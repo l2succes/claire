@@ -4,7 +4,7 @@ import { messageIngestion } from '../services/message-ingestion';
 import { messageQueue } from '../services/message-queue';
 import { realtimeSync } from '../services/realtime-sync';
 import { whatsappAuth } from '../auth/whatsapp-auth';
-import { prisma } from '../services/prisma';
+import { supabase } from '../services/supabase';
 import { validateRequest } from '../middleware/validation';
 import { requireAuth } from '../middleware/auth';
 import { logger } from '../utils/logger';

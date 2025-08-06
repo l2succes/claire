@@ -1,6 +1,5 @@
 import { EventEmitter } from 'events';
 import { supabase, realtime } from './supabase';
-import { prisma } from './prisma';
 import { logger } from '../utils/logger';
 
 interface RealtimeMessage {

@@ -1,11 +1,9 @@
 import { MessageIngestionService } from '../../src/services/message-ingestion';
 import { messageQueue } from '../../src/services/message-queue';
-import { prisma } from '../../src/services/prisma';
 import { supabase } from '../../src/services/supabase';
 
 // Mock dependencies
 jest.mock('../../src/services/message-queue');
-jest.mock('../../src/services/prisma');
 jest.mock('../../src/services/supabase');
 jest.mock('../../src/auth/whatsapp-auth');
 jest.mock('../../src/utils/logger');

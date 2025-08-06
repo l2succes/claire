@@ -2,7 +2,6 @@ import { EventEmitter } from 'events';
 import { Message, Chat, Contact, GroupChat } from 'whatsapp-web.js';
 import { whatsappAuth } from '../auth/whatsapp-auth';
 import { messageQueue } from './message-queue';
-import { prisma } from './prisma';
 import { supabase } from './supabase';
 import { logger } from '../utils/logger';
 

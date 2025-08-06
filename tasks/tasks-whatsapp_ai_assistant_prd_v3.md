@@ -17,14 +17,12 @@
 - `server/jest.config.js` - Jest testing configuration
 - `server/.env.example` - Server environment variables template
 - `server/src/index.ts` - Main application entry point and server setup (created)
-- `server/prisma/schema.prisma` - Database schema definition
 - `server/tests/setup.ts` - Test setup and mocks
 - `server/tests/example.test.ts` - Example test file
 - `server/src/config/index.ts` - Configuration management with Zod validation (created)
 - `server/src/auth/whatsapp-auth.ts` - WhatsApp Web authentication service (created)
 - `server/src/services/message-ingestion.ts` - Message capture and storage pipeline (created)
 - `server/src/services/message-queue.ts` - Bull/Redis message queue service (created)
-- `server/src/services/prisma.ts` - Prisma database client singleton (created)
 - `server/src/services/realtime-sync.ts` - Real-time message synchronization (created)
 - `server/src/routes/messages.ts` - Message API endpoints (created)
 - `server/tests/services/message-ingestion.test.ts` - Message ingestion tests (created)
@@ -103,7 +101,7 @@
 - **Runtime:** Node.js with TypeScript
 - **Framework:** Express.js with TypeScript decorators
 - **Database:** Supabase (PostgreSQL with built-in auth & real-time)
-- **ORM:** Prisma with Supabase connection
+- **Database:** Supabase (PostgreSQL with built-in auth & real-time)
 - **Queue:** Supabase Edge Functions or Bull with Redis
 - **WhatsApp Integration:** whatsapp-web.js with Puppeteer
 - **AI/LLM:** OpenAI API (GPT-4)
