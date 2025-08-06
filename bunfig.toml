@@ -1,0 +1,28 @@
+# Bun configuration
+
+[install]
+# Use the platform's native package manager
+# This allows for better compatibility with packages that have native dependencies
+native = true
+
+# Lockfile settings
+[install.lockfile]
+# Save the lockfile after every install
+save = true
+# Print a diff of the lockfile changes
+print = "yarn"
+
+# Telemetry
+telemetry = false
+
+# Test configuration
+[test]
+# Test runner settings
+root = "./"
+coverage = true
+coverageThreshold = 0.6
+
+# Development settings
+[dev]
+# Port for the dev server
+port = 3000

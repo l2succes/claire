@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: ./docker/bun/Dockerfile
+    container_name: claire-app
+    environment:
+      - NODE_ENV=development
+      - REDIS_URL=redis://redis:6379
+    ports:
+      - "3001:3001"  # Server port
+      - "8081:8081"  # Client port
+    volumes:
+      - ./server:/app/server
+      - ./client:/app/client
+      - /app/node_modules
+      - /app/server/node_modules
+      - /app/client/node_modules
+    depends_on:
+      - redis
+    networks:
+      - claire-network
+    command: bun run dev
+
+  redis:
+    image: redis:7-alpine
+    container_name: claire-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - claire-network
+
+  puppeteer:
+    build:
+      context: ./docker/puppeteer
+      dockerfile: Dockerfile
+    container_name: claire-puppeteer
+    environment:
+      - PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+    volumes:
+      - ./server/session:/app/session
+      - ./server/.wwebjs_auth:/app/.wwebjs_auth
+      - ./server/.wwebjs_cache:/app/.wwebjs_cache
+    cap_add:
+      - SYS_ADMIN
+    security_opt:
+      - seccomp:unconfined
+    networks:
+      - claire-network
+
+volumes:
+  redis_data:
+
+networks:
+  claire-network:
+    driver: bridge

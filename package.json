@@ -7,23 +7,21 @@
     "client"
   ],
   "scripts": {
-    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
-    "dev:server": "npm run dev --workspace=server",
-    "dev:client": "npm run dev --workspace=client",
-    "test": "npm run test:server && npm run test:client",
-    "test:server": "npm test --workspace=server",
-    "test:client": "npm test --workspace=client",
-    "lint": "npm run lint:server && npm run lint:client",
-    "lint:server": "npm run lint --workspace=server",
-    "lint:client": "npm run lint --workspace=client",
-    "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,md}\""
+    "dev": "concurrently \"bun run dev:server\" \"bun run dev:client\"",
+    "dev:server": "cd server && bun run dev",
+    "dev:client": "cd client && bun run dev",
+    "test": "bun run test:server && bun run test:client",
+    "test:server": "cd server && bun test",
+    "test:client": "cd client && bun test",
+    "lint": "bun run lint:server && bun run lint:client",
+    "lint:server": "cd server && bun run lint",
+    "lint:client": "cd client && bun run lint",
+    "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,md}\"",
+    "install:server": "cd server && bun install",
+    "install:client": "cd client && bun install"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",
     "prettier": "^3.1.1"
-  },
-  "engines": {
-    "node": ">=18.0.0",
-    "npm": ">=9.0.0"
   }
 }

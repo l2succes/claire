@@ -16,7 +16,7 @@ An AI-powered WhatsApp companion that ensures users never forget to respond to m
 ## Tech Stack
 
 ### Backend
-- Node.js + TypeScript
+- Bun + TypeScript
 - Express.js
 - Supabase (PostgreSQL, Auth, Realtime, Storage)
 - Prisma ORM

@@ -1,0 +1,12 @@
+# Server-specific Bun configuration
+
+[test]
+# Test configuration for server
+root = "./tests"
+coverage = true
+coverageThreshold = 0.7
+
+# Development settings
+[dev]
+# Port for the dev server
+port = 3001
