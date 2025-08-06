@@ -6,6 +6,9 @@ import { config } from './config';
 import { logger, stream } from './utils/logger';
 import { sessionMonitor } from './services/session-monitor';
 import authRoutes from './routes/auth';
+import messageRoutes from './routes/messages';
+import { messageIngestion } from './services/message-ingestion';
+import { messageQueue } from './services/message-queue';
 
 const app = express();
 const PORT = config.PORT;
@@ -24,6 +27,7 @@ app.use(morgan('combined', { stream }));
 
 // Routes
 app.use('/auth', authRoutes);
+app.use('/messages', messageRoutes);
 
 // Health check
 app.get('/health', async (req, res) => {
