@@ -3,7 +3,7 @@ version: '3.8'
 services:
   redis:
     image: redis:7-alpine
-    container_name: whatsapp-ai-redis
+    container_name: claire-redis
     ports:
       - "6379:6379"
     volumes:
@@ -19,7 +19,7 @@ services:
     build:
       context: ./docker/puppeteer
       dockerfile: Dockerfile
-    container_name: whatsapp-ai-puppeteer
+    container_name: claire-puppeteer
     environment:
       - PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
       - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
@@ -32,17 +32,17 @@ services:
     security_opt:
       - seccomp:unconfined
     networks:
-      - whatsapp-ai-network
+      - claire-network
 
   # Optional: Local PostgreSQL for development without Supabase
   # Uncomment if you want to test locally without Supabase
   # postgres:
   #   image: postgres:15-alpine
-  #   container_name: whatsapp-ai-postgres
+  #   container_name: claire-postgres
   #   environment:
   #     POSTGRES_USER: postgres
   #     POSTGRES_PASSWORD: postgres
-  #     POSTGRES_DB: whatsapp_ai
+  #     POSTGRES_DB: claire
   #   ports:
   #     - "5432:5432"
   #   volumes:
@@ -58,5 +58,5 @@ volumes:
   # postgres_data:
 
 networks:
-  whatsapp-ai-network:
+  claire-network:
     driver: bridge

@@ -1,4 +1,4 @@
-# WhatsApp AI Assistant
+# Claire
 
 An AI-powered WhatsApp companion that ensures users never forget to respond to messages, with smart reply suggestions, promise tracking, and contact inference.
 
@@ -44,7 +44,7 @@ An AI-powered WhatsApp companion that ensures users never forget to respond to m
 1. **Clone the repository**
    ```bash
    git clone <repository-url>
-   cd whatsapp-ai-assistant
+   cd claire
    ```
 
 2. **Install dependencies**

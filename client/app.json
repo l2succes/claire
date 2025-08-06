@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "WhatsApp AI Assistant",
-    "slug": "whatsapp-ai-assistant",
+    "name": "Claire",
+    "slug": "claire",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -16,7 +16,7 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.whatsappai.assistant",
+      "bundleIdentifier": "com.claire.app",
       "infoPlist": {
         "NSCameraUsageDescription": "This app uses the camera to scan QR codes for WhatsApp login."
       }
@@ -26,7 +26,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.whatsappai.assistant",
+      "package": "com.claire.app",
       "permissions": ["CAMERA"]
     },
     "web": {
@@ -45,13 +45,13 @@
       [
         "expo-barcode-scanner",
         {
-          "cameraPermission": "Allow WhatsApp AI Assistant to access camera for QR code scanning."
+          "cameraPermission": "Allow Claire to access camera for QR code scanning."
         }
       ]
     ],
     "experiments": {
       "typedRoutes": true
     },
-    "scheme": "whatsapp-ai"
+    "scheme": "claire"
   }
 }

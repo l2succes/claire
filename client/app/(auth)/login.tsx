@@ -25,7 +25,7 @@ export default function LoginScreen() {
     <View className="flex-1 bg-white justify-center items-center p-6">
       <View className="items-center mb-8">
         <Text className="text-3xl font-bold text-gray-900 mb-2">
-          WhatsApp AI Assistant
+          Claire
         </Text>
         <Text className="text-gray-600 text-center">
           Never forget to respond to a message again

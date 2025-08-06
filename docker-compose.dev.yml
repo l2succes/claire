@@ -13,7 +13,7 @@ services:
   # Development tools
   redis-commander:
     image: rediscommander/redis-commander:latest
-    container_name: whatsapp-ai-redis-commander
+    container_name: claire-redis-commander
     environment:
       - REDIS_HOSTS=local:redis:6379
     ports:
@@ -21,8 +21,8 @@ services:
     depends_on:
       - redis
     networks:
-      - whatsapp-ai-network
+      - claire-network
 
 networks:
-  whatsapp-ai-network:
+  claire-network:
     driver: bridge
