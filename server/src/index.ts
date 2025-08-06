@@ -7,6 +7,7 @@ import { logger, stream } from './utils/logger';
 import { sessionMonitor } from './services/session-monitor';
 import authRoutes from './routes/auth';
 import messageRoutes from './routes/messages';
+import aiRoutes from './routes/ai';
 import { messageIngestion } from './services/message-ingestion';
 import { messageQueue } from './services/message-queue';
 
@@ -28,6 +29,7 @@ app.use(morgan('combined', { stream }));
 // Routes
 app.use('/auth', authRoutes);
 app.use('/messages', messageRoutes);
+app.use('/ai', aiRoutes);
 
 // Health check
 app.get('/health', async (req, res) => {
