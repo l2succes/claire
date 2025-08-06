@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: whatsapp-ai-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  puppeteer:
+    build:
+      context: ./docker/puppeteer
+      dockerfile: Dockerfile
+    container_name: whatsapp-ai-puppeteer
+    environment:
+      - PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+    volumes:
+      - ./server/session:/app/session
+      - ./server/.wwebjs_auth:/app/.wwebjs_auth
+      - ./server/.wwebjs_cache:/app/.wwebjs_cache
+    cap_add:
+      - SYS_ADMIN
+    security_opt:
+      - seccomp:unconfined
+    networks:
+      - whatsapp-ai-network
+
+  # Optional: Local PostgreSQL for development without Supabase
+  # Uncomment if you want to test locally without Supabase
+  # postgres:
+  #   image: postgres:15-alpine
+  #   container_name: whatsapp-ai-postgres
+  #   environment:
+  #     POSTGRES_USER: postgres
+  #     POSTGRES_PASSWORD: postgres
+  #     POSTGRES_DB: whatsapp_ai
+  #   ports:
+  #     - "5432:5432"
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U postgres"]
+  #     interval: 5s
+  #     timeout: 3s
+  #     retries: 5
+
+volumes:
+  redis_data:
+  # postgres_data:
+
+networks:
+  whatsapp-ai-network:
+    driver: bridge
