@@ -27,7 +27,9 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.claire.app",
-      "permissions": ["CAMERA"]
+      "permissions": [
+        "CAMERA"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -42,16 +44,12 @@
           "color": "#ffffff"
         }
       ],
-      [
-        "expo-barcode-scanner",
-        {
-          "cameraPermission": "Allow Claire to access camera for QR code scanning."
-        }
-      ]
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true
     },
-    "scheme": "claire"
+    "scheme": "claire",
+    "newArchEnabled": true
   }
 }

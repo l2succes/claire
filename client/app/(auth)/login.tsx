@@ -1,45 +1,41 @@
 import { View, Text, TouchableOpacity, Image, Alert } from 'react-native';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { router } from 'expo-router';
 import { useAuthStore } from '../../stores/authStore';
-import { BarCodeScanner } from 'expo-barcode-scanner';
+// Temporarily commenting out expo-camera to fix Expo Go crash
+// import { CameraView, useCameraPermissions } from 'expo-camera';
 import { supabase } from '../../services/supabase';
 import axios from 'axios';
 
 export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [scanning, setScanning] = useState(false);
-  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  // const [permission, requestPermission] = useCameraPermissions();
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const login = useAuthStore((state) => state.login);
 
-  useEffect(() => {
-    (async () => {
-      const { status } = await BarCodeScanner.requestPermissionsAsync();
-      setHasPermission(status === 'granted');
-    })();
-  }, []);
-
   const handleQRLogin = async () => {
     setLoading(true);
     try {
-      // Create a new WhatsApp session
-      const response = await axios.post(
-        `${process.env.EXPO_PUBLIC_SERVER_URL}/auth/session/create`,
-        {},
-        {
-          headers: {
-            Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
-          },
-        }
-      );
-
-      setSessionId(response.data.sessionId);
-      setQrCode(response.data.qrCode);
+      // For now, just simulate the QR code display
+      // In production, this would create a WhatsApp session
+      const mockQrCode = 'https://via.placeholder.com/280x280/10b981/ffffff?text=QR+Code';
+      setQrCode(mockQrCode);
       
-      // Start polling for session status
-      pollSessionStatus(response.data.sessionId);
+      // Simulate successful login after 3 seconds for testing
+      setTimeout(() => {
+        // Mock user data for testing
+        const mockUser = {
+          id: 'test-user-123',
+          email: 'test@example.com',
+          user_metadata: {
+            name: 'Test User'
+          }
+        };
+        login(mockUser as any);
+        router.replace('/(tabs)/dashboard');
+      }, 3000);
     } catch (error) {
       console.error('Failed to create session:', error);
       Alert.alert('Error', 'Failed to initialize WhatsApp connection');
@@ -85,14 +81,27 @@ export default function LoginScreen() {
     Alert.alert('QR Scanned', 'Processing WhatsApp login...');
   };
 
+  const startScanning = async () => {
+    // Camera functionality temporarily disabled
+    Alert.alert('Camera Disabled', 'Camera functionality is temporarily disabled for testing');
+    return;
+    
+    // if (!permission?.granted) {
+    //   const result = await requestPermission();
+    //   if (!result.granted) {
+    //     Alert.alert('Permission Required', 'Camera permission is required to scan QR codes');
+    //     return;
+    //   }
+    // }
+    // setScanning(true);
+  };
+
   return (
     <View className="flex-1 bg-white justify-center items-center p-6">
       {scanning ? (
-        <View className="flex-1 w-full">
-          <BarCodeScanner
-            onBarCodeScanned={handleBarCodeScanned}
-            style={{ flex: 1 }}
-          />
+        <View className="flex-1 w-full items-center justify-center">
+          {/* Camera view temporarily disabled */}
+          <Text className="text-gray-600 mb-4">Camera functionality temporarily disabled</Text>
           <TouchableOpacity
             onPress={() => setScanning(false)}
             className="bg-red-500 rounded-lg p-4 m-4"
@@ -141,12 +150,12 @@ export default function LoginScreen() {
               className={`bg-green-500 rounded-lg p-4 mb-4 ${loading ? 'opacity-50' : ''}`}
             >
               <Text className="text-white text-center font-semibold text-lg">
-                {loading ? 'Initializing...' : 'Connect WhatsApp'}
+                {loading ? 'Initializing...' : 'Connect WhatsApp (Test Mode)'}
               </Text>
             </TouchableOpacity>
 
             <Text className="text-gray-500 text-center text-sm">
-              You'll scan a QR code to link your WhatsApp account
+              Camera temporarily disabled - will auto-login for testing
             </Text>
           </View>
         </>
