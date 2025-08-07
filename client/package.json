@@ -26,9 +26,11 @@
     "@supabase/supabase-js": "^2.39.1",
     "@tanstack/react-query": "^5.14.2",
     "axios": "^1.6.2",
+    "clsx": "^2.1.0",
+    "date-fns": "^4.1.0",
     "expo": "~50.0.0",
     "expo-barcode-scanner": "~12.9.0",
-    "expo-constants": "~15.4.0",
+    "expo-constants": "^17.1.7",
     "expo-device": "~5.9.0",
     "expo-font": "~11.10.0",
     "expo-linking": "~6.2.0",
@@ -45,9 +47,8 @@
     "react-native-screens": "~3.29.0",
     "react-native-svg": "14.1.0",
     "react-native-web": "~0.19.10",
-    "zustand": "^4.4.7",
-    "clsx": "^2.1.0",
-    "tailwind-merge": "^2.2.0"
+    "tailwind-merge": "^2.2.0",
+    "zustand": "^4.4.7"
   },
   "devDependencies": {
     "@babel/core": "^7.23.6",
