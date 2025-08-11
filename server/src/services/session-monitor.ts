@@ -90,7 +90,7 @@ export class SessionMonitorService extends EventEmitter {
       const { data: sessions, error } = await supabase
         .from('whatsapp_sessions')
         .select('*')
-        .eq('isActive', true);
+        .in('status', ['connected', 'ready']);
 
       if (error) {
         logger.error('Failed to fetch active sessions:', error);
@@ -174,8 +174,8 @@ export class SessionMonitorService extends EventEmitter {
     await supabase
       .from('whatsapp_sessions')
       .update({
-        isActive: false,
-        updatedAt: new Date().toISOString(),
+        status: 'disconnected',
+        updated_at: new Date().toISOString(),
       })
       .eq('id', sessionId);
 

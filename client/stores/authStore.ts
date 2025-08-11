@@ -35,18 +35,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const { data: { session } } = await supabase.auth.getSession();
       
       if (session) {
-        // Get user profile
-        const { data: profile } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', session.user.id)
-          .single();
-
         const user = {
           id: session.user.id,
           email: session.user.email || '',
-          name: profile?.name,
-          avatar_url: profile?.avatar_url,
+          name: session.user.user_metadata?.name,
+          avatar_url: session.user.user_metadata?.avatar_url,
         };
 
         set({ 
@@ -58,6 +51,30 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       } else {
         set({ isLoading: false });
       }
+
+      // Listen to auth changes
+      supabase.auth.onAuthStateChange((event, session) => {
+        if (session) {
+          const user = {
+            id: session.user.id,
+            email: session.user.email || '',
+            name: session.user.user_metadata?.name,
+            avatar_url: session.user.user_metadata?.avatar_url,
+          };
+
+          set({ 
+            isAuthenticated: true, 
+            token: session.access_token,
+            user,
+          });
+        } else {
+          set({ 
+            isAuthenticated: false, 
+            token: null, 
+            user: null,
+          });
+        }
+      });
     } catch (error) {
       console.error('Auth initialization error:', error);
       set({ isLoading: false });

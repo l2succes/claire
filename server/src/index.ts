@@ -31,6 +31,12 @@ app.use('/auth', authRoutes);
 app.use('/messages', messageRoutes);
 app.use('/ai', aiRoutes);
 
+// Handle Supabase email confirmation redirects
+app.get('/', (req, res) => {
+  // If there's a hash fragment with tokens, serve the confirmation page
+  res.sendFile(__dirname + '/routes/email-confirm.html');
+});
+
 // Health check
 app.get('/health', async (req, res) => {
   const health = {

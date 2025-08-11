@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Claire - Email Confirmation</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .container {
+            background: white;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            max-width: 400px;
+            text-align: center;
+        }
+        h1 {
+            color: #10b981;
+            margin-bottom: 1rem;
+        }
+        p {
+            color: #666;
+            line-height: 1.6;
+        }
+        .button {
+            background: #10b981;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            text-decoration: none;
+            display: inline-block;
+            margin-top: 1rem;
+            font-weight: 600;
+        }
+        .button:hover {
+            background: #059669;
+        }
+        .loading {
+            color: #10b981;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>✓ Email Confirmed!</h1>
+        <p id="message">Your email has been successfully confirmed.</p>
+        <p class="loading" id="status">Setting up your account...</p>
+        <a href="claire://auth/signin" class="button" id="openApp" style="display: none;">Open Claire App</a>
+    </div>
+
+    <script>
+        // Parse the URL hash parameters
+        const hash = window.location.hash.substring(1);
+        const params = new URLSearchParams(hash);
+        const accessToken = params.get('access_token');
+        const refreshToken = params.get('refresh_token');
+
+        if (accessToken && refreshToken) {
+            // Try to open the app with deep link
+            const deepLink = `claire://auth/confirm?access_token=${accessToken}&refresh_token=${refreshToken}`;
+            
+            // Attempt to open the app
+            window.location.href = deepLink;
+            
+            // Show button after a delay in case app doesn't open
+            setTimeout(() => {
+                document.getElementById('status').textContent = 'You can now sign in to the Claire app.';
+                document.getElementById('openApp').style.display = 'inline-block';
+            }, 2000);
+        } else {
+            document.getElementById('message').textContent = 'Invalid confirmation link.';
+            document.getElementById('status').textContent = 'Please try signing up again.';
+        }
+    </script>
+</body>
+</html>

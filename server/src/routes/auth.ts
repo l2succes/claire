@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
+import path from 'path';
 import { whatsappAuth } from '../auth/whatsapp-auth';
 import { supabase } from '../services/supabase';
 import { validateRequest } from '../middleware/validation';
@@ -19,6 +20,40 @@ const getSessionSchema = z.object({
   params: z.object({
     sessionId: z.string(),
   }),
+});
+
+/**
+ * GET /auth/confirm
+ * Handle email confirmation redirects
+ */
+router.get('/confirm', (req: Request, res: Response) => {
+  res.sendFile(path.join(__dirname, 'email-confirm.html'));
+});
+
+/**
+ * POST /auth/session/create-test
+ * Create a test WhatsApp session (development only)
+ */
+router.post('/session/create-test', async (req: Request, res: Response) => {
+  try {
+    // Only allow in development mode
+    if (process.env.NODE_ENV === 'production') {
+      return res.status(403).json({ error: 'Test mode not available in production' });
+    }
+
+    const testUserId = 'test-user-123';
+    const sessionId = `test-${Date.now()}`;
+    
+    // Return mock QR code for testing
+    res.json({
+      sessionId,
+      status: 'qr',
+      qrCode: 'https://via.placeholder.com/280x280/10b981/ffffff?text=Test+QR+Code',
+    });
+  } catch (error) {
+    logger.error('Failed to create test session:', error);
+    res.status(500).json({ error: 'Failed to create test session' });
+  }
 });
 
 /**
@@ -47,10 +82,10 @@ router.post(
         .from('whatsapp_sessions')
         .insert({
           id: sessionId,
-          userId,
-          phoneNumber: '',
-          sessionData: {},
-          isActive: false,
+          user_id: userId,
+          phone_number: '',
+          session_data: {},
+          status: 'qr',
         });
 
       if (error) {
@@ -187,7 +222,7 @@ router.delete(
       // Update database
       await supabase
         .from('whatsapp_sessions')
-        .update({ isActive: false })
+        .update({ status: 'disconnected' })
         .eq('id', sessionId);
 
       res.json({ message: 'Session disconnected' });
