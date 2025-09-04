@@ -1,7 +1,7 @@
-# WhatsApp AI Assistant - Product Requirement Document (v1.4)
+# Claire - Product Requirement Document (v1.4)
 
 ## Product Name (Working Title)
-WhatsApp AI Assistant
+Claire - WhatsApp AI Assistant
 
 ---
 
@@ -23,7 +23,7 @@ Build an AI‑powered WhatsApp companion that ensures users **never forget to re
 ## Key Features (MVP)
 1. **Seamless WhatsApp Login**
    - Connect via QR scan (same as WhatsApp Web).
-   - Web companion app for QR scanning flow (user scans code from their WhatsApp mobile app).
+   - In-app QR scanning flow using device camera (user scans code displayed on desktop/web).
    - Session persistence (re-login only if session expires).
 
 2. **Message Dashboard**
@@ -48,10 +48,10 @@ Build an AI‑powered WhatsApp companion that ensures users **never forget to re
    - Quick context so users don’t have to scroll endlessly.
 
 7. **Notifications**
-   - PWA push notifications supported via Web Push API.
-   - Android: native-like push works directly.
-   - iOS: requires user to install the PWA (Add to Home Screen) before enabling push.
-   - Future upgrade path: Expo/React Native native app wrapper for reliable push notifications (using FCM + APNs).
+   - Native push notifications via Expo Push Notifications API.
+   - Android: FCM (Firebase Cloud Messaging) integration.
+   - iOS: APNs (Apple Push Notification service) integration.
+   - Real-time, reliable push notifications across all platforms (iOS, Android, Web).
 
 8. **Personalization & Memory**
    - Instead of using ChatGPT’s built-in memory (not available via API), app maintains its own memory system.
@@ -86,9 +86,9 @@ Build an AI‑powered WhatsApp companion that ensures users **never forget to re
 ## System Architecture (MVP)
 
 ### A. User Authentication & Session Handling
-- QR Code login using `whatsapp-web.js`.
-- Companion web portal for login flow (desktop/laptop QR scan).
-- Session tokens securely stored (encrypted DB or Redis).
+- QR Code login using `whatsapp-web.js` on backend.
+- Native camera integration for QR scanning via Expo Camera API.
+- Session tokens securely stored using Expo SecureStore (on-device) and encrypted backend DB.
 - Session manager service for re-login and monitoring.
 
 ### B. Message Ingestion Pipeline
@@ -109,11 +109,13 @@ Build an AI‑powered WhatsApp companion that ensures users **never forget to re
 - **Auto Mode**: Send replies automatically if rule matches.
 
 ### E. Frontend (User App)
-- PWA (web-first) with push notification support.
+- **Expo universal app** (iOS, Android, Web) built with React Native.
+- Native performance and UI components via Expo SDK.
 - Displays chats, AI suggestions, reply options.
 - Dedicated **Promises tab** where commitments are tracked and managed.
 - **Card-based UI prompts** for clarifying contact identities.
 - Settings: tone, rules, privacy.
+- Platform-specific optimizations and native features.
 
 ### F. Infra & Security
 - **Backend**: Node.js + Express/NestJS.
@@ -126,25 +128,30 @@ Build an AI‑powered WhatsApp companion that ensures users **never forget to re
 
 ## Design Tools & Process
 - **AI-Powered Design Tools**: Use platforms like **Uizard**, **Galileo AI**, or **Figma with AI plugins** to generate mobile-first wireframes and prototypes quickly.
-- **Figma/Locofy.ai Workflow**: Build detailed screens in Figma and convert them into responsive React Native or web components with Locofy.ai.
-- **User Testing**: Iterative design validation through quick user feedback sessions.
-- **Deliverables**: Low-fidelity wireframes → high-fidelity mockups → clickable prototypes.
+- **Figma to React Native Workflow**: Build detailed screens in Figma and convert them into React Native components using tools like Locofy.ai or manually with Expo/React Native components.
+- **Expo Go Testing**: Rapid prototyping and testing using Expo Go app for instant preview on physical devices.
+- **User Testing**: Iterative design validation through TestFlight (iOS) and Play Console beta testing (Android).
+- **Deliverables**: Low-fidelity wireframes → high-fidelity mockups → working Expo prototypes.
 
 ---
 
 ## Infrastructure Strategy
-- **Firebase**: Strong option for push notifications (native integration with FCM), real-time database, authentication, hosting, and analytics.
+- **Firebase**: Strong option for push notifications (native integration with FCM), real-time database, authentication, and analytics. Works seamlessly with Expo.
 - **Supabase**: SQL-based alternative with real-time subscriptions, great for structured relational data, open-source flexibility.
-- **Other Options**: 
-  - **Vercel** for fast PWA hosting.
+- **Expo Application Services (EAS)**: 
+  - **EAS Build** for cloud-based app builds.
+  - **EAS Submit** for app store submissions.
+  - **EAS Update** for over-the-air updates.
+- **Backend Options**: 
   - **Render** or **Railway** for backend deployments.
-- **Recommendation**: Start with Firebase or Supabase depending on developer comfort and leverage credits to keep initial costs minimal. Firebase may edge out for ease with notifications, while Supabase may be preferable for SQL workflows.
+  - **Vercel** for API endpoints and serverless functions.
+- **Recommendation**: Use Firebase for its excellent Expo integration and notification infrastructure, combined with EAS for build and deployment pipeline. This provides native app distribution while keeping costs minimal.
 
 ---
 
 ## User Stories
 
-1. **As a user**, I want to connect my WhatsApp account via QR code (through a desktop flow) so that the AI assistant can read and help me manage my messages.
+1. **As a user**, I want to connect my WhatsApp account via QR code (using my phone's camera) so that the AI assistant can read and help me manage my messages.
 2. **As a user**, I want to see all my incoming messages in one dashboard so I don’t have to switch between chats.
 3. **As a user**, I want AI to suggest a response draft that I can approve or edit, so I can save time.
 4. **As a user**, I want to snooze certain messages and get reminded later, so I don’t forget to reply.
@@ -174,9 +181,10 @@ Build an AI‑powered WhatsApp companion that ensures users **never forget to re
 - Puppeteer session scaling challenges (each user = browser instance).
 - Data privacy concerns around message storage.
 - User trust (convincing users to connect personal WhatsApp).
-- iOS push notification friction for PWAs.
+- App store review/approval challenges (especially iOS App Store).
 - Accuracy of promise detection (false positives/negatives).
 - Accuracy of contact inference (mislabeling risk).
+- Native module compatibility issues across platforms.
 
 ---
 
@@ -202,12 +210,14 @@ Build an AI‑powered WhatsApp companion that ensures users **never forget to re
 ---
 
 ## Next Steps
-- Define onboarding UX (desktop companion web flow for QR scan).
-- Implement PWA push notifications.
+- Set up Expo development environment and project structure.
+- Define onboarding UX with native camera QR scanning.
+- Implement Expo Push Notifications with FCM/APNs.
 - Build user memory system (tone, preferences, past chats).
 - Implement promise detection + tracking system.
 - Implement contact inference + card-based clarification UI.
 - Prototype backend with `whatsapp-web.js`.
-- Test feasibility with small user group.
+- Test with Expo Go and TestFlight/Play Console beta.
+- Set up EAS Build and deployment pipeline.
 - Validate engagement and perceived value before scaling.
 
