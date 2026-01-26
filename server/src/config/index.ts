@@ -35,6 +35,11 @@ const envSchema = z.object({
   
   // Monitoring
   SENTRY_DSN: z.string().url().optional(),
+
+  // Platform Configuration
+  TELEGRAM_ENABLED: z.string().default('true').transform((val) => val === 'true'),
+  IMESSAGE_ENABLED: z.string().default('true').transform((val) => val === 'true'),
+  INSTAGRAM_ENABLED: z.string().default('true').transform((val) => val === 'true'),
 });
 
 // Parse and validate environment variables
@@ -76,4 +81,21 @@ export const whatsappConfig = {
 export const openaiConfig = {
   apiKey: config.OPENAI_API_KEY,
   model: config.OPENAI_MODEL,
+};
+
+export const platformConfig = {
+  whatsapp: {
+    enabled: true,
+    sessionPath: config.WHATSAPP_SESSION_PATH,
+    puppeteerHeadless: config.PUPPETEER_HEADLESS,
+  },
+  telegram: {
+    enabled: config.TELEGRAM_ENABLED,
+  },
+  imessage: {
+    enabled: config.IMESSAGE_ENABLED && process.platform === 'darwin',
+  },
+  instagram: {
+    enabled: config.INSTAGRAM_ENABLED,
+  },
 };

@@ -2,14 +2,20 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
-import { config } from './config';
+import { config, platformConfig } from './config';
 import { logger, stream } from './utils/logger';
 import { sessionMonitor } from './services/session-monitor';
 import authRoutes from './routes/auth';
 import messageRoutes from './routes/messages';
 import aiRoutes from './routes/ai';
+import platformRoutes from './routes/platforms';
 import { messageIngestion } from './services/message-ingestion';
 import { messageQueue } from './services/message-queue';
+import { platformManager } from './adapters';
+import { whatsappAdapter } from './adapters/whatsapp';
+import { telegramAdapter } from './adapters/telegram';
+import { imessageAdapter } from './adapters/imessage';
+import { instagramAdapter } from './adapters/instagram';
 
 const app = express();
 const PORT = config.PORT;
@@ -30,6 +36,7 @@ app.use(morgan('combined', { stream }));
 app.use('/auth', authRoutes);
 app.use('/messages', messageRoutes);
 app.use('/ai', aiRoutes);
+app.use('/platforms', platformRoutes);
 
 // Handle Supabase email confirmation redirects
 app.get('/', (req, res) => {
@@ -65,20 +72,54 @@ app.use((req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
+// Initialize platform adapters
+async function initializePlatforms() {
+  logger.info('Initializing platform adapters...');
+
+  // Register all enabled platform adapters
+  if (platformConfig.whatsapp.enabled) {
+    platformManager.registerAdapter(whatsappAdapter);
+  }
+  if (platformConfig.telegram.enabled) {
+    platformManager.registerAdapter(telegramAdapter);
+  }
+  if (platformConfig.imessage.enabled) {
+    platformManager.registerAdapter(imessageAdapter);
+  }
+  if (platformConfig.instagram.enabled) {
+    platformManager.registerAdapter(instagramAdapter);
+  }
+
+  // Initialize all registered adapters
+  await platformManager.initialize();
+
+  // Setup unified message handler
+  platformManager.onMessage((message) => {
+    logger.info(`Message received from ${message.platform}: ${message.id}`);
+    // TODO: Route to message ingestion service
+  });
+
+  logger.info('Platform adapters initialized');
+}
+
 // Start server
-const server = app.listen(PORT, () => {
+const server = app.listen(PORT, async () => {
   logger.info(`Server running on port ${PORT} in ${config.NODE_ENV} mode`);
-  
+
   // Start session monitor
   sessionMonitor.start();
+
+  // Initialize platforms
+  await initializePlatforms();
 });
 
 // Graceful shutdown
-process.on('SIGTERM', () => {
+process.on('SIGTERM', async () => {
   logger.info('SIGTERM received, shutting down gracefully');
-  
+
   sessionMonitor.stop();
-  
+  await platformManager.shutdown();
+
   server.close(() => {
     logger.info('Server closed');
     process.exit(0);
