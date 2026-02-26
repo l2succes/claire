@@ -1,0 +1,56 @@
+# Railway Configuration for Claire Backend
+# Deploy with: railway up
+# Docs: https://docs.railway.app/reference/config-as-code
+
+[build]
+# Use Dockerfile for custom build
+dockerfilePath = "Dockerfile"
+
+[deploy]
+# Number of replicas (1 for hobby, can increase for production)
+numReplicas = 1
+
+# Health check configuration
+healthcheckPath = "/health"
+healthcheckTimeout = 30
+
+# Restart policy
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5
+
+# Start command (optional, Dockerfile CMD is used if not specified)
+# startCommand = "bun run dist/index.js"
+
+[service]
+# Internal port the application listens on
+internalPort = 3001
+
+# ============================================
+# Environment Variables (set via Railway dashboard)
+# ============================================
+# Required variables to configure in Railway:
+#
+# Database & Auth:
+#   SUPABASE_URL=https://your-project.supabase.co
+#   SUPABASE_ANON_KEY=your-anon-key
+#   SUPABASE_SERVICE_KEY=your-service-key
+#   DATABASE_URL=postgresql://...
+#   JWT_SECRET=your-jwt-secret-min-32-chars
+#   ENCRYPTION_KEY=your-32-char-key
+#
+# AI:
+#   OPENAI_API_KEY=sk-...
+#
+# Platform Mode:
+#   PLATFORM_MODE=direct  (or 'matrix')
+#
+# Redis (use Railway's Redis plugin):
+#   REDIS_URL=${{Redis.REDIS_URL}}  (auto-populated)
+#
+# For Matrix mode, also set:
+#   MATRIX_HOMESERVER_URL=...
+#   MATRIX_SERVER_NAME=...
+#   MATRIX_ADMIN_TOKEN=...
+#
+# For Telegram direct mode:
+#   TELEGRAM_BOT_TOKEN=...
