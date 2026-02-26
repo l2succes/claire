@@ -1,0 +1,15 @@
+# Docker volume data - should not be committed
+**/volumes/db/
+**/volumes/storage/
+**/volumes/logs/
+
+# PostgreSQL data
+**/pgdata/
+**/pg_data/
+
+# Keep config files
+!**/volumes/api/
+!**/*.yml
+!**/*.yaml
+!**/*.conf
+!**/*.config
