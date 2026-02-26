@@ -1,10 +1,13 @@
-import { View, Text, FlatList, RefreshControl, TextInput, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, FlatList, RefreshControl, TextInput, TouchableOpacity, ActivityIndicator, ScrollView } from 'react-native';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Search, MessageCircle } from 'lucide-react-native';
-// import { useRouter } from 'expo-router'; // Will be used for navigation
+import { router } from 'expo-router';
 import { MessageCard } from '../../components/MessageCard';
+import { PlatformBadge, PlatformIconButton } from '../../components/PlatformIcon';
 import { supabase } from '../../services/supabase';
 import { useAuthStore } from '../../stores/authStore';
+import { usePlatformStore, useHasAnyConnection } from '../../stores/platformStore';
+import { Platform, PLATFORM_DISPLAY } from '../../types/platform';
 
 interface Message {
   id: string;
@@ -18,11 +21,13 @@ interface Message {
   status?: 'sent' | 'delivered' | 'read' | 'pending';
   unread_count?: number;
   has_ai_response?: boolean;
-  whatsapp_chat_id: string;
+  chat_id: string;
   contact_phone?: string;
+  platform?: Platform;
 }
 
 type FilterType = 'all' | 'unread' | 'groups' | 'ai';
+type PlatformFilterType = Platform | 'all';
 
 export default function DashboardScreen() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -30,11 +35,21 @@ export default function DashboardScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
+  const [platformFilter, setPlatformFilter] = useState<PlatformFilterType>('all');
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  // const router = useRouter(); // Will be used for navigation to chat details
+
   const user = useAuthStore((state) => state.user);
+  const { connectedSessions, initialize, isInitialized } = usePlatformStore();
+  const hasConnection = useHasAnyConnection();
+
+  // Initialize platform store on mount
+  useEffect(() => {
+    if (!isInitialized) {
+      initialize();
+    }
+  }, [initialize, isInitialized]);
 
   // Fetch messages with pagination
   const fetchMessages = useCallback(async (pageNum: number = 0, append: boolean = false) => {
@@ -55,8 +70,9 @@ export default function DashboardScreen() {
           from_me,
           is_group,
           status,
-          whatsapp_chat_id,
-          whatsapp_message_id,
+          platform,
+          chat_id,
+          platform_message_id,
           contact_phone,
           contact_name,
           ai_responses (
@@ -72,24 +88,28 @@ export default function DashboardScreen() {
 
       // Group messages by chat and get latest
       const chatMap = new Map<string, Message>();
-      
+
       (data || []).forEach((msg: any) => {
-        const chatId = msg.whatsapp_chat_id;
-        
+        // Use chat_id, falling back to whatsapp_chat_id for backward compatibility
+        const chatId = msg.chat_id || msg.whatsapp_chat_id || msg.id;
+        // Default to whatsapp for backward compatibility with existing messages
+        const platform = msg.platform || Platform.WHATSAPP;
+
         if (!chatMap.has(chatId) || new Date(msg.timestamp) > new Date(chatMap.get(chatId)!.timestamp)) {
           chatMap.set(chatId, {
             id: msg.id,
             contact_name: msg.contact_name,
-            chat_name: msg.is_group ? msg.whatsapp_chat_id.split('@')[0] : msg.contact_name,
+            chat_name: msg.is_group ? chatId.split('@')[0] : msg.contact_name,
             content: msg.content,
             timestamp: msg.timestamp,
             from_me: msg.from_me,
             is_group: msg.is_group,
             status: msg.status,
-            whatsapp_chat_id: chatId,
+            chat_id: chatId,
             contact_phone: msg.contact_phone,
             has_ai_response: msg.ai_responses?.length > 0,
             unread_count: 0, // TODO: Calculate from unread messages
+            platform: platform,
           });
         }
       });
@@ -148,10 +168,15 @@ export default function DashboardScreen() {
   const filteredMessages = useMemo(() => {
     let filtered = messages;
 
+    // Apply platform filter
+    if (platformFilter !== 'all') {
+      filtered = filtered.filter(msg => msg.platform === platformFilter);
+    }
+
     // Apply search filter
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(msg => 
+      filtered = filtered.filter(msg =>
         msg.contact_name?.toLowerCase().includes(query) ||
         msg.chat_name?.toLowerCase().includes(query) ||
         msg.content.toLowerCase().includes(query) ||
@@ -173,11 +198,11 @@ export default function DashboardScreen() {
     }
 
     return filtered;
-  }, [messages, searchQuery, activeFilter]);
+  }, [messages, searchQuery, activeFilter, platformFilter]);
 
   const handleMessagePress = (message: Message) => {
     // Navigate to chat detail screen (to be implemented)
-    console.log('Navigate to chat:', message.whatsapp_chat_id);
+    console.log('Navigate to chat:', message.chat_id, 'platform:', message.platform);
   };
 
   const handleMessageLongPress = (message: Message) => {
@@ -202,20 +227,51 @@ export default function DashboardScreen() {
     <TouchableOpacity
       onPress={() => setActiveFilter(type)}
       className={`px-3 py-1.5 rounded-full mr-2 ${
-        activeFilter === type 
-          ? 'bg-green-500' 
+        activeFilter === type
+          ? 'bg-green-500'
           : 'bg-gray-200 dark:bg-gray-700'
       }`}
     >
       <Text className={`text-sm font-medium ${
-        activeFilter === type 
-          ? 'text-white' 
+        activeFilter === type
+          ? 'text-white'
           : 'text-gray-700 dark:text-gray-300'
       }`}>
         {label}
       </Text>
     </TouchableOpacity>
   );
+
+  const PlatformFilterPill = ({ platform, label }: { platform: PlatformFilterType; label: string }) => {
+    const isActive = platformFilter === platform;
+    const display = platform !== 'all' ? PLATFORM_DISPLAY[platform] : null;
+
+    return (
+      <TouchableOpacity
+        onPress={() => setPlatformFilter(platform)}
+        className={`flex-row items-center px-3 py-1.5 rounded-full mr-2 ${
+          isActive
+            ? 'bg-green-500'
+            : 'bg-gray-200 dark:bg-gray-700'
+        }`}
+      >
+        {platform !== 'all' && display && (
+          <PlatformBadge platform={platform} size={14} className="mr-1" />
+        )}
+        <Text className={`text-sm font-medium ${
+          isActive
+            ? 'text-white'
+            : 'text-gray-700 dark:text-gray-300'
+        }`}>
+          {label}
+        </Text>
+      </TouchableOpacity>
+    );
+  };
+
+  const handleConnectPlatform = () => {
+    router.push('/(auth)/login');
+  };
 
   if (loading) {
     return (
@@ -242,13 +298,31 @@ export default function DashboardScreen() {
           />
         </View>
         
-        {/* Filter Pills */}
-        <View className="flex-row mt-3">
+        {/* Platform Filter Pills */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          className="mt-3 -mx-1"
+          contentContainerStyle={{ paddingHorizontal: 4 }}
+        >
+          <PlatformFilterPill platform="all" label="All" />
+          <PlatformFilterPill platform={Platform.WHATSAPP} label="WhatsApp" />
+          <PlatformFilterPill platform={Platform.TELEGRAM} label="Telegram" />
+          <PlatformFilterPill platform={Platform.INSTAGRAM} label="Instagram" />
+        </ScrollView>
+
+        {/* Type Filter Pills */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          className="mt-2 -mx-1"
+          contentContainerStyle={{ paddingHorizontal: 4 }}
+        >
           <FilterPill type="all" label="All" />
           <FilterPill type="unread" label="Unread" />
           <FilterPill type="groups" label="Groups" />
           <FilterPill type="ai" label="AI Suggestions" />
-        </View>
+        </ScrollView>
       </View>
 
       {/* Messages List */}
@@ -283,16 +357,30 @@ export default function DashboardScreen() {
           <View className="flex-1 items-center justify-center py-20">
             <MessageCircle size={48} color="#9ca3af" />
             <Text className="text-gray-500 dark:text-gray-400 mt-4 text-center">
-              {searchQuery 
-                ? 'No messages found matching your search' 
-                : activeFilter !== 'all'
-                  ? `No ${activeFilter} messages`
-                  : 'No messages yet'}
+              {searchQuery
+                ? 'No messages found matching your search'
+                : platformFilter !== 'all'
+                  ? `No ${PLATFORM_DISPLAY[platformFilter].name} messages`
+                  : activeFilter !== 'all'
+                    ? `No ${activeFilter} messages`
+                    : 'No messages yet'}
             </Text>
-            {!searchQuery && activeFilter === 'all' && (
-              <Text className="text-gray-400 dark:text-gray-500 mt-2 text-center px-8">
-                Connect your WhatsApp account to start receiving messages
-              </Text>
+            {!searchQuery && activeFilter === 'all' && platformFilter === 'all' && (
+              <View className="mt-4 items-center">
+                <Text className="text-gray-400 dark:text-gray-500 text-center px-8">
+                  {hasConnection
+                    ? 'Messages will appear here once they arrive'
+                    : 'Connect a messaging platform to start receiving messages'}
+                </Text>
+                {!hasConnection && (
+                  <TouchableOpacity
+                    onPress={handleConnectPlatform}
+                    className="mt-4 bg-green-500 px-6 py-2 rounded-full"
+                  >
+                    <Text className="text-white font-semibold">Connect Platform</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             )}
           </View>
         }
