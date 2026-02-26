@@ -1,0 +1,16 @@
+# WhatsApp Bridge Registration for Synapse
+# This file must match the tokens in config.yaml
+
+id: whatsapp
+url: http://mautrix-whatsapp:29318
+as_token: GENERATE_ME_WITH_OPENSSL_RAND_HEX_32
+hs_token: GENERATE_ME_WITH_OPENSSL_RAND_HEX_32
+sender_localpart: whatsappbot
+rate_limited: false
+namespaces:
+    users:
+        - regex: "@_wa_.*:claire\\.local"
+          exclusive: true
+    aliases:
+        - regex: "#_wa_.*:claire\\.local"
+          exclusive: true

@@ -1,0 +1,16 @@
+# Telegram Bridge Registration for Synapse
+# This file must match the tokens in config.yaml
+
+id: telegram
+url: http://mautrix-telegram:29317
+as_token: GENERATE_ME_WITH_OPENSSL_RAND_HEX_32
+hs_token: GENERATE_ME_WITH_OPENSSL_RAND_HEX_32
+sender_localpart: telegrambot
+rate_limited: false
+namespaces:
+    users:
+        - regex: "@_telegram_.*:claire\\.local"
+          exclusive: true
+    aliases:
+        - regex: "#_telegram_.*:claire\\.local"
+          exclusive: true

@@ -1,0 +1,73 @@
+# Synapse Homeserver Configuration for Claire
+# Documentation: https://element-hq.github.io/synapse/latest/usage/configuration/config_documentation.html
+
+server_name: "claire.local"
+pid_file: /data/homeserver.pid
+
+listeners:
+  - port: 8008
+    type: http
+    tls: false
+    x_forwarded: true
+    resources:
+      - names: [client, federation]
+        compress: false
+
+database:
+  name: psycopg2
+  args:
+    user: synapse
+    password: synapse_secret
+    database: synapse
+    host: postgres-synapse
+    cp_min: 5
+    cp_max: 10
+
+log_config: "/data/log.config"
+
+media_store_path: /data/media_store
+uploads_path: /data/uploads
+
+# Generate with: openssl rand -hex 32
+registration_shared_secret: "CHANGE_ME_TO_SECURE_SECRET"
+
+enable_registration: false
+enable_registration_without_verification: false
+
+# Application services (bridges)
+app_service_config_files:
+  - /data/appservices/whatsapp.yaml
+  - /data/appservices/telegram.yaml
+  - /data/appservices/instagram.yaml
+
+# Generate these with: openssl rand -hex 32
+macaroon_secret_key: "CHANGE_ME_TO_SECURE_SECRET"
+form_secret: "CHANGE_ME_TO_SECURE_SECRET"
+signing_key_path: "/data/claire.local.signing.key"
+
+trusted_key_servers:
+  - server_name: "matrix.org"
+
+# Rate limiting (relaxed for bridge traffic)
+rc_message:
+  per_second: 100
+  burst_count: 500
+
+rc_registration:
+  per_second: 0.5
+  burst_count: 5
+
+rc_login:
+  address:
+    per_second: 0.5
+    burst_count: 10
+  account:
+    per_second: 0.5
+    burst_count: 10
+
+# Retention policy
+retention:
+  enabled: true
+  default_policy:
+    min_lifetime: 1d
+    max_lifetime: 1y

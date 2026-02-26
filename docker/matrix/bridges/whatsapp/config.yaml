@@ -1,0 +1,47 @@
+# mautrix-whatsapp Configuration for Claire
+# Documentation: https://docs.mau.fi/bridges/go/whatsapp/config.html
+
+homeserver:
+    address: http://synapse:8008
+    domain: claire.local
+
+appservice:
+    address: http://mautrix-whatsapp:29318
+    hostname: 0.0.0.0
+    port: 29318
+    database:
+        type: sqlite3-fk-wal
+        uri: /data/mautrix-whatsapp.db
+    id: whatsapp
+    bot:
+        username: whatsappbot
+        displayname: WhatsApp Bridge Bot
+        avatar: mxc://maunium.net/NeXNQarUbrlYBiPCpprYsRqr
+    as_token: GENERATE_ME_WITH_OPENSSL_RAND_HEX_32
+    hs_token: GENERATE_ME_WITH_OPENSSL_RAND_HEX_32
+
+bridge:
+    username_template: "_wa_{{.}}"
+    displayname_template: "{{.Name}} (WA)"
+    command_prefix: "!wa"
+
+    permissions:
+        "*": relay
+        "claire.local": user
+        "@claire_bot:claire.local": admin
+
+    history_sync:
+        max_initial_conversations: 25
+        message_count: 50
+
+    relay:
+        enabled: false
+
+    private_chat_portal_meta: true
+    parallel_member_sync: true
+
+logging:
+    min_level: info
+    writers:
+        - type: stdout
+          format: pretty-colored

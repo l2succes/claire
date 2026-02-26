@@ -1,0 +1,16 @@
+# Instagram Bridge Registration for Synapse
+# This file must match the tokens in config.yaml
+
+id: instagram
+url: http://mautrix-instagram:29319
+as_token: GENERATE_ME_WITH_OPENSSL_RAND_HEX_32
+hs_token: GENERATE_ME_WITH_OPENSSL_RAND_HEX_32
+sender_localpart: instagrambot
+rate_limited: false
+namespaces:
+    users:
+        - regex: "@_instagram_.*:claire\\.local"
+          exclusive: true
+    aliases:
+        - regex: "#_instagram_.*:claire\\.local"
+          exclusive: true
