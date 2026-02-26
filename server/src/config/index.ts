@@ -40,18 +40,47 @@ const envSchema = z.object({
   TELEGRAM_ENABLED: z.string().default('true').transform((val) => val === 'true'),
   IMESSAGE_ENABLED: z.string().default('true').transform((val) => val === 'true'),
   INSTAGRAM_ENABLED: z.string().default('true').transform((val) => val === 'true'),
+
+  // Platform Mode: 'direct' uses native adapters, 'matrix' uses bridges
+  PLATFORM_MODE: z.enum(['direct', 'matrix']).default('direct'),
+
+  // Matrix Configuration (required when PLATFORM_MODE=matrix)
+  MATRIX_HOMESERVER_URL: z.string().url().optional(),
+  MATRIX_SERVER_NAME: z.string().optional(),
+  MATRIX_ADMIN_TOKEN: z.string().optional(),
+  MATRIX_BOT_USER_ID: z.string().optional(),
+
+  // Telegram API (required for mautrix-telegram bridge)
+  TELEGRAM_API_ID: z.string().optional(),
+  TELEGRAM_API_HASH: z.string().optional(),
 });
 
 // Parse and validate environment variables
 const parseEnv = () => {
   try {
-    return envSchema.parse(process.env);
+    const env = envSchema.parse(process.env);
+
+    // Validate matrix config when in matrix mode
+    if (env.PLATFORM_MODE === 'matrix') {
+      if (!env.MATRIX_HOMESERVER_URL) {
+        throw new Error('MATRIX_HOMESERVER_URL is required when PLATFORM_MODE=matrix');
+      }
+      if (!env.MATRIX_SERVER_NAME) {
+        throw new Error('MATRIX_SERVER_NAME is required when PLATFORM_MODE=matrix');
+      }
+    }
+
+    return env;
   } catch (error) {
     if (error instanceof z.ZodError) {
       console.error('❌ Invalid environment variables:');
       error.errors.forEach((err) => {
         console.error(`  ${err.path.join('.')}: ${err.message}`);
       });
+      process.exit(1);
+    }
+    if (error instanceof Error) {
+      console.error(`❌ Configuration error: ${error.message}`);
       process.exit(1);
     }
     throw error;
@@ -97,5 +126,18 @@ export const platformConfig = {
   },
   instagram: {
     enabled: config.INSTAGRAM_ENABLED,
+  },
+};
+
+export const matrixConfig = {
+  enabled: config.PLATFORM_MODE === 'matrix',
+  mode: config.PLATFORM_MODE,
+  homeserverUrl: config.MATRIX_HOMESERVER_URL,
+  serverName: config.MATRIX_SERVER_NAME,
+  adminToken: config.MATRIX_ADMIN_TOKEN,
+  botUserId: config.MATRIX_BOT_USER_ID,
+  telegram: {
+    apiId: config.TELEGRAM_API_ID,
+    apiHash: config.TELEGRAM_API_HASH,
   },
 };

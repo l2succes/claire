@@ -2,20 +2,19 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
-import { config, platformConfig } from './config';
+import { config, platformConfig, matrixConfig } from './config';
 import { logger, stream } from './utils/logger';
 import { sessionMonitor } from './services/session-monitor';
 import authRoutes from './routes/auth';
 import messageRoutes from './routes/messages';
 import aiRoutes from './routes/ai';
 import platformRoutes from './routes/platforms';
-import { messageIngestion } from './services/message-ingestion';
-import { messageQueue } from './services/message-queue';
 import { platformManager } from './adapters';
 import { whatsappAdapter } from './adapters/whatsapp';
 import { telegramAdapter } from './adapters/telegram';
 import { imessageAdapter } from './adapters/imessage';
 import { instagramAdapter } from './adapters/instagram';
+import { MatrixBridgeAdapter } from './adapters/matrix';
 
 const app = express();
 const PORT = config.PORT;
@@ -74,20 +73,37 @@ app.use((req, res) => {
 
 // Initialize platform adapters
 async function initializePlatforms() {
-  logger.info('Initializing platform adapters...');
+  const mode = matrixConfig.enabled ? 'matrix' : 'direct';
+  logger.info(`Initializing platform adapters in ${mode} mode...`);
 
-  // Register all enabled platform adapters
-  if (platformConfig.whatsapp.enabled) {
-    platformManager.registerAdapter(whatsappAdapter);
-  }
-  if (platformConfig.telegram.enabled) {
-    platformManager.registerAdapter(telegramAdapter);
-  }
-  if (platformConfig.imessage.enabled) {
-    platformManager.registerAdapter(imessageAdapter);
-  }
-  if (platformConfig.instagram.enabled) {
-    platformManager.registerAdapter(instagramAdapter);
+  if (matrixConfig.enabled) {
+    // Matrix mode: Use MatrixBridgeAdapter for all platforms via bridges
+    logger.info('Using Matrix bridges for platform integration');
+
+    const matrixAdapter = new MatrixBridgeAdapter({
+      homeserverUrl: matrixConfig.homeserverUrl!,
+      serverName: matrixConfig.serverName!,
+      adminAccessToken: matrixConfig.adminToken,
+      botUserId: matrixConfig.botUserId,
+    });
+
+    platformManager.setMatrixMode(matrixAdapter);
+  } else {
+    // Direct mode: Use native platform adapters
+    logger.info('Using direct platform adapters');
+
+    if (platformConfig.whatsapp.enabled) {
+      platformManager.registerAdapter(whatsappAdapter);
+    }
+    if (platformConfig.telegram.enabled) {
+      platformManager.registerAdapter(telegramAdapter);
+    }
+    if (platformConfig.imessage.enabled) {
+      platformManager.registerAdapter(imessageAdapter);
+    }
+    if (platformConfig.instagram.enabled) {
+      platformManager.registerAdapter(instagramAdapter);
+    }
   }
 
   // Initialize all registered adapters

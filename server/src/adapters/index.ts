@@ -29,6 +29,8 @@ class PlatformManager {
   private messageHandlers: Set<MessageHandler> = new Set();
   private eventHandlers: Map<PlatformEvent, Set<EventHandler>> = new Map();
   private initialized: boolean = false;
+  private matrixMode: boolean = false;
+  private matrixAdapter: IPlatformAdapter | null = null;
 
   /**
    * Register a platform adapter
@@ -42,6 +44,29 @@ class PlatformManager {
   }
 
   /**
+   * Set matrix mode - use a single adapter for all platforms
+   * In matrix mode, the MatrixBridgeAdapter handles all platforms via bridges
+   */
+  setMatrixMode(adapter: IPlatformAdapter): void {
+    this.matrixMode = true;
+    this.matrixAdapter = adapter;
+
+    // Register the matrix adapter for all platforms
+    for (const platform of Object.values(Platform)) {
+      this.adapters.set(platform as Platform, adapter);
+    }
+
+    logger.info('PlatformManager set to Matrix mode - all platforms via Matrix bridges');
+  }
+
+  /**
+   * Check if running in matrix mode
+   */
+  isMatrixMode(): boolean {
+    return this.matrixMode;
+  }
+
+  /**
    * Initialize all registered adapters
    */
   async initialize(): Promise<void> {
@@ -50,15 +75,28 @@ class PlatformManager {
       return;
     }
 
-    logger.info(`Initializing ${this.adapters.size} platform adapters...`);
+    logger.info(`Initializing platform adapters (matrix mode: ${this.matrixMode})...`);
 
-    for (const [platform, adapter] of this.adapters) {
+    if (this.matrixMode && this.matrixAdapter) {
+      // In matrix mode, only initialize the single matrix adapter once
       try {
-        await adapter.initialize();
-        this.setupAdapterEventHandlers(adapter);
-        logger.info(`Platform adapter initialized: ${platform}`);
+        await this.matrixAdapter.initialize();
+        this.setupAdapterEventHandlers(this.matrixAdapter);
+        logger.info('Matrix bridge adapter initialized for all platforms');
       } catch (error) {
-        logger.error(`Failed to initialize ${platform} adapter:`, error);
+        logger.error('Failed to initialize Matrix adapter:', error);
+        throw error;
+      }
+    } else {
+      // Direct mode - initialize each adapter separately
+      for (const [platform, adapter] of this.adapters) {
+        try {
+          await adapter.initialize();
+          this.setupAdapterEventHandlers(adapter);
+          logger.info(`Platform adapter initialized: ${platform}`);
+        } catch (error) {
+          logger.error(`Failed to initialize ${platform} adapter:`, error);
+        }
       }
     }
 
