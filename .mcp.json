@@ -1,0 +1,24 @@
+{
+  "mcpServers": {
+    "ios-simulator": {
+      "command": "npx",
+      "args": ["-y", "ios-simulator-mcp"]
+    },
+    "mobile-mcp": {
+      "command": "npx",
+      "args": ["-y", "@mobilenext/mobile-mcp@latest"]
+    },
+    "react-native-debugger-mcp": {
+      "command": "npx",
+      "args": ["-y", "@twodoorsdev/react-native-debugger-mcp"]
+    },
+    "maestro": {
+      "command": "maestro",
+      "args": ["mcp"]
+    },
+    "figma-desktop": {
+      "type": "http",
+      "url": "http://127.0.0.1:3845/mcp"
+    }
+  }
+}

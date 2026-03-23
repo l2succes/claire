@@ -15,7 +15,7 @@ interface ResponseSuggestionProps {
 interface AISuggestion {
   id: string;
   suggestion: string;
-  confidence_score: number;
+  confidence: number;
   is_selected?: boolean;
   feedback?: 'positive' | 'negative';
 }
@@ -38,7 +38,7 @@ export function ResponseSuggestion({
         propSuggestions.map((text, index) => ({
           id: `prop-${index}`,
           suggestion: text,
-          confidence_score: 1,
+          confidence: 1,
         }))
       );
     } else {
@@ -51,10 +51,10 @@ export function ResponseSuggestion({
     setLoading(true);
     try {
       const { data, error } = await supabase
-        .from('ai_responses')
+        .from('ai_suggestions')
         .select('*')
         .eq('message_id', messageId)
-        .order('confidence_score', { ascending: false })
+        .order('confidence', { ascending: false })
         .limit(3);
 
       if (error) throw error;
@@ -64,7 +64,7 @@ export function ResponseSuggestion({
           data.map(item => ({
             id: item.id,
             suggestion: item.response_text,
-            confidence_score: item.confidence_score,
+            confidence: item.confidence,
             is_selected: item.is_selected,
             feedback: item.feedback,
           }))
@@ -85,7 +85,7 @@ export function ResponseSuggestion({
     if (!suggestion.id.startsWith('prop-')) {
       try {
         await supabase
-          .from('ai_responses')
+          .from('ai_suggestions')
           .update({ is_selected: true })
           .eq('id', suggestion.id);
       } catch (error) {
@@ -103,7 +103,7 @@ export function ResponseSuggestion({
     if (!suggestion.id.startsWith('prop-')) {
       try {
         await supabase
-          .from('ai_responses')
+          .from('ai_suggestions')
           .update({ feedback })
           .eq('id', suggestion.id);
 
@@ -176,10 +176,10 @@ export function ResponseSuggestion({
               }`}
             >
               {/* Confidence Score */}
-              {suggestion.confidence_score < 1 && (
+              {suggestion.confidence < 1 && (
                 <View className="flex-row items-center mb-1">
-                  <Text className={`text-xs font-medium ${getConfidenceColor(suggestion.confidence_score)}`}>
-                    {Math.round(suggestion.confidence_score * 100)}% confidence
+                  <Text className={`text-xs font-medium ${getConfidenceColor(suggestion.confidence)}`}>
+                    {Math.round(suggestion.confidence * 100)}% confidence
                   </Text>
                 </View>
               )}

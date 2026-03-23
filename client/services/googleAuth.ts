@@ -6,11 +6,8 @@ import { Platform } from 'react-native';
 // Ensure web browser sessions complete properly
 WebBrowser.maybeCompleteAuthSession();
 
-// Get the redirect URI for OAuth
-const redirectUri = AuthSession.makeRedirectUri({
-  path: 'auth/callback',
-  scheme: 'claire',
-});
+// Hardcode the redirect URI to ensure it's always correct on native
+const redirectUri = 'claire://auth/callback';
 
 export const googleAuth = {
   /**
@@ -39,20 +36,16 @@ export const googleAuth = {
       );
 
       if (res.type === 'success') {
-        // Extract the URL
         const { url } = res;
-        
-        // Extract access and refresh tokens from URL
+
+        // Implicit flow: GoTrue returns tokens in the hash fragment
         const parsedUrl = new URL(url);
         const hashParams = new URLSearchParams(parsedUrl.hash.substring(1));
         const accessToken = hashParams.get('access_token');
         const refreshToken = hashParams.get('refresh_token');
 
-        if (!accessToken) {
-          throw new Error('No access token found');
-        }
+        if (!accessToken) throw new Error('No access token in response');
 
-        // Set the session
         const { data: session, error: sessionError } = await supabase.auth.setSession({
           access_token: accessToken,
           refresh_token: refreshToken!,

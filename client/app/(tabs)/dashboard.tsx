@@ -75,9 +75,9 @@ export default function DashboardScreen() {
           platform_message_id,
           contact_phone,
           contact_name,
-          ai_responses (
+          ai_suggestions (
             id,
-            confidence_score
+            confidence
           )
         `, { count: 'exact' })
         .eq('user_id', user.id)
@@ -107,7 +107,7 @@ export default function DashboardScreen() {
             status: msg.status,
             chat_id: chatId,
             contact_phone: msg.contact_phone,
-            has_ai_response: msg.ai_responses?.length > 0,
+            has_ai_response: msg.ai_suggestions?.length > 0,
             unread_count: 0, // TODO: Calculate from unread messages
             platform: platform,
           });
