@@ -43,9 +43,9 @@ export const BRIDGE_BOT_LOCALPARTS: Record<Platform, string> = {
  * Ghost user prefixes for each platform bridge
  */
 export const GHOST_USER_PREFIXES: Record<Platform, string> = {
-  [Platform.WHATSAPP]: '_wa_',
+  [Platform.WHATSAPP]: 'whatsapp_',
   [Platform.TELEGRAM]: '_telegram_',
-  [Platform.INSTAGRAM]: '_instagram_',
+  [Platform.INSTAGRAM]: 'meta_',
   [Platform.IMESSAGE]: '_imessage_',
 };
 

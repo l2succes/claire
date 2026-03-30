@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import { config, platformConfig, matrixConfig } from './config';
 import { logger, stream } from './utils/logger';
+import { supabase } from './services/supabase';
 import { sessionMonitor } from './services/session-monitor';
 import authRoutes from './routes/auth';
 import messageRoutes from './routes/messages';
@@ -106,14 +107,68 @@ async function initializePlatforms() {
     }
   }
 
-  // Initialize all registered adapters
-  await platformManager.initialize();
-
-  // Setup unified message handler
-  platformManager.onMessage((message) => {
+  // Setup unified message handler BEFORE initialize so backfill is captured
+  platformManager.onMessage(async (message) => {
     logger.info(`Message received from ${message.platform}: ${message.id}`);
-    // TODO: Route to message ingestion service
+
+    // Skip WhatsApp status broadcasts
+    if (message.chatId === 'status@broadcast' || message.platformMetadata?.isStatus) {
+      return;
+    }
+
+    try {
+      // 1. Upsert chat record to get its UUID
+      const { data: chat, error: chatError } = await supabase
+        .from('chats')
+        .upsert({
+          user_id: message.userId,
+          whatsapp_chat_id: message.chatId,
+          platform_chat_id: message.chatId,
+          platform: message.platform,
+          name: message.chatName || message.chatId,
+          is_group: message.chatType === 'group',
+          last_message_at: message.timestamp,
+        }, { onConflict: 'user_id,platform,platform_chat_id' })
+        .select('id')
+        .single();
+
+      if (chatError || !chat) {
+        logger.error('Failed to upsert chat:', chatError);
+        return;
+      }
+
+      // 2. Upsert message record
+      const { error: msgError } = await supabase
+        .from('messages')
+        .upsert({
+          user_id: message.userId,
+          chat_id: chat.id,
+          whatsapp_id: message.platformMessageId,
+          platform_message_id: message.platformMessageId,
+          platform: message.platform,
+          content: message.content,
+          from_me: message.isFromMe,
+          type: message.contentType,
+          content_type: message.contentType,
+          timestamp: message.timestamp,
+          is_group: message.chatType === 'group',
+          contact_name: message.senderName || null,
+          contact_phone: message.isFromMe ? null : message.senderId?.replace(/@.*/, '') || null,
+          metadata: message.platformMetadata || null,
+        }, { onConflict: 'whatsapp_id' });
+
+      if (msgError) {
+        logger.error('Failed to upsert message:', msgError);
+      } else {
+        logger.debug(`Message saved: ${message.platformMessageId}`);
+      }
+    } catch (err) {
+      logger.error('Error saving message to DB:', err);
+    }
   });
+
+  // Initialize all registered adapters (after handler is registered so backfill is captured)
+  await platformManager.initialize();
 
   logger.info('Platform adapters initialized');
 }

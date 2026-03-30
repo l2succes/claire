@@ -29,7 +29,7 @@ media_store_path: /data/media_store
 uploads_path: /data/uploads
 
 # Generate with: openssl rand -hex 32
-registration_shared_secret: "CHANGE_ME_TO_SECURE_SECRET"
+registration_shared_secret: "8b661183fd624e8f63468dc290cb0ba9ecbe8133906b1f58d6eb45caa1dd6e98"
 
 enable_registration: false
 enable_registration_without_verification: false
@@ -41,9 +41,11 @@ app_service_config_files:
   - /data/appservices/instagram.yaml
 
 # Generate these with: openssl rand -hex 32
-macaroon_secret_key: "CHANGE_ME_TO_SECURE_SECRET"
-form_secret: "CHANGE_ME_TO_SECURE_SECRET"
+macaroon_secret_key: "8b661183fd624e8f63468dc290cb0ba9ecbe8133906b1f58d6eb45caa1dd6e98"
+form_secret: "8b661183fd624e8f63468dc290cb0ba9ecbe8133906b1f58d6eb45caa1dd6e98"
 signing_key_path: "/data/claire.local.signing.key"
+
+report_stats: false
 
 trusted_key_servers:
   - server_name: "matrix.org"
@@ -52,6 +54,22 @@ trusted_key_servers:
 rc_message:
   per_second: 100
   burst_count: 500
+
+rc_joins:
+  local:
+    per_second: 100
+    burst_count: 1000
+  remote:
+    per_second: 100
+    burst_count: 1000
+
+rc_joins_per_room:
+  per_second: 100
+  burst_count: 1000
+
+rc_3pid_validation:
+  per_second: 100
+  burst_count: 100
 
 rc_registration:
   per_second: 0.5

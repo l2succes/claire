@@ -78,10 +78,11 @@ class PlatformManager {
     logger.info(`Initializing platform adapters (matrix mode: ${this.matrixMode})...`);
 
     if (this.matrixMode && this.matrixAdapter) {
-      // In matrix mode, only initialize the single matrix adapter once
+      // In matrix mode, only initialize the single matrix adapter once.
+      // Event handlers must be set up BEFORE initialize() so backfill messages are captured.
       try {
-        await this.matrixAdapter.initialize();
         this.setupAdapterEventHandlers(this.matrixAdapter);
+        await this.matrixAdapter.initialize();
         logger.info('Matrix bridge adapter initialized for all platforms');
       } catch (error) {
         logger.error('Failed to initialize Matrix adapter:', error);

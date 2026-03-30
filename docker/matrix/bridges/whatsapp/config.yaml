@@ -17,8 +17,8 @@ appservice:
         username: whatsappbot
         displayname: WhatsApp Bridge Bot
         avatar: mxc://maunium.net/NeXNQarUbrlYBiPCpprYsRqr
-    as_token: GENERATE_ME_WITH_OPENSSL_RAND_HEX_32
-    hs_token: GENERATE_ME_WITH_OPENSSL_RAND_HEX_32
+    as_token: 15c581d944fdb469a5339345f3ff8d90550f19819a18a95c62ccf41e6947bfe6
+    hs_token: 15c581d944fdb469a5339345f3ff8d90550f19819a18a95c62ccf41e6947bfe6
 
 bridge:
     username_template: "_wa_{{.}}"
@@ -31,8 +31,9 @@ bridge:
         "@claire_bot:claire.local": admin
 
     history_sync:
-        max_initial_conversations: 25
-        message_count: 50
+        max_initial_conversations: -1
+        message_count: 500
+        request_full_sync: true
 
     relay:
         enabled: false

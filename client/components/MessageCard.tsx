@@ -108,7 +108,7 @@ export function MessageCard({ message, onPress, onLongPress }: MessageCardProps)
 
           {/* Bottom Row - Badges */}
           <View className="flex-row items-center mt-2">
-            {message.unread_count && message.unread_count > 0 && (
+            {!!message.unread_count && message.unread_count > 0 && (
               <View className="bg-green-500 rounded-full px-2 py-0.5 mr-2">
                 <Text className="text-white text-xs font-semibold">
                   {message.unread_count}

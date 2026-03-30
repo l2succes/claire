@@ -16,8 +16,8 @@ appservice:
     bot:
         username: instagrambot
         displayname: Instagram Bridge Bot
-    as_token: GENERATE_ME_WITH_OPENSSL_RAND_HEX_32
-    hs_token: GENERATE_ME_WITH_OPENSSL_RAND_HEX_32
+    as_token: b4418fe03b242bfcdfed5e7b5e3a81fd5b7d96f7c48647a97c9113cc0e85f4dd
+    hs_token: b4418fe03b242bfcdfed5e7b5e3a81fd5b7d96f7c48647a97c9113cc0e85f4dd
 
 meta:
     mode: instagram

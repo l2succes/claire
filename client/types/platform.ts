@@ -58,10 +58,11 @@ export interface PlatformSession {
   createdAt: string;
   lastConnectedAt?: string;
   error?: string;
+  authData?: AuthData;
 }
 
 export interface AuthData {
-  method: AuthMethod;
+  method?: AuthMethod;
   qrCode?: string;
   phoneNumber?: string;
   instructions?: string;

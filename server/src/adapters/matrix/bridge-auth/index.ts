@@ -42,8 +42,8 @@ export class BridgeAuthManager {
     // Platform-specific command building
     switch (platform) {
       case Platform.WHATSAPP:
-        // WhatsApp just needs "login" - bridge will respond with QR code
-        command = 'login';
+        // New mautrix-whatsapp requires "login qr" to get QR code flow
+        command = 'login qr';
         break;
 
       case Platform.TELEGRAM:

@@ -45,8 +45,9 @@ FROM base AS deps
 COPY server/package.json ./
 
 # Install production dependencies
-# --no-optional skips better-sqlite3 (only needed for iMessage on macOS)
-RUN bun install --production --no-optional
+# --ignore-scripts prevents better-sqlite3 from compiling native binaries in Docker
+# (it's an optional dep only used for iMessage on macOS, PUPPETEER_SKIP_CHROMIUM_DOWNLOAD handles puppeteer)
+RUN bun install --production --ignore-scripts
 
 # ============================================
 # Build stage

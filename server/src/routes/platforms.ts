@@ -12,8 +12,15 @@ import {
 } from '../adapters';
 import { platformConfig } from '../config';
 import { logger } from '../utils/logger';
+import { requireAuth } from '../middleware/auth';
 
 const router = Router();
+
+// Apply auth to all routes except GET / (platform listing)
+router.use((req, res, next) => {
+  if (req.method === 'GET' && req.path === '/') return next();
+  return requireAuth(req, res, next);
+});
 
 /**
  * GET /platforms
@@ -79,11 +86,15 @@ router.get('/:platform/status', async (req: Request, res: Response) => {
 
     const sessions = await adapter.getUserSessions(userId);
 
+    // Disable caching so polling always gets fresh session state / QR codes
+    res.setHeader('Cache-Control', 'no-store');
+
     return res.json({
       success: true,
       platform,
       sessions: sessions.map((s) => ({
         id: s.id,
+        platform: s.platform,
         status: s.status,
         platformUserId: s.platformUserId,
         platformUsername: s.platformUsername,
@@ -91,6 +102,7 @@ router.get('/:platform/status', async (req: Request, res: Response) => {
         createdAt: s.createdAt,
         lastConnectedAt: s.lastConnectedAt,
         error: s.error,
+        authData: s.authData,
       })),
     });
   } catch (error) {

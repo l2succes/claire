@@ -33,7 +33,7 @@ services:
     image: matrixdotorg/synapse:latest
     container_name: claire-synapse
     volumes:
-      - synapse_data:/data
+      - ./data/synapse:/data
       - ./synapse/homeserver.yaml:/data/homeserver.yaml:ro
       - ./synapse/log.config:/data/log.config:ro
       # Bridge registration files
@@ -61,8 +61,7 @@ services:
     image: dock.mau.dev/mautrix/whatsapp:latest
     container_name: claire-mautrix-whatsapp
     volumes:
-      - whatsapp_data:/data
-      - ./bridges/whatsapp/config.yaml:/data/config.yaml:ro
+      - ./data/whatsapp:/data
     networks:
       - claire-matrix
     depends_on:
@@ -75,8 +74,7 @@ services:
     image: dock.mau.dev/mautrix/telegram:latest
     container_name: claire-mautrix-telegram
     volumes:
-      - telegram_data:/data
-      - ./bridges/telegram/config.yaml:/data/config.yaml:ro
+      - ./data/telegram:/data
     networks:
       - claire-matrix
     depends_on:
@@ -89,8 +87,7 @@ services:
     image: dock.mau.dev/mautrix/meta:latest
     container_name: claire-mautrix-instagram
     volumes:
-      - instagram_data:/data
-      - ./bridges/instagram/config.yaml:/data/config.yaml:ro
+      - ./data/instagram:/data
     networks:
       - claire-matrix
     depends_on:
@@ -99,16 +96,8 @@ services:
     restart: unless-stopped
 
 volumes:
-  synapse_data:
-    name: claire_synapse_data
   synapse_postgres_data:
     name: claire_synapse_postgres_data
-  whatsapp_data:
-    name: claire_whatsapp_data
-  telegram_data:
-    name: claire_telegram_data
-  instagram_data:
-    name: claire_instagram_data
 
 networks:
   claire-matrix:

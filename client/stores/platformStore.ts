@@ -238,6 +238,14 @@ export const usePlatformStore = create<PlatformState>((set, get) => ({
               },
               _pollController: null,
             });
+          } else if (session.authData?.qrCode && session.authData.qrCode !== currentFlow.authData?.qrCode) {
+            // QR code refreshed — update so user always sees the latest
+            set({
+              activeAuthFlow: {
+                ...currentFlow,
+                authData: session.authData,
+              },
+            });
           }
         }
       );

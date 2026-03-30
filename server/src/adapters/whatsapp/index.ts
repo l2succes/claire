@@ -88,24 +88,7 @@ export class WhatsAppAdapter extends BasePlatformAdapter {
     this.sessions.set(sessionId, session);
     await this.saveSessionToRedis(session);
 
-    const client = new Client({
-      authStrategy: new LocalAuth({
-        clientId: sessionId,
-        dataPath: whatsappConfig.sessionPath,
-      }),
-      puppeteer: {
-        headless: whatsappConfig.puppeteerHeadless,
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-accelerated-2d-canvas',
-          '--no-first-run',
-          '--no-zygote',
-          '--disable-gpu',
-        ],
-      },
-    });
+    const client = this.createClient(sessionId);
 
     this.setupClientListeners(client, sessionId);
     this.clients.set(sessionId, client);
@@ -115,13 +98,64 @@ export class WhatsAppAdapter extends BasePlatformAdapter {
     return session;
   }
 
+  private createClient(sessionId: string): Client {
+    const isLinux = process.platform === 'linux';
+    const puppeteerArgs = [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-accelerated-2d-canvas',
+      '--no-first-run',
+      '--disable-gpu',
+      '--disable-extensions',
+    ];
+    // --no-zygote can crash Chrome on macOS; only add on Linux (e.g. Docker)
+    if (isLinux) puppeteerArgs.push('--no-zygote');
+
+    this.log('info', `[whatsapp] Creating client for session ${sessionId} on ${process.platform}`);
+
+    return new Client({
+      authStrategy: new LocalAuth({
+        clientId: sessionId,
+        dataPath: whatsappConfig.sessionPath,
+      }),
+      puppeteer: {
+        headless: whatsappConfig.puppeteerHeadless,
+        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/lib/chromium/chromium',
+        args: puppeteerArgs,
+      },
+    });
+  }
+
   private setupClientListeners(client: Client, sessionId: string): void {
     const session = this.sessions.get(sessionId);
     if (!session) return;
 
+    // Capture page-level errors from Chrome (e.g. JS errors, crashes)
+    // pupPage is available after initialize() resolves, so we hook it after a short delay
+    setTimeout(() => {
+      const page = (client as any).pupPage;
+      if (page) {
+        page.on('error', (err: Error) => {
+          this.log('error', `[whatsapp] Chrome page error for ${sessionId}: ${err.message}`);
+        });
+        page.on('pageerror', (err: Error) => {
+          this.log('error', `[whatsapp] WhatsApp Web JS error for ${sessionId}: ${err.message}`);
+        });
+        page.on('console', (msg: any) => {
+          if (msg.type() === 'error') {
+            this.log('warn', `[whatsapp] Browser console error for ${sessionId}: ${msg.text()}`);
+          }
+        });
+        this.log('info', `[whatsapp] Page error listeners attached for ${sessionId}`);
+      } else {
+        this.log('warn', `[whatsapp] pupPage not available for ${sessionId} — cannot attach page listeners`);
+      }
+    }, 3000);
+
     // QR Code generation
     client.on('qr', async (qr: string) => {
-      this.log('info', `QR code generated for session ${sessionId}`);
+      this.log('info', `[whatsapp] QR code generated for session ${sessionId} at ${new Date().toISOString()}`);
 
       const qrDataUrl = await qrcode.toDataURL(qr);
       session.status = PlatformStatus.AWAITING_AUTH;
@@ -131,9 +165,14 @@ export class WhatsAppAdapter extends BasePlatformAdapter {
       this.emitPlatformEvent('qr_code', sessionId, { qrCode: qrDataUrl });
     });
 
+    // Loading screen progress
+    client.on('loading_screen', (percent: number, message: string) => {
+      this.log('info', `[whatsapp] Session ${sessionId} loading: ${percent}% - ${message}`);
+    });
+
     // Authentication successful
     client.on('authenticated', async () => {
-      this.log('info', `Session ${sessionId} authenticated`);
+      this.log('info', `[whatsapp] ✅ Session ${sessionId} AUTHENTICATED at ${new Date().toISOString()}`);
 
       session.status = PlatformStatus.AUTHENTICATING;
       session.authData = { qrCode: undefined };
@@ -142,12 +181,13 @@ export class WhatsAppAdapter extends BasePlatformAdapter {
 
     // Client ready
     client.on('ready', async () => {
-      this.log('info', `Session ${sessionId} ready`);
+      this.log('info', `[whatsapp] ✅ Session ${sessionId} READY at ${new Date().toISOString()}`);
 
       const info = client.info;
       if (info) {
         session.phoneNumber = info.wid.user;
         session.platformUserId = info.wid._serialized;
+        this.log('info', `[whatsapp] Connected as ${session.phoneNumber}`);
       }
       session.status = PlatformStatus.CONNECTED;
       session.lastConnectedAt = new Date();
@@ -160,7 +200,7 @@ export class WhatsAppAdapter extends BasePlatformAdapter {
 
     // Authentication failure
     client.on('auth_failure', async (msg: string) => {
-      this.log('error', `Authentication failed for session ${sessionId}: ${msg}`);
+      this.log('error', `[whatsapp] ❌ Auth FAILED for session ${sessionId}: ${msg}`);
 
       session.status = PlatformStatus.FAILED;
       session.error = msg;
@@ -169,9 +209,14 @@ export class WhatsAppAdapter extends BasePlatformAdapter {
       this.emitPlatformEvent('auth_failure', sessionId, { error: msg });
     });
 
+    // State changes
+    client.on('change_state', (state: string) => {
+      this.log('info', `[whatsapp] Session ${sessionId} state → ${state}`);
+    });
+
     // Disconnection
     client.on('disconnected', async (reason: string) => {
-      this.log('warn', `Session ${sessionId} disconnected: ${reason}`);
+      this.log('warn', `[whatsapp] Session ${sessionId} DISCONNECTED: ${reason}`);
 
       session.status = PlatformStatus.DISCONNECTED;
       session.error = reason;
@@ -324,16 +369,7 @@ export class WhatsAppAdapter extends BasePlatformAdapter {
     }
 
     // Create new client with existing session data
-    const client = new Client({
-      authStrategy: new LocalAuth({
-        clientId: sessionId,
-        dataPath: whatsappConfig.sessionPath,
-      }),
-      puppeteer: {
-        headless: whatsappConfig.puppeteerHeadless,
-        args: ['--no-sandbox', '--disable-setuid-sandbox'],
-      },
-    });
+    const client = this.createClient(sessionId);
 
     this.setupClientListeners(client, sessionId);
     this.clients.set(sessionId, client);
@@ -474,7 +510,9 @@ export class WhatsAppAdapter extends BasePlatformAdapter {
         const sessionId = key.replace(this.sessionPrefix, '');
         const session = await this.loadSessionFromRedis(sessionId);
 
-        if (session && session.status === PlatformStatus.CONNECTED) {
+        if (!session) continue;
+
+        if (session.status === PlatformStatus.CONNECTED) {
           this.sessions.set(sessionId, session);
 
           try {
@@ -483,6 +521,12 @@ export class WhatsAppAdapter extends BasePlatformAdapter {
           } catch (error) {
             this.log('error', `Failed to restore session ${sessionId}`, { error });
           }
+        } else {
+          // Non-connected sessions (awaiting_auth, reconnecting, etc.) can't be resumed
+          // after a server restart because the Chrome process was killed. Remove them
+          // so the client doesn't see stale zombie sessions.
+          await this.deleteSessionFromRedis(sessionId);
+          this.log('info', `Cleaned up stale session ${sessionId} (was ${session.status})`);
         }
       }
 

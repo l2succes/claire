@@ -62,7 +62,7 @@ export class MatrixEventConverter {
       senderId: sender,
       senderName,
       chatId: chatId || room.roomId,
-      chatType: room.getJoinedMemberCount() > 2 ? 'group' : 'individual',
+      chatType: this.isGroupRoom(room, platform) ? 'group' : 'individual',
       chatName: room.name,
       timestamp: event.getDate() || new Date(),
       isFromMe,
@@ -109,6 +109,24 @@ export class MatrixEventConverter {
    */
   private hasMediaContent(content: MatrixMessageContent): boolean {
     return ['m.image', 'm.video', 'm.audio', 'm.file'].includes(content.msgtype);
+  }
+
+  /**
+   * A room is a group if it has more than one distinct ghost contact for the platform.
+   * Bridge bots and duplicate ghost users (LID vs phone) for the same contact don't count.
+   */
+  private isGroupRoom(room: Room, platform: Platform): boolean {
+    const contactIds = new Set<string>();
+    for (const member of room.getJoinedMembers()) {
+      if (this.userMapper.isBridgeBot(member.userId)) continue;
+      const contact = this.userMapper.ghostUserToPlatformContact(member.userId);
+      if (contact && contact.platform === platform) {
+        // Skip LID-based identifiers — they're duplicate aliases for phone-based contacts
+        if (contact.platformContactId.startsWith('lid-')) continue;
+        contactIds.add(contact.platformContactId);
+      }
+    }
+    return contactIds.size > 1;
   }
 
   /**

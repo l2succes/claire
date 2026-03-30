@@ -10,6 +10,7 @@ import {
   MatrixClient,
   ClientEvent,
   RoomEvent,
+  RoomMemberEvent,
   Room,
   MatrixEvent,
   Preset,
@@ -98,6 +99,9 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
       userId: this.config.botUserId || `@claire_bot:${this.config.serverName}`,
     });
 
+    // Setup event handlers BEFORE starting client so we capture initial sync events
+    this.setupMatrixEventHandlers();
+
     // Wait for initial sync
     await new Promise<void>((resolve, reject) => {
       const timeout = setTimeout(() => {
@@ -113,14 +117,17 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
         }
       });
 
-      this.matrixClient!.startClient({ initialSyncLimit: 10 });
+      this.matrixClient!.startClient({ initialSyncLimit: 50 });
     });
-
-    // Setup event handlers
-    this.setupMatrixEventHandlers();
 
     // Restore existing sessions
     await this.restoreExistingSessions();
+
+    // Register all existing rooms so messages can be routed to correct sessions
+    await this.registerExistingRooms();
+
+    // Backfill recent history for any already-connected sessions
+    await this.backfillRestoredSessions();
 
     this.log('info', 'Matrix bridge adapter initialized');
   }
@@ -150,11 +157,35 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
   private setupMatrixEventHandlers(): void {
     if (!this.matrixClient) return;
 
+    // Auto-accept room invites from bridge bots
+    this.matrixClient.on(RoomMemberEvent.Membership, async (event, member) => {
+      if (member.userId !== this.matrixClient!.getUserId()) return;
+      if (member.membership !== 'invite') return;
+
+      // Accept all invites on our local homeserver
+      try {
+        await this.matrixClient!.joinRoom(member.roomId);
+        this.log('info', `Auto-joined room ${member.roomId}`);
+
+        // Register and backfill the newly joined room
+        const room = this.matrixClient!.getRoom(member.roomId);
+        if (room) {
+          await this.tryRegisterRoom(room);
+          for (const [sessionId, platform] of this.sessionPlatforms) {
+            await this.syncRoomHistory(sessionId, platform);
+          }
+        }
+      } catch (err: any) {
+        this.log('warn', `Failed to auto-join room ${member.roomId}: ${err.message}`);
+      }
+    });
+
     // Handle incoming messages
     this.matrixClient.on(RoomEvent.Timeline, async (event, room, toStartOfTimeline) => {
       if (!room) return;
       if (toStartOfTimeline) return; // Ignore historical messages
       if (event.getType() !== 'm.room.message') return;
+      if (event.getContent()?.msgtype === 'm.notice') return; // Skip bridge error/notice messages
 
       const sender = event.getSender();
       if (sender === this.matrixClient!.getUserId()) return; // Ignore own messages
@@ -166,11 +197,12 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
       }
 
       // Check if this is a bridged chat message
-      const chatInfo = this.roomMapper.getRoomChatInfo(room.roomId);
+      let chatInfo = this.roomMapper.getRoomChatInfo(room.roomId);
       if (!chatInfo) {
-        // Try to detect and register the room
+        // Try to detect and register the room, then re-fetch
         await this.tryRegisterRoom(room);
-        return;
+        chatInfo = this.roomMapper.getRoomChatInfo(room.roomId);
+        if (!chatInfo) return;
       }
 
       // Convert and emit the message
@@ -222,13 +254,18 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
 
     // Check for QR code
     if (this.eventConverter.isQrCodeMessage(event)) {
-      const qrCodeUrl = this.eventConverter.getMediaUrl(event, this.matrixClient!);
-      if (qrCodeUrl) {
-        session.status = PlatformStatus.AWAITING_AUTH;
-        session.authData = { qrCode: qrCodeUrl };
-        await this.saveSessionToRedis(session);
-        this.bridgeAuthManager.updateQrCode(sessionId, qrCodeUrl);
-        this.emitPlatformEvent('qr_code', sessionId, { qrCode: qrCodeUrl });
+      const mxcUrl = (event.getContent() as { url?: string }).url;
+      if (mxcUrl) {
+        // Fetch the image server-side with admin token and encode as base64 data URI
+        // so the client doesn't need to make an authenticated request to Synapse
+        const qrCodeDataUri = await this.fetchMxcAsDataUri(mxcUrl);
+        if (qrCodeDataUri) {
+          session.status = PlatformStatus.AWAITING_AUTH;
+          session.authData = { qrCode: qrCodeDataUri };
+          await this.saveSessionToRedis(session);
+          this.bridgeAuthManager.updateQrCode(sessionId, qrCodeDataUri);
+          this.emitPlatformEvent('qr_code', sessionId, { qrCode: qrCodeDataUri });
+        }
       }
       return;
     }
@@ -240,6 +277,13 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
       await this.saveSessionToRedis(session);
       this.bridgeAuthManager.markAuthenticated(sessionId);
       this.emitPlatformEvent('session_ready', sessionId, {});
+
+      // Register all platform rooms and backfill recent messages
+      const platform = this.sessionPlatforms.get(sessionId);
+      if (platform) {
+        await this.registerExistingRooms();
+        await this.syncRoomHistory(sessionId, platform);
+      }
       return;
     }
 
@@ -722,7 +766,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
 
     const messages: UnifiedMessage[] = [];
     for (const event of events) {
-      if (event.getType() === 'm.room.message') {
+      if (event.getType() === 'm.room.message' && event.getContent()?.msgtype !== 'm.notice') {
         messages.push(
           await this.eventConverter.toUnifiedMessage(
             event,
@@ -764,7 +808,122 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
       this.log('error', 'Failed to restore Matrix sessions', { error });
     }
   }
+
+  /**
+   * Backfill history for all restored connected sessions.
+   * Called after registerExistingRooms() so room mappings are available.
+   */
+  private async backfillRestoredSessions(): Promise<void> {
+    for (const [sessionId, platform] of this.sessionPlatforms) {
+      const session = this.sessions.get(sessionId);
+      if (session?.status === PlatformStatus.CONNECTED) {
+        await this.syncRoomHistory(sessionId, platform);
+      }
+    }
+  }
+
+  /**
+   * Register all known Matrix rooms with the room mapper.
+   * Must be called after the initial sync so getRooms() is populated.
+   */
+  private async registerExistingRooms(): Promise<void> {
+    if (!this.matrixClient) return;
+
+    const rooms = this.matrixClient.getRooms();
+    let registered = 0;
+
+    for (const room of rooms) {
+      if (this.roomMapper.isControlRoom(room)) continue;
+      if (this.roomMapper.getRoomChatInfo(room.roomId)) continue; // already registered
+
+      const platform = this.roomMapper.detectRoomPlatform(room);
+      if (!platform) continue;
+
+      const chatId = this.roomMapper.getPrimaryChatParticipant(room);
+      if (!chatId) continue;
+
+      // Find the session for this platform
+      for (const [sessionId, sessionPlatform] of this.sessionPlatforms) {
+        if (sessionPlatform === platform) {
+          this.roomMapper.registerRoom(room.roomId, platform, chatId, sessionId);
+          registered++;
+          break;
+        }
+      }
+    }
+
+    this.log('info', `Registered ${registered} existing Matrix rooms`);
+  }
+
+  /**
+   * Emit all timeline events from known rooms as messages.
+   * Called after login to backfill recent chat history into the DB.
+   */
+  private async syncRoomHistory(sessionId: string, platform: Platform): Promise<void> {
+    if (!this.matrixClient) return;
+
+    const session = this.sessions.get(sessionId);
+    if (!session) return;
+
+    const rooms = this.matrixClient.getRooms();
+    let messageCount = 0;
+
+    for (const room of rooms) {
+      const chatInfo = this.roomMapper.getRoomChatInfo(room.roomId);
+      if (!chatInfo || chatInfo.sessionId !== sessionId) continue;
+
+      const events = room.getLiveTimeline().getEvents();
+      for (const event of events) {
+        if (event.getType() !== 'm.room.message') continue;
+
+        const unifiedMessage = await this.eventConverter.toUnifiedMessage(
+          event,
+          room,
+          sessionId,
+          session.userId,
+          platform
+        );
+
+        this.emitPlatformEvent('message', sessionId, unifiedMessage);
+        messageCount++;
+      }
+    }
+
+    this.log('info', `Backfilled ${messageCount} messages for ${platform} session ${sessionId}`);
+  }
+
+  /**
+   * Fetch an mxc:// media item using the admin token and return as a base64 data URI.
+   * Required because Synapse has authenticated media enabled (Synapse 1.98+),
+   * so the unauthenticated /_matrix/media/v3/download endpoint returns 404.
+   */
+  private async fetchMxcAsDataUri(mxcUrl: string): Promise<string | null> {
+    try {
+      // mxc://server/mediaId -> http://homeserver/_matrix/client/v1/media/download/server/mediaId
+      const match = mxcUrl.match(/^mxc:\/\/([^/]+)\/(.+)$/);
+      if (!match) return null;
+      const [, server, mediaId] = match;
+
+      const httpUrl = `${this.config.homeserverUrl}/_matrix/client/v1/media/download/${server}/${mediaId}`;
+      const response = await fetch(httpUrl, {
+        headers: { Authorization: `Bearer ${this.config.adminAccessToken}` },
+      });
+
+      if (!response.ok) {
+        this.log('warn', `Failed to fetch QR media: ${response.status}`);
+        return null;
+      }
+
+      const buffer = await response.arrayBuffer();
+      const base64 = Buffer.from(buffer).toString('base64');
+      const contentType = response.headers.get('content-type') || 'image/png';
+      return `data:${contentType};base64,${base64}`;
+    } catch (error) {
+      this.log('error', 'Error fetching QR code media', { error });
+      return null;
+    }
+  }
 }
 
 // Export for use in index.ts
-export { MatrixConfig } from './types';
+export type { MatrixConfig } from './types';

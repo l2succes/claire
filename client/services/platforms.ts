@@ -95,10 +95,12 @@ export const platformsApi = {
     platform: Platform,
     config?: Record<string, unknown>
   ): Promise<ConnectPlatformResponse> {
+    console.log('[platforms] connectPlatform called', platform, API_BASE_URL);
     const response = await api.post<ConnectPlatformResponse>(
       `/platforms/${platform}/connect`,
       config || {}
     );
+    console.log('[platforms] connectPlatform response', response.status);
     return response.data;
   },
 

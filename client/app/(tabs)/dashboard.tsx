@@ -75,6 +75,10 @@ export default function DashboardScreen() {
           platform_message_id,
           contact_phone,
           contact_name,
+          chats (
+            name,
+            platform_chat_id
+          ),
           ai_suggestions (
             id,
             confidence
@@ -99,7 +103,7 @@ export default function DashboardScreen() {
           chatMap.set(chatId, {
             id: msg.id,
             contact_name: msg.contact_name,
-            chat_name: msg.is_group ? chatId.split('@')[0] : msg.contact_name,
+            chat_name: msg.is_group ? (msg.chats?.name || msg.contact_name) : msg.contact_name,
             content: msg.content,
             timestamp: msg.timestamp,
             from_me: msg.from_me,
