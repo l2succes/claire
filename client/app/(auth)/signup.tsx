@@ -1,4 +1,4 @@
-import { View, Text, TextInput, TouchableOpacity, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Alert, KeyboardAvoidingView, Platform as RNPlatform } from 'react-native';
 import { useState } from 'react';
 import { router, Link } from 'expo-router';
 import { supabase } from '../../services/supabase';
@@ -60,9 +60,9 @@ export default function SignupScreen() {
   };
 
   return (
-    <KeyboardAvoidingView 
+    <KeyboardAvoidingView
       className="flex-1 bg-white"
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={RNPlatform.OS === 'ios' ? 'padding' : 'height'}
     >
       <View className="flex-1 justify-center px-8">
         <View className="mb-8">

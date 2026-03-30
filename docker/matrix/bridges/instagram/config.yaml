@@ -1,0 +1,41 @@
+# mautrix-meta (Instagram) Configuration for Claire
+# Documentation: https://docs.mau.fi/bridges/go/meta/config.html
+
+homeserver:
+    address: http://synapse:8008
+    domain: claire.local
+
+appservice:
+    address: http://mautrix-instagram:29319
+    hostname: 0.0.0.0
+    port: 29319
+    database:
+        type: sqlite3-fk-wal
+        uri: /data/mautrix-instagram.db
+    id: instagram
+    bot:
+        username: instagrambot
+        displayname: Instagram Bridge Bot
+    as_token: b4418fe03b242bfcdfed5e7b5e3a81fd5b7d96f7c48647a97c9113cc0e85f4dd
+    hs_token: b4418fe03b242bfcdfed5e7b5e3a81fd5b7d96f7c48647a97c9113cc0e85f4dd
+
+meta:
+    mode: instagram
+
+bridge:
+    username_template: "_instagram_{{.}}"
+    displayname_template: "{{.Name}} (IG)"
+    command_prefix: "!ig"
+
+    permissions:
+        "*": relay
+        "claire.local": user
+        "@claire_bot:claire.local": admin
+
+    private_chat_portal_meta: true
+
+logging:
+    min_level: info
+    writers:
+        - type: stdout
+          format: pretty-colored

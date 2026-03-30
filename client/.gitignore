@@ -4,3 +4,10 @@
 
 expo-env.d.ts
 # @end expo-cli
+
+# iOS - commit ios/ but exclude Pods (like node_modules) and build artifacts
+ios/Pods/
+ios/build/
+ios/DerivedData/
+ios/*.xcworkspace/xcuserdata/
+ios/*.xcodeproj/xcuserdata/

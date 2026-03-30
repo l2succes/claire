@@ -1,0 +1,239 @@
+# Production Docker Compose for Claire
+#
+# Usage:
+#   Direct mode:  docker compose -f docker-compose.prod.yml up -d
+#   Matrix mode:  docker compose -f docker-compose.prod.yml --profile matrix up -d
+#
+# This file is compatible with Railway, Docker Swarm, and standalone deployment.
+
+services:
+  # ============================================
+  # Core Services (always running)
+  # ============================================
+
+  # Claire Backend Server
+  claire-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: claire-server
+    ports:
+      - "${PORT:-3001}:3001"
+    environment:
+      # Server
+      NODE_ENV: production
+      PORT: 3001
+
+      # Database (use kong hostname when running with local Supabase)
+      SUPABASE_URL: ${SUPABASE_URL:-http://kong:8000}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY}
+      DATABASE_URL: ${DATABASE_URL}
+
+      # Auth
+      JWT_SECRET: ${JWT_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+
+      # AI
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+
+      # Redis
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+
+      # Platform Mode
+      PLATFORM_MODE: ${PLATFORM_MODE:-direct}
+
+      # WhatsApp (direct mode)
+      WHATSAPP_SESSION_PATH: /app/sessions
+      PUPPETEER_HEADLESS: "true"
+
+      # Telegram (direct mode)
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+
+      # Matrix (matrix mode only)
+      MATRIX_HOMESERVER_URL: ${MATRIX_HOMESERVER_URL:-http://synapse:8008}
+      MATRIX_SERVER_NAME: ${MATRIX_SERVER_NAME:-claire.local}
+      MATRIX_ADMIN_TOKEN: ${MATRIX_ADMIN_TOKEN:-}
+      MATRIX_BOT_USER_ID: ${MATRIX_BOT_USER_ID:-}
+    volumes:
+      - claire_sessions:/app/sessions
+      - claire_wwebjs_auth:/app/.wwebjs_auth
+      - claire_wwebjs_cache:/app/.wwebjs_cache
+    networks:
+      - claire-network
+      - supabase-network
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
+
+  # Redis for queue management
+  redis:
+    image: redis:7-alpine
+    container_name: claire-redis
+    command: redis-server --appendonly yes ${REDIS_PASSWORD:+--requirepass $REDIS_PASSWORD}
+    volumes:
+      - claire_redis_data:/data
+    networks:
+      - claire-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  # ============================================
+  # Matrix Services (profile: matrix)
+  # Only started with: --profile matrix
+  # ============================================
+
+  # PostgreSQL for Synapse
+  postgres-synapse:
+    image: postgres:15-alpine
+    container_name: claire-synapse-postgres
+    profiles: ["matrix"]
+    environment:
+      POSTGRES_USER: synapse
+      POSTGRES_PASSWORD: ${SYNAPSE_DB_PASSWORD:-synapse_secret}
+      POSTGRES_DB: synapse
+      POSTGRES_INITDB_ARGS: --encoding=UTF8 --lc-collate=C --lc-ctype=C
+    volumes:
+      - synapse_postgres_data:/var/lib/postgresql/data
+    networks:
+      - claire-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U synapse"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  # Synapse Matrix Homeserver
+  synapse:
+    image: matrixdotorg/synapse:latest
+    container_name: claire-synapse
+    profiles: ["matrix"]
+    volumes:
+      - synapse_data:/data
+      - ./docker/matrix/synapse/homeserver.yaml:/data/homeserver.yaml:ro
+      - ./docker/matrix/synapse/log.config:/data/log.config:ro
+      - ./docker/matrix/bridges/whatsapp/registration.yaml:/data/appservices/whatsapp.yaml:ro
+      - ./docker/matrix/bridges/telegram/registration.yaml:/data/appservices/telegram.yaml:ro
+      - ./docker/matrix/bridges/instagram/registration.yaml:/data/appservices/instagram.yaml:ro
+    environment:
+      SYNAPSE_CONFIG_PATH: /data/homeserver.yaml
+    ports:
+      - "${MATRIX_PORT:-8008}:8008"
+    networks:
+      - claire-network
+    depends_on:
+      postgres-synapse:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8008/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # WhatsApp Bridge
+  mautrix-whatsapp:
+    image: dock.mau.dev/mautrix/whatsapp:latest
+    container_name: claire-mautrix-whatsapp
+    profiles: ["matrix"]
+    volumes:
+      - whatsapp_bridge_data:/data
+      - ./docker/matrix/bridges/whatsapp/config.yaml:/data/config.yaml:ro
+    networks:
+      - claire-network
+    depends_on:
+      synapse:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Telegram Bridge
+  mautrix-telegram:
+    image: dock.mau.dev/mautrix/telegram:latest
+    container_name: claire-mautrix-telegram
+    profiles: ["matrix"]
+    volumes:
+      - telegram_bridge_data:/data
+      - ./docker/matrix/bridges/telegram/config.yaml:/data/config.yaml:ro
+    networks:
+      - claire-network
+    depends_on:
+      synapse:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Instagram Bridge
+  mautrix-instagram:
+    image: dock.mau.dev/mautrix/meta:latest
+    container_name: claire-mautrix-instagram
+    profiles: ["matrix"]
+    volumes:
+      - instagram_bridge_data:/data
+      - ./docker/matrix/bridges/instagram/config.yaml:/data/config.yaml:ro
+    networks:
+      - claire-network
+    depends_on:
+      synapse:
+        condition: service_healthy
+    restart: unless-stopped
+
+# ============================================
+# Volumes
+# ============================================
+volumes:
+  # Core volumes
+  claire_sessions:
+    name: claire_sessions
+  claire_wwebjs_auth:
+    name: claire_wwebjs_auth
+  claire_wwebjs_cache:
+    name: claire_wwebjs_cache
+  claire_redis_data:
+    name: claire_redis_data
+
+  # Matrix volumes
+  synapse_data:
+    name: claire_synapse_data
+  synapse_postgres_data:
+    name: claire_synapse_postgres_data
+  whatsapp_bridge_data:
+    name: claire_whatsapp_bridge_data
+  telegram_bridge_data:
+    name: claire_telegram_bridge_data
+  instagram_bridge_data:
+    name: claire_instagram_bridge_data
+
+# ============================================
+# Networks
+# ============================================
+networks:
+  claire-network:
+    name: claire-network
+    driver: bridge
+  supabase-network:
+    name: supabase-network
+    external: true

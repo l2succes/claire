@@ -1,0 +1,14 @@
+id: meta
+url: http://mautrix-instagram:29319
+as_token: JfIHXyofgCLVDfyfeDXFWtDMDDCRyBfsG5x7GLDXn4Ay0DwNYUQXH2YiTIogNul9
+hs_token: AnOjYg3WlsvlknIjIuanULCRpHVlFg7ncFakCAoDhRrn0YYYgKUMp7reNDNCUpkx
+sender_localpart: 6LhFKDeFCgCGdHsleVzWj3SV3b30uPx8
+rate_limited: false
+namespaces:
+    users:
+        - regex: ^@metabot:claire\.local$
+          exclusive: true
+        - regex: ^@meta_.*:claire\.local$
+          exclusive: true
+de.sorunome.msc2409.push_ephemeral: true
+receive_ephemeral: true

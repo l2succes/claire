@@ -1,0 +1,105 @@
+# Matrix Bridge Infrastructure for Claire
+# Run with: docker compose -f docker-compose.matrix.yml up -d
+#
+# Before running:
+# 1. Copy .env.example to .env and fill in values
+# 2. Run: ./scripts/init-bridges.sh to generate registration files
+
+version: '3.8'
+
+services:
+  # PostgreSQL database for Synapse
+  postgres-synapse:
+    image: postgres:15-alpine
+    container_name: claire-synapse-postgres
+    environment:
+      POSTGRES_USER: synapse
+      POSTGRES_PASSWORD: ${SYNAPSE_DB_PASSWORD:-synapse_secret}
+      POSTGRES_DB: synapse
+      POSTGRES_INITDB_ARGS: --encoding=UTF8 --lc-collate=C --lc-ctype=C
+    volumes:
+      - synapse_postgres_data:/var/lib/postgresql/data
+    networks:
+      - claire-matrix
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U synapse"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  # Synapse Matrix Homeserver
+  synapse:
+    image: matrixdotorg/synapse:latest
+    container_name: claire-synapse
+    volumes:
+      - ./data/synapse:/data
+      - ./synapse/homeserver.yaml:/data/homeserver.yaml:ro
+      - ./synapse/log.config:/data/log.config:ro
+      # Bridge registration files
+      - ./bridges/whatsapp/registration.yaml:/data/appservices/whatsapp.yaml:ro
+      - ./bridges/telegram/registration.yaml:/data/appservices/telegram.yaml:ro
+      - ./bridges/instagram/registration.yaml:/data/appservices/instagram.yaml:ro
+    environment:
+      - SYNAPSE_CONFIG_PATH=/data/homeserver.yaml
+    ports:
+      - "${MATRIX_PORT:-8008}:8008"
+    networks:
+      - claire-matrix
+    depends_on:
+      postgres-synapse:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8008/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # WhatsApp Bridge (mautrix-whatsapp)
+  mautrix-whatsapp:
+    image: dock.mau.dev/mautrix/whatsapp:latest
+    container_name: claire-mautrix-whatsapp
+    volumes:
+      - ./data/whatsapp:/data
+    networks:
+      - claire-matrix
+    depends_on:
+      synapse:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Telegram Bridge (mautrix-telegram)
+  mautrix-telegram:
+    image: dock.mau.dev/mautrix/telegram:latest
+    container_name: claire-mautrix-telegram
+    volumes:
+      - ./data/telegram:/data
+    networks:
+      - claire-matrix
+    depends_on:
+      synapse:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Instagram Bridge (mautrix-meta)
+  mautrix-instagram:
+    image: dock.mau.dev/mautrix/meta:latest
+    container_name: claire-mautrix-instagram
+    volumes:
+      - ./data/instagram:/data
+    networks:
+      - claire-matrix
+    depends_on:
+      synapse:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  synapse_postgres_data:
+    name: claire_synapse_postgres_data
+
+networks:
+  claire-matrix:
+    name: claire-matrix
+    driver: bridge

@@ -1,0 +1,14 @@
+id: telegram
+url: http://mautrix-telegram:29317
+as_token: 9yjoYsanlFGTSsgfoS8SdbobH7BqIJHczQ4jw6FdcMZ7igPiVVTu6FMzk0lD06td
+hs_token: RgqOHyv11cCg4Ur6bNj3jgT18WnHkXTdApVe8icD2r1QnMAmawTU940G75hU2d6s
+sender_localpart: JuOGycsLE6BoO7QJSSRHxD9M8zAWAO9V
+rate_limited: false
+namespaces:
+    users:
+        - regex: ^@telegrambot:claire\.local$
+          exclusive: true
+        - regex: ^@_telegram_.*:claire\.local$
+          exclusive: true
+de.sorunome.msc2409.push_ephemeral: true
+receive_ephemeral: true

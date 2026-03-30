@@ -1,8 +1,10 @@
-import { View, Text, TextInput, TouchableOpacity, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Alert, KeyboardAvoidingView, Platform as RNPlatform } from 'react-native';
 import { useState } from 'react';
 import { router, Link } from 'expo-router';
 import { supabase } from '../../services/supabase';
 import { GoogleSignInButton } from '../../components/GoogleSignInButton';
+import { platformsApi } from '../../services/platforms';
+import { PlatformStatus } from '../../types/platform';
 
 export default function SigninScreen() {
   const [email, setEmail] = useState('');
@@ -30,20 +32,23 @@ export default function SigninScreen() {
 
       if (data.user && data.session) {
         // User is logged in, auth store will be updated via listener
-        
-        // Check if user has WhatsApp connected
-        const { data: sessions } = await supabase
-          .from('whatsapp_sessions')
-          .select('*')
-          .eq('user_id', data.user.id)
-          .eq('status', 'connected')
-          .single();
 
-        if (sessions) {
-          // User has WhatsApp connected, go to dashboard
-          router.replace('/(tabs)/dashboard');
-        } else {
-          // Need to connect WhatsApp
+        // Check if user has any platform connected
+        try {
+          const sessions = await platformsApi.getAllSessions();
+          const hasConnectedPlatform = sessions.some(
+            (s) => s.status === PlatformStatus.CONNECTED
+          );
+
+          if (hasConnectedPlatform) {
+            // User has a platform connected, go to dashboard
+            router.replace('/(tabs)/dashboard');
+          } else {
+            // Need to connect a platform
+            router.replace('/(auth)/login');
+          }
+        } catch {
+          // If platform check fails, still proceed to login screen
           router.replace('/(auth)/login');
         }
       }
@@ -55,9 +60,9 @@ export default function SigninScreen() {
   };
 
   return (
-    <KeyboardAvoidingView 
+    <KeyboardAvoidingView
       className="flex-1 bg-white"
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={RNPlatform.OS === 'ios' ? 'padding' : 'height'}
     >
       <View className="flex-1 justify-center px-8">
         <View className="mb-8">

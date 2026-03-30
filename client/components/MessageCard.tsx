@@ -2,6 +2,8 @@ import { View, Text, TouchableOpacity, Image } from 'react-native';
 import { formatDistanceToNow } from 'date-fns';
 import { User, Users, Check, CheckCheck, Clock } from 'lucide-react-native';
 import { useState } from 'react';
+import { PlatformBadge } from './PlatformIcon';
+import { Platform } from '../types/platform';
 
 interface MessageCardProps {
   message: {
@@ -16,6 +18,7 @@ interface MessageCardProps {
     status?: 'sent' | 'delivered' | 'read' | 'pending';
     unread_count?: number;
     has_ai_response?: boolean;
+    platform?: Platform;
   };
   onPress: () => void;
   onLongPress?: () => void;
@@ -81,6 +84,9 @@ export function MessageCard({ message, onPress, onLongPress }: MessageCardProps)
             </View>
             <View className="flex-row items-center">
               {message.from_me && getStatusIcon()}
+              {message.platform && (
+                <PlatformBadge platform={message.platform} size={14} className="ml-1" />
+              )}
               <Text className="text-xs text-gray-500 dark:text-gray-400 ml-1">
                 {timeAgo}
               </Text>
@@ -102,7 +108,7 @@ export function MessageCard({ message, onPress, onLongPress }: MessageCardProps)
 
           {/* Bottom Row - Badges */}
           <View className="flex-row items-center mt-2">
-            {message.unread_count && message.unread_count > 0 && (
+            {!!message.unread_count && message.unread_count > 0 && (
               <View className="bg-green-500 rounded-full px-2 py-0.5 mr-2">
                 <Text className="text-white text-xs font-semibold">
                   {message.unread_count}
