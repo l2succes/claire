@@ -1,8 +1,10 @@
 import dotenv from 'dotenv';
 import { z } from 'zod';
+import path from 'path';
 
-// Load environment variables
-dotenv.config();
+// Load .env from the server directory regardless of CWD
+dotenv.config({ path: path.join(__dirname, '../../.env') });
+dotenv.config(); // fallback to CWD .env
 
 // Environment schema validation
 const envSchema = z.object({
@@ -20,7 +22,8 @@ const envSchema = z.object({
   OPENAI_API_KEY: z.string(),
   OPENAI_MODEL: z.string().default('gpt-4-turbo-preview'),
   
-  // Redis
+  // Redis — Railway provides REDIS_URL; local dev uses REDIS_HOST/PORT
+  REDIS_URL: z.string().optional(),
   REDIS_HOST: z.string().default('localhost'),
   REDIS_PORT: z.string().default('6379').transform(Number),
   REDIS_PASSWORD: z.string().optional(),
@@ -96,11 +99,9 @@ export const supabaseConfig = {
   serviceKey: config.SUPABASE_SERVICE_KEY,
 };
 
-export const redisConfig = {
-  host: config.REDIS_HOST,
-  port: config.REDIS_PORT,
-  password: config.REDIS_PASSWORD,
-};
+export const redisConfig = config.REDIS_URL
+  ? { url: config.REDIS_URL }
+  : { host: config.REDIS_HOST, port: config.REDIS_PORT, password: config.REDIS_PASSWORD };
 
 export const whatsappConfig = {
   sessionPath: config.WHATSAPP_SESSION_PATH,

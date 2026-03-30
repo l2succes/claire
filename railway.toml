@@ -21,10 +21,6 @@ restartPolicyMaxRetries = 5
 # Start command (optional, Dockerfile CMD is used if not specified)
 # startCommand = "bun run dist/index.js"
 
-[service]
-# Internal port the application listens on
-internalPort = 3001
-
 # ============================================
 # Environment Variables (set via Railway dashboard)
 # ============================================

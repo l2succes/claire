@@ -11,31 +11,18 @@ class RedisService {
     this.connect();
   }
 
+  private makeClient(extraOpts: object = {}): Redis {
+    if ('url' in redisConfig) {
+      return new Redis(redisConfig.url!, extraOpts as any);
+    }
+    return new Redis({ host: redisConfig.host, port: redisConfig.port, password: redisConfig.password, ...extraOpts });
+  }
+
   private connect() {
     try {
-      // Main client for general operations
-      this.client = new Redis({
-        host: redisConfig.host,
-        port: redisConfig.port,
-        password: redisConfig.password,
-        retryStrategy: (times) => {
-          const delay = Math.min(times * 50, 2000);
-          return delay;
-        },
-      });
-
-      // Separate clients for pub/sub
-      this.subscriber = new Redis({
-        host: redisConfig.host,
-        port: redisConfig.port,
-        password: redisConfig.password,
-      });
-
-      this.publisher = new Redis({
-        host: redisConfig.host,
-        port: redisConfig.port,
-        password: redisConfig.password,
-      });
+      this.client = this.makeClient({ retryStrategy: (times: number) => Math.min(times * 50, 2000) });
+      this.subscriber = this.makeClient();
+      this.publisher = this.makeClient();
 
       this.client.on('connect', () => {
         logger.info('Redis connected');
