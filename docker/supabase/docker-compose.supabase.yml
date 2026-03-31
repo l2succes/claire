@@ -143,6 +143,8 @@ services:
       PGRST_DB_USE_LEGACY_GUCS: "false"
       PGRST_APP_SETTINGS_JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-token-with-at-least-32-characters-long}
       PGRST_APP_SETTINGS_JWT_EXP: ${JWT_EXPIRY:-3600}
+      PGRST_DB_POOL: "25"
+      PGRST_DB_POOL_ACQUISITION_TIMEOUT: "10"
     command: "postgrest"
     networks:
       - supabase-network
