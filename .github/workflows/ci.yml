@@ -27,8 +27,11 @@ jobs:
           bun-version: latest
       
       - name: Install dependencies
-        run: bun install
-      
+        run: |
+          bun install
+          cd server && bun install
+          cd ../client && bun install
+
       - name: Run tests
         working-directory: ${{ matrix.working-directory }}
         run: bunx jest --coverage
