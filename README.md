@@ -53,6 +53,19 @@ Each platform has its own auth method:
 
 For detailed bridge API docs, see [docs/MATRIX_BRIDGE_REFERENCE.md](docs/MATRIX_BRIDGE_REFERENCE.md) and the [official mautrix docs](https://docs.mau.fi/).
 
+## Production
+
+| Service | URL |
+|---|---|
+| Claire server | https://claire-production-1450.up.railway.app |
+| Supabase API (Kong) | https://kong-production-2679.up.railway.app |
+| Supabase Studio | https://supabase-studio-production-b766.up.railway.app |
+| Postgres (external) | `hopper.proxy.rlwy.net:46800` user: `supabase_admin` |
+
+See [docs/deployment/PRODUCTION_SETUP.md](docs/deployment/PRODUCTION_SETUP.md) for health checks, EAS env var setup, and CI.
+
+---
+
 ## Prerequisites
 
 - Bun 1.0+
@@ -104,9 +117,26 @@ cp client/.env.example client/.env
 # Terminal 1: Server
 cd server && bun run --watch src/index.ts
 
-# Terminal 2: iOS app
-cd client && bunx expo prebuild --clean --platform ios && bunx expo run:ios
+# Terminal 2: iOS app (local Supabase + server)
+cd client && bun run start       # pulls dev env vars, opens Expo
+
+# Or run directly on simulator (local)
+cd client && bun run ios
+
+# Or run against Railway production
+cd client && bun run ios:prod
 ```
+
+### Building for device / distribution
+
+```bash
+cd client
+bun run build:dev      # dev client build (EAS, internal)
+bun run build:preview  # preview build pointing at Railway (EAS, internal)
+bun run build:prod     # production build for App Store (EAS)
+```
+
+EAS environment variables are stored in the cloud — no `.env` file needed on CI or a new machine. See [docs/deployment/PRODUCTION_SETUP.md](docs/deployment/PRODUCTION_SETUP.md).
 
 ## Project Structure
 
@@ -143,10 +173,12 @@ cd client && bunx expo prebuild --clean --platform ios && bunx expo run:ios
 
 ## Documentation
 
+- [Production Setup](docs/deployment/PRODUCTION_SETUP.md) — Railway stack, Supabase dashboard, EAS env vars, CI
+- [Railway Deployment](docs/deployment/RAILWAY.md) — Railway service configuration
+- [Environment Setup](docs/ENVIRONMENT_SETUP.md) — Local vs device vs production environments
 - [Matrix Bridge Reference](docs/MATRIX_BRIDGE_REFERENCE.md) — mautrix bridge API quick reference
 - [Matrix Bridge Integration Plan](docs/plans/matrix-bridge-integration.md) — Architecture design
 - [Unified Messenger Client Plan](docs/plans/unified-ai-messenger-client.md) — Client implementation
-- [Environment Setup](docs/ENVIRONMENT_SETUP.md) — Deployment options
 - [Official mautrix docs](https://docs.mau.fi/) — Upstream bridge documentation
 
 ## License

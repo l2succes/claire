@@ -348,25 +348,35 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     const platform = this.roomMapper.detectRoomPlatform(room);
     if (!platform) return;
 
-    // For group rooms use room.roomId as stable chatId to avoid collision with DMs.
-    // A room is a group if it has more than one distinct non-bot ghost contact for the platform.
-    const ghostContacts = room.getJoinedMembers()
-      .filter(m => !this.userMapper.isBridgeBot(m.userId))
-      .map(m => this.userMapper.ghostUserToPlatformContact(m.userId))
-      .filter((c): c is NonNullable<typeof c> => c !== null && c.platform === platform && !c.platformContactId.startsWith('lid-'));
-
-    const isGroup = ghostContacts.length > 1;
-    const chatId = isGroup ? room.roomId : this.roomMapper.getPrimaryChatParticipant(room);
-    if (!chatId) return;
-
-    // Find a session for this platform
+    // Find a session for this platform (needed to get selfGhostId)
+    let matchingSessionId: string | undefined;
     for (const [sessionId, sessionPlatform] of this.sessionPlatforms) {
       if (sessionPlatform === platform) {
-        this.roomMapper.registerRoom(room.roomId, platform, chatId, sessionId);
-        this.log('info', `Registered room ${room.roomId} for ${platform} chat ${chatId} (${isGroup ? 'group' : 'dm'})`);
+        matchingSessionId = sessionId;
         break;
       }
     }
+    if (!matchingSessionId) return;
+
+    const selfGhostId = this.sessionSelfGhostIds.get(matchingSessionId);
+
+    // For group rooms use room.roomId as stable chatId to avoid collision with DMs.
+    // Exclude the self ghost user (present in groups but not DMs) to avoid false positives.
+    // Strategy: prefer phone-based contacts for counting (ignore LID duplicates of the same person).
+    // If ALL contacts are LID-based (mautrix v2 all-LID group), fall back to counting LID contacts.
+    const allGhostContacts = room.getJoinedMembers()
+      .filter(m => !this.userMapper.isBridgeBot(m.userId) && m.userId !== selfGhostId)
+      .map(m => this.userMapper.ghostUserToPlatformContact(m.userId))
+      .filter((c): c is NonNullable<typeof c> => c !== null && c.platform === platform);
+
+    const phoneContacts = allGhostContacts.filter(c => !c.platformContactId.startsWith('lid-'));
+    const contactsForCounting = phoneContacts.length > 0 ? phoneContacts : allGhostContacts;
+    const isGroup = contactsForCounting.length > 1;
+    const chatId = isGroup ? room.roomId : this.roomMapper.getPrimaryChatParticipant(room, selfGhostId);
+    if (!chatId) return;
+
+    this.roomMapper.registerRoom(room.roomId, platform, chatId, matchingSessionId);
+    this.log('info', `Registered room ${room.roomId} for ${platform} chat ${chatId} (${isGroup ? 'group' : 'dm'})`);
   }
 
   /**

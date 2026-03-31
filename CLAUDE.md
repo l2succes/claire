@@ -22,6 +22,16 @@ Mobile App  <-->  Bun Server  <-->  Synapse (Matrix)  <-->  mautrix bridges  <--
 
 Official docs: https://docs.mau.fi/ (source: https://github.com/mautrix/docs)
 
+**Local docs clone**: `docs/mautrix/` — search here first when implementing any bridge feature:
+```bash
+grep -r "keyword" docs/mautrix/bridges/
+```
+Key paths:
+- `docs/mautrix/bridges/general/` — encryption, backfill, double-puppeting, troubleshooting
+- `docs/mautrix/bridges/go/whatsapp/` — WhatsApp-specific
+- `docs/mautrix/bridges/go/telegram/` — Telegram-specific
+- `docs/mautrix/bridges/go/meta/` — Instagram/Meta-specific
+
 ### Key docs to consult:
 - **WhatsApp auth**: https://docs.mau.fi/bridges/go/whatsapp/authentication.html
 - **Double puppeting**: https://docs.mau.fi/bridges/general/double-puppeting.html

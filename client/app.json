@@ -44,12 +44,18 @@
           "color": "#ffffff"
         }
       ],
-"expo-font",
+      "expo-font",
       "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true
     },
-    "scheme": "claire"
+    "scheme": "claire",
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "366bc316-ee01-407b-b681-dd8eed7d02be"
+      }
+    }
   }
 }

@@ -1,410 +1,282 @@
-import { View, Text, FlatList, RefreshControl, TextInput, TouchableOpacity, ActivityIndicator, ScrollView } from 'react-native';
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Search, MessageCircle } from 'lucide-react-native';
+import { View, ScrollView, Text, TouchableOpacity } from 'react-native';
+import { useState } from 'react';
 import { router } from 'expo-router';
-import { MessageCard } from '../../components/MessageCard';
-import { PlatformBadge, PlatformIconButton } from '../../components/PlatformIcon';
-import { supabase } from '../../services/supabase';
-import { useAuthStore } from '../../stores/authStore';
-import { usePlatformStore, useHasAnyConnection } from '../../stores/platformStore';
-import { Platform, PLATFORM_DISPLAY } from '../../types/platform';
+import { UrgentCard, UrgentOverflowItem } from '../../components/UrgentCard';
+import type { UrgentMessage } from '../../components/UrgentCard';
+import { HomeSection } from '../../components/HomeSection';
+import { MorningBrief } from '../../components/MorningBrief';
+import { NudgeCard } from '../../components/NudgeCard';
+import { PlatformBadge } from '../../components/PlatformIcon';
+import { Platform } from '../../types/platform';
+import type { ChatCategory } from '../../types/conversationSettings';
+import { formatWaitTime } from '../../utils/urgency';
 
-interface Message {
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+interface CatchUpGroup {
   id: string;
-  contact_name?: string;
-  contact_avatar?: string;
-  chat_name?: string;
-  content: string;
-  timestamp: string;
-  from_me: boolean;
-  is_group: boolean;
-  status?: 'sent' | 'delivered' | 'read' | 'pending';
-  unread_count?: number;
-  has_ai_response?: boolean;
   chat_id: string;
-  contact_phone?: string;
+  chat_name: string;
+  unread_count: number;
   platform?: Platform;
+  last_active: string;
+  summary: string;
 }
 
-type FilterType = 'all' | 'unread' | 'groups' | 'ai';
-type PlatformFilterType = Platform | 'all';
+interface Nudge {
+  id: string;
+  chat_id: string;
+  contact_name: string;
+  category: ChatCategory;
+  message: string;
+}
 
-export default function DashboardScreen() {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [activeFilter, setActiveFilter] = useState<FilterType>('all');
-  const [platformFilter, setPlatformFilter] = useState<PlatformFilterType>('all');
-  const [page, setPage] = useState(0);
-  const [hasMore, setHasMore] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
+// ---------------------------------------------------------------------------
+// Dummy data (Phase 1 — replace with real data in Phase 2)
+// ---------------------------------------------------------------------------
 
-  const user = useAuthStore((state) => state.user);
-  const { connectedSessions, initialize, isInitialized } = usePlatformStore();
-  const hasConnection = useHasAnyConnection();
+const DUMMY_MORNING_BRIEF =
+  '3 conversations are waiting for your reply. Sarah has been waiting 2.5 hours about the proposal. Mom texted last night. The Vegas trip group is planning April dates.';
 
-  // Initialize platform store on mount
-  useEffect(() => {
-    if (!isInitialized) {
-      initialize();
-    }
-  }, [initialize, isInitialized]);
+const DUMMY_URGENT: UrgentMessage[] = [
+  {
+    id: 'u1',
+    chat_id: 'chat-sarah',
+    contact_name: 'Sarah Chen',
+    content: 'Can we reschedule our call to tomorrow? Also need your input on the proposal ASAP',
+    timestamp: new Date(Date.now() - 2.5 * 3_600_000).toISOString(),
+    from_me: false,
+    is_group: false,
+    platform: Platform.WHATSAPP,
+    urgency_score: 78,
+    quick_replies: [
+      { text: 'Sure, what time works for you?', tone: 'warm' },
+      { text: "I'll review the proposal tonight", tone: 'professional' },
+      { text: 'Can we do 2pm tomorrow?', tone: 'casual' },
+    ],
+  },
+  {
+    id: 'u2',
+    chat_id: 'chat-mom',
+    contact_name: 'Mom',
+    content: 'Just checking in! How are you doing?',
+    timestamp: new Date(Date.now() - 18 * 3_600_000).toISOString(),
+    from_me: false,
+    is_group: false,
+    platform: Platform.WHATSAPP,
+    urgency_score: 48,
+    quick_replies: [
+      { text: 'Hey! Doing well, talk soon', tone: 'warm' },
+      { text: "All good! I'll call you this weekend", tone: 'casual' },
+    ],
+  },
+  {
+    id: 'u3',
+    chat_id: 'chat-vegas',
+    chat_name: 'Vegas Trip',
+    content: 'Jordan: Everyone still good for April 18-21?',
+    timestamp: new Date(Date.now() - 45 * 60_000).toISOString(),
+    from_me: false,
+    is_group: true,
+    platform: Platform.WHATSAPP,
+    urgency_score: 55,
+    quick_replies: [
+      { text: "I'm in!", tone: 'casual' },
+      { text: 'Can confirm those dates work', tone: 'brief' },
+    ],
+  },
+];
 
-  // Fetch messages with pagination
-  const fetchMessages = useCallback(async (pageNum: number = 0, append: boolean = false) => {
-    if (!user?.id) return;
+const DUMMY_CATCHUP: CatchUpGroup[] = [
+  {
+    id: 'g1',
+    chat_id: 'chat-design',
+    chat_name: 'Design Team',
+    unread_count: 24,
+    platform: Platform.TELEGRAM,
+    last_active: new Date(Date.now() - 20 * 60_000).toISOString(),
+    summary: 'Discussing the new onboarding flow. Lena shared mockups and feedback was requested.',
+  },
+  {
+    id: 'g2',
+    chat_id: 'chat-nyc',
+    chat_name: 'NYC Friends',
+    unread_count: 11,
+    platform: Platform.WHATSAPP,
+    last_active: new Date(Date.now() - 3 * 3_600_000).toISOString(),
+    summary: 'Planning dinner for Friday. Still deciding on a spot.',
+  },
+];
 
-    const pageSize = 20;
-    const from = pageNum * pageSize;
-    const to = from + pageSize - 1;
+const DUMMY_NUDGES: Nudge[] = [
+  {
+    id: 'n1',
+    chat_id: 'chat-emma',
+    contact_name: 'Emma',
+    category: 'romantic',
+    message: "Haven't texted in 3 days — say good morning?",
+  },
+  {
+    id: 'n2',
+    chat_id: 'chat-alex',
+    contact_name: 'Alex Rivera',
+    category: 'business',
+    message: 'You offered to send a proposal 4 days ago. Follow up?',
+  },
+];
 
-    try {
-      // Get latest messages grouped by chat
-      const { data, error, count } = await supabase
-        .from('messages')
-        .select(`
-          id,
-          content,
-          timestamp,
-          from_me,
-          is_group,
-          status,
-          platform,
-          chat_id,
-          platform_message_id,
-          contact_phone,
-          contact_name,
-          chats (
-            name,
-            platform_chat_id
-          ),
-          ai_suggestions (
-            id,
-            confidence
-          )
-        `, { count: 'exact' })
-        .eq('user_id', user.id)
-        .order('timestamp', { ascending: false })
-        .range(from, to);
+// ---------------------------------------------------------------------------
+// Sub-components
+// ---------------------------------------------------------------------------
 
-      if (error) throw error;
+function CatchUpCard({ group, onPress }: { group: CatchUpGroup; onPress: () => void }) {
+  const minsAgo = Math.floor((Date.now() - new Date(group.last_active).getTime()) / 60_000);
+  const timeLabel = minsAgo < 60 ? `${minsAgo}m ago` : `${Math.floor(minsAgo / 60)}h ago`;
 
-      // Group messages by chat and get latest
-      const chatMap = new Map<string, Message>();
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.75}
+      className="mx-4 mb-2 bg-white dark:bg-gray-800 rounded-2xl p-4 border border-gray-100 dark:border-gray-700"
+    >
+      <View className="flex-row items-start justify-between mb-2">
+        <View className="flex-row items-center flex-1 mr-3">
+          <View className="w-9 h-9 rounded-full bg-gray-100 dark:bg-gray-700 items-center justify-center mr-2.5">
+            <Text className="text-sm font-bold text-gray-600 dark:text-gray-300">
+              {group.chat_name[0].toUpperCase()}
+            </Text>
+          </View>
+          <View className="flex-1">
+            <Text className="font-semibold text-gray-900 dark:text-white text-sm" numberOfLines={1}>
+              {group.chat_name}
+            </Text>
+            <View className="flex-row items-center gap-1.5 mt-0.5">
+              {group.platform && <PlatformBadge platform={group.platform} size={11} />}
+              <Text className="text-xs text-gray-400 dark:text-gray-500">{timeLabel}</Text>
+            </View>
+          </View>
+        </View>
+        <View className="bg-indigo-100 dark:bg-indigo-900 rounded-full px-2 py-0.5">
+          <Text className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">
+            {group.unread_count} new
+          </Text>
+        </View>
+      </View>
+      <Text className="text-sm text-gray-500 dark:text-gray-400 leading-4" numberOfLines={2}>
+        {group.summary}
+      </Text>
+    </TouchableOpacity>
+  );
+}
 
-      (data || []).forEach((msg: any) => {
-        // Use chat_id, falling back to whatsapp_chat_id for backward compatibility
-        const chatId = msg.chat_id || msg.whatsapp_chat_id || msg.id;
-        // Default to whatsapp for backward compatibility with existing messages
-        const platform = msg.platform || Platform.WHATSAPP;
+// ---------------------------------------------------------------------------
+// Main screen
+// ---------------------------------------------------------------------------
 
-        if (!chatMap.has(chatId) || new Date(msg.timestamp) > new Date(chatMap.get(chatId)!.timestamp)) {
-          chatMap.set(chatId, {
-            id: msg.id,
-            contact_name: msg.contact_name,
-            chat_name: msg.is_group ? (msg.chats?.name || msg.contact_name) : msg.contact_name,
-            content: msg.content,
-            timestamp: msg.timestamp,
-            from_me: msg.from_me,
-            is_group: msg.is_group,
-            status: msg.status,
-            chat_id: chatId,
-            contact_phone: msg.contact_phone,
-            has_ai_response: msg.ai_suggestions?.length > 0,
-            unread_count: 0, // TODO: Calculate from unread messages
-            platform: platform,
-          });
-        }
-      });
+export default function HomeScreen() {
+  const [dismissedNudges, setDismissedNudges] = useState<Set<string>>(new Set());
 
-      const latestMessages = Array.from(chatMap.values())
-        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-
-      if (append) {
-        setMessages(prev => [...prev, ...latestMessages]);
-      } else {
-        setMessages(latestMessages);
-      }
-
-      // Check if there are more messages
-      setHasMore(count ? to < count - 1 : false);
-      setPage(pageNum);
-    } catch (error) {
-      console.error('Error fetching messages:', error);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-      setLoadingMore(false);
-    }
-  }, [user?.id]);
-
-  // Set up real-time subscription
-  useEffect(() => {
-    if (!user?.id) return;
-
-    fetchMessages();
-
-    // Subscribe to new messages
-    const subscription = supabase
-      .channel(`dashboard-messages-${user.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'messages',
-          filter: `user_id=eq.${user.id}`,
-        },
-        () => {
-          fetchMessages();
-        }
-      )
-      .subscribe((status, err) => {
-        console.log('[Realtime] Dashboard subscription status:', status, err ?? '');
-      });
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, [user?.id, fetchMessages]);
-
-  // Polling fallback — re-fetches every 15s in case realtime misses an event
-  useEffect(() => {
-    if (!user?.id) return;
-    const interval = setInterval(() => fetchMessages(), 15_000);
-    return () => clearInterval(interval);
-  }, [user?.id, fetchMessages]);
-
-  // Filter messages
-  const filteredMessages = useMemo(() => {
-    let filtered = messages;
-
-    // Apply platform filter
-    if (platformFilter !== 'all') {
-      filtered = filtered.filter(msg => msg.platform === platformFilter);
-    }
-
-    // Apply search filter
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(msg =>
-        msg.contact_name?.toLowerCase().includes(query) ||
-        msg.chat_name?.toLowerCase().includes(query) ||
-        msg.content.toLowerCase().includes(query) ||
-        msg.contact_phone?.includes(query)
-      );
-    }
-
-    // Apply type filter
-    switch (activeFilter) {
-      case 'unread':
-        filtered = filtered.filter(msg => msg.unread_count && msg.unread_count > 0);
-        break;
-      case 'groups':
-        filtered = filtered.filter(msg => msg.is_group);
-        break;
-      case 'ai':
-        filtered = filtered.filter(msg => msg.has_ai_response);
-        break;
-    }
-
-    return filtered;
-  }, [messages, searchQuery, activeFilter, platformFilter]);
-
-  const handleMessagePress = (message: Message) => {
+  const navigateToChat = (
+    msg: { chat_id: string; contact_name?: string; chat_name?: string; platform?: Platform; is_group: boolean },
+    prefillText?: string
+  ) => {
     router.push({
       pathname: '/chat/[chatId]',
       params: {
-        chatId: message.chat_id,
-        contact_name: message.contact_name || '',
-        chat_name: message.chat_name || '',
-        platform: message.platform || '',
-        is_group: message.is_group ? '1' : '0',
+        chatId: msg.chat_id,
+        contact_name: msg.contact_name || '',
+        chat_name: msg.chat_name || '',
+        platform: msg.platform || '',
+        is_group: msg.is_group ? '1' : '0',
+        ...(prefillText ? { prefill: prefillText } : {}),
       },
     });
   };
 
-  const handleMessageLongPress = (message: Message) => {
-    // Show message options (archive, delete, etc.)
-    console.log('Show options for:', message.id);
-  };
-
-  const onRefresh = async () => {
-    setRefreshing(true);
-    setPage(0);
-    await fetchMessages(0, false);
-  };
-
-  const loadMore = async () => {
-    if (!hasMore || loadingMore) return;
-    
-    setLoadingMore(true);
-    await fetchMessages(page + 1, true);
-  };
-
-  const FilterPill = ({ type, label }: { type: FilterType; label: string }) => (
-    <TouchableOpacity
-      onPress={() => setActiveFilter(type)}
-      className={`px-3 py-1.5 rounded-full mr-2 ${
-        activeFilter === type
-          ? 'bg-green-500'
-          : 'bg-gray-200 dark:bg-gray-700'
-      }`}
-    >
-      <Text className={`text-sm font-medium ${
-        activeFilter === type
-          ? 'text-white'
-          : 'text-gray-700 dark:text-gray-300'
-      }`}>
-        {label}
-      </Text>
-    </TouchableOpacity>
-  );
-
-  const PlatformFilterPill = ({ platform, label }: { platform: PlatformFilterType; label: string }) => {
-    const isActive = platformFilter === platform;
-    const display = platform !== 'all' ? PLATFORM_DISPLAY[platform] : null;
-
-    return (
-      <TouchableOpacity
-        onPress={() => setPlatformFilter(platform)}
-        className={`flex-row items-center px-3 py-1.5 rounded-full mr-2 ${
-          isActive
-            ? 'bg-green-500'
-            : 'bg-gray-200 dark:bg-gray-700'
-        }`}
-      >
-        {platform !== 'all' && display && (
-          <PlatformBadge platform={platform} size={14} className="mr-1" />
-        )}
-        <Text className={`text-sm font-medium ${
-          isActive
-            ? 'text-white'
-            : 'text-gray-700 dark:text-gray-300'
-        }`}>
-          {label}
-        </Text>
-      </TouchableOpacity>
-    );
-  };
-
-  const handleConnectPlatform = () => {
-    router.push('/(auth)/login');
-  };
-
-  if (loading) {
-    return (
-      <View className="flex-1 items-center justify-center bg-gray-50 dark:bg-gray-900">
-        <ActivityIndicator size="large" color="#10b981" />
-        <Text className="mt-2 text-gray-600 dark:text-gray-400">Loading messages...</Text>
-      </View>
-    );
-  }
+  const visibleNudges = DUMMY_NUDGES.filter((n) => !dismissedNudges.has(n.id));
 
   return (
-    <View className="flex-1 bg-gray-50 dark:bg-gray-900">
-      {/* Search Bar */}
-      <View className="bg-white dark:bg-gray-800 px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-        <View className="flex-row items-center bg-gray-100 dark:bg-gray-700 rounded-lg px-3 py-2">
-          <Search size={20} color="#6b7280" />
-          <TextInput
-            className="flex-1 ml-2 text-gray-900 dark:text-white"
-            placeholder="Search messages..."
-            placeholderTextColor="#6b7280"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            returnKeyType="search"
-          />
-        </View>
-        
-        {/* Platform Filter Pills */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          className="mt-3 -mx-1"
-          contentContainerStyle={{ paddingHorizontal: 4 }}
-        >
-          <PlatformFilterPill platform="all" label="All" />
-          <PlatformFilterPill platform={Platform.WHATSAPP} label="WhatsApp" />
-          <PlatformFilterPill platform={Platform.TELEGRAM} label="Telegram" />
-          <PlatformFilterPill platform={Platform.INSTAGRAM} label="Instagram" />
-        </ScrollView>
+    <ScrollView
+      className="flex-1 bg-gray-50 dark:bg-gray-900"
+      contentContainerStyle={{ paddingTop: 12, paddingBottom: 32 }}
+      showsVerticalScrollIndicator={false}
+    >
+      {/* Morning Brief */}
+      <MorningBrief text={DUMMY_MORNING_BRIEF} />
 
-        {/* Type Filter Pills */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          className="mt-2 -mx-1"
-          contentContainerStyle={{ paddingHorizontal: 4 }}
-        >
-          <FilterPill type="all" label="All" />
-          <FilterPill type="unread" label="Unread" />
-          <FilterPill type="groups" label="Groups" />
-          <FilterPill type="ai" label="AI Suggestions" />
-        </ScrollView>
-      </View>
-
-      {/* Messages List */}
-      <FlatList
-        data={filteredMessages}
-        renderItem={({ item }) => (
-          <MessageCard
-            message={item}
-            onPress={() => handleMessagePress(item)}
-            onLongPress={() => handleMessageLongPress(item)}
-          />
+      {/* Needs Your Reply */}
+      <HomeSection
+        title="Needs Your Reply"
+        subtitle={`${DUMMY_URGENT.length} conversations waiting`}
+      >
+        <UrgentCard
+          message={DUMMY_URGENT[0]}
+          onPress={() => navigateToChat(DUMMY_URGENT[0])}
+          onQuickReply={(text, chatId) => {
+            const msg = DUMMY_URGENT.find((u) => u.chat_id === chatId);
+            if (msg) navigateToChat(msg, text);
+          }}
+        />
+        {DUMMY_URGENT.length > 1 && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ paddingHorizontal: 16, gap: 12, paddingTop: 12 }}
+          >
+            {DUMMY_URGENT.slice(1).map((msg) => (
+              <UrgentOverflowItem
+                key={msg.id}
+                message={msg}
+                onPress={() => navigateToChat(msg)}
+              />
+            ))}
+          </ScrollView>
         )}
-        keyExtractor={(item) => item.id}
-        refreshControl={
-          <RefreshControl 
-            refreshing={refreshing} 
-            onRefresh={onRefresh}
-            tintColor="#10b981"
+      </HomeSection>
+
+      {/* Catch Up */}
+      <HomeSection title="Catch Up" subtitle="Groups with new activity">
+        {DUMMY_CATCHUP.map((group) => (
+          <CatchUpCard
+            key={group.id}
+            group={group}
+            onPress={() =>
+              router.push({
+                pathname: '/chat/[chatId]',
+                params: {
+                  chatId: group.chat_id,
+                  chat_name: group.chat_name,
+                  platform: group.platform || '',
+                  is_group: '1',
+                },
+              })
+            }
           />
-        }
-        onEndReached={loadMore}
-        onEndReachedThreshold={0.5}
-        contentContainerStyle={filteredMessages.length === 0 ? { flex: 1 } : undefined}
-        ListFooterComponent={
-          loadingMore ? (
-            <View className="py-4">
-              <ActivityIndicator size="small" color="#10b981" />
-            </View>
-          ) : null
-        }
-        ListEmptyComponent={
-          <View className="flex-1 items-center justify-center py-20">
-            <MessageCircle size={48} color="#9ca3af" />
-            <Text className="text-gray-500 dark:text-gray-400 mt-4 text-center">
-              {searchQuery
-                ? 'No messages found matching your search'
-                : platformFilter !== 'all'
-                  ? `No ${PLATFORM_DISPLAY[platformFilter].name} messages`
-                  : activeFilter !== 'all'
-                    ? `No ${activeFilter} messages`
-                    : 'No messages yet'}
-            </Text>
-            {!searchQuery && activeFilter === 'all' && platformFilter === 'all' && (
-              <View className="mt-4 items-center">
-                <Text className="text-gray-400 dark:text-gray-500 text-center px-8">
-                  {hasConnection
-                    ? 'Messages will appear here once they arrive'
-                    : 'Connect a messaging platform to start receiving messages'}
-                </Text>
-                {!hasConnection && (
-                  <TouchableOpacity
-                    onPress={handleConnectPlatform}
-                    className="mt-4 bg-green-500 px-6 py-2 rounded-full"
-                  >
-                    <Text className="text-white font-semibold">Connect Platform</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            )}
-          </View>
-        }
-      />
-    </View>
+        ))}
+      </HomeSection>
+
+      {/* Follow-up Nudges */}
+      {visibleNudges.length > 0 && (
+        <HomeSection title="Follow-up Nudges">
+          {visibleNudges.map((nudge) => (
+            <NudgeCard
+              key={nudge.id}
+              contactName={nudge.contact_name}
+              message={nudge.message}
+              category={nudge.category}
+              onPress={() =>
+                router.push({
+                  pathname: '/chat/[chatId]',
+                  params: { chatId: nudge.chat_id, contact_name: nudge.contact_name },
+                })
+              }
+              onDismiss={() => setDismissedNudges((prev) => new Set([...prev, nudge.id]))}
+            />
+          ))}
+        </HomeSection>
+      )}
+    </ScrollView>
   );
 }
