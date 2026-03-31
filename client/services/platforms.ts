@@ -85,7 +85,14 @@ export const platformsApi = {
     });
 
     const allSessions = await Promise.all(sessionsPromises);
-    return allSessions.flat();
+    const flat = allSessions.flat();
+    // Deduplicate by session ID (in Matrix mode, all platforms share one adapter)
+    const seen = new Set<string>();
+    return flat.filter((s) => {
+      if (seen.has(s.id)) return false;
+      seen.add(s.id);
+      return true;
+    });
   },
 
   /**
