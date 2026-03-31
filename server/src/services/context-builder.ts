@@ -6,6 +6,7 @@ interface ConversationContext {
   contact: ContactContext | null;
   userPreferences: UserPreferences | null;
   metadata: ContextMetadata;
+  chatCategory?: string;
 }
 
 interface ContextMessage {
@@ -62,11 +63,12 @@ export class ContextBuilder {
       }
 
       // Build context components in parallel
-      const [messages, contact, userPreferences, metadata] = await Promise.all([
+      const [messages, contact, userPreferences, metadata, categoryRow] = await Promise.all([
         this.getRecentMessages(currentMessage.chat_id, userId, maxMessages),
         this.getContactContext(currentMessage.contact_id, userId),
         this.getUserPreferences(userId),
         this.getConversationMetadata(currentMessage.chat_id, userId),
+        this.getChatCategory(currentMessage.chat_id, userId),
       ]);
 
       return {
@@ -74,6 +76,7 @@ export class ContextBuilder {
         contact,
         userPreferences,
         metadata,
+        chatCategory: categoryRow,
       };
     } catch (error) {
       logger.error('Error building conversation context:', error);
@@ -285,6 +288,20 @@ export class ContextBuilder {
   }
 
   /**
+   * Get the user-assigned chat category (personal, friend, business, trip, romantic)
+   */
+  private async getChatCategory(chatId: string, userId: string): Promise<string | undefined> {
+    const { data } = await supabase
+      .from('chat_categories')
+      .select('category')
+      .eq('chat_id', chatId)
+      .eq('user_id', userId)
+      .single();
+
+    return data?.category || undefined;
+  }
+
+  /**
    * Format context for AI prompt
    */
   formatForPrompt(context: ConversationContext): string {
@@ -329,6 +346,11 @@ export class ContextBuilder {
         prompt += `Personality: ${context.userPreferences.personalityTraits.join(', ')}\n`;
       }
       prompt += '\n';
+    }
+
+    // Add chat category if set
+    if (context.chatCategory) {
+      prompt += `Conversation category: ${context.chatCategory}\n\n`;
     }
 
     // Add conversation metadata

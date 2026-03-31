@@ -167,7 +167,14 @@ export const usePlatformStore = create<PlatformState>((set, get) => ({
       try {
         const stored = await AsyncStorage.getItem(STORAGE_KEY);
         if (stored) {
-          set({ connectedSessions: JSON.parse(stored) });
+          const parsed: PlatformSession[] = JSON.parse(stored);
+          const seen = new Set<string>();
+          const deduped = parsed.filter((s) => {
+            if (seen.has(s.id)) return false;
+            seen.add(s.id);
+            return true;
+          });
+          set({ connectedSessions: deduped });
         }
       } catch {
         // Ignore storage errors

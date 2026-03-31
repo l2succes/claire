@@ -10,6 +10,7 @@ import authRoutes from './routes/auth';
 import messageRoutes from './routes/messages';
 import aiRoutes from './routes/ai';
 import platformRoutes from './routes/platforms';
+import conversationRoutes from './routes/conversations';
 import { platformManager } from './adapters';
 import { whatsappAdapter } from './adapters/whatsapp';
 import { telegramAdapter } from './adapters/telegram';
@@ -37,11 +38,38 @@ app.use('/auth', authRoutes);
 app.use('/messages', messageRoutes);
 app.use('/ai', aiRoutes);
 app.use('/platforms', platformRoutes);
+app.use('/conversations', conversationRoutes);
 
 // Handle Supabase email confirmation redirects
 app.get('/', (req, res) => {
   // If there's a hash fragment with tokens, serve the confirmation page
   res.sendFile(__dirname + '/routes/email-confirm.html');
+});
+
+// Matrix media proxy — serves mxc:// content via the admin token
+// Client uses: GET /media/:server/:mediaId
+app.get('/media/:server/:mediaId', async (req, res) => {
+  if (!matrixConfig.enabled || !matrixConfig.homeserverUrl || !matrixConfig.adminToken) {
+    return res.status(503).json({ error: 'Matrix not configured' });
+  }
+  const { server, mediaId } = req.params;
+  const url = `${matrixConfig.homeserverUrl}/_matrix/client/v1/media/download/${server}/${mediaId}`;
+  try {
+    const upstream = await fetch(url, {
+      headers: { Authorization: `Bearer ${matrixConfig.adminToken}` },
+    });
+    if (!upstream.ok) {
+      return res.status(upstream.status).json({ error: 'Media not found' });
+    }
+    const contentType = upstream.headers.get('content-type') || 'application/octet-stream';
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    const buffer = await upstream.arrayBuffer();
+    return res.send(Buffer.from(buffer));
+  } catch (err) {
+    logger.error('Media proxy error:', err);
+    return res.status(500).json({ error: 'Failed to fetch media' });
+  }
 });
 
 // Health check
@@ -152,15 +180,46 @@ async function initializePlatforms() {
           content_type: message.contentType,
           timestamp: message.timestamp,
           is_group: message.chatType === 'group',
-          contact_name: message.senderName || null,
+          contact_name: message.isFromMe ? null : (message.senderName || null),
           contact_phone: message.isFromMe ? null : message.senderId?.replace(/@.*/, '') || null,
           metadata: message.platformMetadata || null,
+          media_url: (() => {
+            const mxc = message.platformMetadata?.mediaUrl;
+            if (!mxc || typeof mxc !== 'string') return null;
+            const match = mxc.match(/^mxc:\/\/([^/]+)\/(.+)$/);
+            return match ? `/media/${match[1]}/${match[2]}` : null;
+          })(),
+          media_mime_type: message.platformMetadata?.mediaInfo?.mimetype || null,
         }, { onConflict: 'whatsapp_id' });
 
       if (msgError) {
         logger.error('Failed to upsert message:', msgError);
       } else {
         logger.debug(`Message saved: ${message.platformMessageId}`);
+      }
+
+      // 3. Upsert contact for the sender (if not from me)
+      if (!message.isFromMe && message.senderId) {
+        // Extract platform contact ID from ghost user ID
+        // Patterns: @whatsapp_12345:... @_telegram_12345:... @meta_12345:... @_imessage_+15551234567:...
+        const contactMatch = message.senderId.match(/@(?:whatsapp|_telegram|meta|_imessage)_([^:]+):/);
+        const platformContactId = contactMatch?.[1];
+        if (platformContactId) {
+          const { error: contactError } = await supabase
+            .from('contacts')
+            .upsert({
+              user_id: message.userId,
+              platform: message.platform,
+              platform_contact_id: platformContactId,
+              whatsapp_id: platformContactId,
+              name: message.senderName || platformContactId,
+              phone_number: /^\d+$/.test(platformContactId) ? platformContactId : null,
+            }, { onConflict: 'user_id,platform,platform_contact_id' });
+
+          if (contactError) {
+            logger.debug('Failed to upsert contact:', contactError);
+          }
+        }
       }
     } catch (err) {
       logger.error('Error saving message to DB:', err);

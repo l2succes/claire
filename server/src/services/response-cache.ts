@@ -106,7 +106,7 @@ class ResponseCache {
       const keys = await redis.keys(pattern);
       
       if (keys.length > 0) {
-        await redis.del(...keys);
+        await Promise.all(keys.map((k) => redis.del(k)));
         logger.info(`Cleared ${keys.length} cached responses for user ${userId}`);
       }
     } catch (error) {
@@ -124,11 +124,7 @@ class ResponseCache {
   }> {
     try {
       const keys = await redis.keys(`${this.keyPrefix}*`);
-      const info = await redis.info('memory');
-      
-      // Extract memory usage from info string
-      const memoryMatch = info.match(/used_memory_human:(\S+)/);
-      const memoryUsage = memoryMatch ? memoryMatch[1] : 'unknown';
+      const memoryUsage = 'unknown';
       
       return {
         totalKeys: keys.length,

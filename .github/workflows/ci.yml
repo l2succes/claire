@@ -27,14 +27,17 @@ jobs:
           bun-version: latest
       
       - name: Install dependencies
-        run: bun install
-      
+        run: |
+          bun install
+          cd server && bun install
+          cd ../client && bun install
+
       - name: Run tests
         working-directory: ${{ matrix.working-directory }}
-        run: bun test --coverage
+        run: bunx jest --coverage
       
       - name: Upload coverage
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: coverage-${{ matrix.name }}
           path: ${{ matrix.working-directory }}/coverage
@@ -51,8 +54,11 @@ jobs:
           bun-version: latest
       
       - name: Install dependencies
-        run: bun install
-      
+        run: |
+          bun install
+          cd server && bun install
+          cd ../client && bun install
+
       - name: Run linting
         run: bun run lint
       

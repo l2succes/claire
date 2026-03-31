@@ -18,6 +18,7 @@ import {
   EventType,
 } from 'matrix-js-sdk';
 import { BasePlatformAdapter } from '../base-adapter';
+import { supabase } from '../../services/supabase';
 import {
   Platform,
   AuthMethod,
@@ -77,6 +78,8 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
   private sessionControlRooms: Map<string, string> = new Map();
   // Maps sessionId -> platform
   private sessionPlatforms: Map<string, Platform> = new Map();
+  // Maps sessionId -> the user's own ghost user ID (e.g. @whatsapp_15166100494:claire.local)
+  private sessionSelfGhostIds: Map<string, string> = new Map();
 
   constructor(private config: MatrixConfig) {
     super();
@@ -129,6 +132,11 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     // Backfill recent history for any already-connected sessions
     await this.backfillRestoredSessions();
 
+    // Sync contacts from Matrix room members into the database
+    for (const [sessionId] of this.sessionPlatforms) {
+      await this.syncContacts(sessionId);
+    }
+
     this.log('info', 'Matrix bridge adapter initialized');
   }
 
@@ -146,6 +154,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     this.sessions.clear();
     this.sessionControlRooms.clear();
     this.sessionPlatforms.clear();
+    this.sessionSelfGhostIds.clear();
     this.roomMapper.clearCache();
 
     this.log('info', 'Matrix bridge adapter shutdown complete');
@@ -185,16 +194,19 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
       if (!room) return;
       if (toStartOfTimeline) return; // Ignore historical messages
       if (event.getType() !== 'm.room.message') return;
-      if (event.getContent()?.msgtype === 'm.notice') return; // Skip bridge error/notice messages
 
       const sender = event.getSender();
-      if (sender === this.matrixClient!.getUserId()) return; // Ignore own messages
+      if (sender === this.matrixClient!.getUserId()) return; // Ignore bot's own sends
 
       // Check if this is a control room message (from bridge bot)
+      // Must happen BEFORE the m.notice filter — login success is sent as m.notice
       if (this.isControlRoomMessage(room, sender || '')) {
         await this.handleControlRoomMessage(event, room);
         return;
       }
+
+      // Skip bridge notices in chat rooms (system messages, errors)
+      if (event.getContent()?.msgtype === 'm.notice') return;
 
       // Check if this is a bridged chat message
       let chatInfo = this.roomMapper.getRoomChatInfo(room.roomId);
@@ -209,12 +221,14 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
       const session = this.sessions.get(chatInfo.sessionId);
       if (!session) return;
 
+      const selfGhostId = this.sessionSelfGhostIds.get(chatInfo.sessionId);
       const unifiedMessage = await this.eventConverter.toUnifiedMessage(
         event,
         room,
         chatInfo.sessionId,
         session.userId,
-        chatInfo.platform
+        chatInfo.platform,
+        selfGhostId
       );
 
       this.emitPlatformEvent('message', chatInfo.sessionId, unifiedMessage);
@@ -272,17 +286,32 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
 
     // Check for login success
     if (this.eventConverter.isLoginSuccessMessage(event)) {
+      // Parse the user's phone number from "Successfully logged in as +15166100494"
+      const body = (event.getContent() as { body?: string }).body || '';
+      const phoneMatch = body.match(/\+(\d+)/);
+      if (phoneMatch) {
+        const platform = this.sessionPlatforms.get(sessionId);
+        if (platform) {
+          const prefix = this.userMapper.platformContactToGhostUser(phoneMatch[1], platform);
+          this.sessionSelfGhostIds.set(sessionId, prefix);
+          this.log('info', `Self ghost user for session ${sessionId}: ${prefix}`);
+        }
+      }
+
       session.status = PlatformStatus.CONNECTED;
       session.lastConnectedAt = new Date();
+      // Persist selfGhostId alongside session for restore after restart
+      (session as any).selfGhostId = this.sessionSelfGhostIds.get(sessionId) || null;
       await this.saveSessionToRedis(session);
       this.bridgeAuthManager.markAuthenticated(sessionId);
       this.emitPlatformEvent('session_ready', sessionId, {});
 
-      // Register all platform rooms and backfill recent messages
+      // Register all platform rooms, backfill messages, and sync contacts
       const platform = this.sessionPlatforms.get(sessionId);
       if (platform) {
         await this.registerExistingRooms();
         await this.syncRoomHistory(sessionId, platform);
+        await this.syncContacts(sessionId);
       }
       return;
     }
@@ -319,14 +348,22 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     const platform = this.roomMapper.detectRoomPlatform(room);
     if (!platform) return;
 
-    const chatId = this.roomMapper.getPrimaryChatParticipant(room);
+    // For group rooms use room.roomId as stable chatId to avoid collision with DMs.
+    // A room is a group if it has more than one distinct non-bot ghost contact for the platform.
+    const ghostContacts = room.getJoinedMembers()
+      .filter(m => !this.userMapper.isBridgeBot(m.userId))
+      .map(m => this.userMapper.ghostUserToPlatformContact(m.userId))
+      .filter((c): c is NonNullable<typeof c> => c !== null && c.platform === platform && !c.platformContactId.startsWith('lid-'));
+
+    const isGroup = ghostContacts.length > 1;
+    const chatId = isGroup ? room.roomId : this.roomMapper.getPrimaryChatParticipant(room);
     if (!chatId) return;
 
     // Find a session for this platform
     for (const [sessionId, sessionPlatform] of this.sessionPlatforms) {
       if (sessionPlatform === platform) {
         this.roomMapper.registerRoom(room.roomId, platform, chatId, sessionId);
-        this.log('info', `Registered room ${room.roomId} for ${platform} chat ${chatId}`);
+        this.log('info', `Registered room ${room.roomId} for ${platform} chat ${chatId} (${isGroup ? 'group' : 'dm'})`);
         break;
       }
     }
@@ -456,6 +493,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     // Clean up
     this.sessionControlRooms.delete(sessionId);
     this.sessionPlatforms.delete(sessionId);
+    this.sessionSelfGhostIds.delete(sessionId);
 
     await this.updateSessionStatus(sessionId, PlatformStatus.DISCONNECTED);
     this.emitPlatformEvent('session_disconnected', sessionId, { reason: 'manual' });
@@ -668,6 +706,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
 
     const contacts: UnifiedContact[] = [];
     const rooms = this.matrixClient.getRooms();
+    const selfGhostId = this.sessionSelfGhostIds.get(sessionId);
 
     for (const room of rooms) {
       if (this.roomMapper.detectRoomPlatform(room) !== platform) continue;
@@ -675,6 +714,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
       const members = room.getJoinedMembers();
       for (const member of members) {
         if (this.userMapper.isBridgeBot(member.userId)) continue;
+        if (selfGhostId && member.userId === selfGhostId) continue;
 
         const contact = this.userMapper.matrixMemberToContact(
           member.userId,
@@ -763,6 +803,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
 
     const timeline = room.getLiveTimeline();
     const events = timeline.getEvents().slice(-limit);
+    const selfGhostId = this.sessionSelfGhostIds.get(sessionId);
 
     const messages: UnifiedMessage[] = [];
     for (const event of events) {
@@ -773,7 +814,8 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
             room,
             sessionId,
             session.userId,
-            platform
+            platform,
+            selfGhostId
           )
         );
       }
@@ -799,7 +841,12 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
           if (platform) {
             this.sessionPlatforms.set(sessionId, platform);
           }
-          this.log('info', `Restored Matrix session: ${sessionId}`);
+          // Restore self ghost ID from persisted session data
+          const selfGhostId = (session as any).selfGhostId;
+          if (selfGhostId) {
+            this.sessionSelfGhostIds.set(sessionId, selfGhostId);
+          }
+          this.log('info', `Restored Matrix session: ${sessionId} (selfGhost: ${selfGhostId || 'unknown'})`);
         }
       }
 
@@ -819,6 +866,48 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
       if (session?.status === PlatformStatus.CONNECTED) {
         await this.syncRoomHistory(sessionId, platform);
       }
+    }
+  }
+
+  /**
+   * Sync contacts from Matrix room members into Supabase.
+   */
+  private async syncContacts(sessionId: string): Promise<void> {
+    try {
+      const contacts = await this.getContacts(sessionId);
+      if (contacts.length === 0) return;
+
+      const session = this.sessions.get(sessionId);
+      if (!session) return;
+
+      const selfGhostId = this.sessionSelfGhostIds.get(sessionId);
+      let synced = 0;
+
+      for (const contact of contacts) {
+        // Skip the user's own ghost contact
+        if (selfGhostId) {
+          const selfContact = this.userMapper.ghostUserToPlatformContact(selfGhostId);
+          if (selfContact && selfContact.platformContactId === contact.platformContactId) continue;
+        }
+
+        const { error } = await supabase
+          .from('contacts')
+          .upsert({
+            user_id: session.userId,
+            platform: contact.platform,
+            platform_contact_id: contact.platformContactId,
+            whatsapp_id: contact.platformContactId,
+            name: contact.displayName || contact.platformContactId,
+            avatar_url: contact.avatarUrl || null,
+            phone_number: /^\d+$/.test(contact.platformContactId) ? contact.platformContactId : null,
+          }, { onConflict: 'user_id,platform,platform_contact_id' });
+
+        if (!error) synced++;
+      }
+
+      this.log('info', `Synced ${synced} contacts for session ${sessionId}`);
+    } catch (error) {
+      this.log('error', 'Failed to sync contacts', { error });
     }
   }
 
@@ -868,6 +957,8 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     const rooms = this.matrixClient.getRooms();
     let messageCount = 0;
 
+    const selfGhostId = this.sessionSelfGhostIds.get(sessionId);
+
     for (const room of rooms) {
       const chatInfo = this.roomMapper.getRoomChatInfo(room.roomId);
       if (!chatInfo || chatInfo.sessionId !== sessionId) continue;
@@ -875,13 +966,15 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
       const events = room.getLiveTimeline().getEvents();
       for (const event of events) {
         if (event.getType() !== 'm.room.message') continue;
+        if (event.getContent()?.msgtype === 'm.notice') continue;
 
         const unifiedMessage = await this.eventConverter.toUnifiedMessage(
           event,
           room,
           sessionId,
           session.userId,
-          platform
+          platform,
+          selfGhostId
         );
 
         this.emitPlatformEvent('message', sessionId, unifiedMessage);

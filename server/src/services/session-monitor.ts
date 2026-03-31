@@ -88,7 +88,7 @@ export class SessionMonitorService extends EventEmitter {
     try {
       // Get all active sessions from database
       const { data: sessions, error } = await supabase
-        .from('whatsapp_sessions')
+        .from('platform_sessions')
         .select('*')
         .in('status', ['connected', 'ready']);
 
@@ -172,7 +172,7 @@ export class SessionMonitorService extends EventEmitter {
 
     // Update database
     await supabase
-      .from('whatsapp_sessions')
+      .from('platform_sessions')
       .update({
         status: 'disconnected',
         updated_at: new Date().toISOString(),

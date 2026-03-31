@@ -265,7 +265,7 @@ export class RealtimeService {
    * Unsubscribe from all channels
    */
   async unsubscribeAll() {
-    for (const [name, channel] of this.subscriptions) {
+    for (const [, channel] of this.subscriptions) {
       await supabase.removeChannel(channel);
     }
     this.subscriptions.clear();

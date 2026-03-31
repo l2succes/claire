@@ -177,7 +177,7 @@ export class WhatsAppAuthService extends EventEmitter {
       const redisData = await redis.get(`whatsapp:session:${sessionId}`);
       if (redisData) {
         session = JSON.parse(redisData);
-        this.sessions.set(sessionId, session);
+        this.sessions.set(sessionId, session!);
       }
     }
     

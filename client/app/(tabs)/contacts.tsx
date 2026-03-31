@@ -23,8 +23,8 @@ export default function ContactsScreen() {
   const user = useAuthStore((state) => state.user);
 
   useEffect(() => {
-    fetchContacts();
-  }, []);
+    if (user?.id) fetchContacts();
+  }, [user?.id]);
 
   const fetchContacts = async () => {
     if (!user?.id) return;

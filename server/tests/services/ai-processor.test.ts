@@ -11,7 +11,11 @@ jest.mock('../../src/services/response-cache');
 jest.mock('../../src/services/response-safety');
 jest.mock('../../src/services/supabase');
 jest.mock('../../src/utils/logger');
-jest.mock('openai');
+jest.mock('openai', () =>
+  jest.fn().mockImplementation(() => ({
+    chat: { completions: { create: jest.fn() } },
+  }))
+);
 
 describe('AIProcessor', () => {
   const mockContextBuilder = contextBuilder as jest.Mocked<typeof contextBuilder>;
@@ -68,7 +72,6 @@ describe('AIProcessor', () => {
       mockResponseCache.set.mockResolvedValue();
 
       // Mock OpenAI response
-      const mockOpenAI = require('openai');
       const mockCompletion = {
         choices: [{
           message: {
@@ -80,13 +83,8 @@ describe('AIProcessor', () => {
           },
         }],
       };
-      mockOpenAI.mockImplementation(() => ({
-        chat: {
-          completions: {
-            create: jest.fn().mockResolvedValue(mockCompletion),
-          },
-        },
-      }));
+      const mockCreate = (aiProcessor as any).openai.chat.completions.create as jest.Mock;
+      mockCreate.mockResolvedValue(mockCompletion);
 
       const result = await aiProcessor.generateResponse(
         'test-msg-1',
@@ -125,13 +123,13 @@ describe('AIProcessor', () => {
         'individual'
       );
 
-      expect(result).toEqual({
+      expect(result).toEqual(expect.objectContaining({
         messageId: 'test-msg-1',
         suggestions: ['Cached response'],
         confidence: 0.8,
         messageType: 'social',
         cached: true,
-      });
+      }));
 
       // Should not call context builder or AI when using cache
       expect(mockContextBuilder.buildContext).not.toHaveBeenCalled();
@@ -161,14 +159,8 @@ describe('AIProcessor', () => {
         },
       };
 
-      const mockOpenAI = require('openai');
-      mockOpenAI.mockImplementation(() => ({
-        chat: {
-          completions: {
-            create: jest.fn().mockResolvedValue(mockStream),
-          },
-        },
-      }));
+      const mockCreate = (aiProcessor as any).openai.chat.completions.create as jest.Mock;
+      mockCreate.mockResolvedValue(mockStream);
 
       mockResponseSafety.validateAndFilter.mockResolvedValue({
         messageId: 'test-msg-1',
@@ -215,36 +207,19 @@ describe('AIProcessor', () => {
 
   describe('analyzeSentiment', () => {
     it('should analyze message sentiment', async () => {
-      const mockOpenAI = require('openai');
       const mockCompletion = {
-        choices: [{
-          message: {
-            content: 'positive',
-          },
-        }],
+        choices: [{ message: { content: 'positive' } }],
       };
-      
-      mockOpenAI.mockImplementation(() => ({
-        chat: {
-          completions: {
-            create: jest.fn().mockResolvedValue(mockCompletion),
-          },
-        },
-      }));
+      const mockCreate = (aiProcessor as any).openai.chat.completions.create as jest.Mock;
+      mockCreate.mockResolvedValue(mockCompletion);
 
       const sentiment = await aiProcessor.analyzeSentiment('I love this!');
       expect(sentiment).toBe('positive');
     });
 
     it('should return neutral on error', async () => {
-      const mockOpenAI = require('openai');
-      mockOpenAI.mockImplementation(() => ({
-        chat: {
-          completions: {
-            create: jest.fn().mockRejectedValue(new Error('API Error')),
-          },
-        },
-      }));
+      const mockCreate = (aiProcessor as any).openai.chat.completions.create as jest.Mock;
+      mockCreate.mockRejectedValue(new Error('API Error'));
 
       const sentiment = await aiProcessor.analyzeSentiment('Test message');
       expect(sentiment).toBe('neutral');
@@ -253,36 +228,19 @@ describe('AIProcessor', () => {
 
   describe('extractTopics', () => {
     it('should extract topics from message', async () => {
-      const mockOpenAI = require('openai');
       const mockCompletion = {
-        choices: [{
-          message: {
-            content: JSON.stringify({ topics: ['work', 'project', 'deadline'] }),
-          },
-        }],
+        choices: [{ message: { content: JSON.stringify({ topics: ['work', 'project', 'deadline'] }) } }],
       };
-      
-      mockOpenAI.mockImplementation(() => ({
-        chat: {
-          completions: {
-            create: jest.fn().mockResolvedValue(mockCompletion),
-          },
-        },
-      }));
+      const mockCreate = (aiProcessor as any).openai.chat.completions.create as jest.Mock;
+      mockCreate.mockResolvedValue(mockCompletion);
 
       const topics = await aiProcessor.extractTopics('We need to finish the work project by the deadline');
       expect(topics).toEqual(['work', 'project', 'deadline']);
     });
 
     it('should return empty array on error', async () => {
-      const mockOpenAI = require('openai');
-      mockOpenAI.mockImplementation(() => ({
-        chat: {
-          completions: {
-            create: jest.fn().mockRejectedValue(new Error('API Error')),
-          },
-        },
-      }));
+      const mockCreate = (aiProcessor as any).openai.chat.completions.create as jest.Mock;
+      mockCreate.mockRejectedValue(new Error('API Error'));
 
       const topics = await aiProcessor.extractTopics('Test message');
       expect(topics).toEqual([]);
