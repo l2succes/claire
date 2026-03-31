@@ -11,3 +11,7 @@ ios/build/
 ios/DerivedData/
 ios/*.xcworkspace/xcuserdata/
 ios/*.xcodeproj/xcuserdata/
+# Local env overrides (never commit)
+.env.local
+.env.production
+.env.*.local
