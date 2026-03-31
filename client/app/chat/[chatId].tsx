@@ -1,16 +1,20 @@
 import {
   View, Text, TouchableOpacity, ActivityIndicator,
   FlatList, TextInput, KeyboardAvoidingView, Platform as RNPlatform,
+  Image,
 } from 'react-native';
+import { ImageIcon, Volume2, Video, FileText, AlertCircle } from 'lucide-react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { ChevronLeft, SendHorizonal } from 'lucide-react-native';
+import { ChevronLeft, SendHorizonal, Settings } from 'lucide-react-native';
 import { supabase } from '../../services/supabase';
-import { platformsApi } from '../../services/platforms';
+import { platformsApi, API_BASE_URL } from '../../services/platforms';
 import { useAuthStore } from '../../stores/authStore';
 import { usePlatformStore } from '../../stores/platformStore';
 import { PlatformBadge } from '../../components/PlatformIcon';
+import { ChatSmartCardTray } from '../../components/ChatSmartCardTray';
+import { useConversationSettingsStore } from '../../stores/conversationSettingsStore';
 import { Platform } from '../../types/platform';
 
 interface ChatMessage {
@@ -20,6 +24,9 @@ interface ChatMessage {
   from_me: boolean;
   contact_name?: string;
   contact_phone?: string;
+  content_type?: string;
+  media_url?: string;
+  media_mime_type?: string;
 }
 
 export default function ChatScreen() {
@@ -33,7 +40,9 @@ export default function ChatScreen() {
 
   const user = useAuthStore((state) => state.user);
   const connectedSessions = usePlatformStore((state) => state.connectedSessions);
+  const { settings: convSettings, fetchSettings: fetchConvSettings, dismissCard, markCardActed } = useConversationSettingsStore();
   const insets = useSafeAreaInsets();
+  const smartCards = convSettings[chatId!]?.smartCards ?? [];
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -54,7 +63,7 @@ export default function ChatScreen() {
     try {
       const { data, error } = await supabase
         .from('messages')
-        .select('id, content, timestamp, from_me, contact_name, contact_phone')
+        .select('id, content, timestamp, from_me, contact_name, contact_phone, content_type, media_url, media_mime_type')
         .eq('chat_id', chatId)
         .eq('user_id', user.id)
         .order('timestamp', { ascending: true })
@@ -83,6 +92,7 @@ export default function ChatScreen() {
   useEffect(() => {
     fetchMessages();
     fetchChatInfo();
+    if (chatId) fetchConvSettings(chatId);
 
     const subscription = supabase
       .channel(`chat-${chatId}`)
@@ -141,8 +151,100 @@ export default function ChatScreen() {
     }
   }, [inputText, platform, connectedSessions]);
 
+  const isBridgeFailure = (content: string) =>
+    content.startsWith('* Failed to bridge media') ||
+    content.startsWith('Failed to bridge media');
+
+  const renderMessageBody = (item: ChatMessage, isMe: boolean) => {
+    const textColor = isMe ? '#ffffff' : '#111827';
+    const subtextColor = isMe ? 'rgba(255,255,255,0.65)' : '#9ca3af';
+    const iconColor = isMe ? 'rgba(255,255,255,0.8)' : '#6b7280';
+
+    // Bridge decryption failure — show a muted placeholder instead of the raw error
+    if (isBridgeFailure(item.content)) {
+      return (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <AlertCircle size={15} color={iconColor} />
+          <Text style={{ fontSize: 14, color: isMe ? 'rgba(255,255,255,0.7)' : '#9ca3af', fontStyle: 'italic' }}>
+            Media unavailable
+          </Text>
+        </View>
+      );
+    }
+
+    const type = item.content_type || 'text';
+
+    if (type === 'image' && item.media_url) {
+      const imageUri = item.media_url.startsWith('/media/')
+        ? `${API_BASE_URL}${item.media_url}`
+        : item.media_url;
+      return (
+        <View>
+          <Image
+            source={{ uri: imageUri }}
+            style={{ width: 220, height: 160, borderRadius: 10, marginBottom: 4 }}
+            resizeMode="cover"
+          />
+          {item.content ? (
+            <Text style={{ fontSize: 14, color: textColor, marginTop: 2 }}>{item.content}</Text>
+          ) : null}
+        </View>
+      );
+    }
+
+    if (type === 'image') {
+      return (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <ImageIcon size={16} color={iconColor} />
+          <Text style={{ fontSize: 14, color: textColor }}>Photo</Text>
+        </View>
+      );
+    }
+
+    if (type === 'audio') {
+      return (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Volume2 size={16} color={iconColor} />
+          <Text style={{ fontSize: 14, color: textColor }}>
+            {item.content || 'Voice message'}
+          </Text>
+        </View>
+      );
+    }
+
+    if (type === 'video') {
+      return (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Video size={16} color={iconColor} />
+          <Text style={{ fontSize: 14, color: textColor }}>
+            {item.content || 'Video'}
+          </Text>
+        </View>
+      );
+    }
+
+    if (type === 'document') {
+      return (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <FileText size={16} color={iconColor} />
+          <Text style={{ fontSize: 14, color: textColor }}>
+            {item.content || 'File'}
+          </Text>
+        </View>
+      );
+    }
+
+    // Default: text
+    return (
+      <Text style={{ fontSize: 15, color: textColor, lineHeight: 20 }}>
+        {item.content}
+      </Text>
+    );
+  };
+
   const renderMessage = ({ item }: { item: ChatMessage }) => {
     const isMe = item.from_me;
+    const subtextColor = isMe ? 'rgba(255,255,255,0.65)' : '#9ca3af';
     return (
       <View style={{
         flexDirection: 'row',
@@ -164,10 +266,8 @@ export default function ChatScreen() {
               {item.contact_name}
             </Text>
           )}
-          <Text style={{ fontSize: 15, color: isMe ? '#ffffff' : '#111827', lineHeight: 20 }}>
-            {item.content}
-          </Text>
-          <Text style={{ fontSize: 11, color: isMe ? 'rgba(255,255,255,0.7)' : '#9ca3af', marginTop: 3, textAlign: isMe ? 'right' : 'left' }}>
+          {renderMessageBody(item, isMe)}
+          <Text style={{ fontSize: 11, color: subtextColor, marginTop: 3, textAlign: isMe ? 'right' : 'left' }}>
             {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </Text>
         </View>
@@ -195,6 +295,15 @@ export default function ChatScreen() {
           </Text>
         </View>
         {platform ? <PlatformBadge platform={platform as Platform} size="sm" /> : null}
+        <TouchableOpacity
+          onPress={() => router.push({
+            pathname: '/chat/settings/[chatId]',
+            params: { chatId: chatId!, platform, contact_name, chat_name, is_group },
+          })}
+          style={{ marginLeft: 8, padding: 4 }}
+        >
+          <Settings size={20} color="#6b7280" />
+        </TouchableOpacity>
       </View>
 
       <KeyboardAvoidingView
@@ -214,12 +323,23 @@ export default function ChatScreen() {
             keyExtractor={(item) => item.id}
             contentContainerStyle={{ paddingVertical: 8 }}
             onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
+            onLayout={() => listRef.current?.scrollToEnd({ animated: false })}
             keyboardShouldPersistTaps="handled"
             ListEmptyComponent={
               <View style={{ flex: 1, alignItems: 'center', paddingTop: 60 }}>
                 <Text style={{ color: '#9ca3af', fontSize: 15 }}>No messages yet</Text>
               </View>
             }
+          />
+        )}
+
+        {/* Smart Card Tray */}
+        {smartCards.length > 0 && (
+          <ChatSmartCardTray
+            cards={smartCards}
+            onDismiss={(cardId) => dismissCard(chatId!, cardId)}
+            onDraftMessage={(text) => setInputText(text)}
+            onActed={(cardId) => markCardActed(chatId!, cardId)}
           />
         )}
 
