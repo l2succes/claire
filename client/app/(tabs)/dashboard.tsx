@@ -147,7 +147,7 @@ export default function DashboardScreen() {
 
     // Subscribe to new messages
     const subscription = supabase
-      .channel('messages')
+      .channel(`dashboard-messages-${user.id}`)
       .on(
         'postgres_changes',
         {
@@ -157,15 +157,23 @@ export default function DashboardScreen() {
           filter: `user_id=eq.${user.id}`,
         },
         () => {
-          // Refresh messages when new one arrives
           fetchMessages();
         }
       )
-      .subscribe();
+      .subscribe((status, err) => {
+        console.log('[Realtime] Dashboard subscription status:', status, err ?? '');
+      });
 
     return () => {
       subscription.unsubscribe();
     };
+  }, [user?.id, fetchMessages]);
+
+  // Polling fallback — re-fetches every 15s in case realtime misses an event
+  useEffect(() => {
+    if (!user?.id) return;
+    const interval = setInterval(() => fetchMessages(), 15_000);
+    return () => clearInterval(interval);
   }, [user?.id, fetchMessages]);
 
   // Filter messages
@@ -205,8 +213,16 @@ export default function DashboardScreen() {
   }, [messages, searchQuery, activeFilter, platformFilter]);
 
   const handleMessagePress = (message: Message) => {
-    // Navigate to chat detail screen (to be implemented)
-    console.log('Navigate to chat:', message.chat_id, 'platform:', message.platform);
+    router.push({
+      pathname: '/chat/[chatId]',
+      params: {
+        chatId: message.chat_id,
+        contact_name: message.contact_name || '',
+        chat_name: message.chat_name || '',
+        platform: message.platform || '',
+        is_group: message.is_group ? '1' : '0',
+      },
+    });
   };
 
   const handleMessageLongPress = (message: Message) => {
