@@ -269,29 +269,6 @@ class AIProcessor {
   }
 
   /**
-   * Store AI suggestions in database
-   */
-  private async storeSuggestions(
-    messageId: string,
-    userId: string,
-    result: any
-  ) {
-    try {
-      await supabase.from('ai_suggestions').insert({
-        message_id: messageId,
-        user_id: userId,
-        suggestions: result.suggestions,
-        confidence: result.confidence,
-        reasoning: result.reasoning,
-        message_type: result.messageType,
-        created_at: new Date().toISOString(),
-      });
-    } catch (error) {
-      logger.error('Error storing AI suggestions:', error);
-    }
-  }
-
-  /**
    * Update suggestion feedback
    */
   async updateFeedback(

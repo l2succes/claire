@@ -51,15 +51,17 @@ jest.mock('ioredis', () => {
     exists: jest.fn(),
     expire: jest.fn(),
     ttl: jest.fn(),
-    keys: jest.fn(),
+    keys: jest.fn().mockResolvedValue([]),
     flushdb: jest.fn(),
     quit: jest.fn(),
+    on: jest.fn(),
+    duplicate: jest.fn().mockReturnThis(),
   }));
   return Redis;
 });
 
 // Global test utilities
-global.testUtils = {
+(global as any).testUtils = {
   generateMockUser: () => ({
     id: 'test-user-id',
     email: 'test@example.com',

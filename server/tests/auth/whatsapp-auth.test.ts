@@ -10,6 +10,7 @@ describe('WhatsAppAuthService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    (redis.keys as jest.Mock).mockResolvedValue([]);
     authService = new WhatsAppAuthService();
   });
 

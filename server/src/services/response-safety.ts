@@ -258,7 +258,7 @@ class ResponseSafety {
   /**
    * Expand a short response
    */
-  private expandResponse(suggestion: string, conversationContext: any): string {
+  private expandResponse(suggestion: string, _conversationContext: any): string {
     if (suggestion.length >= 10) return suggestion;
     
     const expansions = {
@@ -302,31 +302,6 @@ class ResponseSafety {
     return fallbacks[Math.floor(Math.random() * fallbacks.length)];
   }
 
-  /**
-   * Report safety issue for monitoring
-   */
-  private async reportSafetyIssue(
-    suggestion: string,
-    issues: string[],
-    severity: string,
-    userId: string
-  ) {
-    try {
-      // Log for monitoring
-      logger.warn('Safety issue detected', {
-        suggestion: suggestion.substring(0, 50) + '...',
-        issues,
-        severity,
-        userId,
-        timestamp: new Date().toISOString(),
-      });
-
-      // Could also store in database for analysis
-      // await supabase.from('safety_reports').insert({...})
-    } catch (error) {
-      logger.error('Error reporting safety issue:', error);
-    }
-  }
 }
 
 // Export singleton instance
