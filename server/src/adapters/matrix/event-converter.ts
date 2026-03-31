@@ -24,7 +24,8 @@ export class MatrixEventConverter {
     room: Room,
     sessionId: string,
     sessionUserId: string,
-    platform: Platform
+    platform: Platform,
+    selfGhostUserId?: string
   ): Promise<UnifiedMessage> {
     const content = event.getContent() as MatrixMessageContent;
     const sender = event.getSender() || '';
@@ -36,11 +37,13 @@ export class MatrixEventConverter {
       ? this.userMapper.cleanDisplayName(senderMember.name)
       : undefined;
 
-    // Determine if message is from us
-    const isFromMe = !this.userMapper.isGhostUser(sender);
+    // Determine if message is from us:
+    // - sender matches our own ghost user (e.g. @whatsapp_15166100494:claire.local)
+    // - sender is not a ghost user at all (i.e. the bot user @claire_bot:...)
+    const isFromMe = sender === selfGhostUserId || !this.userMapper.isGhostUser(sender);
 
-    // Get chat participant (the ghost user in the room)
-    const chatId = this.extractChatId(room, platform);
+    // Get chat participant (the ghost user in the room, excluding self)
+    const chatId = this.extractChatId(room, platform, selfGhostUserId);
 
     // Convert content type
     const contentType = this.matrixMsgTypeToContentType(content.msgtype);
@@ -62,7 +65,7 @@ export class MatrixEventConverter {
       senderId: sender,
       senderName,
       chatId: chatId || room.roomId,
-      chatType: this.isGroupRoom(room, platform) ? 'group' : 'individual',
+      chatType: this.isGroupRoom(room, platform, selfGhostUserId) ? 'group' : 'individual',
       chatName: room.name,
       timestamp: event.getDate() || new Date(),
       isFromMe,
@@ -115,10 +118,11 @@ export class MatrixEventConverter {
    * A room is a group if it has more than one distinct ghost contact for the platform.
    * Bridge bots and duplicate ghost users (LID vs phone) for the same contact don't count.
    */
-  private isGroupRoom(room: Room, platform: Platform): boolean {
+  private isGroupRoom(room: Room, platform: Platform, selfGhostUserId?: string): boolean {
     const contactIds = new Set<string>();
     for (const member of room.getJoinedMembers()) {
       if (this.userMapper.isBridgeBot(member.userId)) continue;
+      if (selfGhostUserId && member.userId === selfGhostUserId) continue;
       const contact = this.userMapper.ghostUserToPlatformContact(member.userId);
       if (contact && contact.platform === platform) {
         // Skip LID-based identifiers — they're duplicate aliases for phone-based contacts
@@ -130,13 +134,20 @@ export class MatrixEventConverter {
   }
 
   /**
-   * Extract the platform chat ID from room members
+   * Extract the platform chat ID from room members.
+   * Group rooms use room.roomId as a stable unique identifier to avoid
+   * collisions with 1:1 DM rooms that share a member.
    */
-  private extractChatId(room: Room, platform: Platform): string | null {
+  private extractChatId(room: Room, platform: Platform, selfGhostUserId?: string): string | null {
+    if (this.isGroupRoom(room, platform, selfGhostUserId)) {
+      return room.roomId;
+    }
+
     const members = room.getJoinedMembers();
 
     for (const member of members) {
       if (this.userMapper.isBridgeBot(member.userId)) continue;
+      if (selfGhostUserId && member.userId === selfGhostUserId) continue;
 
       const contactInfo = this.userMapper.ghostUserToPlatformContact(member.userId);
       if (contactInfo && contactInfo.platform === platform) {
