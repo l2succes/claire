@@ -79,7 +79,7 @@ router.post(
       
       // Store in database
       const { error } = await supabase
-        .from('whatsapp_sessions')
+        .from('platform_sessions')
         .insert({
           id: sessionId,
           user_id: userId,
@@ -221,7 +221,7 @@ router.delete(
       
       // Update database
       await supabase
-        .from('whatsapp_sessions')
+        .from('platform_sessions')
         .update({ status: 'disconnected' })
         .eq('id', sessionId);
 

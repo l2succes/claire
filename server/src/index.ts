@@ -162,6 +162,30 @@ async function initializePlatforms() {
       } else {
         logger.debug(`Message saved: ${message.platformMessageId}`);
       }
+
+      // 3. Upsert contact for the sender (if not from me)
+      if (!message.isFromMe && message.senderId) {
+        // Extract platform contact ID from ghost user ID
+        // Patterns: @whatsapp_12345:... @_telegram_12345:... @meta_12345:... @_imessage_+15551234567:...
+        const contactMatch = message.senderId.match(/@(?:whatsapp|_telegram|meta|_imessage)_([^:]+):/);
+        const platformContactId = contactMatch?.[1];
+        if (platformContactId) {
+          const { error: contactError } = await supabase
+            .from('contacts')
+            .upsert({
+              user_id: message.userId,
+              platform: message.platform,
+              platform_contact_id: platformContactId,
+              whatsapp_id: platformContactId,
+              name: message.senderName || platformContactId,
+              phone_number: /^\d+$/.test(platformContactId) ? platformContactId : null,
+            }, { onConflict: 'user_id,platform,platform_contact_id' });
+
+          if (contactError) {
+            logger.debug('Failed to upsert contact:', contactError);
+          }
+        }
+      }
     } catch (err) {
       logger.error('Error saving message to DB:', err);
     }
