@@ -12,6 +12,7 @@ import aiRoutes from './routes/ai';
 import platformRoutes from './routes/platforms';
 import conversationRoutes from './routes/conversations';
 import { platformManager } from './adapters';
+import { aiProcessor } from './services/ai-processor';
 import { whatsappAdapter } from './adapters/whatsapp';
 import { telegramAdapter } from './adapters/telegram';
 import { imessageAdapter } from './adapters/imessage';
@@ -166,7 +167,7 @@ async function initializePlatforms() {
       }
 
       // 2. Upsert message record
-      const { error: msgError } = await supabase
+      const { data: savedMsg, error: msgError } = await supabase
         .from('messages')
         .upsert({
           user_id: message.userId,
@@ -190,12 +191,45 @@ async function initializePlatforms() {
             return match ? `/media/${match[1]}/${match[2]}` : null;
           })(),
           media_mime_type: message.platformMetadata?.mediaInfo?.mimetype || null,
-        }, { onConflict: 'whatsapp_id' });
+        }, { onConflict: 'whatsapp_id' })
+        .select('id')
+        .single();
 
       if (msgError) {
         logger.error('Failed to upsert message:', msgError);
       } else {
         logger.debug(`Message saved: ${message.platformMessageId}`);
+
+        // Generate AI response suggestion for incoming messages (fire-and-forget)
+        if (!message.isFromMe && savedMsg?.id && message.content?.trim()) {
+          const chatType = message.chatType === 'group' ? 'group' : 'individual';
+          aiProcessor.generateAndStore(savedMsg.id, message.content, message.userId, chatType)
+            .catch((err) => logger.debug('AI suggestion skipped:', (err as Error).message));
+        }
+      }
+
+      // 3. Upsert contact for the sender (if not from me)
+      if (!message.isFromMe && message.senderId) {
+        // Extract platform contact ID from ghost user ID
+        // Patterns: @whatsapp_12345:... @_telegram_12345:... @meta_12345:... @_imessage_+15551234567:...
+        const contactMatch = message.senderId.match(/@(?:whatsapp|_telegram|meta|_imessage)_([^:]+):/);
+        const platformContactId = contactMatch?.[1];
+        if (platformContactId) {
+          const { error: contactError } = await supabase
+            .from('contacts')
+            .upsert({
+              user_id: message.userId,
+              platform: message.platform,
+              platform_contact_id: platformContactId,
+              whatsapp_id: platformContactId,
+              name: message.senderName || platformContactId,
+              phone_number: /^\d+$/.test(platformContactId) ? platformContactId : null,
+            }, { onConflict: 'user_id,platform,platform_contact_id' });
+
+          if (contactError) {
+            logger.debug('Failed to upsert contact:', contactError);
+          }
+        }
       }
 
       // 3. Upsert contact for the sender (if not from me)

@@ -53,6 +53,19 @@ Each platform has its own auth method:
 
 For detailed bridge API docs, see [docs/MATRIX_BRIDGE_REFERENCE.md](docs/MATRIX_BRIDGE_REFERENCE.md) and the [official mautrix docs](https://docs.mau.fi/).
 
+## Production
+
+| Service | URL |
+|---|---|
+| Claire server | https://claire-production-1450.up.railway.app |
+| Supabase API (Kong) | https://kong-production-2679.up.railway.app |
+| Supabase Studio | https://supabase-studio-production-b766.up.railway.app |
+| Postgres (external) | `hopper.proxy.rlwy.net:46800` user: `supabase_admin` |
+
+See [docs/deployment/PRODUCTION_SETUP.md](docs/deployment/PRODUCTION_SETUP.md) for health checks, EAS env var setup, and CI.
+
+---
+
 ## Prerequisites
 
 - Bun 1.0+
@@ -75,15 +88,24 @@ cd ../client && bun install
 ### 2. Start infrastructure
 
 ```bash
-# Start Supabase (PostgreSQL, Kong, GoTrue, PostgREST, Realtime)
-docker compose -f docker/supabase/docker-compose.supabase.yml up -d
+# Start everything (Supabase + Matrix)
+bun run docker:up
 
-# Start Matrix stack (Synapse + mautrix bridges)
-docker compose -f docker/matrix/docker-compose.matrix.yml up -d
-
-# Start Redis
-docker compose up -d redis
+# Or start stacks individually
+bun run docker:supabase   # Supabase only (PostgreSQL, Kong, GoTrue, PostgREST, Realtime)
+bun run docker:matrix     # Matrix only (Synapse + mautrix bridges)
 ```
+
+| Script | What it does |
+|---|---|
+| `bun run docker:up` | Start Supabase + Matrix |
+| `bun run docker:down` | Stop both stacks |
+| `bun run docker:supabase` | Start Supabase stack |
+| `bun run docker:supabase:down` | Stop Supabase |
+| `bun run docker:supabase:logs` | Tail Supabase logs |
+| `bun run docker:matrix` | Start Matrix stack |
+| `bun run docker:matrix:down` | Stop Matrix stack |
+| `bun run docker:matrix:logs` | Tail Matrix logs |
 
 ### 3. Configure environment
 
@@ -101,12 +123,46 @@ cp client/.env.example client/.env
 ### 4. Run
 
 ```bash
-# Terminal 1: Server
-cd server && bun run --watch src/index.ts
+# Both server + client (local infra)
+bun run dev
 
-# Terminal 2: iOS app
-cd client && bunx expo prebuild --clean --platform ios && bunx expo run:ios
+# Server only
+bun run dev:server
+
+# Client only (local infra, Expo QR)
+bun run dev:client
 ```
+
+#### Run client against Railway (production backend)
+
+```bash
+# Expo QR code (local server + Railway Supabase)
+bun run client:prod
+
+# iOS simulator → Railway
+bun run client:ios:prod
+
+# Connected device → Railway
+bun run client:ios:prod:device
+```
+
+| Script | Environment |
+|---|---|
+| `bun run dev` | Local server + local Supabase |
+| `bun run client:prod` | Local server + **Railway** Supabase |
+| `bun run client:ios:prod` | Simulator → **Railway** |
+| `bun run client:ios:prod:device` | Physical device → **Railway** |
+
+### Building for device / distribution
+
+```bash
+cd client
+bun run build:dev      # dev client build (EAS, internal)
+bun run build:preview  # preview build pointing at Railway (EAS, internal)
+bun run build:prod     # production build for App Store (EAS)
+```
+
+EAS environment variables are stored in the cloud — no `.env` file needed on CI or a new machine. See [docs/deployment/PRODUCTION_SETUP.md](docs/deployment/PRODUCTION_SETUP.md).
 
 ## Project Structure
 
@@ -143,10 +199,12 @@ cd client && bunx expo prebuild --clean --platform ios && bunx expo run:ios
 
 ## Documentation
 
+- [Production Setup](docs/deployment/PRODUCTION_SETUP.md) — Railway stack, Supabase dashboard, EAS env vars, CI
+- [Railway Deployment](docs/deployment/RAILWAY.md) — Railway service configuration
+- [Environment Setup](docs/ENVIRONMENT_SETUP.md) — Local vs device vs production environments
 - [Matrix Bridge Reference](docs/MATRIX_BRIDGE_REFERENCE.md) — mautrix bridge API quick reference
 - [Matrix Bridge Integration Plan](docs/plans/matrix-bridge-integration.md) — Architecture design
 - [Unified Messenger Client Plan](docs/plans/unified-ai-messenger-client.md) — Client implementation
-- [Environment Setup](docs/ENVIRONMENT_SETUP.md) — Deployment options
 - [Official mautrix docs](https://docs.mau.fi/) — Upstream bridge documentation
 
 ## License

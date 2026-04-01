@@ -67,6 +67,10 @@ dump.rdb
 .wwebjs_auth/
 .wwebjs_cache/
 session/
+sessions/
+
+# Docker runtime data (not for VCS)
+docker/matrix/data/
 
 # OS
 Thumbs.db

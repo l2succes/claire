@@ -266,6 +266,19 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     const session = this.sessions.get(sessionId);
     if (!session) return;
 
+    // Check for WhatsApp pairing code (sent after "login phone" + phone number)
+    if (this.eventConverter.isPairingCodeMessage(event)) {
+      const pairingCode = this.eventConverter.extractPairingCode(event);
+      if (pairingCode) {
+        session.status = PlatformStatus.AWAITING_AUTH;
+        session.authData = { pairingCode };
+        await this.saveSessionToRedis(session);
+        this.bridgeAuthManager.updatePairingCode(sessionId, pairingCode);
+        this.emitPlatformEvent('pairing_code', sessionId, { pairingCode });
+      }
+      return;
+    }
+
     // Check for QR code
     if (this.eventConverter.isQrCodeMessage(event)) {
       const mxcUrl = (event.getContent() as { url?: string }).url;
@@ -348,25 +361,35 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     const platform = this.roomMapper.detectRoomPlatform(room);
     if (!platform) return;
 
-    // For group rooms use room.roomId as stable chatId to avoid collision with DMs.
-    // A room is a group if it has more than one distinct non-bot ghost contact for the platform.
-    const ghostContacts = room.getJoinedMembers()
-      .filter(m => !this.userMapper.isBridgeBot(m.userId))
-      .map(m => this.userMapper.ghostUserToPlatformContact(m.userId))
-      .filter((c): c is NonNullable<typeof c> => c !== null && c.platform === platform && !c.platformContactId.startsWith('lid-'));
-
-    const isGroup = ghostContacts.length > 1;
-    const chatId = isGroup ? room.roomId : this.roomMapper.getPrimaryChatParticipant(room);
-    if (!chatId) return;
-
-    // Find a session for this platform
+    // Find a session for this platform (needed to get selfGhostId)
+    let matchingSessionId: string | undefined;
     for (const [sessionId, sessionPlatform] of this.sessionPlatforms) {
       if (sessionPlatform === platform) {
-        this.roomMapper.registerRoom(room.roomId, platform, chatId, sessionId);
-        this.log('info', `Registered room ${room.roomId} for ${platform} chat ${chatId} (${isGroup ? 'group' : 'dm'})`);
+        matchingSessionId = sessionId;
         break;
       }
     }
+    if (!matchingSessionId) return;
+
+    const selfGhostId = this.sessionSelfGhostIds.get(matchingSessionId);
+
+    // For group rooms use room.roomId as stable chatId to avoid collision with DMs.
+    // Exclude the self ghost user (present in groups but not DMs) to avoid false positives.
+    // Strategy: prefer phone-based contacts for counting (ignore LID duplicates of the same person).
+    // If ALL contacts are LID-based (mautrix v2 all-LID group), fall back to counting LID contacts.
+    const allGhostContacts = room.getJoinedMembers()
+      .filter(m => !this.userMapper.isBridgeBot(m.userId) && m.userId !== selfGhostId)
+      .map(m => this.userMapper.ghostUserToPlatformContact(m.userId))
+      .filter((c): c is NonNullable<typeof c> => c !== null && c.platform === platform);
+
+    const phoneContacts = allGhostContacts.filter(c => !c.platformContactId.startsWith('lid-'));
+    const contactsForCounting = phoneContacts.length > 0 ? phoneContacts : allGhostContacts;
+    const isGroup = contactsForCounting.length > 1;
+    const chatId = isGroup ? room.roomId : this.roomMapper.getPrimaryChatParticipant(room, selfGhostId);
+    if (!chatId) return;
+
+    this.roomMapper.registerRoom(room.roomId, platform, chatId, matchingSessionId);
+    this.log('info', `Registered room ${room.roomId} for ${platform} chat ${chatId} (${isGroup ? 'group' : 'dm'})`);
   }
 
   /**
@@ -396,13 +419,19 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     const controlRoom = await this.findOrCreateControlRoom(bridgeBotUserId);
     this.sessionControlRooms.set(sessionId, controlRoom.roomId);
 
+    // Merge explicit bridgeConfig with any top-level fields (e.g. phoneNumber from connect body)
+    const bridgeConfig = {
+      ...config?.bridgeConfig,
+      ...(( config as Record<string, unknown> )?.phoneNumber ? { phoneNumber: ( config as Record<string, unknown> ).phoneNumber as string } : {}),
+    };
+
     // Initiate auth flow
     await this.bridgeAuthManager.initiateAuth(
       this.matrixClient,
       controlRoom.roomId,
       platform,
       sessionId,
-      config?.bridgeConfig
+      bridgeConfig
     );
 
     session.status = PlatformStatus.AWAITING_AUTH;

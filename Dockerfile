@@ -87,6 +87,7 @@ COPY --from=deps --chown=claire:claire /app/node_modules ./node_modules
 
 # Copy built application from builder stage
 COPY --from=builder --chown=claire:claire /app/dist ./dist
+COPY --from=builder --chown=claire:claire /app/src/routes/email-confirm.html ./dist/routes/email-confirm.html
 COPY --from=builder --chown=claire:claire /app/package.json ./
 
 # Switch to non-root user

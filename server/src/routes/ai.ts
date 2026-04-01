@@ -59,27 +59,15 @@ router.post('/responses/generate',
           'Access-Control-Allow-Origin': '*',
         });
 
-        const streamingCallbacks = {
-          onToken: (token: string) => {
-            res.write(`data: ${JSON.stringify({ type: 'token', data: token })}\n\n`);
-          },
-          onComplete: (response: any) => {
-            res.write(`data: ${JSON.stringify({ type: 'complete', data: response })}\n\n`);
-            res.end();
-          },
-          onError: (error: Error) => {
-            res.write(`data: ${JSON.stringify({ type: 'error', error: error.message })}\n\n`);
-            res.end();
-          },
-        };
-
-        await aiProcessor.generateResponse(
+        // Streaming token-by-token not yet supported with Bedrock; send as single SSE event
+        const streamResponse = await aiProcessor.generateResponse(
           messageId,
           content,
           userId,
-          chatType,
-          streamingCallbacks
+          chatType
         );
+        res.write(`data: ${JSON.stringify({ type: 'complete', data: streamResponse })}\n\n`);
+        res.end();
       } else {
         // Regular response
         const response = await aiProcessor.generateResponse(

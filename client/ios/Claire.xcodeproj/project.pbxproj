@@ -8,11 +8,11 @@
 
 /* Begin PBXBuildFile section */
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
+		151E42576DDB807B983FDA1E /* libPods-Claire.a in Frameworks */ = {isa = PBXBuildFile; fileRef = FC58F05B908AD3769C3BC5B1 /* libPods-Claire.a */; };
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
-		927844B443842FE64B6A1248 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 0D360FAEBCB1834851C25433 /* PrivacyInfo.xcprivacy */; };
+		3ED5155B75C3248AA9EEFB30 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF4D6864267087115C1A101C /* ExpoModulesProvider.swift */; };
+		AE2C663CE7DF97FB0DB8E974 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = DF017CDB7A47AA191DE56EC8 /* PrivacyInfo.xcprivacy */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
-		C3C21A76088134EEADC54DA0 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 254181FCAAF3DC656DDD9DD5 /* ExpoModulesProvider.swift */; };
-		CF7C9F1157CB1D8CF6FE2CE4 /* libPods-Claire.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 8328ECB6BA7FCEF1E9A472B6 /* libPods-Claire.a */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
 /* End PBXBuildFile section */
 
@@ -21,15 +21,16 @@
 		13B07F961A680F5B00A75B9A /* Claire.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Claire.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = Claire/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = Claire/Info.plist; sourceTree = "<group>"; };
-		19CC5D7459F36ECA7CACEE59 /* Pods-Claire.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Claire.debug.xcconfig"; path = "Target Support Files/Pods-Claire/Pods-Claire.debug.xcconfig"; sourceTree = "<group>"; };
-		1F8AB327493B7024EEA9E05D /* Pods-Claire.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Claire.release.xcconfig"; path = "Target Support Files/Pods-Claire/Pods-Claire.release.xcconfig"; sourceTree = "<group>"; };
-		254181FCAAF3DC656DDD9DD5 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-Claire/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
-		8328ECB6BA7FCEF1E9A472B6 /* libPods-Claire.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-Claire.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = Claire/SplashScreen.storyboard; sourceTree = "<group>"; };
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
+		DF017CDB7A47AA191DE56EC8 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = Claire/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		DF4D6864267087115C1A101C /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-Claire/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
+		ECE37A3E762E70F2B57DE717 /* Pods-Claire.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Claire.debug.xcconfig"; path = "Target Support Files/Pods-Claire/Pods-Claire.debug.xcconfig"; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = Claire/AppDelegate.swift; sourceTree = "<group>"; };
 		F11748442D0722820044C1D9 /* Claire-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "Claire-Bridging-Header.h"; path = "Claire/Claire-Bridging-Header.h"; sourceTree = "<group>"; };
+		FC58F05B908AD3769C3BC5B1 /* libPods-Claire.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-Claire.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		FF4C3AC902DD450D88F171D6 /* Pods-Claire.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Claire.release.xcconfig"; path = "Target Support Files/Pods-Claire/Pods-Claire.release.xcconfig"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -37,7 +38,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				CF7C9F1157CB1D8CF6FE2CE4 /* libPods-Claire.a in Frameworks */,
+				151E42576DDB807B983FDA1E /* libPods-Claire.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -53,15 +54,7 @@
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */,
-				0D360FAEBCB1834851C25433 /* PrivacyInfo.xcprivacy */,
-			);
-			name = Claire;
-			sourceTree = "<group>";
-		};
-		1ACED73DE9780D073C85353D /* Claire */ = {
-			isa = PBXGroup;
-			children = (
-				254181FCAAF3DC656DDD9DD5 /* ExpoModulesProvider.swift */,
+				DF017CDB7A47AA191DE56EC8 /* PrivacyInfo.xcprivacy */,
 			);
 			name = Claire;
 			sourceTree = "<group>";
@@ -70,15 +63,15 @@
 			isa = PBXGroup;
 			children = (
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
-				8328ECB6BA7FCEF1E9A472B6 /* libPods-Claire.a */,
+				FC58F05B908AD3769C3BC5B1 /* libPods-Claire.a */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
-		7FD49F7AA8749DF11BD7A163 /* ExpoModulesProviders */ = {
+		4BB298AE35B0D310BC7AD443 /* ExpoModulesProviders */ = {
 			isa = PBXGroup;
 			children = (
-				1ACED73DE9780D073C85353D /* Claire */,
+				CB731CE0C7F408A8EF2D23D4 /* Claire */,
 			);
 			name = ExpoModulesProviders;
 			sourceTree = "<group>";
@@ -97,8 +90,8 @@
 				832341AE1AAA6A7D00B99B32 /* Libraries */,
 				83CBBA001A601CBA00E9B192 /* Products */,
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
-				BD8CBE4C7691252F315A39AC /* Pods */,
-				7FD49F7AA8749DF11BD7A163 /* ExpoModulesProviders */,
+				B42E7935A0C8854CF453F9AC /* Pods */,
+				4BB298AE35B0D310BC7AD443 /* ExpoModulesProviders */,
 			);
 			indentWidth = 2;
 			sourceTree = "<group>";
@@ -113,6 +106,16 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		B42E7935A0C8854CF453F9AC /* Pods */ = {
+			isa = PBXGroup;
+			children = (
+				ECE37A3E762E70F2B57DE717 /* Pods-Claire.debug.xcconfig */,
+				FF4C3AC902DD450D88F171D6 /* Pods-Claire.release.xcconfig */,
+			);
+			name = Pods;
+			path = Pods;
+			sourceTree = "<group>";
+		};
 		BB2F792B24A3F905000567C9 /* Supporting */ = {
 			isa = PBXGroup;
 			children = (
@@ -122,14 +125,12 @@
 			path = Claire/Supporting;
 			sourceTree = "<group>";
 		};
-		BD8CBE4C7691252F315A39AC /* Pods */ = {
+		CB731CE0C7F408A8EF2D23D4 /* Claire */ = {
 			isa = PBXGroup;
 			children = (
-				19CC5D7459F36ECA7CACEE59 /* Pods-Claire.debug.xcconfig */,
-				1F8AB327493B7024EEA9E05D /* Pods-Claire.release.xcconfig */,
+				DF4D6864267087115C1A101C /* ExpoModulesProvider.swift */,
 			);
-			name = Pods;
-			path = Pods;
+			name = Claire;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -140,13 +141,14 @@
 			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "Claire" */;
 			buildPhases = (
 				08A4A3CD28434E44B6B9DE2E /* [CP] Check Pods Manifest.lock */,
-				11C4F41D4E1C7A6CA6AEB0D4 /* [Expo] Configure project */,
+				1FE35B73BFF818B9846A0EEE /* [Expo] Configure project */,
 				13B07F871A680F5B00A75B9A /* Sources */,
 				13B07F8C1A680F5B00A75B9A /* Frameworks */,
 				13B07F8E1A680F5B00A75B9A /* Resources */,
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
 				800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */,
-				DE6D10B0EFCC64FBD81B5B81 /* [CP] Embed Pods Frameworks */,
+				B9A8E3AEC49A41D796829CB7 /* [Expo Dev Launcher] Strip Local Network Keys for Release */,
+				D7F0EEA028B06996B5082DF6 /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -196,7 +198,7 @@
 				BB2F792D24A3F905000567C9 /* Expo.plist in Resources */,
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */,
-				927844B443842FE64B6A1248 /* PrivacyInfo.xcprivacy in Resources */,
+				AE2C663CE7DF97FB0DB8E974 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -242,7 +244,7 @@
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 			showEnvVarsInLog = 0;
 		};
-		11C4F41D4E1C7A6CA6AEB0D4 /* [Expo] Configure project */ = {
+		1FE35B73BFF818B9846A0EEE /* [Expo] Configure project */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
@@ -284,6 +286,8 @@
 				"${PODS_CONFIGURATION_BUILD_DIR}/React-Core/React-Core_privacy.bundle",
 				"${PODS_CONFIGURATION_BUILD_DIR}/React-cxxreact/React-cxxreact_privacy.bundle",
 				"${PODS_CONFIGURATION_BUILD_DIR}/SDWebImage/SDWebImage.bundle",
+				"${PODS_CONFIGURATION_BUILD_DIR}/expo-dev-launcher/EXDevLauncher.bundle",
+				"${PODS_CONFIGURATION_BUILD_DIR}/expo-dev-menu/EXDevMenu.bundle",
 			);
 			name = "[CP] Copy Pods Resources";
 			outputPaths = (
@@ -298,13 +302,29 @@
 				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/React-Core_privacy.bundle",
 				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/React-cxxreact_privacy.bundle",
 				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/SDWebImage.bundle",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/EXDevLauncher.bundle",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/EXDevMenu.bundle",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Claire/Pods-Claire-resources.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
-		DE6D10B0EFCC64FBD81B5B81 /* [CP] Embed Pods Frameworks */ = {
+		B9A8E3AEC49A41D796829CB7 /* [Expo Dev Launcher] Strip Local Network Keys for Release */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			name = "[Expo Dev Launcher] Strip Local Network Keys for Release";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# Strip dev-launcher-specific local network permission keys from non-Debug builds\n# This only removes _expo._tcp Bonjour services and the dev-launcher usage description.\n# Other Bonjour services and custom descriptions are preserved for production use.\n\nif [ \"$CONFIGURATION\" != \"Debug\" ]; then\n  PLIST_PATH=\"${TARGET_BUILD_DIR}/${INFOPLIST_PATH}\"\n  if [ -f \"$PLIST_PATH\" ]; then\n    # Check if NSBonjourServices exists\n    if /usr/libexec/PlistBuddy -c \"Print :NSBonjourServices\" \"$PLIST_PATH\" >/dev/null 2>&1; then\n      # Get the count of services\n      COUNT=$(/usr/libexec/PlistBuddy -c \"Print :NSBonjourServices\" \"$PLIST_PATH\" 2>/dev/null | grep \"^    \" | wc -l | tr -d ' ')\n\n      # Remove _expo._tcp\n      for ((i=COUNT-1; i>=0; i--)); do\n        SERVICE=$(/usr/libexec/PlistBuddy -c \"Print :NSBonjourServices:$i\" \"$PLIST_PATH\" 2>/dev/null || echo \"\")\n        if echo \"$SERVICE\" | grep -q \"_expo._tcp\"; then\n          /usr/libexec/PlistBuddy -c \"Delete :NSBonjourServices:$i\" \"$PLIST_PATH\" 2>/dev/null || true\n        fi\n      done\n\n      # If the array is now empty, remove it entirely\n      REMAINING=$(/usr/libexec/PlistBuddy -c \"Print :NSBonjourServices\" \"$PLIST_PATH\" 2>/dev/null | grep \"^    \" | wc -l | tr -d ' ')\n      if [ \"$REMAINING\" -eq \"0\" ]; then\n        /usr/libexec/PlistBuddy -c \"Delete :NSBonjourServices\" \"$PLIST_PATH\" 2>/dev/null || true\n      fi\n    fi\n\n    # Only delete the description if it matches the dev-launcher default text\n    DESC=$(/usr/libexec/PlistBuddy -c \"Print :NSLocalNetworkUsageDescription\" \"$PLIST_PATH\" 2>/dev/null || echo \"\")\n    if echo \"$DESC\" | grep -q \"Expo Dev Launcher\"; then\n      /usr/libexec/PlistBuddy -c \"Delete :NSLocalNetworkUsageDescription\" \"$PLIST_PATH\" 2>/dev/null || true\n    fi\n  fi\nfi\n";
+		};
+		D7F0EEA028B06996B5082DF6 /* [CP] Embed Pods Frameworks */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -334,7 +354,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */,
-				C3C21A76088134EEADC54DA0 /* ExpoModulesProvider.swift in Sources */,
+				3ED5155B75C3248AA9EEFB30 /* ExpoModulesProvider.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -343,12 +363,13 @@
 /* Begin XCBuildConfiguration section */
 		13B07F941A680F5B00A75B9A /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 19CC5D7459F36ECA7CACEE59 /* Pods-Claire.debug.xcconfig */;
+			baseConfigurationReference = ECE37A3E762E70F2B57DE717 /* Pods-Claire.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = Claire/Claire.entitlements;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = T74H9G4334;
 				ENABLE_BITCODE = NO;
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					"$(inherited)",
@@ -379,12 +400,13 @@
 		};
 		13B07F951A680F5B00A75B9A /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 1F8AB327493B7024EEA9E05D /* Pods-Claire.release.xcconfig */;
+			baseConfigurationReference = FF4C3AC902DD450D88F171D6 /* Pods-Claire.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = Claire/Claire.entitlements;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = T74H9G4334;
 				INFOPLIST_FILE = Claire/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
 				LD_RUNPATH_SEARCH_PATHS = (

@@ -66,7 +66,7 @@ export class MatrixEventConverter {
       senderName,
       chatId: chatId || room.roomId,
       chatType: this.isGroupRoom(room, platform, selfGhostUserId) ? 'group' : 'individual',
-      chatName: room.name,
+      chatName: this.userMapper.cleanDisplayName(room.name),
       timestamp: event.getDate() || new Date(),
       isFromMe,
       isRead: false,
@@ -119,18 +119,24 @@ export class MatrixEventConverter {
    * Bridge bots and duplicate ghost users (LID vs phone) for the same contact don't count.
    */
   private isGroupRoom(room: Room, platform: Platform, selfGhostUserId?: string): boolean {
-    const contactIds = new Set<string>();
+    const phoneIds = new Set<string>();
+    const lidIds = new Set<string>();
     for (const member of room.getJoinedMembers()) {
       if (this.userMapper.isBridgeBot(member.userId)) continue;
       if (selfGhostUserId && member.userId === selfGhostUserId) continue;
       const contact = this.userMapper.ghostUserToPlatformContact(member.userId);
       if (contact && contact.platform === platform) {
-        // Skip LID-based identifiers — they're duplicate aliases for phone-based contacts
-        if (contact.platformContactId.startsWith('lid-')) continue;
-        contactIds.add(contact.platformContactId);
+        if (contact.platformContactId.startsWith('lid-')) {
+          lidIds.add(contact.platformContactId);
+        } else {
+          phoneIds.add(contact.platformContactId);
+        }
       }
     }
-    return contactIds.size > 1;
+    // Prefer phone-based count (avoids counting phone+LID duplicates of the same person).
+    // Fall back to LID count for all-LID groups (mautrix v2 fully migrated accounts).
+    const countSet = phoneIds.size > 0 ? phoneIds : lidIds;
+    return countSet.size > 1;
   }
 
   /**
@@ -156,6 +162,25 @@ export class MatrixEventConverter {
     }
 
     return null;
+  }
+
+  /**
+   * Check if an event contains a WhatsApp phone pairing code (XXXX-XXXX format)
+   */
+  isPairingCodeMessage(event: MatrixEvent): boolean {
+    const content = event.getContent() as MatrixMessageContent;
+    const body = content.body || '';
+    return /\b[A-Z0-9]{4}-[A-Z0-9]{4}\b/.test(body);
+  }
+
+  /**
+   * Extract the pairing code from a bridge bot message
+   */
+  extractPairingCode(event: MatrixEvent): string | null {
+    const content = event.getContent() as MatrixMessageContent;
+    const body = content.body || '';
+    const match = body.match(/\b([A-Z0-9]{4}-[A-Z0-9]{4})\b/);
+    return match ? match[1] : null;
   }
 
   /**

@@ -108,9 +108,11 @@ export class WhatsAppAdapter extends BasePlatformAdapter {
       '--no-first-run',
       '--disable-gpu',
       '--disable-extensions',
+      '--disable-crash-reporter',
+      '--disable-features=VizDisplayCompositor',
     ];
     // --no-zygote can crash Chrome on macOS; only add on Linux (e.g. Docker)
-    if (isLinux) puppeteerArgs.push('--no-zygote');
+    if (isLinux) puppeteerArgs.push('--no-zygote', '--single-process');
 
     this.log('info', `[whatsapp] Creating client for session ${sessionId} on ${process.platform}`);
 

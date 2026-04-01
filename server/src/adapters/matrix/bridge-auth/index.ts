@@ -42,8 +42,8 @@ export class BridgeAuthManager {
     // Platform-specific command building
     switch (platform) {
       case Platform.WHATSAPP:
-        // New mautrix-whatsapp requires "login qr" to get QR code flow
-        command = 'login qr';
+        // Use phone pairing code flow — works on mobile without camera scanning
+        command = 'login phone';
         break;
 
       case Platform.TELEGRAM:
@@ -71,6 +71,14 @@ export class BridgeAuthManager {
 
     // Send the login command to the bridge bot
     await client.sendTextMessage(controlRoomId, command);
+
+    // For WhatsApp phone login, immediately send the phone number so the bridge
+    // can reply with the pairing code in one round-trip
+    if (platform === Platform.WHATSAPP && config?.phoneNumber) {
+      // Brief delay so the bridge has time to process the login command first
+      await new Promise((r) => setTimeout(r, 800));
+      await client.sendTextMessage(controlRoomId, config.phoneNumber);
+    }
 
     // Update auth state
     this.authStates.set(sessionId, {
@@ -117,6 +125,18 @@ export class BridgeAuthManager {
 
     await client.sendTextMessage(state.controlRoomId, password);
     state.lastUpdated = new Date();
+  }
+
+  /**
+   * Update auth state when pairing code is received
+   */
+  updatePairingCode(sessionId: string, pairingCode: string): void {
+    const state = this.authStates.get(sessionId);
+    if (state) {
+      state.status = 'pairing_code_generated';
+      state.pairingCode = pairingCode;
+      state.lastUpdated = new Date();
+    }
   }
 
   /**

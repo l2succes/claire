@@ -119,8 +119,9 @@ export class MatrixUserMapper {
    * Bridges often format names like "John Doe (WA)" or "Username (TG)"
    */
   cleanDisplayName(bridgeFormattedName: string): string {
-    // Remove platform suffixes like (WA), (TG), (IG)
     return bridgeFormattedName
+      .replace(/\s*\(@[^)]+:[^)]+\)/g, '')      // strip (@userId:server) Matrix IDs
+      .replace(/\s*and \d+ others?\s*$/i, '')    // strip "and 2 others"
       .replace(/\s*\(WA\)\s*$/i, '')
       .replace(/\s*\(TG\)\s*$/i, '')
       .replace(/\s*\(IG\)\s*$/i, '')

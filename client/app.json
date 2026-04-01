@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "light",
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
@@ -19,7 +19,8 @@
       "bundleIdentifier": "com.claire.app",
       "infoPlist": {
         "NSCameraUsageDescription": "This app uses the camera to scan QR codes for WhatsApp login."
-      }
+      },
+      "appleTeamId": "T74H9G4334"
     },
     "android": {
       "adaptiveIcon": {
@@ -36,6 +37,7 @@
       "bundler": "metro"
     },
     "plugins": [
+      "expo-dev-client",
       "expo-router",
       [
         "expo-notifications",
@@ -44,12 +46,18 @@
           "color": "#ffffff"
         }
       ],
-"expo-font",
+      "expo-font",
       "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true
     },
-    "scheme": "claire"
+    "scheme": "claire",
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "366bc316-ee01-407b-b681-dd8eed7d02be"
+      }
+    }
   }
 }
