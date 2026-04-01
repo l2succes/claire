@@ -18,9 +18,21 @@ const envSchema = z.object({
   DATABASE_URL: z.string().url(),
   DIRECT_DATABASE_URL: z.string().url().optional(),
   
-  // OpenAI
-  OPENAI_API_KEY: z.string(),
+  // OpenAI (optional — kept for legacy/Kimi OpenAI-compatible usage)
+  OPENAI_API_KEY: z.string().optional(),
   OPENAI_MODEL: z.string().default('gpt-4-turbo-preview'),
+
+  // AWS Bedrock (primary AI provider)
+  AWS_ACCESS_KEY_ID: z.string().optional(),
+  AWS_SECRET_ACCESS_KEY: z.string().optional(),
+  AWS_REGION: z.string().default('us-east-1'),
+  BEDROCK_MODEL: z.string().default('us.anthropic.claude-sonnet-4-6-20250514-v1:0'),
+
+  // AI provider selection and Kimi K2.5 fallback
+  AI_PROVIDER: z.enum(['bedrock', 'kimi', 'openai']).default('bedrock'),
+  KIMI_API_KEY: z.string().optional(),
+  KIMI_BASE_URL: z.string().url().default('https://api.moonshot.cn/v1'),
+  KIMI_MODEL: z.string().default('moonshot-v1-32k'),
   
   // Redis — Railway provides REDIS_URL; local dev uses REDIS_HOST/PORT
   REDIS_URL: z.string().optional(),
@@ -111,6 +123,21 @@ export const whatsappConfig = {
 export const openaiConfig = {
   apiKey: config.OPENAI_API_KEY,
   model: config.OPENAI_MODEL,
+};
+
+export const aiConfig = {
+  provider: config.AI_PROVIDER,
+  bedrock: {
+    accessKeyId: config.AWS_ACCESS_KEY_ID,
+    secretAccessKey: config.AWS_SECRET_ACCESS_KEY,
+    region: config.AWS_REGION,
+    model: config.BEDROCK_MODEL,
+  },
+  kimi: {
+    apiKey: config.KIMI_API_KEY,
+    baseUrl: config.KIMI_BASE_URL,
+    model: config.KIMI_MODEL,
+  },
 };
 
 export const platformConfig = {

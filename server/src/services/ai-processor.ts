@@ -1,5 +1,6 @@
+import AnthropicBedrock from '@anthropic-ai/bedrock-sdk';
 import OpenAI from 'openai';
-import { config } from '../config';
+import { aiConfig } from '../config';
 import { logger } from '../utils/logger';
 import { supabase } from './supabase';
 import { contextBuilder } from './context-builder';
@@ -16,59 +17,111 @@ interface AIResponse {
   cached?: boolean;
 }
 
-interface StreamingCallback {
-  onToken?: (token: string) => void;
-  onComplete?: (response: AIResponse) => void;
-  onError?: (error: Error) => void;
+interface ResponseAnalytics {
+  messageId: string;
+  userId: string;
+  messageType: string;
+  confidence: number;
+  suggestionCount: number;
+  contextMessageCount: number;
+  hasContactInfo: boolean;
+  responseTime: number;
+  cached: boolean;
 }
 
 class AIProcessor {
-  private openai: OpenAI;
+  private bedrock: AnthropicBedrock | null;
+  private kimiClient: OpenAI | null;
   private responseAnalytics: Map<string, ResponseAnalytics> = new Map();
 
   constructor() {
-    this.openai = new OpenAI({
-      apiKey: config.OPENAI_API_KEY,
-    });
+    this.bedrock =
+      aiConfig.bedrock.accessKeyId && aiConfig.bedrock.secretAccessKey
+        ? new AnthropicBedrock({
+            awsAccessKey: aiConfig.bedrock.accessKeyId,
+            awsSecretKey: aiConfig.bedrock.secretAccessKey,
+            awsRegion: aiConfig.bedrock.region,
+          })
+        : null;
+
+    this.kimiClient = aiConfig.kimi.apiKey
+      ? new OpenAI({ apiKey: aiConfig.kimi.apiKey, baseURL: aiConfig.kimi.baseUrl })
+      : null;
   }
 
   /**
-   * Generate response suggestions for a message
+   * Call the configured AI provider, with fallback to the other provider on failure.
+   */
+  private async callAI(systemPrompt: string, userPrompt: string): Promise<string> {
+    const provider = aiConfig.provider;
+
+    const callBedrock = async () => {
+      if (!this.bedrock) throw new Error('Bedrock not configured');
+      const msg = await this.bedrock.messages.create({
+        model: aiConfig.bedrock.model,
+        max_tokens: 1024,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userPrompt }],
+      });
+      const block = msg.content[0];
+      return block.type === 'text' ? block.text : '{}';
+    };
+
+    const callKimi = async () => {
+      if (!this.kimiClient) throw new Error('Kimi not configured');
+      const completion = await this.kimiClient.chat.completions.create({
+        model: aiConfig.kimi.model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        temperature: 0.7,
+        max_tokens: 1024,
+      });
+      return completion.choices[0].message.content || '{}';
+    };
+
+    const [primary, fallback] =
+      provider === 'bedrock' ? [callBedrock, callKimi] : [callKimi, callBedrock];
+
+    try {
+      return await primary();
+    } catch (err) {
+      logger.warn(`Primary AI provider (${provider}) failed, trying fallback:`, (err as Error).message);
+    }
+
+    return await fallback();
+  }
+
+  /**
+   * Generate response suggestions for a message.
    */
   async generateResponse(
     messageId: string,
     content: string,
     userId: string,
-    chatType: 'individual' | 'group',
-    streaming?: StreamingCallback
+    chatType: 'individual' | 'group'
   ): Promise<AIResponse> {
     try {
-      // Check cache first
       const cachedResponse = await responseCache.get(content, userId);
       if (cachedResponse) {
         logger.info(`Using cached response for message ${messageId}`);
-        const response = { ...cachedResponse, messageId, cached: true };
-        streaming?.onComplete?.(response);
-        return response;
+        return { ...cachedResponse, messageId, cached: true };
       }
 
-      // Build comprehensive context
       const conversationContext = await contextBuilder.buildContext(messageId, userId);
-      
-      // Detect message type
       const messageType = promptTemplates.detectMessageType(content);
-      
-      // Get user preferences for tone and style
+
       const tone = conversationContext.userPreferences?.tone || 'friendly';
       const style = conversationContext.userPreferences?.responseStyle || 'concise';
       const language = conversationContext.userPreferences?.language || 'en';
-      
-      // Build context-aware prompt
+
       const promptContext = {
         messageType,
         chatType,
-        relationship: conversationContext.contact?.relationship || 
-                     conversationContext.contact?.inferredRelationship,
+        relationship:
+          conversationContext.contact?.relationship ||
+          conversationContext.contact?.inferredRelationship,
         tone,
         style,
         language,
@@ -82,93 +135,63 @@ class AIProcessor {
         3
       );
 
-      // Generate response with streaming support
-      const response = await this.generateWithStreaming(
-        messageId,
-        system,
-        user,
-        messageType,
-        streaming
-      );
+      // Ensure JSON output — Anthropic doesn't have response_format but respects the instruction
+      const systemWithJson = `${system}\n\nYou MUST respond with valid JSON only, no markdown or explanation.`;
 
-      // Validate response safety
+      const rawContent = await this.callAI(systemWithJson, user);
+      const response = this.parseAIResponse(rawContent, messageId, messageType);
+
       const safeResponse = await responseSafety.validateAndFilter(response, conversationContext);
-
-      // Cache the response
-      await responseCache.set(content, userId, safeResponse);
-
-      // Track analytics
+      await responseCache.setWithConfidenceTTL(content, userId, safeResponse);
       this.trackResponseAnalytics(messageId, userId, safeResponse, conversationContext);
 
       return safeResponse;
     } catch (error) {
       logger.error('Error generating AI response:', error);
-      streaming?.onError?.(error as Error);
       throw error;
     }
   }
 
   /**
-   * Generate response with streaming support
+   * Generate response suggestions and persist them to ai_suggestions table.
+   * Call this from the message ingestion pipeline with the DB message UUID.
    */
-  private async generateWithStreaming(
-    messageId: string,
-    systemPrompt: string,
-    userPrompt: string,
-    messageType: string,
-    streaming?: StreamingCallback
+  async generateAndStore(
+    messageDbId: string,
+    content: string,
+    userId: string,
+    chatType: 'individual' | 'group'
   ): Promise<AIResponse> {
-    if (streaming?.onToken) {
-      // Streaming mode
-      const stream = await this.openai.chat.completions.create({
-        model: 'gpt-4-turbo-preview',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-        temperature: 0.7,
-        max_tokens: 500,
-        response_format: { type: 'json_object' },
-        stream: true,
-      });
+    const response = await this.generateResponse(messageDbId, content, userId, chatType);
 
-      let fullContent = '';
-      
-      for await (const chunk of stream) {
-        const delta = chunk.choices[0]?.delta?.content || '';
-        if (delta) {
-          fullContent += delta;
-          streaming.onToken(delta);
-        }
-      }
+    const { error } = await supabase.from('ai_suggestions').upsert(
+      {
+        user_id: userId,
+        message_id: messageDbId,
+        suggestions: response.suggestions,
+        confidence: response.confidence,
+        reasoning: response.reasoning,
+      },
+      { onConflict: 'message_id' }
+    );
 
-      const result = this.parseAIResponse(fullContent, messageId, messageType);
-      streaming?.onComplete?.(result);
-      return result;
+    if (error) {
+      logger.error('Failed to store AI suggestion:', error);
     } else {
-      // Non-streaming mode
-      const completion = await this.openai.chat.completions.create({
-        model: 'gpt-4-turbo-preview',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-        temperature: 0.7,
-        max_tokens: 500,
-        response_format: { type: 'json_object' },
-      });
-
-      const content = completion.choices[0].message.content || '{}';
-      return this.parseAIResponse(content, messageId, messageType);
+      logger.debug(`AI suggestion stored for message ${messageDbId}`);
     }
+
+    return response;
   }
 
   /**
-   * Parse AI response from JSON
+   * Parse the AI JSON response into an AIResponse object.
    */
   private parseAIResponse(content: string, messageId: string, messageType: string): AIResponse {
     try {
-      const parsed = JSON.parse(content);
+      // Strip markdown code fences if present
+      const clean = content.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+      const parsed = JSON.parse(clean);
       return {
         messageId,
         suggestions: parsed.suggestions || ['I understand.', 'Thanks for letting me know.'],
@@ -176,8 +199,8 @@ class AIProcessor {
         reasoning: parsed.reasoning,
         messageType,
       };
-    } catch (error) {
-      logger.warn('Failed to parse AI response, using fallback:', error);
+    } catch {
+      logger.warn('Failed to parse AI response, using fallback');
       return {
         messageId,
         suggestions: ['I understand.', 'Thanks for sharing that with me.'],
@@ -189,7 +212,7 @@ class AIProcessor {
   }
 
   /**
-   * Track response analytics
+   * Track in-memory analytics for the session.
    */
   private trackResponseAnalytics(
     messageId: string,
@@ -197,7 +220,7 @@ class AIProcessor {
     response: AIResponse,
     context: any
   ) {
-    const analytics: ResponseAnalytics = {
+    this.responseAnalytics.set(messageId, {
       messageId,
       userId,
       messageType: response.messageType || 'unknown',
@@ -207,69 +230,54 @@ class AIProcessor {
       hasContactInfo: !!context.contact,
       responseTime: Date.now(),
       cached: response.cached || false,
-    };
-
-    this.responseAnalytics.set(messageId, analytics);
+    });
   }
 
   /**
-   * Get response analytics
+   * Get analytics from ai_suggestions table.
    */
   async getAnalytics(userId: string, dateRange?: { start: Date; end: Date }) {
     const { data } = await supabase
       .from('ai_suggestions')
       .select('*')
       .eq('user_id', userId)
-      .gte('created_at', dateRange?.start?.toISOString() || new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
+      .gte(
+        'created_at',
+        dateRange?.start?.toISOString() ||
+          new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+      )
       .lte('created_at', dateRange?.end?.toISOString() || new Date().toISOString());
 
     if (!data) return null;
 
-    const analytics = {
+    return {
       totalSuggestions: data.length,
       averageConfidence: data.reduce((sum, r) => sum + (r.confidence || 0), 0) / data.length,
-      selectionRate: data.filter(r => r.selected_index !== null).length / data.length,
+      selectionRate: data.filter((r) => r.selected_index !== null).length / data.length,
       messageTypes: this.groupByMessageType(data),
       qualityScore: this.calculateQualityScore(data),
     };
-
-    return analytics;
   }
 
-  /**
-   * Group suggestions by message type
-   */
   private groupByMessageType(data: any[]) {
     const groups: { [key: string]: number } = {};
-    data.forEach(item => {
+    data.forEach((item) => {
       const type = item.message_type || 'unknown';
       groups[type] = (groups[type] || 0) + 1;
     });
     return groups;
   }
 
-  /**
-   * Calculate overall quality score
-   */
   private calculateQualityScore(data: any[]): number {
     if (data.length === 0) return 0;
-
-    const factors = {
-      averageConfidence: data.reduce((sum, r) => sum + (r.confidence || 0), 0) / data.length,
-      selectionRate: data.filter(r => r.selected_index !== null).length / data.length,
-      positiveFeedback: data.filter(r => r.feedback === 'positive').length / data.length,
-    };
-
-    // Weighted quality score
-    return (
-      factors.averageConfidence * 0.4 +
-      factors.selectionRate * 0.4 +
-      factors.positiveFeedback * 0.2
-    );
+    const avgConfidence = data.reduce((sum, r) => sum + (r.confidence || 0), 0) / data.length;
+    const selectionRate = data.filter((r) => r.selected_index !== null).length / data.length;
+    const positiveFeedback = data.filter((r) => r.feedback === 'positive').length / data.length;
+    return avgConfidence * 0.4 + selectionRate * 0.4 + positiveFeedback * 0.2;
   }
 
   /**
-   * Update suggestion feedback
+   * Update user feedback for a suggestion.
    */
   async updateFeedback(
     messageId: string,
@@ -297,27 +305,17 @@ class AIProcessor {
   }
 
   /**
-   * Analyze message sentiment
+   * Analyze message sentiment using Bedrock.
    */
   async analyzeSentiment(content: string): Promise<string> {
     try {
-      const completion = await this.openai.chat.completions.create({
-        model: 'gpt-3.5-turbo',
-        messages: [
-          {
-            role: 'system',
-            content: 'Analyze the sentiment of the message. Return one of: positive, negative, neutral, mixed',
-          },
-          {
-            role: 'user',
-            content,
-          },
-        ],
-        temperature: 0,
-        max_tokens: 10,
-      });
-
-      return completion.choices[0].message.content || 'neutral';
+      const result = await this.callAI(
+        'Classify the sentiment of the message. Return exactly one word: positive, negative, neutral, or mixed.',
+        content
+      );
+      const sentiment = result.trim().toLowerCase();
+      if (['positive', 'negative', 'neutral', 'mixed'].includes(sentiment)) return sentiment;
+      return 'neutral';
     } catch (error) {
       logger.error('Error analyzing sentiment:', error);
       return 'neutral';
@@ -325,29 +323,16 @@ class AIProcessor {
   }
 
   /**
-   * Extract key topics from message
+   * Extract key topics from a message using Bedrock.
    */
   async extractTopics(content: string): Promise<string[]> {
     try {
-      const completion = await this.openai.chat.completions.create({
-        model: 'gpt-3.5-turbo',
-        messages: [
-          {
-            role: 'system',
-            content: 'Extract key topics from the message. Return as JSON array of strings.',
-          },
-          {
-            role: 'user',
-            content,
-          },
-        ],
-        temperature: 0,
-        max_tokens: 100,
-        response_format: { type: 'json_object' },
-      });
-
-      const result = JSON.parse(completion.choices[0].message.content || '{}');
-      return result.topics || [];
+      const result = await this.callAI(
+        'Extract key topics from the message. Return a JSON object with a "topics" array of strings. No markdown.',
+        content
+      );
+      const parsed = JSON.parse(result.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim());
+      return parsed.topics || [];
     } catch (error) {
       logger.error('Error extracting topics:', error);
       return [];
@@ -355,17 +340,4 @@ class AIProcessor {
   }
 }
 
-interface ResponseAnalytics {
-  messageId: string;
-  userId: string;
-  messageType: string;
-  confidence: number;
-  suggestionCount: number;
-  contextMessageCount: number;
-  hasContactInfo: boolean;
-  responseTime: number;
-  cached: boolean;
-}
-
-// Export singleton instance
 export const aiProcessor = new AIProcessor();
