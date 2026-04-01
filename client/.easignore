@@ -1,0 +1,49 @@
+# Exclude iOS build artifacts and Pods (490MB+)
+ios/Pods
+ios/build
+ios/DerivedData
+*.xcworkspace/xcuserdata
+*.xcodeproj/xcuserdata
+
+# Exclude Android build artifacts
+android/.gradle
+android/build
+android/app/build
+android/app/.cxx
+android/.idea
+android/captures
+
+# Exclude node_modules
+node_modules
+
+# Exclude Expo cache and build output
+.expo
+.expo-shared
+dist
+
+# Exclude test and coverage
+coverage
+.nyc_output
+.jest
+
+# Exclude dev tools
+maestro
+
+# Exclude caches and IDE files
+.sentry
+.yalc
+.DS_Store
+.vscode
+.idea
+*.log
+
+# Exclude environment files (except examples)
+.env*
+!.env.example
+
+# Exclude temporary files
+*.swp
+*.swo
+*~
+*.tmp
+*.temp

@@ -106,8 +106,9 @@ export interface BridgeAuthState {
   platform: Platform;
   sessionId: string;
   controlRoomId: string;
-  status: 'pending' | 'qr_generated' | 'code_sent' | 'authenticated' | 'failed';
+  status: 'pending' | 'qr_generated' | 'pairing_code_generated' | 'code_sent' | 'authenticated' | 'failed';
   qrCodeUrl?: string;
+  pairingCode?: string;
   errorMessage?: string;
   lastUpdated: Date;
 }

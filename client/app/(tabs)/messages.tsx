@@ -156,19 +156,29 @@ export default function MessagesScreen() {
         (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
       );
 
-      // Deduplicate DMs by name+platform — same contact may have multiple chat records
-      // during DB migration. Groups are kept as-is (different groups can share a name).
-      const seenDMs = new Set<string>();
+      // Deduplicate by platform + name/phone/id — same conversation may have multiple
+      // DB entries with different chat_ids (e.g. after a DB migration or backfill).
+      const seen = new Set<string>();
       const latest = sorted.filter((msg) => {
-        if (msg.is_group) return true;
         const key = `${msg.platform}:${msg.chat_name || msg.contact_phone || msg.chat_id}`;
-        if (seenDMs.has(key)) return false;
-        seenDMs.add(key);
+        if (seen.has(key)) return false;
+        seen.add(key);
         return true;
       });
 
-      if (append) setMessages((prev) => [...prev, ...latest]);
-      else setMessages(latest);
+      if (append) {
+        setMessages((prev) => {
+          const combined = [...prev, ...latest];
+          const seenChatIds = new Set<string>();
+          return combined.filter((m) => {
+            if (seenChatIds.has(m.chat_id)) return false;
+            seenChatIds.add(m.chat_id);
+            return true;
+          });
+        });
+      } else {
+        setMessages(latest);
+      }
 
       setHasMore(count ? to < count - 1 : false);
       setPage(pageNum);
@@ -240,36 +250,34 @@ export default function MessagesScreen() {
     );
   }
 
-  const ListHeader = (
-    <View className="bg-white dark:bg-gray-800 px-4 pt-3 pb-2 border-b border-gray-100 dark:border-gray-700">
-      <View className="flex-row items-center bg-gray-100 dark:bg-gray-700 rounded-xl px-3 py-2 mb-3">
-        <Search size={18} color="#6b7280" />
-        <TextInput
-          className="flex-1 ml-2 text-gray-900 dark:text-white"
-          placeholder="Search messages..."
-          placeholderTextColor="#6b7280"
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          returnKeyType="search"
-        />
-      </View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-2" contentContainerStyle={{ gap: 6 }}>
-        <PlatformFilterPill platform="all" label="All" platformFilter={platformFilter} onPress={() => setPlatformFilter('all')} />
-        <PlatformFilterPill platform={Platform.WHATSAPP} label="WhatsApp" platformFilter={platformFilter} onPress={() => setPlatformFilter(Platform.WHATSAPP)} />
-        <PlatformFilterPill platform={Platform.TELEGRAM} label="Telegram" platformFilter={platformFilter} onPress={() => setPlatformFilter(Platform.TELEGRAM)} />
-        <PlatformFilterPill platform={Platform.INSTAGRAM} label="Instagram" platformFilter={platformFilter} onPress={() => setPlatformFilter(Platform.INSTAGRAM)} />
-      </ScrollView>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-        <FilterPill type="all" label="All" activeFilter={activeFilter} onPress={() => setActiveFilter('all')} />
-        <FilterPill type="unread" label="Unread" activeFilter={activeFilter} onPress={() => setActiveFilter('unread')} />
-        <FilterPill type="groups" label="Groups" activeFilter={activeFilter} onPress={() => setActiveFilter('groups')} />
-        <FilterPill type="ai" label="AI Suggestions" activeFilter={activeFilter} onPress={() => setActiveFilter('ai')} />
-      </ScrollView>
-    </View>
-  );
-
   return (
     <View className="flex-1 bg-gray-50 dark:bg-gray-900">
+      {/* Sticky filter bar — lives outside FlatList to avoid key conflicts */}
+      <View className="bg-white dark:bg-gray-800 px-4 pt-3 pb-2 border-b border-gray-100 dark:border-gray-700">
+        <View className="flex-row items-center bg-gray-100 dark:bg-gray-700 rounded-xl px-3 py-2 mb-3">
+          <Search size={18} color="#6b7280" />
+          <TextInput
+            className="flex-1 ml-2 text-gray-900 dark:text-white"
+            placeholder="Search messages..."
+            placeholderTextColor="#6b7280"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            returnKeyType="search"
+          />
+        </View>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-2" contentContainerStyle={{ gap: 6 }}>
+          <PlatformFilterPill platform="all" label="All" platformFilter={platformFilter} onPress={() => setPlatformFilter('all')} />
+          <PlatformFilterPill platform={Platform.WHATSAPP} label="WhatsApp" platformFilter={platformFilter} onPress={() => setPlatformFilter(Platform.WHATSAPP)} />
+          <PlatformFilterPill platform={Platform.TELEGRAM} label="Telegram" platformFilter={platformFilter} onPress={() => setPlatformFilter(Platform.TELEGRAM)} />
+          <PlatformFilterPill platform={Platform.INSTAGRAM} label="Instagram" platformFilter={platformFilter} onPress={() => setPlatformFilter(Platform.INSTAGRAM)} />
+        </ScrollView>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+          <FilterPill type="all" label="All" activeFilter={activeFilter} onPress={() => setActiveFilter('all')} />
+          <FilterPill type="unread" label="Unread" activeFilter={activeFilter} onPress={() => setActiveFilter('unread')} />
+          <FilterPill type="groups" label="Groups" activeFilter={activeFilter} onPress={() => setActiveFilter('groups')} />
+          <FilterPill type="ai" label="AI Suggestions" activeFilter={activeFilter} onPress={() => setActiveFilter('ai')} />
+        </ScrollView>
+      </View>
       <FlatList
         data={filteredMessages}
         renderItem={({ item }) => (
@@ -280,8 +288,6 @@ export default function MessagesScreen() {
           />
         )}
         keyExtractor={(item) => item.id}
-        ListHeaderComponent={ListHeader}
-        stickyHeaderIndices={[0]}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}

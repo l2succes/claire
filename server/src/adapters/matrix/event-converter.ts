@@ -165,6 +165,25 @@ export class MatrixEventConverter {
   }
 
   /**
+   * Check if an event contains a WhatsApp phone pairing code (XXXX-XXXX format)
+   */
+  isPairingCodeMessage(event: MatrixEvent): boolean {
+    const content = event.getContent() as MatrixMessageContent;
+    const body = content.body || '';
+    return /\b[A-Z0-9]{4}-[A-Z0-9]{4}\b/.test(body);
+  }
+
+  /**
+   * Extract the pairing code from a bridge bot message
+   */
+  extractPairingCode(event: MatrixEvent): string | null {
+    const content = event.getContent() as MatrixMessageContent;
+    const body = content.body || '';
+    const match = body.match(/\b([A-Z0-9]{4}-[A-Z0-9]{4})\b/);
+    return match ? match[1] : null;
+  }
+
+  /**
    * Check if an event is a QR code image from bridge bot
    */
   isQrCodeMessage(event: MatrixEvent): boolean {

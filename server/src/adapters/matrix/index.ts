@@ -266,6 +266,19 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     const session = this.sessions.get(sessionId);
     if (!session) return;
 
+    // Check for WhatsApp pairing code (sent after "login phone" + phone number)
+    if (this.eventConverter.isPairingCodeMessage(event)) {
+      const pairingCode = this.eventConverter.extractPairingCode(event);
+      if (pairingCode) {
+        session.status = PlatformStatus.AWAITING_AUTH;
+        session.authData = { pairingCode };
+        await this.saveSessionToRedis(session);
+        this.bridgeAuthManager.updatePairingCode(sessionId, pairingCode);
+        this.emitPlatformEvent('pairing_code', sessionId, { pairingCode });
+      }
+      return;
+    }
+
     // Check for QR code
     if (this.eventConverter.isQrCodeMessage(event)) {
       const mxcUrl = (event.getContent() as { url?: string }).url;
@@ -406,13 +419,19 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     const controlRoom = await this.findOrCreateControlRoom(bridgeBotUserId);
     this.sessionControlRooms.set(sessionId, controlRoom.roomId);
 
+    // Merge explicit bridgeConfig with any top-level fields (e.g. phoneNumber from connect body)
+    const bridgeConfig = {
+      ...config?.bridgeConfig,
+      ...(( config as Record<string, unknown> )?.phoneNumber ? { phoneNumber: ( config as Record<string, unknown> ).phoneNumber as string } : {}),
+    };
+
     // Initiate auth flow
     await this.bridgeAuthManager.initiateAuth(
       this.matrixClient,
       controlRoom.roomId,
       platform,
       sessionId,
-      config?.bridgeConfig
+      bridgeConfig
     );
 
     session.status = PlatformStatus.AWAITING_AUTH;

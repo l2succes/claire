@@ -20,7 +20,7 @@ import {
   KeyboardAvoidingView,
   Platform as RNPlatform,
 } from 'react-native';
-import { X, Check, AlertCircle, RefreshCw } from 'lucide-react-native';
+import { X, Check, AlertCircle } from 'lucide-react-native';
 import { cn } from '../utils/cn';
 import { PlatformIconButton } from './PlatformIcon';
 import { Button } from './ui/Button';
@@ -31,6 +31,7 @@ import {
   getPlatformAuthMethod,
 } from '../types/platform';
 import { usePlatformStore } from '../stores/platformStore';
+import { InstagramWebViewLogin } from './InstagramWebViewLogin';
 
 interface PlatformAuthModalProps {
   platform: Platform | null;
@@ -57,14 +58,14 @@ export function PlatformAuthModal({
 
   const [phoneNumber, setPhoneNumber] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
-  const [cookies, setCookies] = useState('');
+  const [showInstagramWebView, setShowInstagramWebView] = useState(false);
 
   // Reset state when modal opens/closes
   useEffect(() => {
     if (!visible) {
       setPhoneNumber('');
       setVerificationCode('');
-      setCookies('');
+      setShowInstagramWebView(false);
       clearError();
     }
   }, [visible, clearError]);
@@ -86,13 +87,18 @@ export function PlatformAuthModal({
   const display = PLATFORM_DISPLAY[platform];
 
   const handleConnect = async () => {
-    if (authMethod === AuthMethod.PHONE_CODE && phoneNumber) {
+    if (authMethod === AuthMethod.PAIRING_CODE && phoneNumber) {
       await connectPlatform(platform, { phoneNumber });
-    } else if (authMethod === AuthMethod.COOKIE && cookies) {
-      await connectPlatform(platform, { cookies });
+    } else if (authMethod === AuthMethod.PHONE_CODE && phoneNumber) {
+      await connectPlatform(platform, { phoneNumber });
     } else {
       await connectPlatform(platform);
     }
+  };
+
+  const handleInstagramCookies = async (cookieJson: string) => {
+    setShowInstagramWebView(false);
+    await connectPlatform(platform!, { cookies: cookieJson });
   };
 
   const handleSubmitCode = async () => {
@@ -152,6 +158,8 @@ export function PlatformAuthModal({
     switch (authMethod) {
       case AuthMethod.QR_CODE:
         return renderQRCodeFlow();
+      case AuthMethod.PAIRING_CODE:
+        return renderPairingCodeFlow();
       case AuthMethod.PHONE_CODE:
         return renderPhoneCodeFlow();
       case AuthMethod.COOKIE:
@@ -159,6 +167,86 @@ export function PlatformAuthModal({
       default:
         return null;
     }
+  };
+
+  const renderPairingCodeFlow = () => {
+    const pairingCode = activeAuthFlow?.authData?.pairingCode;
+
+    // Step 1: Phone number entry
+    if (!activeAuthFlow || activeAuthFlow.step === 'initial') {
+      return (
+        <View className="py-4">
+          <Text className="text-gray-600 dark:text-gray-300 text-center mb-4">
+            Enter your WhatsApp phone number to receive a pairing code
+          </Text>
+          <TextInput
+            value={phoneNumber}
+            onChangeText={setPhoneNumber}
+            placeholder="+1 234 567 8900"
+            keyboardType="phone-pad"
+            autoComplete="tel"
+            className="bg-gray-100 dark:bg-gray-800 rounded-lg px-4 py-3 text-gray-900 dark:text-white text-lg mb-4"
+            placeholderTextColor="#9ca3af"
+          />
+          <Button
+            variant="primary"
+            onPress={handleConnect}
+            loading={isLoading}
+            disabled={!phoneNumber}
+            className="w-full"
+          >
+            Get Pairing Code
+          </Button>
+        </View>
+      );
+    }
+
+    // Step 2: Display the pairing code once received
+    if (pairingCode) {
+      return (
+        <View className="items-center py-4">
+          <Text className="text-gray-600 dark:text-gray-300 text-center mb-4">
+            Enter this code in WhatsApp to link your account
+          </Text>
+          <View className="bg-gray-100 dark:bg-gray-800 rounded-xl px-8 py-5 mb-5">
+            <Text
+              className="text-4xl font-bold tracking-widest text-gray-900 dark:text-white"
+              style={{ letterSpacing: 8 }}
+            >
+              {pairingCode}
+            </Text>
+          </View>
+          <View className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4 mb-4 w-full">
+            <Text className="text-gray-700 dark:text-gray-300 text-sm font-medium mb-1">
+              How to link:
+            </Text>
+            <Text className="text-gray-600 dark:text-gray-400 text-sm">
+              1. Open WhatsApp on this phone{'\n'}
+              2. Go to Settings → Linked Devices{'\n'}
+              3. Tap "Link a Device"{'\n'}
+              4. Tap "Link with phone number instead"{'\n'}
+              5. Enter the code above
+            </Text>
+          </View>
+          <View className="flex-row items-center">
+            <ActivityIndicator size="small" color={display.color} />
+            <Text className="text-gray-500 dark:text-gray-400 ml-2 text-sm">
+              Waiting for confirmation...
+            </Text>
+          </View>
+        </View>
+      );
+    }
+
+    // Waiting for bridge to respond with code
+    return (
+      <View className="items-center py-8">
+        <ActivityIndicator size="large" color={display.color} />
+        <Text className="text-gray-500 dark:text-gray-400 mt-4">
+          Requesting pairing code...
+        </Text>
+      </View>
+    );
   };
 
   const renderQRCodeFlow = () => {
@@ -291,56 +379,29 @@ export function PlatformAuthModal({
   };
 
   const renderCookieFlow = () => {
-    if (!activeAuthFlow || activeAuthFlow.step === 'initial') {
+    if (activeAuthFlow && activeAuthFlow.step !== 'initial') {
       return (
-        <View className="py-4">
-          <Text className="text-gray-600 dark:text-gray-300 mb-4">
-            To connect {display.name}, you'll need to export your session cookies from your browser:
+        <View className="items-center py-8">
+          <ActivityIndicator size="large" color={display.color} />
+          <Text className="text-gray-500 dark:text-gray-400 mt-4">
+            Connecting to Instagram...
           </Text>
-
-          <View className="bg-gray-100 dark:bg-gray-800 rounded-lg p-4 mb-4">
-            <Text className="text-gray-900 dark:text-white font-medium mb-2">
-              Instructions:
-            </Text>
-            <Text className="text-gray-600 dark:text-gray-300 text-sm">
-              1. Open {display.name} in your browser{'\n'}
-              2. Open Developer Tools (F12){'\n'}
-              3. Go to Application → Cookies{'\n'}
-              4. Copy all cookie values{'\n'}
-              5. Paste them below
-            </Text>
-          </View>
-
-          <TextInput
-            value={cookies}
-            onChangeText={setCookies}
-            placeholder="Paste cookies here..."
-            multiline
-            numberOfLines={4}
-            className="bg-gray-100 dark:bg-gray-800 rounded-lg px-4 py-3 text-gray-900 dark:text-white text-sm mb-4"
-            placeholderTextColor="#9ca3af"
-            style={{ minHeight: 100, textAlignVertical: 'top' }}
-          />
-
-          <Button
-            variant="primary"
-            onPress={handleConnect}
-            loading={isLoading}
-            disabled={!cookies}
-            className="w-full"
-          >
-            Connect
-          </Button>
         </View>
       );
     }
 
     return (
-      <View className="items-center py-8">
-        <ActivityIndicator size="large" color={display.color} />
-        <Text className="text-gray-500 dark:text-gray-400 mt-4">
-          Validating cookies...
+      <View className="py-4">
+        <Text className="text-gray-600 dark:text-gray-300 text-center mb-6">
+          Log in to Instagram to connect your account
         </Text>
+        <Button
+          variant="primary"
+          onPress={() => setShowInstagramWebView(true)}
+          className="w-full"
+        >
+          Log in to Instagram
+        </Button>
       </View>
     );
   };
@@ -356,32 +417,41 @@ export function PlatformAuthModal({
         behavior={RNPlatform.OS === 'ios' ? 'padding' : 'height'}
         className="flex-1 bg-white dark:bg-gray-900"
       >
-        {/* Header */}
-        <View className="flex-row items-center justify-between px-4 py-4 border-b border-gray-200 dark:border-gray-700">
-          <TouchableOpacity onPress={handleClose} className="p-2">
-            <X size={24} color="#6b7280" />
-          </TouchableOpacity>
+        {showInstagramWebView ? (
+          <InstagramWebViewLogin
+            onSuccess={handleInstagramCookies}
+            onCancel={() => setShowInstagramWebView(false)}
+          />
+        ) : (
+          <>
+            {/* Header */}
+            <View className="flex-row items-center justify-between px-4 py-4 border-b border-gray-200 dark:border-gray-700">
+              <TouchableOpacity onPress={handleClose} className="p-2">
+                <X size={24} color="#6b7280" />
+              </TouchableOpacity>
 
-          <Text className="text-lg font-semibold text-gray-900 dark:text-white">
-            Connect {display.name}
-          </Text>
+              <Text className="text-lg font-semibold text-gray-900 dark:text-white">
+                Connect {display.name}
+              </Text>
 
-          <View className="w-10" />
-        </View>
+              <View className="w-10" />
+            </View>
 
-        {/* Content */}
-        <ScrollView
-          className="flex-1"
-          contentContainerStyle={{ padding: 16 }}
-          keyboardShouldPersistTaps="handled"
-        >
-          {/* Platform Icon */}
-          <View className="items-center mb-6">
-            <PlatformIconButton platform={platform} size={72} />
-          </View>
+            {/* Content */}
+            <ScrollView
+              className="flex-1"
+              contentContainerStyle={{ padding: 16 }}
+              keyboardShouldPersistTaps="handled"
+            >
+              {/* Platform Icon */}
+              <View className="items-center mb-6">
+                <PlatformIconButton platform={platform} size={72} />
+              </View>
 
-          {renderContent()}
-        </ScrollView>
+              {renderContent()}
+            </ScrollView>
+          </>
+        )}
       </KeyboardAvoidingView>
     </Modal>
   );

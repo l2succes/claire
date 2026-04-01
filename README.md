@@ -88,15 +88,24 @@ cd ../client && bun install
 ### 2. Start infrastructure
 
 ```bash
-# Start Supabase (PostgreSQL, Kong, GoTrue, PostgREST, Realtime)
-docker compose -f docker/supabase/docker-compose.supabase.yml up -d
+# Start everything (Supabase + Matrix)
+bun run docker:up
 
-# Start Matrix stack (Synapse + mautrix bridges)
-docker compose -f docker/matrix/docker-compose.matrix.yml up -d
-
-# Start Redis
-docker compose up -d redis
+# Or start stacks individually
+bun run docker:supabase   # Supabase only (PostgreSQL, Kong, GoTrue, PostgREST, Realtime)
+bun run docker:matrix     # Matrix only (Synapse + mautrix bridges)
 ```
+
+| Script | What it does |
+|---|---|
+| `bun run docker:up` | Start Supabase + Matrix |
+| `bun run docker:down` | Stop both stacks |
+| `bun run docker:supabase` | Start Supabase stack |
+| `bun run docker:supabase:down` | Stop Supabase |
+| `bun run docker:supabase:logs` | Tail Supabase logs |
+| `bun run docker:matrix` | Start Matrix stack |
+| `bun run docker:matrix:down` | Stop Matrix stack |
+| `bun run docker:matrix:logs` | Tail Matrix logs |
 
 ### 3. Configure environment
 
@@ -114,18 +123,35 @@ cp client/.env.example client/.env
 ### 4. Run
 
 ```bash
-# Terminal 1: Server
-cd server && bun run --watch src/index.ts
+# Both server + client (local infra)
+bun run dev
 
-# Terminal 2: iOS app (local Supabase + server)
-cd client && bun run start       # pulls dev env vars, opens Expo
+# Server only
+bun run dev:server
 
-# Or run directly on simulator (local)
-cd client && bun run ios
-
-# Or run against Railway production
-cd client && bun run ios:prod
+# Client only (local infra, Expo QR)
+bun run dev:client
 ```
+
+#### Run client against Railway (production backend)
+
+```bash
+# Expo QR code (local server + Railway Supabase)
+bun run client:prod
+
+# iOS simulator → Railway
+bun run client:ios:prod
+
+# Connected device → Railway
+bun run client:ios:prod:device
+```
+
+| Script | Environment |
+|---|---|
+| `bun run dev` | Local server + local Supabase |
+| `bun run client:prod` | Local server + **Railway** Supabase |
+| `bun run client:ios:prod` | Simulator → **Railway** |
+| `bun run client:ios:prod:device` | Physical device → **Railway** |
 
 ### Building for device / distribution
 

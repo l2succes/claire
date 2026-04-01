@@ -253,6 +253,14 @@ export const usePlatformStore = create<PlatformState>((set, get) => ({
                 authData: session.authData,
               },
             });
+          } else if (session.authData?.pairingCode && session.authData.pairingCode !== currentFlow.authData?.pairingCode) {
+            // Pairing code arrived from bridge — update so user can enter it in WhatsApp
+            set({
+              activeAuthFlow: {
+                ...currentFlow,
+                authData: session.authData,
+              },
+            });
           }
         }
       );

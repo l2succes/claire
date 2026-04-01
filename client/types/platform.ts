@@ -23,6 +23,7 @@ export enum PlatformStatus {
 export enum AuthMethod {
   QR_CODE = 'qr_code',
   PHONE_CODE = 'phone_code',
+  PAIRING_CODE = 'pairing_code',
   COOKIE = 'cookie',
 }
 
@@ -64,6 +65,7 @@ export interface PlatformSession {
 export interface AuthData {
   method?: AuthMethod;
   qrCode?: string;
+  pairingCode?: string;
   phoneNumber?: string;
   instructions?: string;
   sessionId: string;
@@ -110,7 +112,7 @@ export const PLATFORM_DISPLAY: Record<Platform, {
     name: 'WhatsApp',
     color: '#25D366',
     bgColor: '#dcfce7',
-    description: 'Connect via QR code scan',
+    description: 'Connect via phone pairing code',
   },
   [Platform.TELEGRAM]: {
     name: 'Telegram',
@@ -136,7 +138,7 @@ export const PLATFORM_DISPLAY: Record<Platform, {
 export const getPlatformAuthMethod = (platform: Platform): AuthMethod => {
   switch (platform) {
     case Platform.WHATSAPP:
-      return AuthMethod.QR_CODE;
+      return AuthMethod.PAIRING_CODE;
     case Platform.TELEGRAM:
       return AuthMethod.PHONE_CODE;
     case Platform.INSTAGRAM:
