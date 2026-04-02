@@ -196,7 +196,32 @@ export default function MessagesScreen() {
     fetchMessages();
     const sub = supabase
       .channel(`messages-tab-${user.id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages', filter: `user_id=eq.${user.id}` }, () => fetchMessages())
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `user_id=eq.${user.id}` }, (payload) => {
+        const row = payload.new as any;
+        const platform = row.platform || Platform.WHATSAPP;
+        setMessages((prev) => {
+          const idx = prev.findIndex((m) => m.chat_id === row.chat_id);
+          if (idx >= 0) {
+            // Known chat — update its preview and bubble to top instantly
+            const updated: Message = {
+              ...prev[idx],
+              id: row.id,
+              content: row.content,
+              timestamp: row.timestamp,
+              from_me: row.from_me,
+              is_group: row.is_group ?? prev[idx].is_group,
+              contact_name: row.contact_name || prev[idx].contact_name,
+              contact_phone: row.contact_phone || prev[idx].contact_phone,
+              platform,
+            };
+            return [updated, ...prev.filter((_, i) => i !== idx)];
+          }
+          // New chat we haven't seen yet — fetch to get joined name/avatar data
+          fetchMessages();
+          return prev;
+        });
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages', filter: `user_id=eq.${user.id}` }, () => fetchMessages())
       .subscribe();
     return () => { sub.unsubscribe(); };
   }, [user?.id, fetchMessages]);
