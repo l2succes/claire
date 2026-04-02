@@ -50,7 +50,7 @@ export class MatrixUserMapper {
     const botNames: Record<Platform, string> = {
       [Platform.WHATSAPP]: 'whatsappbot',
       [Platform.TELEGRAM]: 'telegrambot',
-      [Platform.INSTAGRAM]: 'instagrambot',
+      [Platform.INSTAGRAM]: 'metabot',
       [Platform.IMESSAGE]: 'imessagebot',
     };
     return `@${botNames[platform]}:${this.serverName}`;
@@ -60,7 +60,7 @@ export class MatrixUserMapper {
    * Check if a user ID is a bridge bot
    */
   isBridgeBot(userId: string): boolean {
-    const botPattern = /^@(whatsappbot|telegrambot|instagrambot|imessagebot):/;
+    const botPattern = /^@(whatsappbot|telegrambot|metabot|imessagebot):/;
     return botPattern.test(userId);
   }
 

@@ -179,6 +179,34 @@ export const platformsApi = {
   },
 
   /**
+   * Start Instagram login via bridge HTTP API.
+   * Returns sessionId, loginId, stepId to pass into instagramLoginSubmit.
+   */
+  async instagramLoginStart(): Promise<{ sessionId: string; loginId: string; stepId: string }> {
+    const response = await api.post<{ success: boolean; sessionId: string; loginId: string; stepId: string }>(
+      '/platforms/instagram/login/start',
+      {}
+    );
+    return { sessionId: response.data.sessionId, loginId: response.data.loginId, stepId: response.data.stepId };
+  },
+
+  /**
+   * Submit extracted Instagram cookies to complete bridge login.
+   */
+  async instagramLoginSubmit(
+    sessionId: string,
+    loginId: string,
+    stepId: string,
+    cookies: Record<string, string>
+  ): Promise<{ success: boolean; userLoginId?: string }> {
+    const response = await api.post<{ success: boolean; userLoginId?: string }>(
+      '/platforms/instagram/login/submit',
+      { sessionId, loginId, stepId, cookies }
+    );
+    return response.data;
+  },
+
+  /**
    * Get chats from a platform session
    */
   async getChats(

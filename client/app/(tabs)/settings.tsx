@@ -106,6 +106,7 @@ export default function SettingsScreen() {
   const handleAuthSuccess = () => {
     setShowAuthModal(false);
     setSelectedPlatform(null);
+    fetchConnectedSessions();
   };
 
   const handleAuthClose = () => {

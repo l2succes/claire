@@ -511,6 +511,39 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
   /**
    * Disconnect a session
    */
+  /**
+   * Mark a session as connected after successful bridge HTTP API login.
+   * Replicates the logic in handleControlRoomMessage for the login-success case.
+   */
+  async markSessionConnected(sessionId: string, platformUserId?: string): Promise<void> {
+    const session = this.sessions.get(sessionId) || await this.loadSessionFromRedis(sessionId);
+    if (!session) return;
+
+    session.status = PlatformStatus.CONNECTED;
+    session.lastConnectedAt = new Date();
+    if (platformUserId) {
+      session.platformUserId = platformUserId;
+    }
+
+    const platform = this.sessionPlatforms.get(sessionId);
+    if (platformUserId && platform) {
+      const selfGhostId = this.userMapper.platformContactToGhostUser(platformUserId, platform);
+      this.sessionSelfGhostIds.set(sessionId, selfGhostId);
+      (session as any).selfGhostId = selfGhostId;
+    }
+
+    this.sessions.set(sessionId, session);
+    await this.saveSessionToRedis(session);
+    this.bridgeAuthManager.markAuthenticated(sessionId);
+    this.emitPlatformEvent('session_ready', sessionId, {});
+
+    if (platform) {
+      await this.registerExistingRooms();
+      await this.syncRoomHistory(sessionId, platform);
+      await this.syncContacts(sessionId);
+    }
+  }
+
   async disconnectSession(sessionId: string): Promise<void> {
     const controlRoom = this.sessionControlRooms.get(sessionId);
 
@@ -948,28 +981,14 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     if (!this.matrixClient) return;
 
     const rooms = this.matrixClient.getRooms();
-    let registered = 0;
+    const before = this.roomMapper.getAllMappings().length;
 
     for (const room of rooms) {
-      if (this.roomMapper.isControlRoom(room)) continue;
       if (this.roomMapper.getRoomChatInfo(room.roomId)) continue; // already registered
-
-      const platform = this.roomMapper.detectRoomPlatform(room);
-      if (!platform) continue;
-
-      const chatId = this.roomMapper.getPrimaryChatParticipant(room);
-      if (!chatId) continue;
-
-      // Find the session for this platform
-      for (const [sessionId, sessionPlatform] of this.sessionPlatforms) {
-        if (sessionPlatform === platform) {
-          this.roomMapper.registerRoom(room.roomId, platform, chatId, sessionId);
-          registered++;
-          break;
-        }
-      }
+      await this.tryRegisterRoom(room);
     }
 
+    const registered = this.roomMapper.getAllMappings().length - before;
     this.log('info', `Registered ${registered} existing Matrix rooms`);
   }
 

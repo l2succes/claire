@@ -10,9 +10,17 @@ import {
   Platform,
   PlatformStatus,
 } from '../adapters';
+import { MatrixBridgeAdapter } from '../adapters/matrix';
 import { platformConfig } from '../config';
 import { logger } from '../utils/logger';
 import { requireAuth } from '../middleware/auth';
+import { BridgeHttpClient } from '../adapters/matrix/bridge-http-client';
+
+const instagramBridgeClient = new BridgeHttpClient(
+  process.env.INSTAGRAM_BRIDGE_URL || 'http://localhost:29319',
+  process.env.INSTAGRAM_BRIDGE_SECRET || '',
+  process.env.INSTAGRAM_BRIDGE_USER_ID || '@claire_bot:claire.local'
+);
 
 const router = Router();
 
@@ -110,6 +118,92 @@ router.get('/:platform/status', async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       error: 'Failed to get platform status',
+    });
+  }
+});
+
+/**
+ * POST /platforms/instagram/login/start
+ * Start Instagram login via mautrix bridge HTTP API.
+ * Creates a session and returns the bridge login_id + step_id for the client.
+ */
+router.post('/instagram/login/start', async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+
+    const adapter = platformManager.getAdapter(Platform.INSTAGRAM);
+    if (!adapter) {
+      return res.status(404).json({ success: false, error: 'Instagram not available' });
+    }
+
+    const sessionId = `instagram-${userId}-${Date.now()}`;
+    await adapter.createSession(userId, sessionId, { platform: Platform.INSTAGRAM } as never);
+
+    // Get login flows and start one
+    const flows = await instagramBridgeClient.getLoginFlows();
+    const flowId = flows[0]?.id;
+    if (!flowId) {
+      return res.status(502).json({ success: false, error: 'No login flows available from bridge' });
+    }
+
+    const step = await instagramBridgeClient.startLogin(flowId);
+
+    return res.json({ success: true, sessionId, loginId: step.login_id, stepId: step.step_id });
+  } catch (error) {
+    logger.error('Error starting Instagram login:', error);
+    return res.status(500).json({
+      success: false,
+      error: (error as Error).message || 'Failed to start Instagram login',
+    });
+  }
+});
+
+/**
+ * POST /platforms/instagram/login/submit
+ * Submit extracted cookies to the mautrix bridge to complete Instagram login.
+ */
+router.post('/instagram/login/submit', async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+
+    const { sessionId, loginId, stepId, cookies } = req.body as {
+      sessionId: string;
+      loginId: string;
+      stepId: string;
+      cookies: Record<string, string>;
+    };
+
+    if (!sessionId || !loginId || !stepId || !cookies) {
+      return res.status(400).json({ success: false, error: 'sessionId, loginId, stepId, and cookies are required' });
+    }
+
+    const result = await instagramBridgeClient.submitCookies(loginId, stepId, cookies);
+
+    if (result.type === 'complete') {
+      const userLoginId = result.complete?.user_login_id;
+      logger.info(`Instagram login complete for session ${sessionId}, user ${userLoginId}`);
+
+      // Directly mark the session connected — the HTTP API flow doesn't guarantee
+      // a Matrix bot message, so we can't rely on the event handler to do this.
+      const matrixAdapter = platformManager.getAdapter(Platform.INSTAGRAM) as MatrixBridgeAdapter;
+      await matrixAdapter.markSessionConnected(sessionId, userLoginId);
+
+      return res.json({ success: true, userLoginId });
+    }
+
+    // Bridge returned another step (e.g. 2FA) — return it for future handling
+    return res.json({ success: true, step: result });
+  } catch (error) {
+    logger.error('Error submitting Instagram cookies:', error);
+    return res.status(500).json({
+      success: false,
+      error: (error as Error).message || 'Failed to submit Instagram cookies',
     });
   }
 });

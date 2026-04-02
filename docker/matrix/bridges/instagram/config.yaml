@@ -14,16 +14,16 @@ appservice:
         uri: /data/mautrix-instagram.db
     id: instagram
     bot:
-        username: instagrambot
+        username: metabot
         displayname: Instagram Bridge Bot
-    as_token: b4418fe03b242bfcdfed5e7b5e3a81fd5b7d96f7c48647a97c9113cc0e85f4dd
-    hs_token: b4418fe03b242bfcdfed5e7b5e3a81fd5b7d96f7c48647a97c9113cc0e85f4dd
+    as_token: JfIHXyofgCLVDfyfeDXFWtDMDDCRyBfsG5x7GLDXn4Ay0DwNYUQXH2YiTIogNul9
+    hs_token: AnOjYg3WlsvlknIjIuanULCRpHVlFg7ncFakCAoDhRrn0YYYgKUMp7reNDNCUpkx
 
 meta:
     mode: instagram
 
 bridge:
-    username_template: "_instagram_{{.}}"
+    username_template: "meta_{{.}}"
     displayname_template: "{{.Name}} (IG)"
     command_prefix: "!ig"
 
@@ -33,6 +33,9 @@ bridge:
         "@claire_bot:claire.local": admin
 
     private_chat_portal_meta: true
+
+provisioning:
+    shared_secret: "claire-instagram-bridge-secret-key-2026"
 
 logging:
     min_level: info

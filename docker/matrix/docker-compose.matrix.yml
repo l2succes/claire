@@ -88,6 +88,8 @@ services:
     container_name: claire-mautrix-instagram
     volumes:
       - ./data/instagram:/data
+    ports:
+      - "127.0.0.1:29319:29319"
     networks:
       - claire-matrix
     depends_on:
