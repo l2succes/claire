@@ -32,6 +32,7 @@ import {
 } from '../types/platform';
 import { usePlatformStore } from '../stores/platformStore';
 import { InstagramWebViewLogin } from './InstagramWebViewLogin';
+import { platformsApi, pollAuthStatus } from '../services/platforms';
 
 interface PlatformAuthModalProps {
   platform: Platform | null;
@@ -59,6 +60,12 @@ export function PlatformAuthModal({
   const [phoneNumber, setPhoneNumber] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
   const [showInstagramWebView, setShowInstagramWebView] = useState(false);
+  const [instagramLoginSession, setInstagramLoginSession] = useState<{
+    sessionId: string;
+    loginId: string;
+    stepId: string;
+  } | null>(null);
+  const [instagramConnecting, setInstagramConnecting] = useState(false);
 
   // Reset state when modal opens/closes
   useEffect(() => {
@@ -66,6 +73,8 @@ export function PlatformAuthModal({
       setPhoneNumber('');
       setVerificationCode('');
       setShowInstagramWebView(false);
+      setInstagramLoginSession(null);
+      setInstagramConnecting(false);
       clearError();
     }
   }, [visible, clearError]);
@@ -96,9 +105,38 @@ export function PlatformAuthModal({
     }
   };
 
+  const handleInstagramWebViewOpen = async () => {
+    try {
+      const session = await platformsApi.instagramLoginStart();
+      setInstagramLoginSession(session);
+      setShowInstagramWebView(true);
+    } catch (err) {
+      console.error('[Instagram] Failed to start login session:', err);
+    }
+  };
+
   const handleInstagramCookies = async (cookieJson: string) => {
     setShowInstagramWebView(false);
-    await connectPlatform(platform!, { cookies: cookieJson });
+    if (!instagramLoginSession) return;
+    const { sessionId, loginId, stepId } = instagramLoginSession;
+    const cookies = JSON.parse(cookieJson) as Record<string, string>;
+
+    setInstagramConnecting(true);
+    try {
+      await platformsApi.instagramLoginSubmit(sessionId, loginId, stepId, cookies);
+      // Bridge accepted cookies. Session status will update via Matrix event.
+      // Poll until the session shows as connected.
+      pollAuthStatus(Platform.INSTAGRAM, sessionId, (session) => {
+        if (session.status === 'connected') {
+          setInstagramConnecting(false);
+          onSuccess();
+        } else if (session.status === 'failed') {
+          setInstagramConnecting(false);
+        }
+      });
+    } catch {
+      setInstagramConnecting(false);
+    }
   };
 
   const handleSubmitCode = async () => {
@@ -379,7 +417,7 @@ export function PlatformAuthModal({
   };
 
   const renderCookieFlow = () => {
-    if (activeAuthFlow && activeAuthFlow.step !== 'initial') {
+    if (instagramConnecting) {
       return (
         <View className="items-center py-8">
           <ActivityIndicator size="large" color={display.color} />
@@ -397,7 +435,8 @@ export function PlatformAuthModal({
         </Text>
         <Button
           variant="primary"
-          onPress={() => setShowInstagramWebView(true)}
+          onPress={handleInstagramWebViewOpen}
+          loading={isLoading}
           className="w-full"
         >
           Log in to Instagram

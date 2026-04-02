@@ -56,14 +56,16 @@ export class BridgeAuthManager {
         break;
 
       case Platform.INSTAGRAM:
-        // Instagram uses cookie-based auth
-        if (config?.cookies) {
-          command = `login-cookie ${config.cookies}`;
-        } else {
-          // Will prompt for manual cookie extraction
-          command = 'login';
-        }
-        break;
+        // Instagram auth is handled via the bridge HTTP API (/v3/login/*)
+        // — no Matrix message needed here.
+        this.authStates.set(sessionId, {
+          platform,
+          sessionId,
+          controlRoomId,
+          status: 'pending',
+          lastUpdated: new Date(),
+        });
+        return;
 
       default:
         throw new Error(`Unsupported platform for bridge auth: ${platform}`);

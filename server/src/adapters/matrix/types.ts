@@ -35,7 +35,7 @@ export interface MatrixRoomMapping {
 export const BRIDGE_BOT_LOCALPARTS: Record<Platform, string> = {
   [Platform.WHATSAPP]: 'whatsappbot',
   [Platform.TELEGRAM]: 'telegrambot',
-  [Platform.INSTAGRAM]: 'instagrambot',
+  [Platform.INSTAGRAM]: 'metabot',
   [Platform.IMESSAGE]: 'imessagebot',
 };
 
