@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events';
-import { supabase, realtime } from './supabase';
+import { supabase } from './supabase';
 import { logger } from '../utils/logger';
 
 interface RealtimeMessage {
@@ -17,34 +17,6 @@ export class RealtimeSyncService extends EventEmitter {
 
   constructor() {
     super();
-    this.setupDatabaseListeners();
-  }
-
-  /**
-   * Setup database change listeners
-   */
-  private setupDatabaseListeners() {
-    // Listen for new messages
-    realtime.subscribeToTable('messages', undefined, (payload) => {
-      this.handleDatabaseChange('messages', payload);
-    });
-
-    // Listen for message updates
-    realtime.subscribeToTable('messages', undefined, (payload) => {
-      if (payload.eventType === 'UPDATE') {
-        this.handleMessageUpdate(payload);
-      }
-    });
-
-    // Listen for contact changes
-    realtime.subscribeToTable('contacts', undefined, (payload) => {
-      this.handleDatabaseChange('contacts', payload);
-    });
-
-    // Listen for promise changes
-    realtime.subscribeToTable('promises', undefined, (payload) => {
-      this.handleDatabaseChange('promises', payload);
-    });
   }
 
   /**
@@ -175,19 +147,8 @@ export class RealtimeSyncService extends EventEmitter {
                   eventType === 'UPDATE' ? 'message:updated' : 
                   'message:deleted';
 
-    // Get full message with relations
-    const fullMessage = await prisma.message.findUnique({
-      where: { id: message.id },
-      include: {
-        sender: true,
-        receiver: true,
-        group: true,
-      },
-    });
-
-    if (fullMessage) {
-      this.broadcastToUser(message.userId, event, fullMessage);
-    }
+    // newRecord already contains all columns (REPLICA IDENTITY FULL)
+    this.broadcastToUser(message.user_id, event, message);
   }
 
   /**
@@ -302,38 +263,31 @@ export class RealtimeSyncService extends EventEmitter {
    */
   private async sendInitialSync(userId: string) {
     try {
-      // Get recent messages
-      const messages = await prisma.message.findMany({
-        where: { userId },
-        orderBy: { timestamp: 'desc' },
-        take: 50,
-        include: {
-          sender: true,
-          receiver: true,
-          group: true,
-        },
-      });
-
-      // Get active promises
-      const promises = await prisma.promise.findMany({
-        where: {
-          userId,
-          status: { in: ['PENDING', 'IN_PROGRESS'] },
-        },
-        orderBy: { createdAt: 'desc' },
-      });
-
-      // Get contacts
-      const contacts = await prisma.contact.findMany({
-        where: { userId },
-        orderBy: { name: 'asc' },
-      });
+      const [{ data: messages }, { data: promises }, { data: contacts }] = await Promise.all([
+        supabase
+          .from('messages')
+          .select('*')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false })
+          .limit(50),
+        supabase
+          .from('promises')
+          .select('*')
+          .eq('user_id', userId)
+          .in('status', ['pending', 'in_progress'])
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('contacts')
+          .select('*')
+          .eq('user_id', userId)
+          .order('name', { ascending: true }),
+      ]);
 
       // Send initial data
       this.broadcastToUser(userId, 'sync:initial', {
-        messages: messages.reverse(),
-        promises,
-        contacts,
+        messages: (messages ?? []).slice().reverse(),
+        promises: promises ?? [],
+        contacts: contacts ?? [],
         timestamp: new Date(),
       });
     } catch (error) {
@@ -395,15 +349,11 @@ export class RealtimeSyncService extends EventEmitter {
   async syncReadStatus(userId: string, messageIds: string[]) {
     try {
       // Update database
-      await prisma.message.updateMany({
-        where: {
-          id: { in: messageIds },
-          userId,
-        },
-        data: {
-          isRead: true,
-        },
-      });
+      await supabase
+        .from('messages')
+        .update({ is_read: true })
+        .in('id', messageIds)
+        .eq('user_id', userId);
 
       // Broadcast update
       await this.broadcastToUser(userId, 'messages:read', {

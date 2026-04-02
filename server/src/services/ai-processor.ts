@@ -52,7 +52,15 @@ class AIProcessor {
   /**
    * Call the configured AI provider, with fallback to the other provider on failure.
    */
+  get isConfigured(): boolean {
+    return !!(this.bedrock || this.kimiClient);
+  }
+
   private async callAI(systemPrompt: string, userPrompt: string): Promise<string> {
+    if (!this.bedrock && !this.kimiClient) {
+      throw new Error('NO_AI_PROVIDER');
+    }
+
     const provider = aiConfig.provider;
 
     const callBedrock = async () => {

@@ -138,7 +138,7 @@ async function initializePlatforms() {
 
   // Setup unified message handler BEFORE initialize so backfill is captured
   platformManager.onMessage(async (message) => {
-    logger.info(`Message received from ${message.platform}: ${message.id}`);
+    logger.debug(`Message received from ${message.platform}: ${message.id}`);
 
     // Skip WhatsApp status broadcasts
     if (message.chatId === 'status@broadcast' || message.platformMetadata?.isStatus) {
@@ -146,6 +146,19 @@ async function initializePlatforms() {
     }
 
     try {
+      // Fast-path: skip duplicate messages (backfill replay) without touching the DB further
+      const { data: existing } = await supabase
+        .from('messages')
+        .select('id')
+        .eq('whatsapp_id', message.platformMessageId)
+        .maybeSingle();
+
+      if (existing) {
+        return; // already processed — skip chat/AI/contact upserts
+      }
+
+      logger.info(`New message from ${message.platform}: ${message.platformMessageId}`);
+
       // 1. Upsert chat record to get its UUID
       const { data: chat, error: chatError } = await supabase
         .from('chats')
@@ -166,7 +179,7 @@ async function initializePlatforms() {
         return;
       }
 
-      // 2. Upsert message record
+      // 2. Insert message record (ignoreDuplicates as a safety net)
       const { data: savedMsg, error: msgError } = await supabase
         .from('messages')
         .upsert({
@@ -191,9 +204,9 @@ async function initializePlatforms() {
             return match ? `/media/${match[1]}/${match[2]}` : null;
           })(),
           media_mime_type: message.platformMetadata?.mediaInfo?.mimetype || null,
-        }, { onConflict: 'whatsapp_id' })
+        }, { onConflict: 'whatsapp_id', ignoreDuplicates: true })
         .select('id')
-        .single();
+        .maybeSingle();
 
       if (msgError) {
         logger.error('Failed to upsert message:', msgError);
@@ -201,7 +214,7 @@ async function initializePlatforms() {
         logger.debug(`Message saved: ${message.platformMessageId}`);
 
         // Generate AI response suggestion for incoming messages (fire-and-forget)
-        if (!message.isFromMe && savedMsg?.id && message.content?.trim()) {
+        if (!message.isFromMe && savedMsg?.id && message.content?.trim() && aiProcessor.isConfigured) {
           const chatType = message.chatType === 'group' ? 'group' : 'individual';
           aiProcessor.generateAndStore(savedMsg.id, message.content, message.userId, chatType)
             .catch((err) => logger.debug('AI suggestion skipped:', (err as Error).message));
