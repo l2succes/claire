@@ -109,6 +109,7 @@ export class WhatsAppAdapter extends BasePlatformAdapter {
       '--disable-gpu',
       '--disable-extensions',
       '--disable-crash-reporter',
+      '--no-crashpad',
       '--disable-features=VizDisplayCompositor',
       '--disable-background-networking',
       '--disable-default-apps',
@@ -127,7 +128,7 @@ export class WhatsAppAdapter extends BasePlatformAdapter {
       }),
       puppeteer: {
         headless: whatsappConfig.puppeteerHeadless,
-        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/lib/chromium/chromium',
+        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
         args: puppeteerArgs,
       },
     });
