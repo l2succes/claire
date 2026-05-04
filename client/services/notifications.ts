@@ -1,17 +1,29 @@
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
-import { Platform } from 'react-native';
+import { platformCapabilities } from '../utils/platformCapabilities';
 
-// Configure notification behavior
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-});
+if (platformCapabilities.supportsNativeNotifications) {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+    }),
+  });
+}
+
+function logWebNoop(method: string) {
+  console.info(`[notifications] ${method} is a no-op on web`);
+}
 
 export async function setupNotifications() {
+  if (!platformCapabilities.supportsNativeNotifications) {
+    logWebNoop('setupNotifications');
+    return null;
+  }
+
   if (!Device.isDevice) {
     console.log('Push notifications only work on physical devices');
     return null;
@@ -32,9 +44,9 @@ export async function setupNotifications() {
 
   try {
     const token = await Notifications.getExpoPushTokenAsync({
-      projectId: 'your-project-id', // Replace with your Expo project ID
+      projectId: 'your-project-id',
     });
-    
+
     console.log('Push token:', token.data);
     return token.data;
   } catch (error) {
@@ -48,6 +60,11 @@ export function scheduleNotification(
   body: string,
   trigger: Notifications.NotificationTriggerInput
 ) {
+  if (!platformCapabilities.supportsNativeNotifications) {
+    logWebNoop('scheduleNotification');
+    return Promise.resolve(null);
+  }
+
   return Notifications.scheduleNotificationAsync({
     content: {
       title,
@@ -61,11 +78,21 @@ export function scheduleNotification(
 export function addNotificationListener(
   callback: (notification: Notifications.Notification) => void
 ) {
+  if (!platformCapabilities.supportsNativeNotifications) {
+    logWebNoop('addNotificationListener');
+    return { remove: () => undefined };
+  }
+
   return Notifications.addNotificationReceivedListener(callback);
 }
 
 export function addResponseListener(
   callback: (response: Notifications.NotificationResponse) => void
 ) {
+  if (!platformCapabilities.supportsNativeNotifications) {
+    logWebNoop('addResponseListener');
+    return { remove: () => undefined };
+  }
+
   return Notifications.addNotificationResponseReceivedListener(callback);
 }

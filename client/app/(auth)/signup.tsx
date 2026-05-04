@@ -63,6 +63,7 @@ export default function SignupScreen() {
     <KeyboardAvoidingView
       className="flex-1 bg-white"
       behavior={RNPlatform.OS === 'ios' ? 'padding' : 'height'}
+      testID="signup-screen"
     >
       <View className="flex-1 justify-center px-8">
         <View className="mb-8">
@@ -84,6 +85,7 @@ export default function SignupScreen() {
               onChangeText={setName}
               autoCapitalize="words"
               editable={!loading}
+              testID="signup-name-input"
             />
           </View>
 
@@ -97,6 +99,7 @@ export default function SignupScreen() {
               autoCapitalize="none"
               keyboardType="email-address"
               editable={!loading}
+              testID="signup-email-input"
             />
           </View>
 
@@ -109,6 +112,7 @@ export default function SignupScreen() {
               onChangeText={setPassword}
               secureTextEntry
               editable={!loading}
+              testID="signup-password-input"
             />
           </View>
         </View>
@@ -116,6 +120,7 @@ export default function SignupScreen() {
         <TouchableOpacity
           onPress={handleSignup}
           disabled={loading}
+          testID="signup-submit"
           className={`bg-green-500 rounded-lg py-4 mb-4 ${loading ? 'opacity-50' : ''}`}
         >
           <Text className="text-white text-center font-semibold text-lg">

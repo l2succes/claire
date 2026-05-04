@@ -656,14 +656,25 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     }
 
     // Find the Matrix room for this chat
-    const roomId = await this.roomMapper.findRoomForChat(
-      this.matrixClient,
-      platform,
-      chatId
-    );
+    let roomId: string;
 
-    if (!roomId) {
-      throw new Error(`No Matrix room found for chat ${chatId}`);
+    // Check if chatId is already a Matrix room ID (starts with !)
+    if (chatId.startsWith('!') && chatId.includes(':')) {
+      this.log('warn', `Using chatId as room ID directly: ${chatId} (should be fixed in database)`);
+      roomId = chatId;
+    } else {
+      // Normal case: look up room by platform contact ID
+      const foundRoomId = await this.roomMapper.findRoomForChat(
+        this.matrixClient,
+        platform,
+        chatId
+      );
+
+      if (!foundRoomId) {
+        throw new Error(`No Matrix room found for platform ${platform} chat ${chatId}`);
+      }
+
+      roomId = foundRoomId;
     }
 
     // Send the message
@@ -907,6 +918,9 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
           const selfGhostId = (session as any).selfGhostId;
           if (selfGhostId) {
             this.sessionSelfGhostIds.set(sessionId, selfGhostId);
+            this.log('info', `Restored selfGhostId for session ${sessionId}: ${selfGhostId}`);
+          } else {
+            this.log('warn', `Session ${sessionId} missing selfGhostId - sender detection may fail`);
           }
           this.log('info', `Restored Matrix session: ${sessionId} (selfGhost: ${selfGhostId || 'unknown'})`);
         }

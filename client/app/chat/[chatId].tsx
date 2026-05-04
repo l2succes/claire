@@ -47,6 +47,7 @@ export default function ChatScreen() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
   const [inputText, setInputText] = useState('');
   const platformChatIdRef = useRef<string | null>(null);
   const listRef = useRef<FlatList>(null);
@@ -116,17 +117,36 @@ export default function ChatScreen() {
     return () => { supabase.removeChannel(subscription); };
   }, [chatId, fetchMessages, fetchChatInfo]);
 
+  // Clear error when user starts typing
+  useEffect(() => {
+    if (sendError && inputText) {
+      setSendError(null);
+    }
+  }, [inputText, sendError]);
+
   const handleSend = useCallback(async () => {
     const text = inputText.trim();
-    if (!text || !platform) return;
+    if (!text || !platform) {
+      setSendError('Unable to determine platform');
+      return;
+    }
 
     const platformChatId = platformChatIdRef.current;
-    if (!platformChatId) return;
+    if (!platformChatId) {
+      setSendError('Chat configuration error - please reopen this chat');
+      return;
+    }
 
     const session = connectedSessions.find(
       (s) => s.platform === (platform as Platform) && s.status === 'connected'
     );
-    if (!session) return;
+    if (!session) {
+      setSendError(`Not connected to ${platform}. Please reconnect in Settings.`);
+      return;
+    }
+
+    // Clear any previous errors
+    setSendError(null);
 
     // Optimistic update
     const optimistic: ChatMessage = {
@@ -144,6 +164,15 @@ export default function ChatScreen() {
       await platformsApi.sendMessage(platform as Platform, session.id, platformChatId, text);
     } catch (err) {
       console.error('Send failed:', err);
+
+      // Extract error message
+      const errorMessage = err instanceof Error
+        ? err.message
+        : 'Failed to send message. Please try again.';
+
+      setSendError(errorMessage);
+
+      // Remove optimistic message and restore input
       setMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
       setInputText(text);
     } finally {
@@ -276,7 +305,7 @@ export default function ChatScreen() {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#ffffff' }} edges={['top']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#ffffff' }} edges={['top']} testID="chat-screen">
       {/* Header */}
       <View style={{
         flexDirection: 'row',
@@ -294,7 +323,7 @@ export default function ChatScreen() {
             {displayName}
           </Text>
         </View>
-        {platform ? <PlatformBadge platform={platform as Platform} size="sm" /> : null}
+        {platform ? <PlatformBadge platform={platform as Platform} size={14} /> : null}
         <TouchableOpacity
           onPress={() => router.push({
             pathname: '/chat/settings/[chatId]',
@@ -306,13 +335,28 @@ export default function ChatScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Connection status banner */}
+      {platform && !connectedSessions.some(s => s.platform === platform && s.status === 'connected') && (
+        <View style={{
+          backgroundColor: '#fef3c7',
+          paddingVertical: 10,
+          paddingHorizontal: 12,
+          borderBottomWidth: 1,
+          borderBottomColor: '#fcd34d',
+        }}>
+          <Text style={{ color: '#92400e', fontSize: 13, textAlign: 'center' }}>
+            Not connected to {platform}. Reconnect in Settings to send messages.
+          </Text>
+        </View>
+      )}
+
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={RNPlatform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={0}
       >
         {loading ? (
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }} testID="chat-loading">
             <ActivityIndicator size="large" color="#10b981" />
           </View>
         ) : (
@@ -321,12 +365,13 @@ export default function ChatScreen() {
             data={messages}
             renderItem={renderMessage}
             keyExtractor={(item) => item.id}
+            testID="chat-message-list"
             contentContainerStyle={{ paddingVertical: 8 }}
             onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
             onLayout={() => listRef.current?.scrollToEnd({ animated: false })}
             keyboardShouldPersistTaps="handled"
             ListEmptyComponent={
-              <View style={{ flex: 1, alignItems: 'center', paddingTop: 60 }}>
+              <View style={{ flex: 1, alignItems: 'center', paddingTop: 60 }} testID="chat-empty">
                 <Text style={{ color: '#9ca3af', fontSize: 15 }}>No messages yet</Text>
               </View>
             }
@@ -341,6 +386,22 @@ export default function ChatScreen() {
             onDraftMessage={(text) => setInputText(text)}
             onActed={(cardId) => markCardActed(chatId!, cardId)}
           />
+        )}
+
+        {/* Error display */}
+        {sendError && (
+          <View style={{
+            paddingHorizontal: 12,
+            paddingVertical: 8,
+            backgroundColor: '#fee2e2',
+            borderRadius: 8,
+            marginHorizontal: 12,
+            marginBottom: 8,
+          }}>
+            <Text style={{ color: '#dc2626', fontSize: 13 }}>
+              {sendError}
+            </Text>
+          </View>
         )}
 
         {/* Input bar */}
@@ -374,10 +435,12 @@ export default function ChatScreen() {
             multiline
             returnKeyType="default"
             onSubmitEditing={handleSend}
+            testID="chat-input"
           />
           <TouchableOpacity
             onPress={handleSend}
-            disabled={!inputText.trim() || sending}
+            disabled={!inputText.trim() || sending || (platform && !connectedSessions.some(s => s.platform === platform && s.status === 'connected'))}
+            testID="chat-send-button"
             style={{
               width: 40,
               height: 40,

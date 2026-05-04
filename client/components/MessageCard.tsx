@@ -1,9 +1,9 @@
 import { View, Text, TouchableOpacity, Image } from 'react-native';
-import { formatDistanceToNow } from 'date-fns';
 import { User, Users, Check, CheckCheck, Clock } from 'lucide-react-native';
 import { useState } from 'react';
 import { PlatformBadge } from './PlatformIcon';
 import { Platform } from '../types/platform';
+import { formatInboxTimestamp } from '../utils/messageTimestamp';
 
 interface MessageCardProps {
   message: {
@@ -42,14 +42,13 @@ export function MessageCard({ message, onPress, onLongPress }: MessageCardProps)
     }
   };
 
-  const timeAgo = formatDistanceToNow(new Date(message.timestamp), { 
-    addSuffix: false 
-  }).replace('about ', '');
+  const timestampLabel = formatInboxTimestamp(message.timestamp);
 
   return (
     <TouchableOpacity
       onPress={onPress}
       onLongPress={onLongPress}
+      testID={`message-card-${message.id}`}
       className="bg-white dark:bg-gray-800 px-4 py-3 border-b border-gray-100 dark:border-gray-700"
       activeOpacity={0.7}
     >
@@ -87,8 +86,8 @@ export function MessageCard({ message, onPress, onLongPress }: MessageCardProps)
               {message.platform && (
                 <PlatformBadge platform={message.platform} size={14} className="ml-1" />
               )}
-              <Text className="text-xs text-gray-500 dark:text-gray-400 ml-1">
-                {timeAgo}
+              <Text className="text-xs text-gray-500 dark:text-gray-400 ml-1" testID="message-card-timestamp">
+                {timestampLabel}
               </Text>
             </View>
           </View>

@@ -71,6 +71,23 @@ export interface AuthData {
   sessionId: string;
 }
 
+export interface InstagramLoginStep {
+  sessionId: string;
+  loginId: string;
+  stepId: string;
+  stepType?: 'user_input' | 'cookies' | 'display_and_wait' | 'complete';
+  instructions?: string;
+  loginUrl?: string;
+  requiredCookies?: string[];
+}
+
+export interface InstagramLoginSubmission {
+  cookies?: Record<string, string>;
+  cookieHeader?: string;
+  cookieString?: string;
+  curlCommand?: string;
+}
+
 export interface AuthFlowState {
   platform: Platform;
   sessionId: string;

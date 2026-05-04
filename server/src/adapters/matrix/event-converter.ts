@@ -64,7 +64,24 @@ export class MatrixEventConverter {
       contentType,
       senderId: sender,
       senderName,
-      chatId: chatId || room.roomId,
+      chatId: (() => {
+        if (chatId) return chatId;
+
+        // For groups, room ID is acceptable
+        if (this.isGroupRoom(room, platform, selfGhostUserId)) {
+          return room.roomId;
+        }
+
+        // For 1:1 DMs, this is an error - we need the contact ID
+        this.log('error', `Failed to extract contact ID from 1:1 DM room ${room.roomId}`, {
+          platform,
+          members: room.getJoinedMembers().map(m => m.userId),
+          selfGhostUserId,
+        });
+
+        // Return room ID as last resort but mark it
+        return `INVALID:${room.roomId}`;
+      })(),
       chatType: this.isGroupRoom(room, platform, selfGhostUserId) ? 'group' : 'individual',
       chatName: this.userMapper.cleanDisplayName(room.name),
       timestamp: event.getDate() || new Date(),
@@ -145,22 +162,42 @@ export class MatrixEventConverter {
    * collisions with 1:1 DM rooms that share a member.
    */
   private extractChatId(room: Room, platform: Platform, selfGhostUserId?: string): string | null {
-    if (this.isGroupRoom(room, platform, selfGhostUserId)) {
+    const isGroup = this.isGroupRoom(room, platform, selfGhostUserId);
+
+    if (isGroup) {
       return room.roomId;
     }
 
     const members = room.getJoinedMembers();
 
+    this.log('debug', `Extracting chat ID from room ${room.roomId}`, {
+      platform,
+      memberCount: members.length,
+      memberUserIds: members.map(m => m.userId),
+      selfGhostUserId,
+    });
+
     for (const member of members) {
-      if (this.userMapper.isBridgeBot(member.userId)) continue;
-      if (selfGhostUserId && member.userId === selfGhostUserId) continue;
+      if (this.userMapper.isBridgeBot(member.userId)) {
+        this.log('debug', `Skipping bridge bot: ${member.userId}`);
+        continue;
+      }
+
+      if (selfGhostUserId && member.userId === selfGhostUserId) {
+        this.log('debug', `Skipping self ghost user: ${member.userId}`);
+        continue;
+      }
 
       const contactInfo = this.userMapper.ghostUserToPlatformContact(member.userId);
       if (contactInfo && contactInfo.platform === platform) {
+        this.log('debug', `Extracted contact ID: ${contactInfo.platformContactId}`);
         return contactInfo.platformContactId;
+      } else {
+        this.log('warn', `Ghost user parsing failed for ${member.userId}`, { contactInfo });
       }
     }
 
+    this.log('error', `No valid contact found in room ${room.roomId} for platform ${platform}`);
     return null;
   }
 

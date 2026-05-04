@@ -52,7 +52,7 @@ export function ConnectedPlatformsList({ className }: ConnectedPlatformsListProp
 
   if (connectedSessions.length === 0) {
     return (
-      <View className={cn('p-4', className)}>
+      <View className={cn('p-4', className)} testID="connected-platforms-empty">
         <View className="items-center py-8">
           <WifiOff size={48} color="#9ca3af" />
           <Text className="text-gray-500 dark:text-gray-400 mt-4 text-center">
@@ -67,7 +67,7 @@ export function ConnectedPlatformsList({ className }: ConnectedPlatformsListProp
   }
 
   return (
-    <View className={className}>
+    <View className={className} testID="connected-platforms-list">
       {connectedSessions.map((session) => (
         <PlatformSessionCard
           key={session.id}
@@ -140,7 +140,7 @@ function PlatformSessionCard({
     : null;
 
   return (
-    <View className="bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700">
+    <View className="bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700" testID={`connected-platform-${session.platform}`}>
       <View className="flex-row items-center px-4 py-3">
         {/* Platform Icon */}
         <PlatformIconButton
@@ -200,6 +200,7 @@ function PlatformSessionCard({
                 <TouchableOpacity
                   onPress={onReconnect}
                   className="p-2 mr-1"
+                  testID={`reconnect-platform-${session.platform}`}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
                   <RefreshCw size={20} color="#3b82f6" />
@@ -209,6 +210,7 @@ function PlatformSessionCard({
               <TouchableOpacity
                 onPress={onDisconnect}
                 className="p-2"
+                testID={`disconnect-platform-${session.platform}`}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
                 <Trash2 size={20} color="#ef4444" />
