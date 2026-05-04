@@ -161,7 +161,7 @@ export default function SettingsScreen() {
   );
 
   return (
-    <ScrollView className="flex-1 bg-gray-50 dark:bg-gray-900">
+    <ScrollView className="flex-1 bg-gray-50 dark:bg-gray-900" testID="settings-screen">
       <View className="p-4">
         {/* Header */}
         <Text className="text-2xl font-bold text-gray-900 dark:text-white mb-6">
@@ -197,12 +197,14 @@ export default function SettingsScreen() {
               <TouchableOpacity
                 onPress={handleRefreshPlatforms}
                 className="p-2 mr-1"
+                testID="settings-refresh-platforms"
               >
                 <RefreshCw size={18} color="#6b7280" />
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={handleAddPlatform}
                 className="bg-green-500 rounded-full p-2"
+                testID="settings-add-platform"
               >
                 <Plus size={18} color="white" />
               </TouchableOpacity>
@@ -214,13 +216,14 @@ export default function SettingsScreen() {
               <ConnectedPlatformsList />
             </View>
           ) : (
-            <View className="bg-white dark:bg-gray-800 rounded-lg p-6 items-center">
+            <View className="bg-white dark:bg-gray-800 rounded-lg p-6 items-center" testID="settings-no-platforms">
               <Text className="text-gray-500 dark:text-gray-400 text-center mb-3">
                 No platforms connected
               </Text>
               <TouchableOpacity
                 onPress={handleAddPlatform}
                 className="bg-green-500 px-4 py-2 rounded-full"
+                testID="settings-connect-platform"
               >
                 <Text className="text-white font-semibold">Connect Platform</Text>
               </TouchableOpacity>

@@ -21,7 +21,6 @@ import {
   Platform as RNPlatform,
 } from 'react-native';
 import { X, Check, AlertCircle } from 'lucide-react-native';
-import { cn } from '../utils/cn';
 import { PlatformIconButton } from './PlatformIcon';
 import { Button } from './ui/Button';
 import {
@@ -29,10 +28,13 @@ import {
   AuthMethod,
   PLATFORM_DISPLAY,
   getPlatformAuthMethod,
+  InstagramLoginStep,
+  InstagramLoginSubmission,
 } from '../types/platform';
 import { usePlatformStore } from '../stores/platformStore';
 import { InstagramWebViewLogin } from './InstagramWebViewLogin';
 import { platformsApi, pollAuthStatus } from '../services/platforms';
+import { getInstagramLoginMode, platformCapabilities } from '../utils/platformCapabilities';
 
 interface PlatformAuthModalProps {
   platform: Platform | null;
@@ -60,11 +62,7 @@ export function PlatformAuthModal({
   const [phoneNumber, setPhoneNumber] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
   const [showInstagramWebView, setShowInstagramWebView] = useState(false);
-  const [instagramLoginSession, setInstagramLoginSession] = useState<{
-    sessionId: string;
-    loginId: string;
-    stepId: string;
-  } | null>(null);
+  const [instagramLoginSession, setInstagramLoginSession] = useState<InstagramLoginStep | null>(null);
   const [instagramConnecting, setInstagramConnecting] = useState(false);
 
   // Reset state when modal opens/closes
@@ -107,7 +105,9 @@ export function PlatformAuthModal({
 
   const handleInstagramWebViewOpen = async () => {
     try {
-      const session = await platformsApi.instagramLoginStart();
+      const session = await platformsApi.instagramLoginStart(
+        platformCapabilities.isWeb ? 'web' : 'native'
+      );
       setInstagramLoginSession(session);
       setShowInstagramWebView(true);
     } catch (err) {
@@ -115,17 +115,14 @@ export function PlatformAuthModal({
     }
   };
 
-  const handleInstagramCookies = async (cookieJson: string) => {
+  const handleInstagramCookies = async (submission: InstagramLoginSubmission) => {
     setShowInstagramWebView(false);
     if (!instagramLoginSession) return;
     const { sessionId, loginId, stepId } = instagramLoginSession;
-    const cookies = JSON.parse(cookieJson) as Record<string, string>;
 
     setInstagramConnecting(true);
     try {
-      await platformsApi.instagramLoginSubmit(sessionId, loginId, stepId, cookies);
-      // Bridge accepted cookies. Session status will update via Matrix event.
-      // Poll until the session shows as connected.
+      await platformsApi.instagramLoginSubmit(sessionId, loginId, stepId, submission);
       pollAuthStatus(Platform.INSTAGRAM, sessionId, (session) => {
         if (session.status === 'connected') {
           setInstagramConnecting(false);
@@ -154,7 +151,7 @@ export function PlatformAuthModal({
     // Success state
     if (activeAuthFlow?.step === 'success') {
       return (
-        <View className="items-center py-8">
+        <View className="items-center py-8" testID="platform-auth-success">
           <View className="w-16 h-16 rounded-full bg-green-100 items-center justify-center mb-4">
             <Check size={32} color="#22c55e" />
           </View>
@@ -171,7 +168,7 @@ export function PlatformAuthModal({
     // Error state
     if (activeAuthFlow?.step === 'error' || error) {
       return (
-        <View className="items-center py-8">
+        <View className="items-center py-8" testID="platform-auth-error">
           <View className="w-16 h-16 rounded-full bg-red-100 items-center justify-center mb-4">
             <AlertCircle size={32} color="#ef4444" />
           </View>
@@ -419,7 +416,7 @@ export function PlatformAuthModal({
   const renderCookieFlow = () => {
     if (instagramConnecting) {
       return (
-        <View className="items-center py-8">
+        <View className="items-center py-8" testID="instagram-connecting-state">
           <ActivityIndicator size="large" color={display.color} />
           <Text className="text-gray-500 dark:text-gray-400 mt-4">
             Connecting to Instagram...
@@ -431,15 +428,20 @@ export function PlatformAuthModal({
     return (
       <View className="py-4">
         <Text className="text-gray-600 dark:text-gray-300 text-center mb-6">
-          Log in to Instagram to connect your account
+          {getInstagramLoginMode() === 'embedded'
+            ? 'Log in to Instagram to connect your account'
+            : 'Connect Instagram using the browser-assisted web flow'}
         </Text>
         <Button
           variant="primary"
           onPress={handleInstagramWebViewOpen}
           loading={isLoading}
           className="w-full"
+          testID="instagram-login-trigger"
         >
-          Log in to Instagram
+          {getInstagramLoginMode() === 'embedded'
+            ? 'Log in to Instagram'
+            : 'Continue in Browser'}
         </Button>
       </View>
     );
@@ -451,6 +453,7 @@ export function PlatformAuthModal({
       animationType="slide"
       presentationStyle="pageSheet"
       onRequestClose={handleClose}
+      testID="platform-auth-modal"
     >
       <KeyboardAvoidingView
         behavior={RNPlatform.OS === 'ios' ? 'padding' : 'height'}
@@ -460,6 +463,7 @@ export function PlatformAuthModal({
           <InstagramWebViewLogin
             onSuccess={handleInstagramCookies}
             onCancel={() => setShowInstagramWebView(false)}
+            loginStep={instagramLoginSession}
           />
         ) : (
           <>
@@ -481,6 +485,7 @@ export function PlatformAuthModal({
               className="flex-1"
               contentContainerStyle={{ padding: 16 }}
               keyboardShouldPersistTaps="handled"
+              testID="platform-auth-scroll"
             >
               {/* Platform Icon */}
               <View className="items-center mb-6">

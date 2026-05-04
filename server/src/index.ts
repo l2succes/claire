@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
-import { config, platformConfig, matrixConfig } from './config';
+import { config, platformConfig, matrixConfig, serverConfig } from './config';
 import { logger, stream } from './utils/logger';
 import { supabase } from './services/supabase';
 import { sessionMonitor } from './services/session-monitor';
@@ -25,8 +25,15 @@ const PORT = config.PORT;
 // Middleware
 app.use(helmet());
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? ['https://claire.app'] // Update with your domain
+  origin: process.env.NODE_ENV === 'production'
+    ? (origin, callback) => {
+        if (!origin || serverConfig.corsOrigins.includes(origin)) {
+          callback(null, true);
+          return;
+        }
+
+        callback(new Error(`Origin ${origin} is not allowed by CORS`));
+      }
     : true,
   credentials: true,
 }));

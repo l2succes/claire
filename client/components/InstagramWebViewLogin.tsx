@@ -14,11 +14,18 @@ const USER_AGENT =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
 
 interface InstagramWebViewLoginProps {
-  onSuccess: (cookieJson: string) => void;
+  onSuccess: (submission: { cookies: Record<string, string> }) => void;
   onCancel: () => void;
+  loginStep?: {
+    instructions?: string;
+  } | null;
 }
 
-export function InstagramWebViewLogin({ onSuccess, onCancel }: InstagramWebViewLoginProps) {
+export function InstagramWebViewLogin({
+  onSuccess,
+  onCancel,
+  loginStep,
+}: InstagramWebViewLoginProps) {
   const [pageLoading, setPageLoading] = useState(true);
   const [extracting, setExtracting] = useState(false);
   const extractedRef = useRef(false);
@@ -48,7 +55,7 @@ export function InstagramWebViewLogin({ onSuccess, onCancel }: InstagramWebViewL
         return;
       }
 
-      onSuccess(JSON.stringify(result));
+      onSuccess({ cookies: result });
     } catch {
       extractedRef.current = false;
       setExtracting(false);
@@ -76,15 +83,21 @@ export function InstagramWebViewLogin({ onSuccess, onCancel }: InstagramWebViewL
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={onCancel} style={styles.closeBtn}>
+        <TouchableOpacity onPress={onCancel} style={styles.closeBtn} testID="instagram-native-login-close">
           <X size={20} color="#6b7280" />
         </TouchableOpacity>
         <Text style={styles.title}>Log in to Instagram</Text>
         <View style={styles.placeholder} />
       </View>
 
+      {loginStep?.instructions ? (
+        <View style={styles.instructionsBanner}>
+          <Text style={styles.instructionsText}>{loginStep.instructions}</Text>
+        </View>
+      ) : null}
+
       {extracting ? (
-        <View style={styles.center}>
+        <View style={styles.center} testID="instagram-native-login-loading">
           <ActivityIndicator size="large" color="#E1306C" />
           <Text style={styles.extractingText}>Connecting to Instagram...</Text>
         </View>
@@ -97,6 +110,7 @@ export function InstagramWebViewLogin({ onSuccess, onCancel }: InstagramWebViewL
           onLoadEnd={() => setPageLoading(false)}
           onNavigationStateChange={handleNavigationStateChange}
           style={styles.webview}
+          testID="instagram-native-webview"
         />
       )}
 
@@ -137,6 +151,18 @@ const styles = StyleSheet.create({
   },
   webview: {
     flex: 1,
+  },
+  instructionsBanner: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: '#f9fafb',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  instructionsText: {
+    color: '#6b7280',
+    fontSize: 13,
+    lineHeight: 18,
   },
   center: {
     flex: 1,

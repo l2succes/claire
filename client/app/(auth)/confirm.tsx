@@ -56,7 +56,7 @@ export default function ConfirmScreen() {
   };
 
   return (
-    <View className="flex-1 bg-white justify-center items-center">
+    <View className="flex-1 bg-white justify-center items-center" testID="confirm-screen">
       <ActivityIndicator size="large" color="#10b981" />
       <Text className="text-gray-600 mt-4">Confirming your email...</Text>
     </View>

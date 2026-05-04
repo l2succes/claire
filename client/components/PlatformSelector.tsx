@@ -63,6 +63,7 @@ export function PlatformSelector({
               onPress={() => onPlatformSelect(platform)}
               disabled={!available}
               activeOpacity={0.7}
+              testID={`platform-selector-${platform}`}
               className={cn(
                 'items-center p-4 rounded-xl mb-4',
                 columns === 2 ? 'w-[48%]' : 'w-[23%]',
@@ -153,6 +154,7 @@ export function PlatformSelectorInline({
             onPress={() => onPlatformSelect(platform)}
             disabled={!available}
             activeOpacity={0.7}
+            testID={`platform-selector-inline-${platform}`}
             className={cn(
               'items-center mx-2 p-2 rounded-lg',
               isSelected && 'bg-gray-100 dark:bg-gray-800'

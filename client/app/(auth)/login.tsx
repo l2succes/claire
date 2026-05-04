@@ -53,7 +53,7 @@ export default function LoginScreen() {
   ).length;
 
   return (
-    <View className="flex-1 bg-white dark:bg-gray-900">
+    <View className="flex-1 bg-white dark:bg-gray-900" testID="platform-login-screen">
       <ScrollView
         className="flex-1"
         contentContainerStyle={{ flexGrow: 1, padding: 24 }}
@@ -103,6 +103,7 @@ export default function LoginScreen() {
               variant="primary"
               onPress={handleContinue}
               className="w-full"
+              testID="platform-login-continue"
             >
               <View className="flex-row items-center justify-center">
                 <Text className="text-white font-semibold text-lg mr-2">
@@ -124,6 +125,7 @@ export default function LoginScreen() {
             <TouchableOpacity
               onPress={handleContinue}
               className="mt-4 p-2"
+              testID="platform-login-skip-dev"
             >
               <Text className="text-gray-400 text-sm text-center">
                 Skip (dev mode)
