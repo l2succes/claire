@@ -167,7 +167,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     if (!this.matrixClient) return;
 
     // Auto-accept room invites from bridge bots
-    this.matrixClient.on(RoomMemberEvent.Membership, async (event, member) => {
+    this.matrixClient.on(RoomMemberEvent.Membership, async (_event, member) => {
       if (member.userId !== this.matrixClient!.getUserId()) return;
       if (member.membership !== 'invite') return;
 
@@ -422,7 +422,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     // Merge explicit bridgeConfig with any top-level fields (e.g. phoneNumber from connect body)
     const bridgeConfig = {
       ...config?.bridgeConfig,
-      ...(( config as Record<string, unknown> )?.phoneNumber ? { phoneNumber: ( config as Record<string, unknown> ).phoneNumber as string } : {}),
+      ...(( config as unknown as Record<string, unknown> )?.phoneNumber ? { phoneNumber: ( config as unknown as Record<string, unknown> ).phoneNumber as string } : {}),
     };
 
     // Initiate auth flow

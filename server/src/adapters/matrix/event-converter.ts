@@ -72,15 +72,9 @@ export class MatrixEventConverter {
           return room.roomId;
         }
 
-        // For 1:1 DMs, this is an error - we need the contact ID
-        this.log('error', `Failed to extract contact ID from 1:1 DM room ${room.roomId}`, {
-          platform,
-          members: room.getJoinedMembers().map(m => m.userId),
-          selfGhostUserId,
-        });
-
-        // Return room ID as last resort but mark it
-        return `INVALID:${room.roomId}`;
+        // For 1:1 DMs, fallback to room ID (this shouldn't happen in normal operation)
+        // The room ID will work for sending but may cause issues with chat identification
+        return room.roomId;
       })(),
       chatType: this.isGroupRoom(room, platform, selfGhostUserId) ? 'group' : 'individual',
       chatName: this.userMapper.cleanDisplayName(room.name),
@@ -170,34 +164,21 @@ export class MatrixEventConverter {
 
     const members = room.getJoinedMembers();
 
-    this.log('debug', `Extracting chat ID from room ${room.roomId}`, {
-      platform,
-      memberCount: members.length,
-      memberUserIds: members.map(m => m.userId),
-      selfGhostUserId,
-    });
-
     for (const member of members) {
       if (this.userMapper.isBridgeBot(member.userId)) {
-        this.log('debug', `Skipping bridge bot: ${member.userId}`);
         continue;
       }
 
       if (selfGhostUserId && member.userId === selfGhostUserId) {
-        this.log('debug', `Skipping self ghost user: ${member.userId}`);
         continue;
       }
 
       const contactInfo = this.userMapper.ghostUserToPlatformContact(member.userId);
       if (contactInfo && contactInfo.platform === platform) {
-        this.log('debug', `Extracted contact ID: ${contactInfo.platformContactId}`);
         return contactInfo.platformContactId;
-      } else {
-        this.log('warn', `Ghost user parsing failed for ${member.userId}`, { contactInfo });
       }
     }
 
-    this.log('error', `No valid contact found in room ${room.roomId} for platform ${platform}`);
     return null;
   }
 

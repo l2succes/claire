@@ -178,6 +178,7 @@ export interface PlatformSession {
     token?: string;
     sessionPath?: string;
     state?: unknown;
+    pairingCode?: string;
   };
 
   createdAt: Date;
@@ -238,6 +239,7 @@ export type PlatformEvent =
   | 'session_disconnected'
   | 'session_error'
   | 'qr_code'
+  | 'pairing_code'
   | 'auth_failure';
 
 export type PlatformEventHandler = (data: PlatformEventData) => void | Promise<void>;
