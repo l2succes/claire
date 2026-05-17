@@ -27,16 +27,20 @@ jest.mock('expo-notifications', () => ({
   removeNotificationSubscription: jest.fn(),
 }));
 
-jest.mock('expo-barcode-scanner', () => ({
-  BarCodeScanner: {
-    requestPermissionsAsync: jest.fn(() => Promise.resolve({ status: 'granted' })),
-    Constants: {
-      BarCodeType: {
-        qr: 'qr',
+jest.mock(
+  'expo-barcode-scanner',
+  () => ({
+    BarCodeScanner: {
+      requestPermissionsAsync: jest.fn(() => Promise.resolve({ status: 'granted' })),
+      Constants: {
+        BarCodeType: {
+          qr: 'qr',
+        },
       },
     },
-  },
-}));
+  }),
+  { virtual: true }
+);
 
 jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock')

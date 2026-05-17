@@ -64,7 +64,18 @@ export class MatrixEventConverter {
       contentType,
       senderId: sender,
       senderName,
-      chatId: chatId || room.roomId,
+      chatId: (() => {
+        if (chatId) return chatId;
+
+        // For groups, room ID is acceptable
+        if (this.isGroupRoom(room, platform, selfGhostUserId)) {
+          return room.roomId;
+        }
+
+        // For 1:1 DMs, fallback to room ID (this shouldn't happen in normal operation)
+        // The room ID will work for sending but may cause issues with chat identification
+        return room.roomId;
+      })(),
       chatType: this.isGroupRoom(room, platform, selfGhostUserId) ? 'group' : 'individual',
       chatName: this.userMapper.cleanDisplayName(room.name),
       timestamp: event.getDate() || new Date(),
@@ -145,15 +156,22 @@ export class MatrixEventConverter {
    * collisions with 1:1 DM rooms that share a member.
    */
   private extractChatId(room: Room, platform: Platform, selfGhostUserId?: string): string | null {
-    if (this.isGroupRoom(room, platform, selfGhostUserId)) {
+    const isGroup = this.isGroupRoom(room, platform, selfGhostUserId);
+
+    if (isGroup) {
       return room.roomId;
     }
 
     const members = room.getJoinedMembers();
 
     for (const member of members) {
-      if (this.userMapper.isBridgeBot(member.userId)) continue;
-      if (selfGhostUserId && member.userId === selfGhostUserId) continue;
+      if (this.userMapper.isBridgeBot(member.userId)) {
+        continue;
+      }
+
+      if (selfGhostUserId && member.userId === selfGhostUserId) {
+        continue;
+      }
 
       const contactInfo = this.userMapper.ghostUserToPlatformContact(member.userId);
       if (contactInfo && contactInfo.platform === platform) {

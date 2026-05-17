@@ -11,6 +11,7 @@ import { platformsApi, pollAuthStatus } from '../services/platforms';
 import {
   Platform,
   PlatformStatus,
+  AuthMethod,
   PlatformInfo,
   PlatformSession,
   AuthData,
@@ -97,7 +98,7 @@ export const usePlatformStore = create<PlatformState>((set, get) => ({
           {
             platform: Platform.WHATSAPP,
             enabled: true,
-            authMethod: 'qr_code' as const,
+            authMethod: AuthMethod.QR_CODE,
             capabilities: {
               canSendText: true,
               canSendMedia: true,
@@ -114,7 +115,7 @@ export const usePlatformStore = create<PlatformState>((set, get) => ({
           {
             platform: Platform.TELEGRAM,
             enabled: true,
-            authMethod: 'phone_code' as const,
+            authMethod: AuthMethod.PHONE_CODE,
             capabilities: {
               canSendText: true,
               canSendMedia: true,
@@ -131,7 +132,7 @@ export const usePlatformStore = create<PlatformState>((set, get) => ({
           {
             platform: Platform.INSTAGRAM,
             enabled: true,
-            authMethod: 'cookie' as const,
+            authMethod: AuthMethod.COOKIE,
             capabilities: {
               canSendText: true,
               canSendMedia: true,

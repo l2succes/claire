@@ -167,7 +167,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     if (!this.matrixClient) return;
 
     // Auto-accept room invites from bridge bots
-    this.matrixClient.on(RoomMemberEvent.Membership, async (event, member) => {
+    this.matrixClient.on(RoomMemberEvent.Membership, async (_event, member) => {
       if (member.userId !== this.matrixClient!.getUserId()) return;
       if (member.membership !== 'invite') return;
 
@@ -422,7 +422,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     // Merge explicit bridgeConfig with any top-level fields (e.g. phoneNumber from connect body)
     const bridgeConfig = {
       ...config?.bridgeConfig,
-      ...(( config as Record<string, unknown> )?.phoneNumber ? { phoneNumber: ( config as Record<string, unknown> ).phoneNumber as string } : {}),
+      ...(( config as unknown as Record<string, unknown> )?.phoneNumber ? { phoneNumber: ( config as unknown as Record<string, unknown> ).phoneNumber as string } : {}),
     };
 
     // Initiate auth flow
@@ -656,14 +656,25 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     }
 
     // Find the Matrix room for this chat
-    const roomId = await this.roomMapper.findRoomForChat(
-      this.matrixClient,
-      platform,
-      chatId
-    );
+    let roomId: string;
 
-    if (!roomId) {
-      throw new Error(`No Matrix room found for chat ${chatId}`);
+    // Check if chatId is already a Matrix room ID (starts with !)
+    if (chatId.startsWith('!') && chatId.includes(':')) {
+      this.log('warn', `Using chatId as room ID directly: ${chatId} (should be fixed in database)`);
+      roomId = chatId;
+    } else {
+      // Normal case: look up room by platform contact ID
+      const foundRoomId = await this.roomMapper.findRoomForChat(
+        this.matrixClient,
+        platform,
+        chatId
+      );
+
+      if (!foundRoomId) {
+        throw new Error(`No Matrix room found for platform ${platform} chat ${chatId}`);
+      }
+
+      roomId = foundRoomId;
     }
 
     // Send the message
@@ -907,6 +918,9 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
           const selfGhostId = (session as any).selfGhostId;
           if (selfGhostId) {
             this.sessionSelfGhostIds.set(sessionId, selfGhostId);
+            this.log('info', `Restored selfGhostId for session ${sessionId}: ${selfGhostId}`);
+          } else {
+            this.log('warn', `Session ${sessionId} missing selfGhostId - sender detection may fail`);
           }
           this.log('info', `Restored Matrix session: ${sessionId} (selfGhost: ${selfGhostId || 'unknown'})`);
         }

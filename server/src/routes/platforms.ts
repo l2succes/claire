@@ -15,6 +15,7 @@ import { platformConfig } from '../config';
 import { logger } from '../utils/logger';
 import { requireAuth } from '../middleware/auth';
 import { BridgeHttpClient } from '../adapters/matrix/bridge-http-client';
+import { loginWithCredentials, submitTwoFactorCode } from '../services/instagram-login';
 
 const instagramBridgeClient = new BridgeHttpClient(
   process.env.INSTAGRAM_BRIDGE_URL || 'http://localhost:29319',
@@ -23,6 +24,66 @@ const instagramBridgeClient = new BridgeHttpClient(
 );
 
 const router = Router();
+const INSTAGRAM_LOGIN_URL = 'https://www.instagram.com/accounts/login/';
+const REQUIRED_INSTAGRAM_COOKIES = ['sessionid', 'csrftoken', 'mid', 'ig_did', 'ds_user_id'];
+
+function parseCookieString(cookieSource: string): Record<string, string> {
+  const normalized = cookieSource
+    .replace(/^cookie:\s*/i, '')
+    .replace(/\r?\n/g, ';');
+
+  return normalized
+    .split(';')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .reduce<Record<string, string>>((acc, part) => {
+      const separatorIndex = part.indexOf('=');
+      if (separatorIndex === -1) return acc;
+
+      const name = part.slice(0, separatorIndex).trim();
+      const value = part.slice(separatorIndex + 1).trim();
+      if (name && value) {
+        acc[name] = value;
+      }
+      return acc;
+    }, {});
+}
+
+function extractCookieStringFromCurl(curlCommand: string): string | null {
+  const headerMatch = curlCommand.match(/(?:-H|--header)\s+['"]cookie:\s*([^'"]+)['"]/i);
+  if (headerMatch?.[1]) {
+    return headerMatch[1];
+  }
+
+  const cookieFlagMatch = curlCommand.match(/(?:-b|--cookie)\s+['"]([^'"]+)['"]/i);
+  if (cookieFlagMatch?.[1]) {
+    return cookieFlagMatch[1];
+  }
+
+  return null;
+}
+
+function resolveInstagramCookies(body: {
+  cookies?: Record<string, string>;
+  cookieHeader?: string;
+  cookieString?: string;
+  curlCommand?: string;
+}): Record<string, string> {
+  if (body.cookies && Object.keys(body.cookies).length > 0) {
+    return body.cookies;
+  }
+
+  const rawCookieString =
+    body.cookieHeader
+    || body.cookieString
+    || (body.curlCommand ? extractCookieStringFromCurl(body.curlCommand) : null);
+
+  if (!rawCookieString) {
+    throw new Error('Instagram cookies were not provided');
+  }
+
+  return parseCookieString(rawCookieString);
+}
 
 // Apply auth to all routes except GET / (platform listing)
 router.use((req, res, next) => {
@@ -130,6 +191,7 @@ router.get('/:platform/status', async (req: Request, res: Response) => {
 router.post('/instagram/login/start', async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id;
+    const client = req.body?.client === 'web' ? 'web' : 'native';
     if (!userId) {
       return res.status(401).json({ success: false, error: 'Unauthorized' });
     }
@@ -151,7 +213,16 @@ router.post('/instagram/login/start', async (req: Request, res: Response) => {
 
     const step = await instagramBridgeClient.startLogin(flowId);
 
-    return res.json({ success: true, sessionId, loginId: step.login_id, stepId: step.step_id });
+    return res.json({
+      success: true,
+      sessionId,
+      loginId: step.login_id,
+      stepId: step.step_id,
+      stepType: step.type,
+      instructions: step.instructions,
+      loginUrl: INSTAGRAM_LOGIN_URL,
+      requiredCookies: client === 'web' ? REQUIRED_INSTAGRAM_COOKIES : undefined,
+    });
   } catch (error) {
     logger.error('Error starting Instagram login:', error);
     return res.status(500).json({
@@ -172,18 +243,35 @@ router.post('/instagram/login/submit', async (req: Request, res: Response) => {
       return res.status(401).json({ success: false, error: 'Unauthorized' });
     }
 
-    const { sessionId, loginId, stepId, cookies } = req.body as {
+    const { sessionId, loginId, stepId, cookies, cookieHeader, cookieString, curlCommand } = req.body as {
       sessionId: string;
       loginId: string;
       stepId: string;
-      cookies: Record<string, string>;
+      cookies?: Record<string, string>;
+      cookieHeader?: string;
+      cookieString?: string;
+      curlCommand?: string;
     };
 
-    if (!sessionId || !loginId || !stepId || !cookies) {
-      return res.status(400).json({ success: false, error: 'sessionId, loginId, stepId, and cookies are required' });
+    if (!sessionId || !loginId || !stepId) {
+      return res.status(400).json({ success: false, error: 'sessionId, loginId, and stepId are required' });
     }
 
-    const result = await instagramBridgeClient.submitCookies(loginId, stepId, cookies);
+    const resolvedCookies = resolveInstagramCookies({
+      cookies,
+      cookieHeader,
+      cookieString,
+      curlCommand,
+    });
+
+    if (!resolvedCookies.sessionid) {
+      return res.status(400).json({
+        success: false,
+        error: 'The provided Instagram cookies do not include sessionid',
+      });
+    }
+
+    const result = await instagramBridgeClient.submitCookies(loginId, stepId, resolvedCookies);
 
     if (result.type === 'complete') {
       const userLoginId = result.complete?.user_login_id;
@@ -204,6 +292,152 @@ router.post('/instagram/login/submit', async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       error: (error as Error).message || 'Failed to submit Instagram cookies',
+    });
+  }
+});
+
+/**
+ * POST /platforms/instagram/login/credentials
+ * Web-only: login with username/password via server-side Puppeteer.
+ * On success, submits extracted cookies to the mautrix bridge automatically.
+ */
+router.post('/instagram/login/credentials', async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+
+    const { username, password } = req.body as { username?: string; password?: string };
+    if (!username || !password) {
+      return res.status(400).json({ success: false, error: 'Username and password are required' });
+    }
+
+    const result = await loginWithCredentials(username, password);
+
+    if (result.status === 'success' && result.cookies) {
+      // Start a bridge login flow and submit the cookies immediately
+      try {
+        const flows = await instagramBridgeClient.getLoginFlows();
+        const flowId = flows[0]?.id;
+        if (!flowId) {
+          return res.status(502).json({ success: false, error: 'No login flows available from bridge' });
+        }
+
+        const step = await instagramBridgeClient.startLogin(flowId);
+        const bridgeResult = await instagramBridgeClient.submitCookies(
+          step.login_id, step.step_id, result.cookies
+        );
+
+        if (bridgeResult.type === 'complete') {
+          const userLoginId = bridgeResult.complete?.user_login_id;
+          const sessionId = `instagram-${userId}-${Date.now()}`;
+
+          const adapter = platformManager.getAdapter(Platform.INSTAGRAM);
+          if (adapter) {
+            await adapter.createSession(userId, sessionId, { platform: Platform.INSTAGRAM } as never);
+            const matrixAdapter = adapter as MatrixBridgeAdapter;
+            await matrixAdapter.markSessionConnected(sessionId, userLoginId);
+          }
+
+          return res.json({ success: true, cookies: result.cookies, sessionId, userLoginId });
+        }
+
+        return res.json({ success: true, cookies: result.cookies, bridgeStep: bridgeResult });
+      } catch (bridgeError) {
+        logger.error('Bridge submission failed after credential login:', bridgeError);
+        return res.json({ success: true, cookies: result.cookies });
+      }
+    }
+
+    if (result.status === 'two_factor_required') {
+      return res.json({
+        success: true,
+        status: 'two_factor_required',
+        loginId: result.twoFactorInfo?.loginId,
+        message: result.twoFactorInfo?.message,
+      });
+    }
+
+    if (result.status === 'challenge_required') {
+      return res.json({
+        success: false,
+        status: 'challenge_required',
+        error: result.error,
+      });
+    }
+
+    return res.status(400).json({ success: false, error: result.error || 'Login failed' });
+  } catch (error) {
+    logger.error('Error in Instagram credential login:', error);
+    return res.status(500).json({
+      success: false,
+      error: (error as Error).message || 'Failed to login with credentials',
+    });
+  }
+});
+
+/**
+ * POST /platforms/instagram/login/2fa
+ * Submit a 2FA verification code for an in-progress credential login.
+ */
+router.post('/instagram/login/2fa', async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+
+    const { loginId, code } = req.body as { loginId?: string; code?: string };
+    if (!loginId || !code) {
+      return res.status(400).json({ success: false, error: 'loginId and code are required' });
+    }
+
+    const result = await submitTwoFactorCode(loginId, code);
+
+    if (result.status === 'success' && result.cookies) {
+      try {
+        const flows = await instagramBridgeClient.getLoginFlows();
+        const flowId = flows[0]?.id;
+        if (!flowId) {
+          return res.status(502).json({ success: false, error: 'No login flows available from bridge' });
+        }
+
+        const step = await instagramBridgeClient.startLogin(flowId);
+        const bridgeResult = await instagramBridgeClient.submitCookies(
+          step.login_id, step.step_id, result.cookies
+        );
+
+        if (bridgeResult.type === 'complete') {
+          const userLoginId = bridgeResult.complete?.user_login_id;
+          const sessionId = `instagram-${userId}-${Date.now()}`;
+
+          const adapter = platformManager.getAdapter(Platform.INSTAGRAM);
+          if (adapter) {
+            await adapter.createSession(userId, sessionId, { platform: Platform.INSTAGRAM } as never);
+            const matrixAdapter = adapter as MatrixBridgeAdapter;
+            await matrixAdapter.markSessionConnected(sessionId, userLoginId);
+          }
+
+          return res.json({ success: true, cookies: result.cookies, sessionId, userLoginId });
+        }
+
+        return res.json({ success: true, cookies: result.cookies, bridgeStep: bridgeResult });
+      } catch (bridgeError) {
+        logger.error('Bridge submission failed after 2FA:', bridgeError);
+        return res.json({ success: true, cookies: result.cookies });
+      }
+    }
+
+    return res.status(400).json({
+      success: false,
+      error: result.error || '2FA verification failed',
+    });
+  } catch (error) {
+    logger.error('Error in Instagram 2FA verification:', error);
+    return res.status(500).json({
+      success: false,
+      error: (error as Error).message || 'Failed to verify 2FA code',
     });
   }
 });

@@ -24,7 +24,7 @@ export function GoogleSignInButton({ mode }: GoogleSignInButtonProps) {
         return;
       }
 
-      if (session) {
+      if (session?.user) {
         // Check if user has WhatsApp connected
         const { data: sessions } = await supabase
           .from('whatsapp_sessions')
@@ -52,6 +52,7 @@ export function GoogleSignInButton({ mode }: GoogleSignInButtonProps) {
     <TouchableOpacity
       onPress={handleGoogleSignIn}
       disabled={loading}
+      testID={`google-sign-in-${mode}`}
       className={`flex-row items-center justify-center bg-white border border-gray-300 rounded-lg py-4 ${
         loading ? 'opacity-50' : ''
       }`}

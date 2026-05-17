@@ -63,6 +63,7 @@ export default function SigninScreen() {
     <KeyboardAvoidingView
       className="flex-1 bg-white"
       behavior={RNPlatform.OS === 'ios' ? 'padding' : 'height'}
+      testID="signin-screen"
     >
       <View className="flex-1 justify-center px-8">
         <View className="mb-8">
@@ -85,6 +86,7 @@ export default function SigninScreen() {
               autoCapitalize="none"
               keyboardType="email-address"
               editable={!loading}
+              testID="signin-email-input"
             />
           </View>
 
@@ -97,6 +99,7 @@ export default function SigninScreen() {
               onChangeText={setPassword}
               secureTextEntry
               editable={!loading}
+              testID="signin-password-input"
             />
           </View>
         </View>
@@ -104,6 +107,7 @@ export default function SigninScreen() {
         <TouchableOpacity
           onPress={handleSignin}
           disabled={loading}
+          testID="signin-submit"
           className={`bg-green-500 rounded-lg py-4 mb-4 ${loading ? 'opacity-50' : ''}`}
         >
           <Text className="text-white text-center font-semibold text-lg">

@@ -92,7 +92,7 @@ export default function ConversationSettingsScreen() {
             <Text style={{ fontSize: 18, fontWeight: '600', color: '#111827' }}>{displayName}</Text>
             {platform && (
               <View style={{ marginTop: 6 }}>
-                <PlatformBadge platform={platform as Platform} size="sm" />
+                <PlatformBadge platform={platform as Platform} size={14} />
               </View>
             )}
           </View>

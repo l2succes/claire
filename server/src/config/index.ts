@@ -47,6 +47,7 @@ const envSchema = z.object({
   // Security
   JWT_SECRET: z.string(),
   ENCRYPTION_KEY: z.string(),
+  CORS_ORIGINS: z.string().optional(),
   
   // Monitoring
   SENTRY_DSN: z.string().url().optional(),
@@ -118,6 +119,12 @@ export const redisConfig = config.REDIS_URL
 export const whatsappConfig = {
   sessionPath: config.WHATSAPP_SESSION_PATH,
   puppeteerHeadless: config.PUPPETEER_HEADLESS,
+};
+
+export const serverConfig = {
+  corsOrigins: config.CORS_ORIGINS
+    ? config.CORS_ORIGINS.split(',').map((origin) => origin.trim()).filter(Boolean)
+    : ['https://claire.app'],
 };
 
 export const openaiConfig = {

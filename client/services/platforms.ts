@@ -9,12 +9,16 @@ import axios, { AxiosError } from 'axios';
 import { supabase } from './supabase';
 import {
   Platform,
+  PlatformStatus,
+  AuthMethod,
   PlatformInfo,
   PlatformSession,
   AuthData,
   ConnectPlatformResponse,
   PlatformStatusResponse,
   DisconnectResponse,
+  InstagramLoginStep,
+  InstagramLoginSubmission,
 } from '../types/platform';
 
 export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001';
@@ -182,12 +186,29 @@ export const platformsApi = {
    * Start Instagram login via bridge HTTP API.
    * Returns sessionId, loginId, stepId to pass into instagramLoginSubmit.
    */
-  async instagramLoginStart(): Promise<{ sessionId: string; loginId: string; stepId: string }> {
-    const response = await api.post<{ success: boolean; sessionId: string; loginId: string; stepId: string }>(
+  async instagramLoginStart(client: 'native' | 'web' = 'native'): Promise<InstagramLoginStep> {
+    const response = await api.post<{
+      success: boolean;
+      sessionId: string;
+      loginId: string;
+      stepId: string;
+      stepType?: InstagramLoginStep['stepType'];
+      instructions?: string;
+      loginUrl?: string;
+      requiredCookies?: string[];
+    }>(
       '/platforms/instagram/login/start',
-      {}
+      { client }
     );
-    return { sessionId: response.data.sessionId, loginId: response.data.loginId, stepId: response.data.stepId };
+    return {
+      sessionId: response.data.sessionId,
+      loginId: response.data.loginId,
+      stepId: response.data.stepId,
+      stepType: response.data.stepType,
+      instructions: response.data.instructions,
+      loginUrl: response.data.loginUrl,
+      requiredCookies: response.data.requiredCookies,
+    };
   },
 
   /**
@@ -197,11 +218,11 @@ export const platformsApi = {
     sessionId: string,
     loginId: string,
     stepId: string,
-    cookies: Record<string, string>
+    submission: InstagramLoginSubmission
   ): Promise<{ success: boolean; userLoginId?: string }> {
     const response = await api.post<{ success: boolean; userLoginId?: string }>(
       '/platforms/instagram/login/submit',
-      { sessionId, loginId, stepId, cookies }
+      { sessionId, loginId, stepId, ...submission }
     );
     return response.data;
   },
@@ -257,8 +278,8 @@ export const pollAuthStatus = (
           id: sessionId,
           platform,
           userId: '',
-          status: 'failed' as const,
-          authMethod: 'qr_code' as const,
+          status: PlatformStatus.FAILED,
+          authMethod: AuthMethod.QR_CODE,
           createdAt: new Date().toISOString(),
           error: 'Authentication timed out',
         });
