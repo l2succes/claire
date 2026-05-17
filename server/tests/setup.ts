@@ -60,6 +60,16 @@ jest.mock('ioredis', () => {
   return Redis;
 });
 
+// Mock Winston logger
+jest.mock('../src/utils/logger', () => ({
+  logger: {
+    info: jest.fn(),
+    error: jest.fn(),
+    warn: jest.fn(),
+    debug: jest.fn(),
+  },
+}));
+
 // Global test utilities
 (global as any).testUtils = {
   generateMockUser: () => ({

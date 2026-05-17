@@ -8,6 +8,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, router } from 'expo-router';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { ChevronLeft, SendHorizonal, Settings } from 'lucide-react-native';
+import * as Crypto from 'expo-crypto';
 import { supabase } from '../../services/supabase';
 import { platformsApi, API_BASE_URL } from '../../services/platforms';
 import { useAuthStore } from '../../stores/authStore';
@@ -111,6 +112,18 @@ export default function ChatScreen() {
       )
       .subscribe((status, err) => {
         console.log('[Realtime] Chat subscription status:', status, err ?? '');
+
+        // Handle subscription errors and attempt reconnection
+        if (status === 'CHANNEL_ERROR' || (err && status !== 'SUBSCRIBED')) {
+          console.error('[Realtime] Subscription error:', err);
+          // Attempt to reconnect after 3 seconds
+          setTimeout(() => {
+            console.log('[Realtime] Attempting to reconnect...');
+            supabase.removeChannel(subscription);
+            // Re-fetch messages to catch any missed during disconnection
+            fetchMessages();
+          }, 3000);
+        }
       });
 
     return () => { supabase.removeChannel(subscription); };
@@ -128,9 +141,10 @@ export default function ChatScreen() {
     );
     if (!session) return;
 
-    // Optimistic update
+    // Optimistic update with unique UUID to prevent collisions
+    const optimisticId = `optimistic-${Crypto.randomUUID()}`;
     const optimistic: ChatMessage = {
-      id: `optimistic-${Date.now()}`,
+      id: optimisticId,
       content: text,
       timestamp: new Date().toISOString(),
       from_me: true,

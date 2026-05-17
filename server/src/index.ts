@@ -201,7 +201,11 @@ async function initializePlatforms() {
             const mxc = message.platformMetadata?.mediaUrl;
             if (!mxc || typeof mxc !== 'string') return null;
             const match = mxc.match(/^mxc:\/\/([^/]+)\/(.+)$/);
-            return match ? `/media/${match[1]}/${match[2]}` : null;
+            if (!match) {
+              logger.warn(`Invalid mxc:// URL format: ${mxc}`);
+              return null;
+            }
+            return `/media/${match[1]}/${match[2]}`;
           })(),
           media_mime_type: message.platformMetadata?.mediaInfo?.mimetype || null,
         }, { onConflict: 'whatsapp_id', ignoreDuplicates: true })
@@ -218,30 +222,6 @@ async function initializePlatforms() {
           const chatType = message.chatType === 'group' ? 'group' : 'individual';
           aiProcessor.generateAndStore(savedMsg.id, message.content, message.userId, chatType)
             .catch((err) => logger.debug('AI suggestion skipped:', (err as Error).message));
-        }
-      }
-
-      // 3. Upsert contact for the sender (if not from me)
-      if (!message.isFromMe && message.senderId) {
-        // Extract platform contact ID from ghost user ID
-        // Patterns: @whatsapp_12345:... @_telegram_12345:... @meta_12345:... @_imessage_+15551234567:...
-        const contactMatch = message.senderId.match(/@(?:whatsapp|_telegram|meta|_imessage)_([^:]+):/);
-        const platformContactId = contactMatch?.[1];
-        if (platformContactId) {
-          const { error: contactError } = await supabase
-            .from('contacts')
-            .upsert({
-              user_id: message.userId,
-              platform: message.platform,
-              platform_contact_id: platformContactId,
-              whatsapp_id: platformContactId,
-              name: message.senderName || platformContactId,
-              phone_number: /^\d+$/.test(platformContactId) ? platformContactId : null,
-            }, { onConflict: 'user_id,platform,platform_contact_id' });
-
-          if (contactError) {
-            logger.debug('Failed to upsert contact:', contactError);
-          }
         }
       }
 

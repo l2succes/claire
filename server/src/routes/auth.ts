@@ -4,7 +4,7 @@ import path from 'path';
 import { whatsappAuth } from '../auth/whatsapp-auth';
 import { supabase } from '../services/supabase';
 import { validateRequest } from '../middleware/validation';
-import { requireAuth } from '../middleware/auth';
+import { requireAuth, rateLimit } from '../middleware/auth';
 import { logger } from '../utils/logger';
 
 const router = Router();
@@ -324,8 +324,9 @@ router.delete(
 /**
  * POST /auth/login
  * Login with email/password (Supabase auth)
+ * Rate limited: 5 requests per minute
  */
-router.post('/login', async (req: Request, res: Response) => {
+router.post('/login', rateLimit(5, 60000), async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
 
@@ -351,8 +352,9 @@ router.post('/login', async (req: Request, res: Response) => {
 /**
  * POST /auth/signup
  * Sign up with email/password
+ * Rate limited: 5 requests per minute
  */
-router.post('/signup', async (req: Request, res: Response) => {
+router.post('/signup', rateLimit(5, 60000), async (req: Request, res: Response) => {
   try {
     const { email, password, name } = req.body;
 

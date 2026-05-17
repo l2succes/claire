@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { aiProcessor } from '../services/ai-processor';
 import { responseCache } from '../services/response-cache';
 import { validateRequest } from '../middleware/validation';
-import { requireAuth } from '../middleware/auth';
+import { requireAuth, rateLimit } from '../middleware/auth';
 import { logger } from '../utils/logger';
 
 const router = Router();
@@ -37,9 +37,11 @@ const getAnalyticsSchema = z.object({
 
 /**
  * Generate AI response suggestions
+ * Rate limited: 20 requests per minute to prevent API abuse
  */
-router.post('/responses/generate', 
+router.post('/responses/generate',
   requireAuth,
+  rateLimit(20, 60000),
   validateRequest(generateResponseSchema),
   async (req: Request, res: Response) => {
     try {

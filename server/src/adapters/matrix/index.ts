@@ -650,6 +650,11 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
       throw new Error('Session not found');
     }
 
+    // Check session status before attempting to send
+    if (session.status !== PlatformStatus.CONNECTED) {
+      throw new Error(`Cannot send message: session is ${session.status}. Please reconnect.`);
+    }
+
     const platform = this.sessionPlatforms.get(sessionId);
     if (!platform) {
       throw new Error('Session platform not found');

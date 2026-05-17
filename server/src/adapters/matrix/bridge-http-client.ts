@@ -38,31 +38,46 @@ export class BridgeHttpClient {
 
   private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
     const url = `${this.provisioningBase}${path}?user_id=${encodeURIComponent(this.matrixUserId)}`;
-    const res = await fetch(url, {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${this.sharedSecret}`,
-      },
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-    });
 
-    const text = await res.text();
-    let json: unknown;
+    // Add 30s timeout to prevent hanging
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000);
+
     try {
-      json = JSON.parse(text);
-    } catch {
-      throw new Error(`Bridge HTTP ${res.status}: ${text}`);
-    }
+      const res = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.sharedSecret}`,
+        },
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+        signal: controller.signal,
+      });
 
-    if (!res.ok) {
-      const err = (json as Record<string, string>).error
-        || (json as Record<string, string>).message
-        || text;
-      throw new Error(`Bridge HTTP ${res.status}: ${err}`);
-    }
+      const text = await res.text();
+      let json: unknown;
+      try {
+        json = JSON.parse(text);
+      } catch {
+        throw new Error(`Bridge HTTP ${res.status}: ${text}`);
+      }
 
-    return json as T;
+      if (!res.ok) {
+        const err = (json as Record<string, string>).error
+          || (json as Record<string, string>).message
+          || text;
+        throw new Error(`Bridge HTTP ${res.status}: ${err}`);
+      }
+
+      return json as T;
+    } catch (error) {
+      if ((error as Error).name === 'AbortError') {
+        throw new Error('Bridge HTTP request timed out after 30 seconds');
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 
   async getLoginFlows(): Promise<LoginFlow[]> {
