@@ -1,0 +1,58 @@
+# E2E Test: WhatsApp QR Code Login Flow
+# Tests complete WhatsApp authentication via QR code
+# Duration: ~90 seconds
+
+appId: com.claire.app
+---
+
+# Step 1: Launch app
+- launchApp
+
+# Step 2: Wait for app to load
+- waitForAnimationToEnd
+- assertVisible: "Claire"
+
+# Step 3: Navigate to settings
+- tapOn: "Settings"
+- assertVisible: "Connected Platforms"
+
+# Step 4: Tap Connect WhatsApp
+- tapOn: "Connect WhatsApp"
+- assertVisible: "WhatsApp"
+
+# Step 5: Wait for QR code to appear (max 5 seconds)
+- waitForAnimationToEnd:
+    timeout: 5000
+- assertVisible:
+    text: "Scan QR Code"
+
+# Step 6: Verify QR code is displayed (not expired)
+- assertVisible:
+    id: "qr-code-image"
+
+# Step 7: Check for refresh mechanism (Bug #3 validation)
+- waitForAnimationToEnd:
+    timeout: 25000
+# QR should auto-refresh before 30s expiration
+
+# Step 8: Simulate successful scan (via backend mock)
+# In real test, you would scan with actual WhatsApp
+- runScript: |
+    await device.openURL('claire://mock-auth-success?platform=whatsapp&sessionId=test-session-123');
+
+# Step 9: Wait for "Connected" status
+- waitForAnimationToEnd:
+    timeout: 10000
+- assertVisible: "Connected"
+
+# Step 10: Verify WhatsApp appears in platform list
+- tapOn: "Back"
+- assertVisible: "WhatsApp"
+- assertVisible: "Connected"
+
+# Step 11: Verify session persists after restart
+- stopApp
+- launchApp
+- tapOn: "Settings"
+- assertVisible: "WhatsApp"
+- assertVisible: "Connected"

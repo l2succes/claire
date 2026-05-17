@@ -1,0 +1,102 @@
+# E2E Test: Send and Receive Messages
+# Tests complete message flow with optimistic updates
+# Duration: ~120 seconds
+
+appId: com.claire.app
+---
+
+# Setup: Assume WhatsApp is already connected
+- launchApp
+- assertVisible: "Dashboard"
+
+# Step 1: Navigate to conversation list
+- tapOn: "Messages"
+- assertVisible: "Conversations"
+
+# Step 2: Open first conversation (or create test conversation)
+- tapOn:
+    index: 0
+    id: "conversation-item"
+
+# Step 3: Verify chat screen loaded
+- assertVisible:
+    id: "chat-header"
+- assertVisible:
+    id: "message-input"
+
+# Step 4: Type a test message
+- tapOn:
+    id: "message-input"
+- inputText: "Hello, this is a Maestro E2E test message"
+
+# Step 5: Send message
+- tapOn:
+    id: "send-button"
+
+# Step 6: Verify optimistic message appears immediately (Bug #7 validation)
+- assertVisible: "Hello, this is a Maestro E2E test message"
+
+# Step 7: Wait for server confirmation (message status changes)
+- waitForAnimationToEnd:
+    timeout: 3000
+
+# Step 8: Verify no duplicate messages (Bug #1 & #5 validation)
+- runScript: |
+    const messages = await device.findAll({ text: "Hello, this is a Maestro E2E test message" });
+    if (messages.length > 1) {
+      throw new Error('Duplicate message detected!');
+    }
+
+# Step 9: Simulate incoming message from backend
+- runScript: |
+    await device.openURL('claire://mock-incoming-message?chatId=test-chat&content=Test+response+from+contact');
+
+# Step 10: Verify incoming message appears
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertVisible: "Test response from contact"
+
+# Step 11: Verify AI suggestion card appears (if enabled)
+- scroll:
+    direction: DOWN
+- assertVisible:
+    id: "smart-card-tray"
+    optional: true
+
+# Step 12: Send image message (media test)
+- tapOn:
+    id: "attachment-button"
+- tapOn: "Photo"
+- tapOn:
+    index: 0
+    id: "photo-thumbnail"
+
+# Step 13: Verify image preview
+- assertVisible:
+    id: "image-preview"
+
+# Step 14: Send image
+- tapOn: "Send"
+
+# Step 15: Verify image message in chat (Bug #6 media URL validation)
+- waitForAnimationToEnd:
+    timeout: 5000
+- assertVisible:
+    id: "message-media"
+
+# Step 16: Tap image to view full size
+- tapOn:
+    id: "message-media"
+- assertVisible:
+    id: "full-image-viewer"
+
+# Step 17: Close image viewer
+- tapOn: "Close"
+
+# Step 18: Test realtime sync - message arrives while in chat (Bug #8 validation)
+- runScript: |
+    await device.openURL('claire://mock-incoming-message?chatId=test-chat&content=Realtime+sync+test');
+
+- waitForAnimationToEnd:
+    timeout: 2000
+- assertVisible: "Realtime sync test"

@@ -4,8 +4,10 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import { config, platformConfig, matrixConfig } from './config';
 import { logger, stream } from './utils/logger';
+import { initializeSentry, Sentry } from './utils/sentry';
 import { supabase } from './services/supabase';
 import { sessionMonitor } from './services/session-monitor';
+import { redis } from './services/redis';
 import authRoutes from './routes/auth';
 import messageRoutes from './routes/messages';
 import aiRoutes from './routes/ai';
@@ -19,8 +21,15 @@ import { imessageAdapter } from './adapters/imessage';
 import { instagramAdapter } from './adapters/instagram';
 import { MatrixBridgeAdapter } from './adapters/matrix';
 
+// Initialize Sentry first (Phase 4)
+initializeSentry();
+
 const app = express();
 const PORT = config.PORT;
+
+// Sentry request handler must be first middleware (Phase 4)
+app.use(Sentry.Handlers.requestHandler());
+app.use(Sentry.Handlers.tracingHandler());
 
 // Middleware
 app.use(helmet());
@@ -73,24 +82,47 @@ app.get('/media/:server/:mediaId', async (req, res) => {
   }
 });
 
-// Health check
+// Enhanced health check with dependency checks
 app.get('/health', async (req, res) => {
-  const health = {
+  const health: any = {
     status: 'ok',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     environment: config.NODE_ENV,
+    checks: {
+      database: false,
+      redis: false,
+    },
+    memory: process.memoryUsage(),
   };
-  
-  res.json(health);
+
+  try {
+    // Check Supabase connection
+    const { error: dbError } = await supabase.from('users').select('count').limit(1);
+    health.checks.database = !dbError;
+
+    // Check Redis connection
+    const pingResult = await redis.ping();
+    health.checks.redis = pingResult === 'PONG';
+  } catch (error) {
+    health.status = 'degraded';
+    logger.error('Health check dependency error:', error);
+  }
+
+  // Return 503 if critical dependencies are down
+  const statusCode = health.checks.database && health.checks.redis ? 200 : 503;
+  res.status(statusCode).json(health);
 });
+
+// Sentry error handler must be before other error handlers (Phase 4)
+app.use(Sentry.Handlers.errorHandler());
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   logger.error('Unhandled error:', err);
-  
+
   res.status(err.status || 500).json({
-    error: config.NODE_ENV === 'production' 
+    error: config.NODE_ENV === 'production'
       ? 'Internal server error'
       : err.message,
   });

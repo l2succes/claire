@@ -1,0 +1,103 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  quality-gate:
+    name: Quality Gate
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: |
+          bun install
+          cd server && bun install
+          cd ../client && bun install
+
+      - name: Run server tests with coverage threshold
+        working-directory: ./server
+        run: bunx jest --coverage --ci
+        # Jest will fail if coverage is below 70% (enforced in jest.config.js)
+
+      - name: Run client tests
+        working-directory: ./client
+        run: bunx jest --coverage --ci
+
+      - name: Lint check
+        run: bun run lint
+
+      - name: Type check
+        run: |
+          cd server && bun run typecheck
+          cd ../client && bun run typecheck
+
+      - name: Build validation
+        run: |
+          cd server && bun run build
+          cd ../client && bunx expo export:web
+
+  deploy-server:
+    name: Deploy Server to Railway
+    runs-on: ubuntu-latest
+    needs: quality-gate
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy to Railway
+        run: |
+          npm install -g @railway/cli
+          railway up --service claire-server
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+  deploy-client:
+    name: Build & Deploy Client
+    runs-on: ubuntu-latest
+    needs: quality-gate
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+
+      - name: Install dependencies
+        working-directory: ./client
+        run: bun install
+
+      - name: Build production app with EAS
+        working-directory: ./client
+        run: |
+          bun install -g eas-cli
+          eas build --platform ios --profile production --non-interactive
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+  notify:
+    name: Notify Deployment
+    runs-on: ubuntu-latest
+    needs: [deploy-server, deploy-client]
+    if: always()
+
+    steps:
+      - name: Deployment status
+        run: |
+          if [ "${{ needs.deploy-server.result }}" == "success" ] && [ "${{ needs.deploy-client.result }}" == "success" ]; then
+            echo "✅ Deployment successful"
+          else
+            echo "❌ Deployment failed"
+            exit 1
+          fi

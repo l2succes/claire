@@ -1,0 +1,67 @@
+# E2E Test: Session Recovery After Restart
+# Tests session persistence and reconnection (Bug #3 validation)
+# Duration: ~60 seconds
+
+appId: com.claire.app
+---
+
+# Setup: Ensure we have a connected session
+- launchApp
+- tapOn: "Settings"
+- assertVisible: "Connected Platforms"
+
+# Step 1: Verify WhatsApp is connected
+- assertVisible: "WhatsApp"
+- assertVisible: "Connected"
+
+# Step 2: Note the session details
+- runScript: |
+    const session = await device.getText({ id: "whatsapp-session-details" });
+    device.setVariable('originalSession', session);
+
+# Step 3: Force close the app
+- stopApp
+
+# Step 4: Wait a moment
+- runScript: await new Promise(r => setTimeout(r, 2000));
+
+# Step 5: Relaunch app
+- launchApp
+
+# Step 6: Navigate to settings
+- tapOn: "Settings"
+
+# Step 7: Verify session is still connected (not disconnected)
+- assertVisible: "WhatsApp"
+- assertVisible: "Connected"
+
+# Step 8: Verify session details match (same session restored)
+- runScript: |
+    const currentSession = await device.getText({ id: "whatsapp-session-details" });
+    const original = device.getVariable('originalSession');
+    if (currentSession !== original) {
+      throw new Error('Session was not properly restored!');
+    }
+
+# Step 9: Test that messages can be sent immediately (session is functional)
+- tapOn: "Messages"
+- tapOn:
+    index: 0
+    id: "conversation-item"
+- tapOn:
+    id: "message-input"
+- inputText: "Testing session recovery"
+- tapOn:
+    id: "send-button"
+
+# Step 10: Verify message sent successfully
+- assertVisible: "Testing session recovery"
+
+# Step 11: Verify selfGhostId is preserved (sender detection works)
+- runScript: |
+    // Check that messages from me are correctly identified
+    const myMessage = await device.find({ text: "Testing session recovery" });
+    const isFromMe = await myMessage.getAttribute('data-from-me');
+    if (isFromMe !== 'true') {
+      throw new Error('selfGhostId not preserved - sender detection failed!');
+    }

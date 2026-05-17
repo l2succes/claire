@@ -1,0 +1,20 @@
+# Maestro Configuration for Claire E2E Tests
+# https://maestro.mobile.dev/
+
+appId: com.claire.app
+
+# Default settings for all flows
+env:
+  TEST_USER_EMAIL: "maestro-test@example.com"
+  TEST_USER_PASSWORD: "MaestroTest123!"
+  API_BASE_URL: "http://localhost:3001"
+
+# Timeout settings
+timeout: 30000
+
+# Screenshot on failure
+onFlowComplete:
+  - takeScreenshot
+
+# Retry settings for flaky tests
+retries: 2

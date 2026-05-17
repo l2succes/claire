@@ -32,15 +32,23 @@ jobs:
           cd server && bun install
           cd ../client && bun install
 
-      - name: Run tests
+      - name: Run tests with coverage
         working-directory: ${{ matrix.working-directory }}
-        run: bunx jest --coverage
-      
+        run: bunx jest --coverage --coverageReporters=json-summary --coverageReporters=lcov
+
       - name: Upload coverage
         uses: actions/upload-artifact@v4
         with:
           name: coverage-${{ matrix.name }}
           path: ${{ matrix.working-directory }}/coverage
+
+      - name: Coverage report comment
+        if: github.event_name == 'pull_request'
+        uses: romeovs/lcov-reporter-action@v0.3.1
+        with:
+          lcov-file: ${{ matrix.working-directory }}/coverage/lcov.info
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          delete-old-comments: true
 
   lint:
     runs-on: ubuntu-latest
