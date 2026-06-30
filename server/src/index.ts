@@ -13,6 +13,7 @@ import platformRoutes from './routes/platforms';
 import conversationRoutes from './routes/conversations';
 import { platformManager } from './adapters';
 import { aiProcessor } from './services/ai-processor';
+import { promiseDetector } from './services/promise-detector';
 import { whatsappAdapter } from './adapters/whatsapp';
 import { telegramAdapter } from './adapters/telegram';
 import { imessageAdapter } from './adapters/imessage';
@@ -225,6 +226,12 @@ async function initializePlatforms() {
           const chatType = message.chatType === 'group' ? 'group' : 'individual';
           aiProcessor.generateAndStore(savedMsg.id, message.content, message.userId, chatType)
             .catch((err) => logger.debug('AI suggestion skipped:', (err as Error).message));
+        }
+
+        // Detect and persist promises (fire-and-forget, both inbound and outbound)
+        if (savedMsg?.id && message.content?.trim()) {
+          promiseDetector.detectPromises(savedMsg.id, message.content, message.userId, message.isFromMe)
+            .catch((err) => logger.debug('Promise detection skipped:', (err as Error).message));
         }
       }
 
