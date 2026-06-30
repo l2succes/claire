@@ -9,7 +9,13 @@ module.exports = {
     'tests/services/promise-detector.test.ts',
   ],
   transform: {
-    '^.+\\.ts$': 'ts-jest',
+    '^.+\\.ts$': ['ts-jest', {
+      tsconfig: {
+        noUnusedLocals: false,
+        noUnusedParameters: false,
+        noImplicitReturns: false,
+      },
+    }],
   },
   collectCoverageFrom: [
     'src/**/*.ts',
