@@ -20,14 +20,14 @@ autonomously, until the bound in `$ARGUMENTS` is hit. Full spec: `docs/AUTONOMOU
 - Backlog exists: `gh issue list --label ready` returns issues. If empty, tell the user to run `/claire-loop-init` and stop.
 
 ## One iteration
-1. **Sync:** `git checkout main && git pull --ff-only`.
+1. **Sync:** `git fetch origin` (branches are cut from `origin/main` in step 3, so this works in a fresh clone *and* a multi-worktree checkout where local `main` may be held by another worktree — never rely on `git checkout main`).
 2. **Pick the next ticket:**
    ```bash
    gh issue list --state open --label ready --json number,title,labels,milestone \
      --jq 'map(.pri = (([.labels[].name]|map(select(test("^p[0-9]$")))|first) // "p9")) | sort_by(.milestone.title, .pri) | .[] | "#\(.number) [\(.milestone.title|split(" ")[0])] \(.pri) \(.title)"'
    ```
    Choose the **lowest milestone (M0 first), then lowest priority number (p0 first)**.
-   Skip any issue labeled `blocked`, or whose body says `Depends on:` an issue that is still open. (Hint: M0 issues #1–#5 are prerequisites for most e2e work — finish them first.)
+   Skip any issue labeled `blocked`, or whose body says `Depends on:` an issue that is still open. (Hint: M0 issues **#7 web build, #8 MOCK_BRIDGE, #9 testIDs, #10 Playwright, #11 CI** are prerequisites for most e2e work — finish them first, roughly in that order.)
 3. **Claim:** comment `🔁 loop: starting` on the issue. Create an isolated branch:
    `git worktree add ../wt-<num> -b feat/<area>-<slug> origin/main` (or a normal branch if not parallelizing).
 4. **Implement** strictly to the issue's Acceptance Criteria. Reuse existing code (see `docs/AUTONOMOUS_LOOP.md` "reuse map"). Add/extend mock Playwright e2e + unit tests.
