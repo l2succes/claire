@@ -1,6 +1,9 @@
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { platformCapabilities } from '../utils/platformCapabilities';
+import { supabase } from './supabase';
+
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001';
 
 if (platformCapabilities.supportsNativeNotifications) {
   Notifications.setNotificationHandler({
@@ -52,6 +55,33 @@ export async function setupNotifications() {
   } catch (error) {
     console.error('Error getting push token:', error);
     return null;
+  }
+}
+
+/**
+ * Register an Expo push token with the server.
+ * No-op on web (graceful).
+ */
+export async function registerPushToken(token: string): Promise<void> {
+  if (!platformCapabilities.supportsNativeNotifications) {
+    logWebNoop('registerPushToken');
+    return;
+  }
+
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) return;
+
+    await fetch(`${API_BASE_URL}/push-tokens`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ token }),
+    });
+  } catch (error) {
+    console.error('Failed to register push token:', error);
   }
 }
 
