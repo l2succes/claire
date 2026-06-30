@@ -160,6 +160,83 @@ describe('/platforms', () => {
 });
 
 // ---------------------------------------------------------------------------
+// /promises
+// ---------------------------------------------------------------------------
+describe('/promises', () => {
+  it('GET / — 401 without token', async () => {
+    const res = await request.get('/promises');
+    expect(res.status).toBe(401);
+    expect(res.body).toHaveProperty('error');
+  });
+
+  it('GET / — 200 with valid token, returns array', async () => {
+    const res = await request
+      .get('/promises')
+      .set('Authorization', 'Bearer valid-token');
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.promises)).toBe(true);
+    expect(typeof res.body.total).toBe('number');
+  });
+
+  it('GET /:id — 200 for existing promise', async () => {
+    const res = await request
+      .get('/promises/promise-1')
+      .set('Authorization', 'Bearer valid-token');
+    expect(res.status).toBe(200);
+    expect(res.body.promise).toHaveProperty('id', 'promise-1');
+    expect(res.body.promise).toHaveProperty('status');
+    expect(res.body.promise).toHaveProperty('content');
+  });
+
+  it('GET /:id — 404 for unknown promise', async () => {
+    const res = await request
+      .get('/promises/no-such-promise')
+      .set('Authorization', 'Bearer valid-token');
+    expect(res.status).toBe(404);
+    expect(res.body).toHaveProperty('error');
+  });
+
+  it('PATCH /:id — 401 without token', async () => {
+    const res = await request
+      .patch('/promises/promise-1')
+      .send({ status: 'completed' });
+    expect(res.status).toBe(401);
+  });
+
+  it('PATCH /:id — 200 marks promise completed', async () => {
+    const res = await request
+      .patch('/promises/promise-1')
+      .set('Authorization', 'Bearer valid-token')
+      .send({ status: 'completed' });
+    expect(res.status).toBe(200);
+    expect(res.body.promise).toHaveProperty('status', 'completed');
+  });
+
+  it('POST /:id/snooze — 200 returns updated deadline', async () => {
+    const until = new Date(Date.now() + 2 * 86_400_000).toISOString();
+    const res = await request
+      .post('/promises/promise-1/snooze')
+      .set('Authorization', 'Bearer valid-token')
+      .send({ until });
+    expect(res.status).toBe(200);
+    expect(res.body.promise).toHaveProperty('deadline', until);
+  });
+
+  it('DELETE /:id — 401 without token', async () => {
+    const res = await request.delete('/promises/promise-1');
+    expect(res.status).toBe(401);
+  });
+
+  it('DELETE /:id — 200 with valid token', async () => {
+    const res = await request
+      .delete('/promises/promise-1')
+      .set('Authorization', 'Bearer valid-token');
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // 404 catch-all
 // ---------------------------------------------------------------------------
 describe('404 handler', () => {
