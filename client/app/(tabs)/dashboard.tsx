@@ -32,6 +32,7 @@ interface Message {
   status?: 'sent' | 'delivered' | 'read' | 'pending';
   unread_count?: number;
   has_ai_response?: boolean;
+  has_open_promise?: boolean;
   chat_id: string;
   contact_phone?: string;
   platform?: Platform;
@@ -107,6 +108,8 @@ export default function DashboardScreen() {
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  // chat_id -> true for chats that have at least one open promise
+  const [openPromiseChatIds, setOpenPromiseChatIds] = useState<Set<string>>(new Set());
 
   const user = useAuthStore((state) => state.user);
   const { initialize, isInitialized } = usePlatformStore();
@@ -115,6 +118,23 @@ export default function DashboardScreen() {
   useEffect(() => {
     if (!isInitialized) initialize();
   }, [initialize, isInitialized]);
+
+  const fetchOpenPromises = useCallback(async () => {
+    if (!user?.id) return;
+    const { data } = await supabase
+      .from('promises')
+      .select('chat_id')
+      .eq('user_id', user.id)
+      .in('status', ['pending', 'open'])
+      .not('chat_id', 'is', null);
+    if (data) {
+      setOpenPromiseChatIds(new Set(data.map((r: any) => r.chat_id as string)));
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    fetchOpenPromises();
+  }, [fetchOpenPromises]);
 
   const fetchMessages = useCallback(async (pageNum = 0, append = false) => {
     if (!user?.id) return;
@@ -317,7 +337,7 @@ export default function DashboardScreen() {
         renderItem={({ item }) => (
           <Animated.View entering={MESSAGE_ROW_ENTERING} layout={MESSAGE_ROW_LAYOUT}>
             <MessageCard
-              message={item}
+              message={{ ...item, has_open_promise: openPromiseChatIds.has(item.chat_id) }}
               onPress={() => navigateToChat(item)}
               onLongPress={() => console.log('options:', item.id)}
             />

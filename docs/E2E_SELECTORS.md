@@ -78,6 +78,14 @@ All stable `testID` values (rendered as `data-testid` on web via React Native We
 | `promises-list` | Promises list (added by #18) |
 | `promise-item-<id>` | Individual promise row (added by #18) |
 | `promise-complete-<id>` | Mark-complete button (added by #18) |
+| `promise-snooze-<id>` | Snooze button (added by #18) |
+| `promise-source-<id>` | Source chat link button (added by #18) |
+
+### Messages / Inbox — promise badge (#19)
+
+| Selector | Element |
+|---|---|
+| `message-card-promise-badge-<id>` | Amber "Promise" badge on a `MessageCard` row when the chat has ≥1 open promise |
 
 ### Settings (`/(tabs)/settings`)
 

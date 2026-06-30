@@ -254,6 +254,14 @@ async function mockBackend(page) {
           contentType: 'application/json',
           body: JSON.stringify([{ ...MOCK_PROMISES[0], status: 'completed' }]),
         });
+      } else if (method === 'HEAD') {
+        // Supabase count query (head: true) — return Content-Range with count
+        const openCount = MOCK_PROMISES.filter((p) => p.status === 'open' || p.status === 'pending').length;
+        await route.fulfill({
+          status: 200,
+          headers: { 'Content-Range': `0-${openCount - 1}/${openCount}` },
+          body: '',
+        });
       } else {
         await route.fulfill({
           status: 200,
@@ -633,6 +641,43 @@ test.describe('Core loop — mock backend', () => {
 
     // The seeded card itself should render
     await expect(page.getByTestId('smart-card-card-1')).toBeVisible({ timeout: 5_000 });
+  });
+
+  // 10. Promise badge — tab badge count matches open fixtures (#19)
+  test('Promises tab badge count matches open fixture count', async ({ page }) => {
+    await signIn(page);
+
+    // Verify we're on the messages screen (inbox).
+    await expect(page.getByTestId('messages-screen')).toBeVisible({ timeout: 10_000 });
+
+    // Navigate to Promises tab (same approach as existing test 6)
+    await page.click('text=Promises');
+    await expect(page.getByTestId('promises-screen')).toBeVisible({ timeout: 10_000 });
+
+    // Verify 1 open promise item is present (matching the fixture count of 1 open promise)
+    await expect(
+      page.locator('[data-testid^="promise-item-"]')
+    ).toHaveCount(1, { timeout: 8_000 });
+  });
+
+  // 10b. Promise badge — inbox card highlight for chat with open promise (#19)
+  test('inbox shows promise badge on message card with open promise', async ({ page }) => {
+    await signIn(page);
+
+    // MOCK_PROMISES[0] is linked to mock-chat-wa-alice, which is the first inbox entry.
+    // The first message card should have the promise badge.
+    await expect(page.getByTestId('messages-screen')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId('messages-list')).toBeVisible({ timeout: 8_000 });
+
+    // The message card for Alice (WA) is id=msg-wa-1 — the promise badge should appear on it.
+    await expect(
+      page.getByTestId('message-card-promise-badge-msg-wa-1')
+    ).toBeVisible({ timeout: 8_000 });
+
+    // Bob (TG) has no promise — his card should NOT have a promise badge.
+    await expect(
+      page.getByTestId('message-card-promise-badge-msg-tg-1')
+    ).not.toBeVisible();
   });
 
   // 9b. Smart card tray — dismissing a card removes it

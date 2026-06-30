@@ -18,6 +18,7 @@ interface MessageCardProps {
     status?: 'sent' | 'delivered' | 'read' | 'pending';
     unread_count?: number;
     has_ai_response?: boolean;
+    has_open_promise?: boolean;
     platform?: Platform;
   };
   onPress: () => void;
@@ -111,6 +112,16 @@ export function MessageCard({ message, onPress, onLongPress }: MessageCardProps)
               <View className="bg-green-500 rounded-full px-2 py-0.5 mr-2">
                 <Text className="text-white text-xs font-semibold">
                   {message.unread_count}
+                </Text>
+              </View>
+            )}
+            {message.has_open_promise && (
+              <View
+                testID={`message-card-promise-badge-${message.id}`}
+                className="bg-amber-100 dark:bg-amber-900 rounded-full px-2 py-0.5 mr-2"
+              >
+                <Text className="text-amber-700 dark:text-amber-300 text-xs">
+                  Promise
                 </Text>
               </View>
             )}
