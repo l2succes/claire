@@ -5,6 +5,7 @@ import { responseCache } from '../services/response-cache';
 import { validateRequest } from '../middleware/validation';
 import { requireAuth } from '../middleware/auth';
 import { logger } from '../utils/logger';
+import { supabase } from '../services/supabase';
 
 const router = Router();
 
@@ -277,6 +278,101 @@ router.delete('/cache/user',
         success: false,
         error: 'Failed to clear cache',
       });
+    }
+  }
+);
+
+/**
+ * GET /ai/morning-brief
+ * Returns a morning-brief summary text + list of urgent (unanswered) messages.
+ *
+ * Urgency is scored by wait time, category bonus, and content keywords — mirroring
+ * the client-side `computeUrgencyScore` in `client/utils/urgency.ts`.
+ */
+router.get('/morning-brief',
+  requireAuth,
+  async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      // Fetch most recent message per chat that we haven't replied to
+      const since = new Date(Date.now() - 7 * 24 * 3600_000).toISOString(); // last 7 days
+      const { data: rows, error } = await supabase
+        .from('messages')
+        .select(`id, chat_id, content, timestamp, from_me, is_group, contact_name, chat_name, platform,
+                 chats(name, platform_chat_id)`)
+        .eq('user_id', userId)
+        .eq('from_me', false)
+        .gte('timestamp', since)
+        .order('timestamp', { ascending: false })
+        .limit(200);
+
+      if (error) throw error;
+
+      // Deduplicate to one message per chat, compute urgency
+      const chatMap = new Map<string, {
+        id: string; chat_id: string; contact_name?: string; chat_name?: string;
+        content: string; timestamp: string; from_me: boolean; is_group: boolean;
+        platform?: string; urgency_score: number;
+      }>();
+
+      for (const row of (rows || [])) {
+        const chatId = row.chat_id;
+        if (chatMap.has(chatId)) continue;
+
+        const waitHours = (Date.now() - new Date(row.timestamp).getTime()) / 3_600_000;
+        const waitScore = Math.min(50, waitHours * 5);
+        const content = (row.content || '').toLowerCase();
+        const contentBonus =
+          (content.includes('?') ? 8 : 0) +
+          (/urgent|asap|help|important|please/.test(content) ? 12 : 0);
+        const urgency_score = Math.min(100, Math.round(waitScore + contentBonus + 5));
+
+        chatMap.set(chatId, {
+          id: row.id,
+          chat_id: chatId,
+          contact_name: row.contact_name ?? undefined,
+          chat_name: (row.chats as any)?.name || row.chat_name || undefined,
+          content: row.content,
+          timestamp: row.timestamp,
+          from_me: row.from_me,
+          is_group: row.is_group,
+          platform: row.platform ?? undefined,
+          urgency_score,
+        });
+      }
+
+      const urgent_messages = Array.from(chatMap.values())
+        .filter(m => m.urgency_score >= 30)
+        .sort((a, b) => b.urgency_score - a.urgency_score)
+        .slice(0, 5);
+
+      // Build a brief text summary
+      const total = chatMap.size;
+      const urgentCount = urgent_messages.length;
+      let brief_text = '';
+      if (total === 0) {
+        brief_text = "You're all caught up — no unanswered messages.";
+      } else if (urgentCount === 0) {
+        brief_text = `You have ${total} unanswered conversation${total === 1 ? '' : 's'}, none urgent.`;
+      } else {
+        const names = urgent_messages
+          .slice(0, 2)
+          .map(m => m.contact_name || m.chat_name || 'someone')
+          .join(' and ');
+        brief_text = `${urgentCount} message${urgentCount === 1 ? '' : 's'} need${urgentCount === 1 ? 's' : ''} your attention — starting with ${names}.`;
+      }
+
+      res.json({
+        success: true,
+        data: { brief_text, urgent_messages },
+      });
+    } catch (error) {
+      logger.error('Error building morning brief:', error);
+      res.status(500).json({ success: false, error: 'Failed to build morning brief' });
     }
   }
 );
