@@ -75,5 +75,6 @@ docker/matrix/data/
 # OS
 Thumbs.db
 
-# Claude
-.claude/
+# Claude (ignore local settings/plans, but keep shared project commands tracked)
+.claude/*
+!.claude/commands/
