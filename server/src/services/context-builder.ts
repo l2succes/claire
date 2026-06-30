@@ -1,5 +1,6 @@
 import { logger } from '../utils/logger';
 import { supabase } from './supabase';
+import { memoryService, MemoryEntry } from './memory-service';
 
 interface ConversationContext {
   messages: ContextMessage[];
@@ -7,6 +8,7 @@ interface ConversationContext {
   userPreferences: UserPreferences | null;
   metadata: ContextMetadata;
   chatCategory?: string;
+  contactMemory?: MemoryEntry[];
 }
 
 interface ContextMessage {
@@ -71,12 +73,18 @@ export class ContextBuilder {
         this.getChatCategory(currentMessage.chat_id, userId),
       ]);
 
+      // Fetch persisted memory for this contact (non-blocking; falls back to [] on error)
+      const contactMemory = currentMessage.contact_id
+        ? await memoryService.getContactMemory(userId, currentMessage.contact_id)
+        : [];
+
       return {
         messages,
         contact,
         userPreferences,
         metadata,
         chatCategory: categoryRow,
+        contactMemory,
       };
     } catch (error) {
       logger.error('Error building conversation context:', error);
@@ -314,6 +322,12 @@ export class ContextBuilder {
         const sender = msg.fromMe ? 'You' : 'Them';
         prompt += `${sender}: ${msg.content}\n`;
       });
+      prompt += '\n';
+    }
+
+    // Inject persisted contact memory
+    if (context.contactMemory && context.contactMemory.length > 0) {
+      prompt += memoryService.formatForPrompt(context.contactMemory);
       prompt += '\n';
     }
 
