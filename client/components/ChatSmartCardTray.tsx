@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, Animated, Keyboard } from 'react-native';
+import { Text, TouchableOpacity, Animated, Keyboard } from 'react-native';
 import { Sparkles, ChevronUp, ChevronDown } from 'lucide-react-native';
 import { SmartCardList } from './SmartCardList';
 import type { SmartCard } from '../types/conversationSettings';

@@ -4,7 +4,6 @@ import { messageIngestion } from '../services/message-ingestion';
 import { messageQueue } from '../services/message-queue';
 import { realtimeSync } from '../services/realtime-sync';
 import { whatsappAuth } from '../auth/whatsapp-auth';
-import { supabase } from '../services/supabase';
 import { validateRequest } from '../middleware/validation';
 import { requireAuth } from '../middleware/auth';
 import { logger } from '../utils/logger';
@@ -122,7 +121,7 @@ router.post(
   async (req: Request, res: Response) => {
     try {
       const userId = req.user?.id;
-      const { sessionId, to, message, quotedMessageId } = req.body;
+      const { sessionId, to, message } = req.body;
 
       // Verify session belongs to user
       const session = await whatsappAuth.getSession(sessionId);

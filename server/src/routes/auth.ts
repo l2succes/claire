@@ -106,7 +106,7 @@ router.get('/callback', (req: Request, res: Response) => {
 
           if (accessToken) {
             // Redirect to app with tokens
-            window.location.href = \`/\#access_token=\${accessToken}&refresh_token=\${refreshToken || ''}\`;
+            window.location.href = \`/#access_token=\${accessToken}&refresh_token=\${refreshToken || ''}\`;
           } else {
             // No tokens, redirect to signin
             window.location.href = '/';
@@ -129,7 +129,6 @@ router.post('/session/create-test', async (req: Request, res: Response) => {
       return res.status(403).json({ error: 'Test mode not available in production' });
     }
 
-    const testUserId = 'test-user-123';
     const sessionId = `test-${Date.now()}`;
     
     // Return mock QR code for testing

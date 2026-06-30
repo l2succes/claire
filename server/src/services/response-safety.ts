@@ -35,7 +35,7 @@ class ResponseSafety {
   private unprofessionalPatterns = [
     /\b(love you|babe|honey|sweetheart)\b/i,
     /\b(drunk|wasted|party hard)\b/i,
-    /[😍😘💋❤️💕]/,
+    /[\u{1F60D}\u{1F618}\u{1F48B}\u2764\u{1F495}]/u,
   ];
 
   /**
@@ -239,7 +239,7 @@ class ResponseSafety {
   private makeProfessional(suggestion: string): string {
     return suggestion
       .replace(/\b(love you|babe|honey|sweetheart)\b/gi, 'appreciate you')
-      .replace(/[😍😘💋❤️💕]/g, '')
+      .replace(/[\u{1F60D}\u{1F618}\u{1F48B}\u2764\u{1F495}]/gu, '')
       .replace(/\b(drunk|wasted)\b/gi, 'busy')
       .replace(/party hard/gi, 'celebrate');
   }

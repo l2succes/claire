@@ -93,7 +93,7 @@ app.get('/health', async (req, res) => {
 });
 
 // Error handling middleware
-app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+app.use((err: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {
   logger.error('Unhandled error:', err);
   
   res.status(err.status || 500).json({
@@ -210,7 +210,7 @@ async function initializePlatforms() {
             const match = mxc.match(/^mxc:\/\/([^/]+)\/(.+)$/);
             return match ? `/media/${match[1]}/${match[2]}` : null;
           })(),
-          media_mime_type: message.platformMetadata?.mediaInfo?.mimetype || null,
+          media_mime_type: (message.platformMetadata?.mediaInfo as Record<string, unknown>)?.mimetype as string || null,
         }, { onConflict: 'whatsapp_id', ignoreDuplicates: true })
         .select('id')
         .maybeSingle();
