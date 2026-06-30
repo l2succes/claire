@@ -169,6 +169,30 @@ export function createApp() {
   });
 
   // ------------------------------------------------------------------
+  // /notifications
+  // ------------------------------------------------------------------
+  app.post('/notifications/push/register', requireAuth, (req, res): void => {
+    const { token } = req.body ?? {};
+    if (!token) {
+      res.status(400).json({ error: 'Missing token' });
+      return;
+    }
+    if (!token.startsWith('ExponentPushToken[') && !token.startsWith('ExpoPushToken[')) {
+      res.status(400).json({ error: `Invalid Expo push token: ${token}` });
+      return;
+    }
+    res.json({ success: true });
+  });
+  app.post('/notifications/push/deregister', requireAuth, (req, res): void => {
+    const { token } = req.body ?? {};
+    if (!token) {
+      res.status(400).json({ error: 'Missing token' });
+      return;
+    }
+    res.json({ success: true });
+  });
+
+  // ------------------------------------------------------------------
   // 404 catch-all
   // ------------------------------------------------------------------
   app.use((_req, res) => {

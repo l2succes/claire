@@ -16,6 +16,7 @@ import aiRoutes from './routes/ai';
 import platformRoutes from './routes/platforms';
 import conversationRoutes from './routes/conversations';
 import preferencesRoutes from './routes/preferences';
+import notificationsRoutes from './routes/notifications';
 import { aiRateLimit, authRateLimit } from './middleware/rate-limit';
 import { platformManager } from './adapters';
 import { aiProcessor } from './services/ai-processor';
@@ -24,6 +25,7 @@ import { telegramAdapter } from './adapters/telegram';
 import { imessageAdapter } from './adapters/imessage';
 import { instagramAdapter } from './adapters/instagram';
 import { MatrixBridgeAdapter } from './adapters/matrix';
+import { pushNotificationService } from './services/push-notification';
 
 // Initialise Sentry as early as possible (no-op when SENTRY_DSN is unset)
 initSentry();
@@ -62,6 +64,7 @@ app.use('/ai', aiRateLimit, aiRoutes);
 app.use('/platforms', platformRoutes);
 app.use('/conversations', conversationRoutes);
 app.use('/preferences', preferencesRoutes);
+app.use('/notifications', notificationsRoutes);
 
 // Handle Supabase email confirmation redirects
 app.get('/', (req, res) => {
@@ -283,6 +286,26 @@ async function initializePlatforms() {
           const chatType = message.chatType === 'group' ? 'group' : 'individual';
           aiProcessor.generateAndStore(savedMsg.id, message.content, message.userId, chatType)
             .catch((err) => logger.debug('AI suggestion skipped:', (err as Error).message));
+        }
+
+        // Send push notification for new incoming messages (fire-and-forget)
+        if (!message.isFromMe && message.userId) {
+          const senderLabel = message.senderName || message.senderId || 'Someone';
+          const pushBody = message.content?.trim()
+            ? message.content.slice(0, 120)
+            : '(media message)';
+          pushNotificationService
+            .sendToUser(message.userId, {
+              title: senderLabel,
+              body: pushBody,
+              sound: 'default',
+              data: {
+                chatId: message.chatId,
+                platform: message.platform,
+                messageId: message.platformMessageId,
+              },
+            })
+            .catch((err) => logger.debug('Push notification skipped:', (err as Error).message));
         }
       }
 
