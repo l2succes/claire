@@ -44,7 +44,7 @@ The backlog is created (idempotently) by `scripts/loop-init.sh` via `/claire-loo
 
 ## Driver algorithm (one iteration)
 
-1. **Sync** — `git checkout main && git pull --ff-only`.
+1. **Sync** — `git fetch origin`. Branches are cut from `origin/main` in step 3, so this is correct in both a fresh clone and a multi-worktree checkout (don't rely on `git checkout main`, which fails if another worktree holds it).
 2. **Pick** the next `ready` issue (query above). M0 first; within a milestone, p0 → p3. Respect `Depends on:`.
 3. **Claim** — comment `🔁 loop: starting`; create an isolated branch (worktree): `git worktree add ../wt-<num> -b feat/<area>-<slug> origin/main`.
 4. **Build** to the issue's Acceptance Criteria. Reuse existing code (see reuse map). Add/extend **mock Playwright e2e** + unit tests.
