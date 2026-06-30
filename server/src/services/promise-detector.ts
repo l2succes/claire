@@ -2,17 +2,60 @@ import { logger } from '../utils/logger';
 import { supabase } from './supabase';
 import { aiProcessor } from './ai-processor';
 
-interface DetectedPromise {
-  type: 'commitment' | 'deadline' | 'appointment' | 'task';
-  content: string;
-  deadline?: Date;
-  priority: 'low' | 'medium' | 'high';
-  confidence: number;
+// Typed wrapper to call the (private) callAI method on aiProcessor.
+// We use a function rather than a module-level constant so that tests can
+// replace aiProcessor's callAI at any time without rebinding.
+function _callAI(system: string, user: string): Promise<string> {
+  return (aiProcessor as unknown as { callAI(s: string, u: string): Promise<string> }).callAI(system, user);
 }
 
+export interface DetectedPromise {
+  type: 'commitment' | 'deadline' | 'appointment' | 'task';
+  /** The extracted promise text */
+  text: string;
+  /** ISO deadline string, if detected */
+  deadline?: string;
+  /** Contact name mentioned in the promise, if any */
+  contact?: string;
+  priority: 'low' | 'medium' | 'high';
+  confidence: number;
+  /** True when this result came from the regex fallback, not LLM */
+  fromFallback?: boolean;
+}
+
+const LLM_SYSTEM_PROMPT = `You are a promise and commitment extractor. Given a message, identify any explicit or implied promises, commitments, deadlines, or task obligations.
+
+Return ONLY a valid JSON object with this exact shape:
+{
+  "promises": [
+    {
+      "type": "commitment" | "deadline" | "appointment" | "task",
+      "text": "the extracted promise text, verbatim or paraphrased",
+      "deadline": "ISO 8601 date string if a deadline is present, else null",
+      "contact": "name of person the promise is made to or about, else null",
+      "priority": "low" | "medium" | "high",
+      "confidence": 0.0 to 1.0
+    }
+  ]
+}
+
+Rules:
+- If no promises are found, return {"promises": []}.
+- "commitment": the speaker explicitly commits to doing something (I will, I'll, I promise, going to).
+- "deadline": a hard due date is mentioned (by Friday, before EOD, etc.).
+- "appointment": a scheduled meeting/call/session.
+- "task": an obligation or reminder (need to, have to, remind me).
+- Set confidence based on clarity: explicit phrase = 0.85-1.0, implied = 0.5-0.84.
+- Omit deadline if a specific date cannot be determined.`;
+
+// Simple in-process LRU-like cache for promise detection results (avoids
+// burning LLM tokens for identical messages within the same process lifetime).
+const detectionCache = new Map<string, DetectedPromise[]>();
+const DETECTION_CACHE_MAX = 256;
+
 class PromiseDetector {
-  // Common promise/commitment patterns
-  private patterns = {
+  // Regex patterns — kept as fallback when LLM is unavailable or returns empty
+  private readonly patterns: Record<string, RegExp[]> = {
     commitment: [
       /\b(i will|i'll|i shall|i promise|i commit|i guarantee)\b/i,
       /\b(will do|will send|will call|will meet|will be there)\b/i,
@@ -38,7 +81,9 @@ class PromiseDetector {
   };
 
   /**
-   * Detect promises in a message
+   * Detect promises in a message.
+   * Tries LLM-based extraction first; falls back to regex on failure or when AI
+   * is not configured.
    */
   async detectPromises(
     messageId: string,
@@ -46,28 +91,27 @@ class PromiseDetector {
     userId: string,
     fromMe: boolean
   ): Promise<DetectedPromise[]> {
+    if (!content || content.trim().length === 0) return [];
+
     try {
-      const promises: DetectedPromise[] = [];
-      
-      // Pattern-based detection
-      const patternPromises = this.detectWithPatterns(content);
-      promises.push(...patternPromises);
-      
-      // AI-based detection for complex promises
-      if (content.length > 20) {
-        const aiPromises = await this.detectWithAI(content);
-        promises.push(...aiPromises);
+      let promises: DetectedPromise[] = [];
+
+      if (aiProcessor.isConfigured) {
+        promises = await this.detectWithLLM(content);
       }
-      
-      // Deduplicate and merge similar promises
-      const uniquePromises = this.deduplicatePromises(promises);
-      
-      // Store detected promises
-      if (uniquePromises.length > 0) {
-        await this.storePromises(messageId, userId, uniquePromises, fromMe);
+
+      // Fall back to regex when LLM returns nothing or is unavailable
+      if (promises.length === 0) {
+        promises = this.detectWithPatterns(content);
       }
-      
-      return uniquePromises;
+
+      const unique = this.deduplicatePromises(promises);
+
+      if (unique.length > 0) {
+        await this.storePromises(messageId, userId, unique, fromMe);
+      }
+
+      return unique;
     } catch (error) {
       logger.error('Error detecting promises:', error);
       return [];
@@ -75,273 +119,195 @@ class PromiseDetector {
   }
 
   /**
-   * Pattern-based promise detection
+   * LLM-based promise extraction using the shared aiProcessor.
+   * Uses a lightweight in-process cache to avoid duplicate API calls.
    */
-  private detectWithPatterns(content: string): DetectedPromise[] {
-    const detected: DetectedPromise[] = [];
-    
-    // Check each pattern type
-    for (const [type, patterns] of Object.entries(this.patterns)) {
-      for (const pattern of patterns) {
-        if (pattern.test(content)) {
-          const match = content.match(pattern);
-          if (match) {
-            detected.push({
-              type: type as any,
-              content: this.extractPromiseContent(content, match.index || 0),
-              deadline: this.extractDeadline(content),
-              priority: this.determinePriority(content),
-              confidence: 0.7,
-            });
-            break; // Only one match per type
-          }
-        }
-      }
+  async detectWithLLM(content: string): Promise<DetectedPromise[]> {
+    if (detectionCache.has(content)) {
+      logger.debug('Promise detector: in-process cache hit');
+      return detectionCache.get(content)!;
     }
-    
-    return detected;
-  }
 
-  /**
-   * AI-based promise detection
-   */
-  private async detectWithAI(content: string): Promise<DetectedPromise[]> {
+    const userPrompt = `Extract all promises, commitments, deadlines, and tasks from this message:\n\n"${content}"`;
+
+    let raw: string;
     try {
-      const prompt = `Analyze this message for any promises, commitments, deadlines, or tasks:
-      "${content}"
-      
-      Return JSON array of detected items:
-      [{
-        "type": "commitment|deadline|appointment|task",
-        "content": "extracted promise text",
-        "deadline": "ISO date if applicable",
-        "priority": "low|medium|high",
-        "confidence": 0.0-1.0
-      }]
-      
-      If no promises found, return empty array.`;
+      raw = await _callAI(LLM_SYSTEM_PROMPT, userPrompt);
+    } catch (err) {
+      logger.warn('Promise detector LLM call failed, will fall back to regex:', (err as Error).message);
+      return [];
+    }
 
-      // Use GPT-3.5 for faster, cheaper detection
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: 'gpt-3.5-turbo',
-          messages: [
-            { role: 'system', content: 'You are a promise detection assistant.' },
-            { role: 'user', content: prompt },
-          ],
-          temperature: 0,
-          max_tokens: 300,
-          response_format: { type: 'json_object' },
-        }),
-      });
+    try {
+      // Strip optional markdown fences
+      const jsonText = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+      const parsed = JSON.parse(jsonText);
+      const promises: DetectedPromise[] = (parsed.promises ?? [])
+        .map((p: any) => ({
+          type: (['commitment', 'deadline', 'appointment', 'task'].includes(p.type)
+            ? p.type
+            : 'commitment') as DetectedPromise['type'],
+          text: typeof p.text === 'string' ? p.text : '',
+          deadline: p.deadline ?? undefined,
+          contact: p.contact ?? undefined,
+          priority: (['low', 'medium', 'high'].includes(p.priority)
+            ? p.priority
+            : 'medium') as DetectedPromise['priority'],
+          confidence: typeof p.confidence === 'number' ? Math.min(1, Math.max(0, p.confidence)) : 0.7,
+        }))
+        .filter((p: DetectedPromise) => p.text.length > 0);
 
-      const data = await response.json();
-      const result = JSON.parse(data.choices[0].message.content || '{"promises":[]}');
-      
-      return result.promises || [];
-    } catch (error) {
-      logger.error('Error in AI promise detection:', error);
+      // Evict oldest entry when cache is full
+      if (detectionCache.size >= DETECTION_CACHE_MAX) {
+        detectionCache.delete(detectionCache.keys().next().value as string);
+      }
+      detectionCache.set(content, promises);
+
+      return promises;
+    } catch (parseErr) {
+      logger.warn('Promise detector: failed to parse LLM JSON:', (parseErr as Error).message);
       return [];
     }
   }
 
   /**
-   * Extract promise content from message
+   * Regex-based fallback. Returns DetectedPromise[] with fromFallback: true.
+   * Exposed as public so it can be unit-tested independently.
    */
-  private extractPromiseContent(content: string, startIndex: number): string {
-    // Extract sentence containing the promise
+  detectWithPatterns(content: string): DetectedPromise[] {
+    const detected: DetectedPromise[] = [];
+
+    for (const [type, patterns] of Object.entries(this.patterns)) {
+      for (const pattern of patterns) {
+        const match = content.match(pattern);
+        if (match) {
+          detected.push({
+            type: type as DetectedPromise['type'],
+            text: this.extractSentence(content, match.index ?? 0),
+            deadline: this.extractDeadline(content),
+            priority: this.determinePriority(content),
+            confidence: 0.7,
+            fromFallback: true,
+          });
+          break; // one match per type
+        }
+      }
+    }
+
+    return detected;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Private helpers
+  // ---------------------------------------------------------------------------
+
+  private extractSentence(content: string, startIndex: number): string {
     const sentences = content.split(/[.!?]+/);
     for (const sentence of sentences) {
-      if (content.indexOf(sentence) <= startIndex && 
-          content.indexOf(sentence) + sentence.length >= startIndex) {
+      const idx = content.indexOf(sentence);
+      if (idx <= startIndex && idx + sentence.length >= startIndex) {
         return sentence.trim();
       }
     }
     return content.substring(startIndex, Math.min(startIndex + 100, content.length));
   }
 
-  /**
-   * Extract deadline from content
-   */
-  private extractDeadline(content: string): Date | undefined {
+  private extractDeadline(content: string): string | undefined {
     const now = new Date();
-    
-    // Tomorrow
+
     if (/\btomorrow\b/i.test(content)) {
-      const tomorrow = new Date(now);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      return tomorrow;
+      const d = new Date(now);
+      d.setDate(d.getDate() + 1);
+      return d.toISOString();
     }
-    
-    // Today/Tonight
-    if (/\b(today|tonight)\b/i.test(content)) {
-      return now;
-    }
-    
-    // Next week
+    if (/\b(today|tonight)\b/i.test(content)) return now.toISOString();
     if (/\bnext week\b/i.test(content)) {
-      const nextWeek = new Date(now);
-      nextWeek.setDate(nextWeek.getDate() + 7);
-      return nextWeek;
+      const d = new Date(now);
+      d.setDate(d.getDate() + 7);
+      return d.toISOString();
     }
-    
-    // Next month
     if (/\bnext month\b/i.test(content)) {
-      const nextMonth = new Date(now);
-      nextMonth.setMonth(nextMonth.getMonth() + 1);
-      return nextMonth;
+      const d = new Date(now);
+      d.setMonth(d.getMonth() + 1);
+      return d.toISOString();
     }
-    
-    // Day of week
+
     const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
     for (let i = 0; i < days.length; i++) {
-      const regex = new RegExp(`\\b${days[i]}\\b`, 'i');
-      if (regex.test(content)) {
-        const targetDay = i;
-        const currentDay = now.getDay();
-        let daysToAdd = targetDay - currentDay;
-        if (daysToAdd <= 0) daysToAdd += 7;
-        
-        const targetDate = new Date(now);
-        targetDate.setDate(targetDate.getDate() + daysToAdd);
-        return targetDate;
+      if (new RegExp(`\\b${days[i]}\\b`, 'i').test(content)) {
+        const diff = ((i - now.getDay() + 7) % 7) || 7;
+        const d = new Date(now);
+        d.setDate(d.getDate() + diff);
+        return d.toISOString();
       }
     }
-    
-    // Time pattern (e.g., "3:30 PM")
-    const timeMatch = content.match(/\b(\d{1,2}):(\d{2})\s*(am|pm)?\b/i);
-    if (timeMatch) {
-      const hour = parseInt(timeMatch[1]);
-      const minute = parseInt(timeMatch[2]);
-      const isPM = timeMatch[3]?.toLowerCase() === 'pm';
-      
-      const deadline = new Date(now);
-      deadline.setHours(isPM && hour !== 12 ? hour + 12 : hour);
-      deadline.setMinutes(minute);
-      
-      // If time has passed today, assume tomorrow
-      if (deadline < now) {
-        deadline.setDate(deadline.getDate() + 1);
-      }
-      
-      return deadline;
-    }
-    
+
     return undefined;
   }
 
-  /**
-   * Determine priority based on keywords
-   */
   private determinePriority(content: string): 'low' | 'medium' | 'high' {
-    const highPriorityWords = /\b(urgent|asap|immediately|critical|important|priority|emergency)\b/i;
-    const lowPriorityWords = /\b(whenever|when you can|no rush|if possible|maybe)\b/i;
-    
-    if (highPriorityWords.test(content)) return 'high';
-    if (lowPriorityWords.test(content)) return 'low';
+    if (/\b(urgent|asap|immediately|critical|important|priority|emergency)\b/i.test(content)) return 'high';
+    if (/\b(whenever|when you can|no rush|if possible|maybe)\b/i.test(content)) return 'low';
     return 'medium';
   }
 
-  /**
-   * Deduplicate similar promises
-   */
   private deduplicatePromises(promises: DetectedPromise[]): DetectedPromise[] {
     const unique: DetectedPromise[] = [];
-    
-    for (const promise of promises) {
-      const isDuplicate = unique.some(p => 
-        p.type === promise.type &&
-        this.similarityScore(p.content, promise.content) > 0.8
+    for (const p of promises) {
+      const isDupe = unique.some(
+        (u) => u.type === p.type && this.similarity(u.text, p.text) > 0.8
       );
-      
-      if (!isDuplicate) {
-        unique.push(promise);
-      }
+      if (!isDupe) unique.push(p);
     }
-    
     return unique;
   }
 
-  /**
-   * Calculate similarity between two strings
-   */
-  private similarityScore(str1: string, str2: string): number {
-    const longer = str1.length > str2.length ? str1 : str2;
-    const shorter = str1.length > str2.length ? str2 : str1;
-    
-    if (longer.length === 0) return 1.0;
-    
-    const editDistance = this.levenshteinDistance(longer, shorter);
-    return (longer.length - editDistance) / longer.length;
+  private similarity(a: string, b: string): number {
+    const longer = a.length > b.length ? a : b;
+    const shorter = a.length > b.length ? b : a;
+    if (longer.length === 0) return 1;
+    return (longer.length - this.editDistance(longer, shorter)) / longer.length;
   }
 
-  /**
-   * Levenshtein distance for string similarity
-   */
-  private levenshteinDistance(str1: string, str2: string): number {
-    const matrix: number[][] = [];
-    
-    for (let i = 0; i <= str2.length; i++) {
-      matrix[i] = [i];
-    }
-    
-    for (let j = 0; j <= str1.length; j++) {
-      matrix[0][j] = j;
-    }
-    
-    for (let i = 1; i <= str2.length; i++) {
-      for (let j = 1; j <= str1.length; j++) {
-        if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
-          matrix[i][j] = matrix[i - 1][j - 1];
-        } else {
-          matrix[i][j] = Math.min(
-            matrix[i - 1][j - 1] + 1,
-            matrix[i][j - 1] + 1,
-            matrix[i - 1][j] + 1
-          );
-        }
+  private editDistance(s1: string, s2: string): number {
+    const m: number[][] = Array.from({ length: s2.length + 1 }, (_, i) => [i]);
+    for (let j = 0; j <= s1.length; j++) m[0][j] = j;
+    for (let i = 1; i <= s2.length; i++) {
+      for (let j = 1; j <= s1.length; j++) {
+        m[i][j] =
+          s2[i - 1] === s1[j - 1]
+            ? m[i - 1][j - 1]
+            : 1 + Math.min(m[i - 1][j - 1], m[i][j - 1], m[i - 1][j]);
       }
     }
-    
-    return matrix[str2.length][str1.length];
+    return m[s2.length][s1.length];
   }
 
-  /**
-   * Store detected promises in database
-   */
   private async storePromises(
     messageId: string,
     userId: string,
     promises: DetectedPromise[],
     fromMe: boolean
-  ) {
+  ): Promise<void> {
     try {
-      const records = promises.map(promise => ({
+      const records = promises.map((p) => ({
         message_id: messageId,
         user_id: userId,
-        type: promise.type,
-        content: promise.content,
-        deadline: promise.deadline?.toISOString(),
-        priority: promise.priority,
-        confidence: promise.confidence,
+        type: p.type,
+        content: p.text,
+        deadline: p.deadline ?? null,
+        priority: p.priority,
+        confidence: p.confidence,
         from_me: fromMe,
         status: 'pending',
         created_at: new Date().toISOString(),
       }));
-      
       await supabase.from('promises').insert(records);
-      
-      logger.info(`Stored ${promises.length} promises for message ${messageId}`);
+      logger.info(`Stored ${promises.length} promise(s) for message ${messageId}`);
     } catch (error) {
       logger.error('Error storing promises:', error);
     }
   }
 }
 
-// Export singleton instance
 export const promiseDetector = new PromiseDetector();
