@@ -346,6 +346,13 @@ class AIProcessor {
       return [];
     }
   }
+
+  /**
+   * Summarize a block of text (e.g. a group-chat transcript).
+   */
+  async summarizeText(systemPrompt: string, userPrompt: string): Promise<string> {
+    return this.callAI(systemPrompt, userPrompt);
+  }
 }
 
 export const aiProcessor = new AIProcessor();

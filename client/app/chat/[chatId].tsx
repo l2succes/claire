@@ -17,6 +17,7 @@ import { ChatSmartCardTray } from '../../components/ChatSmartCardTray';
 import { ResponseSuggestion } from '../../components/ResponseSuggestion';
 import { ContactClarificationCard } from '../../components/ContactClarificationCard';
 import { useConversationSettingsStore } from '../../stores/conversationSettingsStore';
+import { GroupChatSummary } from '../../components/GroupChatSummary';
 import { Platform } from '../../types/platform';
 
 interface ChatMessage {
@@ -369,6 +370,11 @@ export default function ChatScreen() {
         behavior={RNPlatform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={0}
       >
+        {/* Group Summary Banner — only shown for group chats */}
+        {is_group === '1' && chatId && (
+          <GroupChatSummary chatId={chatId} />
+        )}
+
         {loading ? (
           <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }} testID="chat-loading">
             <ActivityIndicator size="large" color="#10b981" />
