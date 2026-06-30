@@ -5,7 +5,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useAuthStore } from '../stores/authStore';
-import { setupNotifications } from '../services/notifications';
+import { setupNotifications, registerPushToken } from '../services/notifications';
 import '../global.css';
 
 SplashScreen.preventAutoHideAsync();
@@ -26,7 +26,10 @@ export default function RootLayout() {
     async function init() {
       try {
         await initialize();
-        await setupNotifications();
+        const pushToken = await setupNotifications();
+        if (pushToken) {
+          await registerPushToken(pushToken);
+        }
       } catch (e) {
         console.error('Init error:', e);
       } finally {

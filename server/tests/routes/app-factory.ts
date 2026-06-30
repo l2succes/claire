@@ -160,6 +160,18 @@ export function createApp() {
   });
 
   // ------------------------------------------------------------------
+  // /push-tokens
+  // ------------------------------------------------------------------
+  app.post('/push-tokens', requireAuth, (req, res): void => {
+    const { token } = req.body ?? {};
+    if (!token) {
+      res.status(400).json({ error: 'Missing required fields' });
+      return;
+    }
+    res.json({ success: true });
+  });
+
+  // ------------------------------------------------------------------
   // 404 catch-all
   // ------------------------------------------------------------------
   app.use((_req, res) => {

@@ -300,6 +300,37 @@ describe('/preferences', () => {
 });
 
 // ---------------------------------------------------------------------------
+// /push-tokens
+// ---------------------------------------------------------------------------
+describe('/push-tokens', () => {
+  it('POST / — 401 without token', async () => {
+    const res = await request
+      .post('/push-tokens')
+      .send({ token: 'ExponentPushToken[abc123]' });
+    expect(res.status).toBe(401);
+    expect(res.body).toHaveProperty('error');
+  });
+
+  it('POST / — 400 missing token field', async () => {
+    const res = await request
+      .post('/push-tokens')
+      .set('Authorization', 'Bearer valid-token')
+      .send({});
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty('error');
+  });
+
+  it('POST / — 200 persists valid token', async () => {
+    const res = await request
+      .post('/push-tokens')
+      .set('Authorization', 'Bearer valid-token')
+      .send({ token: 'ExponentPushToken[abc123]' });
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // 404 catch-all
 // ---------------------------------------------------------------------------
 describe('404 handler', () => {
