@@ -143,7 +143,7 @@ export function ResponseSuggestion({
   }
 
   return (
-    <View className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 mx-4 mb-2">
+    <View className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 mx-4 mb-2" testID="ai-suggestion-strip">
       {/* Header */}
       <View className="flex-row items-center justify-between mb-2">
         <View className="flex-row items-center">
@@ -166,11 +166,12 @@ export function ResponseSuggestion({
       </View>
 
       {/* Suggestions */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} testID="ai-suggestion-scroll">
         {suggestions.map((suggestion, index) => (
           <View key={suggestion.id} className="mr-2">
             <TouchableOpacity
               onPress={() => handleSelectSuggestion(suggestion, index)}
+              testID={`ai-suggestion-chip-${index}`}
               className={`bg-white dark:bg-gray-800 rounded-lg p-2.5 min-w-[200] max-w-[280] ${
                 selectedIndex === index ? 'border-2 border-blue-500' : 'border border-gray-200 dark:border-gray-700'
               }`}
@@ -217,6 +218,7 @@ export function ResponseSuggestion({
                 </View>
                 <TouchableOpacity
                   onPress={() => handleSelectSuggestion(suggestion, index)}
+                  testID={`ai-suggestion-use-${index}`}
                   className="flex-row items-center bg-blue-500 rounded px-2 py-1"
                 >
                   <Send size={12} color="#ffffff" />

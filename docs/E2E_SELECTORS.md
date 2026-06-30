@@ -111,6 +111,15 @@ All stable `testID` values (rendered as `data-testid` on web via React Native We
 | `chat-input` | Message composer `TextInput` |
 | `chat-send-button` | Send `TouchableOpacity` |
 
+### AI Suggestion strip (`ResponseSuggestion`)
+
+| Selector | Element |
+|---|---|
+| `ai-suggestion-strip` | Root `View` (only visible when suggestions exist) |
+| `ai-suggestion-scroll` | Horizontal `ScrollView` containing chips |
+| `ai-suggestion-chip-<index>` | Individual suggestion card `TouchableOpacity` (0-based) |
+| `ai-suggestion-use-<index>` | "Use" button inside chip (0-based); tapping fills the composer |
+
 ---
 
 ## Platform auth modal
