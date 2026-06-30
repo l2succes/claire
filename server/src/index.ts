@@ -16,6 +16,7 @@ import aiRoutes from './routes/ai';
 import platformRoutes from './routes/platforms';
 import conversationRoutes from './routes/conversations';
 import preferencesRoutes from './routes/preferences';
+import autoReplyRoutes from './routes/auto-reply';
 import { aiRateLimit, authRateLimit } from './middleware/rate-limit';
 import seedRoutes from './routes/seed';
 import promiseRoutes from './routes/promises';
@@ -23,6 +24,8 @@ import pushTokenRoutes from './routes/push-tokens';
 import { platformManager } from './adapters';
 import { aiProcessor } from './services/ai-processor';
 import { promiseDetector } from './services/promise-detector';
+import { autoReplyEngine } from './services/auto-reply-engine';
+import { PlatformStatus } from './adapters/types';
 import { whatsappAdapter } from './adapters/whatsapp';
 import { telegramAdapter } from './adapters/telegram';
 import { imessageAdapter } from './adapters/imessage';
@@ -71,6 +74,7 @@ app.use('/preferences', preferencesRoutes);
 app.use('/seed', seedRoutes);
 app.use('/promises', promiseRoutes);
 app.use('/push-tokens', pushTokenRoutes);
+app.use('/auto-reply', autoReplyRoutes);
 
 // Handle Supabase email confirmation redirects
 app.get('/', (_req, res) => {
@@ -306,6 +310,42 @@ async function initializePlatforms() {
         if (savedMsg?.id && message.content?.trim()) {
           promiseDetector.detectPromises(savedMsg.id, message.content, message.userId, message.isFromMe)
             .catch((err) => logger.debug('Promise detection skipped:', (err as Error).message));
+        }
+
+        // Evaluate auto-reply rules for incoming messages (fire-and-forget)
+        if (!message.isFromMe && message.content?.trim()) {
+          autoReplyEngine.evaluate({
+            id: savedMsg?.id ?? message.platformMessageId,
+            userId: message.userId,
+            chatId: message.chatId,
+            platform: message.platform,
+            content: message.content,
+            senderName: message.senderName,
+          }).then(async (result) => {
+            if (result.fired && result.reply) {
+              logger.info(`Auto-reply rule "${result.ruleName}" fired — reply queued for chat ${message.chatId}`);
+              try {
+                const sessions = await platformManager.getUserSessions(message.userId);
+                const session = sessions.find(
+                  (candidate) =>
+                    candidate.platform === message.platform &&
+                    candidate.status === PlatformStatus.CONNECTED,
+                );
+                if (session) {
+                  await platformManager.sendMessage(
+                    message.platform,
+                    session.id,
+                    message.chatId,
+                    { content: result.reply },
+                  );
+                } else {
+                  logger.warn(`Auto-reply: no active session for user ${message.userId} on ${message.platform}`);
+                }
+              } catch (err) {
+                logger.warn('Auto-reply send failed:', (err as Error).message);
+              }
+            }
+          }).catch((err: Error) => logger.debug('Auto-reply evaluation skipped:', err.message));
         }
       }
 
