@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   ScrollView,
+  Modal,
 } from 'react-native';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Search, MessageCircle } from 'lucide-react-native';
@@ -39,6 +40,7 @@ interface Message {
   chat_id: string;
   contact_phone?: string;
   platform?: Platform;
+  snoozed_until?: string | null;
 }
 
 type FilterType = 'all' | 'unread' | 'groups' | 'ai';
@@ -116,6 +118,10 @@ export default function DashboardScreen() {
   // Morning brief + urgent messages from /ai/morning-brief
   const [briefText, setBriefText] = useState<string | null>(null);
   const [urgentMessages, setUrgentMessages] = useState<UrgentMessage[]>([]);
+  // Snooze: message currently being snoozed (shows modal picker)
+  const [snoozeTarget, setSnoozeTarget] = useState<Message | null>(null);
+  // Locally snoozed message IDs: hide from inbox immediately (optimistic)
+  const [locallySnoozeIds, setLocallySnoozeIds] = useState<Set<string>>(new Set());
 
   const user = useAuthStore((state) => state.user);
   const { initialize, isInitialized } = usePlatformStore();
@@ -166,22 +172,50 @@ export default function DashboardScreen() {
     fetchMorningBrief();
   }, [fetchMorningBrief]);
 
+  const handleSnooze = useCallback(async (msg: Message, snoozeMinutes: number) => {
+    setSnoozeTarget(null);
+    // Optimistic: hide immediately
+    setLocallySnoozeIds((prev) => new Set([...prev, msg.id]));
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      await fetch(`${API_BASE_URL}/messages/${msg.id}/snooze`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
+        body: JSON.stringify({ snooze_minutes: snoozeMinutes }),
+      });
+    } catch {
+      // If the server call fails, un-hide the message
+      setLocallySnoozeIds((prev) => {
+        const next = new Set(prev);
+        next.delete(msg.id);
+        return next;
+      });
+    }
+  }, []);
+
   const fetchMessages = useCallback(async (pageNum = 0, append = false) => {
     if (!user?.id) return;
     const pageSize = 20;
     const from = pageNum * pageSize;
     const to = from + pageSize - 1;
+    const now = new Date().toISOString();
     try {
       const { data, error, count } = await supabase
         .from('messages')
         .select(
           `id, content, timestamp, from_me, is_group, status, platform,
            chat_id, platform_message_id, contact_phone, contact_name,
+           snoozed_until,
            chats (name, platform_chat_id),
            ai_suggestions (id, confidence)`,
           { count: 'exact' }
         )
         .eq('user_id', user.id)
+        .or(`snoozed_until.is.null,snoozed_until.lte.${now}`)
         .order('timestamp', { ascending: false })
         .range(from, to);
 
@@ -208,6 +242,7 @@ export default function DashboardScreen() {
             has_ai_response: msg.ai_suggestions?.length > 0,
             unread_count: 0,
             platform,
+            snoozed_until: msg.snoozed_until ?? null,
           });
         }
       });
@@ -291,7 +326,13 @@ export default function DashboardScreen() {
   }, [user?.id, fetchMessages]);
 
   const filteredMessages = useMemo(() => {
-    let filtered = messages;
+    const now = new Date();
+    // Exclude messages that are currently snoozed (optimistic local OR server-side)
+    let filtered = messages.filter((m) => {
+      if (locallySnoozeIds.has(m.id)) return false;
+      if (m.snoozed_until && new Date(m.snoozed_until) > now) return false;
+      return true;
+    });
     if (platformFilter !== 'all') filtered = filtered.filter((m) => m.platform === platformFilter);
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
@@ -309,7 +350,7 @@ export default function DashboardScreen() {
       case 'ai':     filtered = filtered.filter((m) => m.has_ai_response); break;
     }
     return filtered;
-  }, [messages, searchQuery, activeFilter, platformFilter]);
+  }, [messages, searchQuery, activeFilter, platformFilter, locallySnoozeIds]);
 
   const navigateToChat = (msg: Message) => {
     router.push({
@@ -369,7 +410,7 @@ export default function DashboardScreen() {
             <MessageCard
               message={{ ...item, has_open_promise: openPromiseChatIds.has(item.chat_id) }}
               onPress={() => navigateToChat(item)}
-              onLongPress={() => console.log('options:', item.id)}
+              onLongPress={() => setSnoozeTarget(item)}
             />
           </Animated.View>
         )}
@@ -459,6 +500,52 @@ export default function DashboardScreen() {
           </View>
         }
       />
+
+      {/* Snooze picker modal */}
+      <Modal
+        visible={!!snoozeTarget}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSnoozeTarget(null)}
+        testID="snooze-modal"
+      >
+        <View
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }}
+          testID="snooze-modal-overlay"
+        >
+          <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 20 }}>
+            <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827', marginBottom: 16 }}>
+              Snooze until…
+            </Text>
+            {[
+              { label: 'Later today (3 hours)', minutes: 180, testID: 'snooze-option-3h' },
+              { label: 'Tonight (8 pm)', minutes: Math.max(30, (20 - new Date().getHours()) * 60), testID: 'snooze-option-tonight' },
+              { label: 'Tomorrow morning', minutes: 60 * (24 - new Date().getHours() + 8), testID: 'snooze-option-tomorrow' },
+              { label: 'Next week', minutes: 60 * 24 * 7, testID: 'snooze-option-week' },
+            ].map((opt) => (
+              <TouchableOpacity
+                key={opt.testID}
+                testID={opt.testID}
+                onPress={() => snoozeTarget && handleSnooze(snoozeTarget, opt.minutes)}
+                style={{
+                  paddingVertical: 14,
+                  borderBottomWidth: 1,
+                  borderBottomColor: '#f3f4f6',
+                }}
+              >
+                <Text style={{ fontSize: 15, color: '#374151' }}>{opt.label}</Text>
+              </TouchableOpacity>
+            ))}
+            <TouchableOpacity
+              testID="snooze-cancel"
+              onPress={() => setSnoozeTarget(null)}
+              style={{ paddingVertical: 14, alignItems: 'center' }}
+            >
+              <Text style={{ fontSize: 15, color: '#6b7280' }}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
