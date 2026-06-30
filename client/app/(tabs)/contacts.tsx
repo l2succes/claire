@@ -85,7 +85,7 @@ export default function ContactsScreen() {
   );
 
   return (
-    <View className="flex-1 bg-gray-50 dark:bg-gray-900">
+    <View className="flex-1 bg-gray-50 dark:bg-gray-900" testID="contacts-screen">
       {/* Search Bar */}
       <View className="bg-white dark:bg-gray-800 px-4 py-3 border-b border-gray-200 dark:border-gray-700">
         <View className="flex-row items-center bg-gray-100 dark:bg-gray-700 rounded-lg px-3 py-2">
@@ -96,6 +96,7 @@ export default function ContactsScreen() {
             placeholderTextColor="#6b7280"
             value={searchQuery}
             onChangeText={setSearchQuery}
+            testID="contacts-search-input"
           />
         </View>
       </View>
@@ -106,8 +107,9 @@ export default function ContactsScreen() {
         renderItem={renderContact}
         keyExtractor={(item) => item.id}
         contentContainerStyle={{ paddingVertical: 8 }}
+        testID="contacts-list"
         ListEmptyComponent={
-          <View className="flex-1 items-center justify-center py-20">
+          <View className="flex-1 items-center justify-center py-20" testID="contacts-empty">
             <User size={48} color="#9ca3af" />
             <Text className="text-gray-500 dark:text-gray-400 mt-4">
               {searchQuery ? 'No contacts found' : 'No contacts yet'}

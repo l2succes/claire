@@ -439,7 +439,7 @@ export default function ChatScreen() {
           />
           <TouchableOpacity
             onPress={handleSend}
-            disabled={!inputText.trim() || sending || (platform && !connectedSessions.some(s => s.platform === platform && s.status === 'connected'))}
+            disabled={!inputText.trim() || sending || (!!platform && !connectedSessions.some(s => s.platform === platform && s.status === 'connected'))}
             testID="chat-send-button"
             style={{
               width: 40,
