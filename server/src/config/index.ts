@@ -60,6 +60,9 @@ const envSchema = z.object({
   // Platform Mode: 'direct' uses native adapters, 'matrix' uses bridges
   PLATFORM_MODE: z.enum(['direct', 'matrix']).default('direct'),
 
+  // Mock bridge mode — replaces all adapters with scripted fixtures (no Docker required)
+  MOCK_BRIDGE: z.string().default('false').transform((val) => val === 'true'),
+
   // Matrix Configuration (required when PLATFORM_MODE=matrix)
   MATRIX_HOMESERVER_URL: z.string().url().optional(),
   MATRIX_SERVER_NAME: z.string().optional(),
@@ -175,4 +178,8 @@ export const matrixConfig = {
     apiId: config.TELEGRAM_API_ID,
     apiHash: config.TELEGRAM_API_HASH,
   },
+};
+
+export const mockBridgeConfig = {
+  enabled: config.MOCK_BRIDGE,
 };
