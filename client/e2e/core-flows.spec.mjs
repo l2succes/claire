@@ -415,6 +415,30 @@ test.describe('Core loop — mock backend', () => {
     ).toBeVisible({ timeout: 10_000 });
   });
 
+  // 5b. AI suggestion accept — tapping "Use" fills the composer
+  test('accepting AI suggestion fills the composer', async ({ page }) => {
+    await signIn(page);
+
+    await expect(
+      page.locator('[data-testid^="message-card-"]').first()
+    ).toBeVisible({ timeout: 8_000 });
+    await page.locator('[data-testid^="message-card-"]').first().click();
+
+    await expect(page.getByTestId('chat-screen')).toBeVisible({ timeout: 10_000 });
+
+    // Wait for the suggestion strip to appear
+    await expect(page.getByTestId('ai-suggestion-strip')).toBeVisible({ timeout: 10_000 });
+
+    // Tap the first "Use" button
+    await page.getByTestId('ai-suggestion-use-0').click();
+
+    // Composer should now contain the first suggestion text
+    await expect(page.getByTestId('chat-input')).toHaveValue(
+      'Sounds great, looking forward to it!',
+      { timeout: 5_000 }
+    );
+  });
+
   // 6. Promises tab — renders the promises screen
   test('Promises tab renders the promises screen', async ({ page }) => {
     await signIn(page);
