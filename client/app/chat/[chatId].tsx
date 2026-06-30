@@ -15,6 +15,7 @@ import { usePlatformStore } from '../../stores/platformStore';
 import { PlatformBadge } from '../../components/PlatformIcon';
 import { ChatSmartCardTray } from '../../components/ChatSmartCardTray';
 import { ResponseSuggestion } from '../../components/ResponseSuggestion';
+import { ContactClarificationCard } from '../../components/ContactClarificationCard';
 import { useConversationSettingsStore } from '../../stores/conversationSettingsStore';
 import { Platform } from '../../types/platform';
 
@@ -41,9 +42,20 @@ export default function ChatScreen() {
 
   const user = useAuthStore((state) => state.user);
   const connectedSessions = usePlatformStore((state) => state.connectedSessions);
-  const { settings: convSettings, fetchSettings: fetchConvSettings, dismissCard, markCardActed } = useConversationSettingsStore();
+  const {
+    settings: convSettings,
+    fetchSettings: fetchConvSettings,
+    dismissCard,
+    markCardActed,
+    updateProfile,
+    dismissClarificationCard,
+  } = useConversationSettingsStore();
   const insets = useSafeAreaInsets();
   const smartCards = convSettings[chatId!]?.smartCards ?? [];
+  const contactProfile = convSettings[chatId!]?.profile ?? null;
+  const clarificationDismissed = convSettings[chatId!]?.clarificationDismissed ?? false;
+  // Show clarification card for 1-on-1 chats that don't yet have a relationship set
+  const showClarificationCard = is_group !== '1' && !clarificationDismissed && !contactProfile?.relationship_context;
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -385,6 +397,19 @@ export default function ChatScreen() {
             chatId={chatId!}
             messageId={[...messages].reverse().find(m => !m.from_me)?.id ?? ''}
             onSelectSuggestion={(text) => setInputText(text)}
+          />
+        )}
+
+        {/* Contact Clarification Card */}
+        {showClarificationCard && (
+          <ContactClarificationCard
+            contactName={displayName}
+            onSelect={(relationship) => {
+              if (chatId && user?.id) {
+                updateProfile(chatId, user.id, { relationship_context: relationship });
+              }
+            }}
+            onDismiss={() => chatId && dismissClarificationCard(chatId)}
           />
         )}
 

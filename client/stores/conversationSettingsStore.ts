@@ -8,6 +8,8 @@ interface ChatSettings {
   profile: ContactProfile | null;
   smartCards: SmartCard[];
   isLoading: boolean;
+  /** Set to true once user dismisses or answers the clarification card */
+  clarificationDismissed: boolean;
 }
 
 interface ConversationSettingsState {
@@ -15,7 +17,9 @@ interface ConversationSettingsState {
 
   fetchSettings: (chatId: string) => Promise<void>;
   setCategory: (chatId: string, userId: string, category: ChatCategory) => Promise<void>;
-  updateProfile: (chatId: string, userId: string, updates: Partial<Pick<ContactProfile, 'display_name' | 'email' | 'phone_number' | 'location'>>) => Promise<void>;
+  updateProfile: (chatId: string, userId: string, updates: Partial<Pick<ContactProfile, 'display_name' | 'email' | 'phone_number' | 'location' | 'relationship_context'>>) => Promise<void>;
+  dismissClarificationCard: (chatId: string) => void;
+  showClarificationCard: (chatId: string) => void;
   dismissCard: (chatId: string, cardId: string) => Promise<void>;
   markCardActed: (chatId: string, cardId: string) => Promise<void>;
   generateSmartCards: (chatId: string) => Promise<void>;
@@ -27,6 +31,7 @@ const defaultSettings: ChatSettings = {
   profile: null,
   smartCards: [],
   isLoading: false,
+  clarificationDismissed: false,
 };
 
 export const useConversationSettingsStore = create<ConversationSettingsState>((set, get) => ({
@@ -68,6 +73,9 @@ export const useConversationSettingsStore = create<ConversationSettingsState>((s
             profile: profileRes.data ?? null,
             smartCards: cardsRes.data ?? [],
             isLoading: false,
+            // Preserve dismissal state: if profile now has relationship_context, keep dismissed
+            clarificationDismissed: (profileRes.data?.relationship_context != null)
+              || (state.settings[chatId]?.clarificationDismissed ?? false),
           },
         },
       }));
@@ -105,7 +113,7 @@ export const useConversationSettingsStore = create<ConversationSettingsState>((s
     }
   },
 
-  updateProfile: async (chatId: string, userId: string, updates: Partial<Pick<ContactProfile, 'display_name' | 'email' | 'phone_number' | 'location'>>) => {
+  updateProfile: async (chatId: string, userId: string, updates: Partial<Pick<ContactProfile, 'display_name' | 'email' | 'phone_number' | 'location' | 'relationship_context'>>) => {
     // Optimistic update
     set((state) => {
       const current = state.settings[chatId] || defaultSettings;
@@ -117,6 +125,8 @@ export const useConversationSettingsStore = create<ConversationSettingsState>((s
             profile: current.profile
               ? { ...current.profile, ...updates }
               : { id: '', user_id: userId, contact_id: null, chat_id: chatId, display_name: null, email: null, phone_number: null, location: null, key_facts: [], relationship_context: null, created_at: '', updated_at: '', ...updates } as ContactProfile,
+            // Once the relationship is saved, dismiss the card
+            clarificationDismissed: updates.relationship_context !== undefined ? true : current.clarificationDismissed,
           },
         },
       };
@@ -133,6 +143,30 @@ export const useConversationSettingsStore = create<ConversationSettingsState>((s
       console.error('Failed to update profile:', error);
       get().fetchSettings(chatId);
     }
+  },
+
+  dismissClarificationCard: (chatId: string) => {
+    set((state) => ({
+      settings: {
+        ...state.settings,
+        [chatId]: {
+          ...(state.settings[chatId] || defaultSettings),
+          clarificationDismissed: true,
+        },
+      },
+    }));
+  },
+
+  showClarificationCard: (chatId: string) => {
+    set((state) => ({
+      settings: {
+        ...state.settings,
+        [chatId]: {
+          ...(state.settings[chatId] || defaultSettings),
+          clarificationDismissed: false,
+        },
+      },
+    }));
   },
 
   dismissCard: async (chatId: string, cardId: string) => {

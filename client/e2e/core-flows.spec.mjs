@@ -299,13 +299,41 @@ async function mockBackend(page) {
           body: JSON.stringify(MOCK_SMART_CARDS),
         });
       }
-    } else if (url.includes('/chat_categories') || url.includes('/contact_profiles')) {
-      // Settings tables — return empty (no category/profile set)
+    } else if (url.includes('/chat_categories')) {
+      // Settings table — return empty (no category set)
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify(null),
       });
+    } else if (url.includes('/contact_profiles')) {
+      if (method === 'POST') {
+        // upsert (insert via POST with Prefer: resolution=merge-duplicates)
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify([{
+            id: 'profile-1',
+            user_id: MOCK_USER_ID,
+            chat_id: 'mock-chat-wa-alice',
+            relationship_context: JSON.parse(route.request().postData() || '{}').relationship_context ?? null,
+            display_name: null,
+            email: null,
+            phone_number: null,
+            location: null,
+            key_facts: [],
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }]),
+        });
+      } else {
+        // GET — return null (no profile set yet, so clarification card appears)
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(null),
+        });
+      }
     } else if (url.includes('/users')) {
       await route.fulfill({
         status: 200,
@@ -678,6 +706,62 @@ test.describe('Core loop — mock backend', () => {
     await expect(
       page.getByTestId('message-card-promise-badge-msg-tg-1')
     ).not.toBeVisible();
+  });
+
+  // 11. Contact clarification card — appears in chat and answer persists to profile
+  test('contact clarification card appears and answer persists to profile', async ({ page }) => {
+    await signIn(page);
+
+    await expect(
+      page.locator('[data-testid^="message-card-"]').first()
+    ).toBeVisible({ timeout: 8_000 });
+    await page.locator('[data-testid^="message-card-"]').first().click();
+
+    await expect(page.getByTestId('chat-screen')).toBeVisible({ timeout: 10_000 });
+
+    // Clarification card should appear (no profile set in mock)
+    await expect(page.getByTestId('contact-clarification-card')).toBeVisible({ timeout: 8_000 });
+
+    // The prompt should mention the contact name
+    await expect(page.getByTestId('contact-clarification-prompt')).toBeVisible();
+
+    // Intercept the upsert request to verify relationship_context is sent
+    const profileUpsertPromise = page.waitForRequest(
+      (req) => req.url().includes('/contact_profiles') && req.method() === 'POST',
+      { timeout: 5_000 }
+    );
+
+    // Tap "Colleague" option
+    await page.getByTestId('contact-clarification-option-colleague').click();
+
+    // Verify the upsert was fired with the right payload
+    const profileReq = await profileUpsertPromise;
+    const body = JSON.parse(profileReq.postData() || '{}');
+    expect(body.relationship_context).toBe('colleague');
+
+    // Card should disappear after selection (optimistic dismiss)
+    await expect(page.getByTestId('contact-clarification-card')).not.toBeVisible({ timeout: 5_000 });
+  });
+
+  // 11b. Contact clarification card — dismiss hides the card
+  test('contact clarification card can be dismissed', async ({ page }) => {
+    await signIn(page);
+
+    await expect(
+      page.locator('[data-testid^="message-card-"]').first()
+    ).toBeVisible({ timeout: 8_000 });
+    await page.locator('[data-testid^="message-card-"]').first().click();
+
+    await expect(page.getByTestId('chat-screen')).toBeVisible({ timeout: 10_000 });
+
+    // Clarification card should appear
+    await expect(page.getByTestId('contact-clarification-card')).toBeVisible({ timeout: 8_000 });
+
+    // Dismiss it
+    await page.getByTestId('contact-clarification-dismiss').click();
+
+    // Card should be gone
+    await expect(page.getByTestId('contact-clarification-card')).not.toBeVisible({ timeout: 5_000 });
   });
 
   // 9b. Smart card tray — dismissing a card removes it
