@@ -351,6 +351,61 @@ describe('/preferences', () => {
 });
 
 // ---------------------------------------------------------------------------
+// /notifications (issue #26)
+// ---------------------------------------------------------------------------
+describe('/notifications', () => {
+  const VALID_TOKEN = 'ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]';
+
+  it('POST /push/register — 401 without token', async () => {
+    const res = await request.post('/notifications/push/register').send({ token: VALID_TOKEN });
+    expect(res.status).toBe(401);
+  });
+
+  it('POST /push/register — 400 when token field missing', async () => {
+    const res = await request
+      .post('/notifications/push/register')
+      .set('Authorization', 'Bearer valid-token')
+      .send({});
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty('error');
+  });
+
+  it('POST /push/register — 400 for invalid Expo token', async () => {
+    const res = await request
+      .post('/notifications/push/register')
+      .set('Authorization', 'Bearer valid-token')
+      .send({ token: 'not-a-valid-token' });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty('error');
+  });
+
+  it('POST /push/register — 200 with valid token', async () => {
+    const res = await request
+      .post('/notifications/push/register')
+      .set('Authorization', 'Bearer valid-token')
+      .send({ token: VALID_TOKEN });
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+  });
+
+  it('POST /push/deregister — 401 without token', async () => {
+    const res = await request
+      .post('/notifications/push/deregister')
+      .send({ token: VALID_TOKEN });
+    expect(res.status).toBe(401);
+  });
+
+  it('POST /push/deregister — 200 with valid token', async () => {
+    const res = await request
+      .post('/notifications/push/deregister')
+      .set('Authorization', 'Bearer valid-token')
+      .send({ token: VALID_TOKEN });
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // 404 catch-all
 // ---------------------------------------------------------------------------
 describe('404 handler', () => {
