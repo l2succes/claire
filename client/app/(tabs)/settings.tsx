@@ -278,6 +278,7 @@ export default function SettingsScreen() {
           icon={Sparkles}
           title="AI Settings"
           description="Customize AI response behavior"
+          onPress={() => router.push('/settings/ai')}
           testID="settings-ai"
         />
 

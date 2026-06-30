@@ -58,7 +58,7 @@ Please provide {count} response suggestions that are:
     this.templates.set('question', {
       system: `You are an AI assistant specializing in generating responses to questions in WhatsApp conversations.
       Focus on providing helpful, accurate, and contextually appropriate answers.
-      
+
       Guidelines:
       - Answer directly and helpfully
       - Provide multiple response options with different levels of detail
@@ -69,7 +69,7 @@ Please provide {count} response suggestions that are:
 
 {context}
 
-Generate responses that answer the question appropriately for this relationship and context.`,
+Generate responses that answer the question in a {tone} tone, written in a {style} style, in {language} language.{relationshipContext}`,
     });
 
     // Invitation/Event response
@@ -86,7 +86,7 @@ Generate responses that answer the question appropriately for this relationship 
 
 {context}
 
-Suggest appropriate responses for this invitation, considering the relationship and context.`,
+Suggest appropriate responses for this invitation in a {tone} tone, {style} style, in {language} language.{relationshipContext}`,
     });
 
     // Appreciation/Compliment response
@@ -103,7 +103,7 @@ Suggest appropriate responses for this invitation, considering the relationship 
 
 {context}
 
-Suggest gracious and appropriate responses to this appreciation.`,
+Suggest gracious responses in a {tone} tone, {style} style, in {language} language.{relationshipContext}`,
     });
 
     // Concern/Support response
@@ -121,7 +121,7 @@ Suggest gracious and appropriate responses to this appreciation.`,
 
 {context}
 
-Generate empathetic and supportive responses appropriate for this relationship.`,
+Generate empathetic responses in a {tone} tone, {style} style, in {language} language.{relationshipContext}`,
     });
 
     // Business/Professional response
@@ -139,7 +139,7 @@ Generate empathetic and supportive responses appropriate for this relationship.`
 
 {context}
 
-Generate professional responses that advance the business relationship or discussion.`,
+Generate professional responses in a {tone} tone, {style} style, in {language} language.{relationshipContext}`,
     });
 
     // Casual/Social response
@@ -157,7 +157,7 @@ Generate professional responses that advance the business relationship or discus
 
 {context}
 
-Generate engaging responses that build the relationship and keep the conversation flowing.`,
+Generate engaging responses in a {tone} tone, {style} style, in {language} language.{relationshipContext}`,
     });
 
     // Group chat response
@@ -175,7 +175,7 @@ Generate engaging responses that build the relationship and keep the conversatio
 
 {context}
 
-Generate responses appropriate for a group chat setting that add value without overwhelming the conversation.`,
+Generate responses in a {tone} tone, {style} style, in {language} language, appropriate for a group chat.{relationshipContext}`,
     });
   }
 

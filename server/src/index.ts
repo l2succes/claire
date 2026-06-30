@@ -11,6 +11,7 @@ import messageRoutes from './routes/messages';
 import aiRoutes from './routes/ai';
 import platformRoutes from './routes/platforms';
 import conversationRoutes from './routes/conversations';
+import preferencesRoutes from './routes/preferences';
 import { platformManager } from './adapters';
 import { aiProcessor } from './services/ai-processor';
 import { whatsappAdapter } from './adapters/whatsapp';
@@ -47,6 +48,7 @@ app.use('/messages', messageRoutes);
 app.use('/ai', aiRoutes);
 app.use('/platforms', platformRoutes);
 app.use('/conversations', conversationRoutes);
+app.use('/preferences', preferencesRoutes);
 
 // Handle Supabase email confirmation redirects
 app.get('/', (req, res) => {
