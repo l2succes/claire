@@ -55,15 +55,31 @@ generate_synapse_secrets() {
     echo "  ✓ Synapse secrets generated"
 }
 
+generate_double_puppet_tokens() {
+    local as_token
+    local hs_token
+    local sender_localpart
+    as_token=$(openssl rand -hex 32)
+    hs_token=$(openssl rand -hex 32)
+    sender_localpart="doublepuppet_$(openssl rand -hex 8)"
+
+    sed -i.bak "s/GENERATE_DOUBLE_PUPPET_AS_TOKEN/$as_token/g" "$MATRIX_DIR"/bridges/*/config.yaml
+    sed -i.bak "s/GENERATE_DOUBLE_PUPPET_AS_TOKEN/$as_token/g" "$MATRIX_DIR/doublepuppet/registration.yaml"
+    sed -i.bak "s/GENERATE_DOUBLE_PUPPET_HS_TOKEN/$hs_token/g" "$MATRIX_DIR/doublepuppet/registration.yaml"
+    sed -i.bak "s/GENERATE_DOUBLE_PUPPET_SENDER_LOCALPART/$sender_localpart/g" "$MATRIX_DIR/doublepuppet/registration.yaml"
+    rm -f "$MATRIX_DIR"/bridges/*/config.yaml.bak "$MATRIX_DIR/doublepuppet/registration.yaml.bak"
+}
+
 # Main
 echo ""
 
 # Check if already initialized
-if grep -q "GENERATE_ME" "$MATRIX_DIR/bridges/whatsapp/config.yaml" 2>/dev/null; then
+if grep -qE "GENERATE_ME|GENERATE_DOUBLE_PUPPET" "$MATRIX_DIR/bridges/whatsapp/config.yaml" 2>/dev/null; then
     echo "Generating new tokens..."
     generate_tokens "whatsapp"
     generate_tokens "telegram"
     generate_tokens "instagram"
+    generate_double_puppet_tokens
     generate_synapse_secrets
 
     echo ""

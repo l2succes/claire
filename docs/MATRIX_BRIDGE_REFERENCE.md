@@ -68,18 +68,27 @@ The server parses the phone number from the login success message and tracks thi
 
 Docs: https://docs.mau.fi/bridges/general/double-puppeting.html
 
-**Current status**: Not enabled in Claire.
+**Current status**: Enabled in Claire (issue #33). Requires `ENABLE_DOUBLE_PUPPETING=true` in server env.
 
 Without double puppeting:
-- User's outgoing messages appear as their ghost user
-- The server must track the "self ghost ID" to set `isFromMe` correctly
+- User's outgoing messages appear as their ghost user (e.g. `@whatsapp_<phone>:claire.local`)
+- The server tracks the "self ghost ID" to set `isFromMe` correctly
 
-With double puppeting (recommended for future):
-- User's outgoing messages appear as their actual Matrix account
-- Automatic invite acceptance for new chats
-- Settings sync (mute status, etc.)
+With double puppeting (active):
+- User's outgoing-from-phone messages appear as their actual Matrix account (e.g. `@claire_bot:claire.local`)
+- The server tracks `matrixUserId` per session to detect `isFromMe` for double-puppeted messages
+- Bridge configs include `bridge.double_puppet.secrets` with the homeserver `as_token`
+- Server tracks locally-sent event IDs (`localSentEventIds`) to prevent echo loops
 
-Setup requires adding `double_puppet.secrets` to bridge config with the appservice's `as_token`.
+Config added to each bridge (`docker/matrix/bridges/<platform>/config.yaml`):
+```yaml
+bridge:
+  double_puppet:
+    secrets:
+      claire.local: "as_token:<bridge_as_token>"
+```
+
+Set `ENABLE_DOUBLE_PUPPETING=true` in `server/.env` to activate server-side handling.
 
 ## Backfill Behavior
 

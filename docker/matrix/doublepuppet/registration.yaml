@@ -1,0 +1,10 @@
+id: claire-doublepuppet
+url:
+as_token: GENERATE_DOUBLE_PUPPET_AS_TOKEN
+hs_token: GENERATE_DOUBLE_PUPPET_HS_TOKEN
+sender_localpart: GENERATE_DOUBLE_PUPPET_SENDER_LOCALPART
+rate_limited: false
+namespaces:
+  users:
+    - regex: '@.*:claire\.local'
+      exclusive: false
