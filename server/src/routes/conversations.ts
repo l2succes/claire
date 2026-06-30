@@ -142,7 +142,7 @@ router.post('/:chatId/smart-cards', requireAuth, async (req: Request, res: Respo
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ error: 'Not authenticated' });
 
-    const cards = await smartCardGenerator.generateCards(chatId, userId);
+    await smartCardGenerator.generateCards(chatId, userId);
 
     // Fetch the persisted cards (with IDs)
     const { data: savedCards } = await supabase

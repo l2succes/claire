@@ -186,7 +186,6 @@ export default function ChatScreen() {
 
   const renderMessageBody = (item: ChatMessage, isMe: boolean) => {
     const textColor = isMe ? '#ffffff' : '#111827';
-    const subtextColor = isMe ? 'rgba(255,255,255,0.65)' : '#9ca3af';
     const iconColor = isMe ? 'rgba(255,255,255,0.8)' : '#6b7280';
 
     // Bridge decryption failure — show a muted placeholder instead of the raw error
@@ -439,7 +438,7 @@ export default function ChatScreen() {
           />
           <TouchableOpacity
             onPress={handleSend}
-            disabled={!inputText.trim() || sending || (platform && !connectedSessions.some(s => s.platform === platform && s.status === 'connected'))}
+            disabled={!inputText.trim() || sending || (!!platform && !connectedSessions.some(s => s.platform === platform && s.status === 'connected'))}
             testID="chat-send-button"
             style={{
               width: 40,

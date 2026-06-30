@@ -1,6 +1,5 @@
 import { logger } from '../utils/logger';
 import { supabase } from './supabase';
-import { aiProcessor } from './ai-processor';
 
 interface DetectedPromise {
   type: 'commitment' | 'deadline' | 'appointment' | 'task';
@@ -140,7 +139,7 @@ class PromiseDetector {
         }),
       });
 
-      const data = await response.json();
+      const data = await response.json() as { choices: Array<{ message: { content: string } }> };
       const result = JSON.parse(data.choices[0].message.content || '{"promises":[]}');
       
       return result.promises || [];

@@ -9,7 +9,6 @@ import { NudgeCard } from '../../components/NudgeCard';
 import { PlatformBadge } from '../../components/PlatformIcon';
 import { Platform } from '../../types/platform';
 import type { ChatCategory } from '../../types/conversationSettings';
-import { formatWaitTime } from '../../utils/urgency';
 
 // ---------------------------------------------------------------------------
 // Types

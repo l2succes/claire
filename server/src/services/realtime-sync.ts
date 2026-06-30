@@ -95,7 +95,7 @@ export class RealtimeSyncService extends EventEmitter {
   /**
    * Handle database change events
    */
-  private handleDatabaseChange(table: string, payload: any) {
+  private _handleDatabaseChange(table: string, payload: any) {
     const { eventType, new: newRecord, old: oldRecord } = payload;
     
     logger.debug(`Database change in ${table}:`, eventType);
@@ -117,7 +117,7 @@ export class RealtimeSyncService extends EventEmitter {
   /**
    * Handle message updates (read receipts, etc.)
    */
-  private handleMessageUpdate(payload: any) {
+  private _handleMessageUpdate(payload: any) {
     const { new: message } = payload;
     
     if (message.isRead) {
@@ -370,7 +370,7 @@ export class RealtimeSyncService extends EventEmitter {
    */
   async cleanup() {
     // Unsubscribe all users
-    for (const [channelName, channel] of this.userChannels) {
+    for (const [, channel] of this.userChannels) {
       await supabase.removeChannel(channel);
     }
     this.userChannels.clear();

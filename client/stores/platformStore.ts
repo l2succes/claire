@@ -14,7 +14,6 @@ import {
   AuthMethod,
   PlatformInfo,
   PlatformSession,
-  AuthData,
   AuthFlowState,
 } from '../types/platform';
 

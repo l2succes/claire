@@ -23,7 +23,7 @@ interface InstagramWebViewLoginProps {
 type LoginState = 'idle' | 'loading' | 'two_factor' | 'challenge' | 'error' | 'success';
 
 export function InstagramWebViewLogin({
-  loginStep,
+  loginStep: _loginStep,
   onSuccess,
   onCancel,
 }: InstagramWebViewLoginProps) {

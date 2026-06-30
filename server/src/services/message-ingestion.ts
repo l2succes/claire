@@ -155,7 +155,7 @@ export class MessageIngestionService extends EventEmitter {
 
       // Handle media if present
       if (message.hasMedia) {
-        this.downloadAndStoreMedia(storedMessage.id, message);
+        this.downloadAndStoreMedia(storedMessage.id as string, message);
       }
 
       return storedMessage;
@@ -168,7 +168,7 @@ export class MessageIngestionService extends EventEmitter {
   /**
    * Upsert contact in database
    */
-  private async upsertContact(userId: string, contact: Contact, chat: Chat) {
+  private async upsertContact(userId: string, contact: Contact, _chat: Chat) {
     try {
       const contactData = {
         userId,
@@ -232,7 +232,7 @@ export class MessageIngestionService extends EventEmitter {
 
       // Upload to Supabase Storage
       const fileName = `${messageId}-${Date.now()}.${media.mimetype.split('/')[1]}`;
-      const { data: uploadData, error } = await supabase.storage
+      const { error } = await supabase.storage
         .from('message-media')
         .upload(fileName, Buffer.from(media.data, 'base64'), {
           contentType: media.mimetype,
