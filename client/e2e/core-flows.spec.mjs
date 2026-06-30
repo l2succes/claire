@@ -111,6 +111,50 @@ const MOCK_CHAT_MESSAGES = [
     contact_name: null,
     content_type: 'text',
   },
+  {
+    id: 'chatmsg-img',
+    content: 'Check out this photo',
+    timestamp: new Date(Date.now() - 3500_000).toISOString(),
+    from_me: false,
+    contact_name: 'Alice (WA)',
+    contact_phone: '+15551234567',
+    content_type: 'image',
+    media_url: '/media/claire.local/abc123img',
+    media_mime_type: 'image/jpeg',
+  },
+  {
+    id: 'chatmsg-audio',
+    content: '',
+    timestamp: new Date(Date.now() - 3400_000).toISOString(),
+    from_me: false,
+    contact_name: 'Alice (WA)',
+    contact_phone: '+15551234567',
+    content_type: 'audio',
+    media_url: '/media/claire.local/abc123audio',
+    media_mime_type: 'audio/ogg',
+  },
+  {
+    id: 'chatmsg-video',
+    content: 'Short clip',
+    timestamp: new Date(Date.now() - 3300_000).toISOString(),
+    from_me: false,
+    contact_name: 'Alice (WA)',
+    contact_phone: '+15551234567',
+    content_type: 'video',
+    media_url: '/media/claire.local/abc123video',
+    media_mime_type: 'video/mp4',
+  },
+  {
+    id: 'chatmsg-doc',
+    content: 'report.pdf',
+    timestamp: new Date(Date.now() - 3200_000).toISOString(),
+    from_me: false,
+    contact_name: 'Alice (WA)',
+    contact_phone: '+15551234567',
+    content_type: 'document',
+    media_url: '/media/claire.local/abc123doc',
+    media_mime_type: 'application/pdf',
+  },
 ];
 
 const MOCK_AI_SUGGESTIONS = [
@@ -431,6 +475,19 @@ async function mockBackend(page) {
   // Supabase realtime — stub WebSocket preflight requests
   await page.route('**/realtime/**', async (route) => {
     await route.fulfill({ status: 200, body: '{}' });
+  });
+
+  // Matrix media proxy — return a 1x1 PNG for any /media/ requests
+  const TINY_PNG = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+    'base64'
+  );
+  await page.route('**/media/**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'image/png',
+      body: TINY_PNG,
+    });
   });
 }
 
@@ -844,6 +901,75 @@ test.describe('Core loop — mock backend', () => {
     await expect(
       page.getByTestId('urgent-cards-container').getByText('Alice (WA)')
     ).toBeVisible({ timeout: 8_000 });
+  });
+
+  // 13. Media in — incoming image fixture renders in chat (#35)
+  test('incoming image message renders in chat', async ({ page }) => {
+    await signIn(page);
+
+    await expect(
+      page.locator('[data-testid^="message-card-"]').first()
+    ).toBeVisible({ timeout: 8_000 });
+    await page.locator('[data-testid^="message-card-"]').first().click();
+
+    await expect(page.getByTestId('chat-screen')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId('chat-message-list')).toBeVisible({ timeout: 8_000 });
+
+    // The image fixture message should render (testID added in this ticket)
+    await expect(page.getByTestId('media-image-chatmsg-img')).toBeVisible({ timeout: 8_000 });
+  });
+
+  // 13b. Media in — audio, video, and document fixtures render in chat (#35)
+  test('incoming audio, video, and document messages render in chat', async ({ page }) => {
+    await signIn(page);
+
+    await expect(
+      page.locator('[data-testid^="message-card-"]').first()
+    ).toBeVisible({ timeout: 8_000 });
+    await page.locator('[data-testid^="message-card-"]').first().click();
+
+    await expect(page.getByTestId('chat-screen')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId('chat-message-list')).toBeVisible({ timeout: 8_000 });
+
+    // Audio fixture
+    await expect(page.getByTestId('media-audio-chatmsg-audio')).toBeVisible({ timeout: 8_000 });
+    // Video fixture
+    await expect(page.getByTestId('media-video-chatmsg-video')).toBeVisible({ timeout: 8_000 });
+    // Document fixture
+    await expect(page.getByTestId('media-document-chatmsg-doc')).toBeVisible({ timeout: 8_000 });
+  });
+
+  // 13c. Media send path — send button dispatches to platform API (#35)
+  test('send path: text message dispatches to platform send API', async ({ page }) => {
+    await signIn(page);
+
+    const sessionsResponsePromise = page.waitForResponse('**/platforms/**', { timeout: 10_000 }).catch(() => null);
+
+    await expect(
+      page.locator('[data-testid^="message-card-"]').first()
+    ).toBeVisible({ timeout: 8_000 });
+
+    await sessionsResponsePromise;
+    await page.locator('[data-testid^="message-card-"]').first().click();
+
+    await expect(page.getByTestId('chat-screen')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId('chat-input')).toBeVisible({ timeout: 8_000 });
+
+    // Intercept the send API call
+    const sendRequestPromise = page.waitForRequest(
+      (req) => req.url().includes('/send') && req.method() === 'POST',
+      { timeout: 8_000 }
+    );
+
+    await page.getByTestId('chat-input').fill('Test media send path');
+    await page.getByTestId('chat-send-button').click();
+
+    // Verify the send API was called
+    const sendReq = await sendRequestPromise;
+    expect(sendReq).toBeTruthy();
+
+    // Input should be cleared after send
+    await expect(page.getByTestId('chat-input')).toHaveValue('', { timeout: 5_000 });
   });
 });
 

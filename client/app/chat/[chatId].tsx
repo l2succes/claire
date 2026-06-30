@@ -221,11 +221,12 @@ export default function ChatScreen() {
         ? `${API_BASE_URL}${item.media_url}`
         : item.media_url;
       return (
-        <View>
+        <View testID={`media-image-${item.id}`}>
           <Image
             source={{ uri: imageUri }}
             style={{ width: 220, height: 160, borderRadius: 10, marginBottom: 4 }}
             resizeMode="cover"
+            testID={`media-image-img-${item.id}`}
           />
           {item.content ? (
             <Text style={{ fontSize: 14, color: textColor, marginTop: 2 }}>{item.content}</Text>
@@ -236,7 +237,7 @@ export default function ChatScreen() {
 
     if (type === 'image') {
       return (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+        <View testID={`media-image-${item.id}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
           <ImageIcon size={16} color={iconColor} />
           <Text style={{ fontSize: 14, color: textColor }}>Photo</Text>
         </View>
@@ -245,7 +246,7 @@ export default function ChatScreen() {
 
     if (type === 'audio') {
       return (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <View testID={`media-audio-${item.id}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <Volume2 size={16} color={iconColor} />
           <Text style={{ fontSize: 14, color: textColor }}>
             {item.content || 'Voice message'}
@@ -256,7 +257,7 @@ export default function ChatScreen() {
 
     if (type === 'video') {
       return (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <View testID={`media-video-${item.id}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <Video size={16} color={iconColor} />
           <Text style={{ fontSize: 14, color: textColor }}>
             {item.content || 'Video'}
@@ -267,7 +268,7 @@ export default function ChatScreen() {
 
     if (type === 'document') {
       return (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <View testID={`media-document-${item.id}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <FileText size={16} color={iconColor} />
           <Text style={{ fontSize: 14, color: textColor }}>
             {item.content || 'File'}
