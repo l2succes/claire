@@ -5,6 +5,7 @@
 root = "./tests"
 coverage = true
 coverageThreshold = 0.7
+envFile = ".env.test"
 
 # Development settings
 [dev]
