@@ -22,6 +22,7 @@ import {
 } from './types';
 import { redis } from '../services/redis';
 import { logger } from '../utils/logger';
+import { encrypt, decrypt } from '../utils/crypto';
 
 export abstract class BasePlatformAdapter extends EventEmitter implements IPlatformAdapter {
   abstract readonly platform: Platform;
@@ -44,33 +45,45 @@ export abstract class BasePlatformAdapter extends EventEmitter implements IPlatf
   }
 
   /**
-   * Save session to Redis with 24-hour TTL
+   * Save session to Redis with 24-hour TTL.
+   * The blob is AES-256-GCM encrypted before storage.
    */
   protected async saveSessionToRedis(session: PlatformSession): Promise<void> {
     const key = this.getSessionKey(session.id);
-    await redis.setex(key, 86400, JSON.stringify(session));
-    logger.debug(`Session saved to Redis: ${key}`);
+    const plaintext = JSON.stringify(session);
+    await redis.setex(key, 86400, encrypt(plaintext));
+    logger.debug(`Session saved to Redis (encrypted): ${key}`);
   }
 
   /**
-   * Load session from Redis
+   * Load session from Redis and decrypt it.
+   * Falls back gracefully if the stored value is unencrypted plain JSON
+   * (migration path for existing sessions).
    */
   protected async loadSessionFromRedis(sessionId: string): Promise<PlatformSession | null> {
     const key = this.getSessionKey(sessionId);
-    const data = await redis.get(key);
-    if (data) {
-      const session = JSON.parse(data) as PlatformSession;
-      // Restore Date objects
-      session.createdAt = new Date(session.createdAt);
-      if (session.lastConnectedAt) {
-        session.lastConnectedAt = new Date(session.lastConnectedAt);
-      }
-      if (session.lastMessageAt) {
-        session.lastMessageAt = new Date(session.lastMessageAt);
-      }
-      return session;
+    const raw = await redis.get(key);
+    if (!raw) return null;
+
+    let data: string;
+    try {
+      data = decrypt(raw);
+    } catch {
+      // Fallback: value may be unencrypted JSON written before this change
+      logger.warn(`Session ${key} appears unencrypted — reading as plain JSON (migration)`);
+      data = raw;
     }
-    return null;
+
+    const session = JSON.parse(data) as PlatformSession;
+    // Restore Date objects
+    session.createdAt = new Date(session.createdAt);
+    if (session.lastConnectedAt) {
+      session.lastConnectedAt = new Date(session.lastConnectedAt);
+    }
+    if (session.lastMessageAt) {
+      session.lastMessageAt = new Date(session.lastMessageAt);
+    }
+    return session;
   }
 
   /**
