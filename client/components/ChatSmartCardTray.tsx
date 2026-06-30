@@ -35,16 +35,20 @@ export function ChatSmartCardTray({ cards, onDismiss, onDraftMessage, onActed }:
   if (cards.length === 0) return null;
 
   return (
-    <Animated.View style={{
-      height: heightAnim,
-      borderTopWidth: 1,
-      borderTopColor: '#e5e7eb',
-      backgroundColor: '#ffffff',
-      overflow: 'hidden',
-    }}>
+    <Animated.View
+      testID="smart-card-tray"
+      style={{
+        height: heightAnim,
+        borderTopWidth: 1,
+        borderTopColor: '#e5e7eb',
+        backgroundColor: '#ffffff',
+        overflow: 'hidden',
+      }}
+    >
       {/* Tray header */}
       <TouchableOpacity
         onPress={() => setIsExpanded(!isExpanded)}
+        testID="smart-card-tray-toggle"
         style={{
           flexDirection: 'row',
           alignItems: 'center',

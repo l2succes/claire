@@ -92,15 +92,18 @@ export function SmartCard({ card, compact, onDismiss, onDraftMessage, onActed }:
   const ctaFontSize = compact ? 13 : 14;
 
   return (
-    <View style={{
-      width,
-      borderRadius: 16,
-      backgroundColor: '#f9fafb',
-      borderWidth: 1,
-      borderColor: '#e5e7eb',
-      padding: compact ? 10 : 14,
-      gap: compact ? 6 : 10,
-    }}>
+    <View
+      testID={`smart-card-${card.id}`}
+      style={{
+        width,
+        borderRadius: 16,
+        backgroundColor: '#f9fafb',
+        borderWidth: 1,
+        borderColor: '#e5e7eb',
+        padding: compact ? 10 : 14,
+        gap: compact ? 6 : 10,
+      }}
+    >
       {/* Header */}
       <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
         <View style={{
@@ -124,9 +127,9 @@ export function SmartCard({ card, compact, onDismiss, onDraftMessage, onActed }:
             </Text>
           )}
         </View>
-        {!compact && onDismiss && (
-          <TouchableOpacity onPress={onDismiss} style={{ padding: 2, marginLeft: 4 }}>
-            <X size={16} color="#9ca3af" />
+        {onDismiss && (
+          <TouchableOpacity onPress={onDismiss} testID={`smart-card-dismiss-${card.id}`} style={{ padding: 2, marginLeft: 4 }}>
+            <X size={compact ? 12 : 16} color="#9ca3af" />
           </TouchableOpacity>
         )}
       </View>

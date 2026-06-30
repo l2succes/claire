@@ -147,6 +147,22 @@ const MOCK_PROMISES = [
   },
 ];
 
+const MOCK_SMART_CARDS = [
+  {
+    id: 'card-1',
+    user_id: MOCK_USER_ID,
+    chat_id: 'mock-chat-wa-alice',
+    card_type: 'action',
+    title: 'Follow up on report',
+    subtitle: 'Alice mentioned a Friday deadline',
+    payload: { draft_message: 'Just checking in on the report — is Friday still good?' },
+    priority: 1,
+    dismissed: false,
+    acted_on: false,
+    created_at: new Date(Date.now() - 1800_000).toISOString(),
+  },
+];
+
 const MOCK_PLATFORM_SESSIONS = [
   {
     id: MOCK_SESSION_ID,
@@ -259,6 +275,28 @@ async function mockBackend(page) {
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify(MOCK_PLATFORM_SESSIONS),
+      });
+    } else if (url.includes('/smart_cards')) {
+      if (method === 'PATCH') {
+        // dismiss or mark acted — optimistic update already handled client-side
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify([]),
+        });
+      } else {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(MOCK_SMART_CARDS),
+        });
+      }
+    } else if (url.includes('/chat_categories') || url.includes('/contact_profiles')) {
+      // Settings tables — return empty (no category/profile set)
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(null),
       });
     } else if (url.includes('/users')) {
       await route.fulfill({
@@ -577,6 +615,48 @@ test.describe('Core loop — mock backend', () => {
 
     // Save button is present (the route mock will accept PUT)
     await expect(page.getByTestId('notifications-settings-save')).toBeVisible();
+  });
+
+  // 9. Smart card tray — seeded card appears in chat
+  test('smart card tray shows seeded card in chat', async ({ page }) => {
+    await signIn(page);
+
+    await expect(
+      page.locator('[data-testid^="message-card-"]').first()
+    ).toBeVisible({ timeout: 8_000 });
+    await page.locator('[data-testid^="message-card-"]').first().click();
+
+    await expect(page.getByTestId('chat-screen')).toBeVisible({ timeout: 10_000 });
+
+    // Smart card tray should appear (seeded card has dismissed=false)
+    await expect(page.getByTestId('smart-card-tray')).toBeVisible({ timeout: 8_000 });
+
+    // The seeded card itself should render
+    await expect(page.getByTestId('smart-card-card-1')).toBeVisible({ timeout: 5_000 });
+  });
+
+  // 9b. Smart card tray — dismissing a card removes it
+  test('dismissing a smart card removes it from the tray', async ({ page }) => {
+    await signIn(page);
+
+    await expect(
+      page.locator('[data-testid^="message-card-"]').first()
+    ).toBeVisible({ timeout: 8_000 });
+    await page.locator('[data-testid^="message-card-"]').first().click();
+
+    await expect(page.getByTestId('chat-screen')).toBeVisible({ timeout: 10_000 });
+
+    // Wait for the smart card to appear
+    await expect(page.getByTestId('smart-card-card-1')).toBeVisible({ timeout: 8_000 });
+
+    // Tap the dismiss button
+    await page.getByTestId('smart-card-dismiss-card-1').click();
+
+    // Card should be removed from the tray (optimistic update)
+    await expect(page.getByTestId('smart-card-card-1')).not.toBeVisible({ timeout: 5_000 });
+
+    // Tray itself should also disappear when no cards remain
+    await expect(page.getByTestId('smart-card-tray')).not.toBeVisible({ timeout: 3_000 });
   });
 });
 
