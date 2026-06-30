@@ -351,6 +351,72 @@ describe('/preferences', () => {
 });
 
 // ---------------------------------------------------------------------------
+// /auto-reply
+// ---------------------------------------------------------------------------
+describe('/auto-reply', () => {
+  it('GET / — 401 without token', async () => {
+    const res = await request.get('/auto-reply');
+    expect(res.status).toBe(401);
+  });
+
+  it('GET / — 200 returns rules array', async () => {
+    const res = await request
+      .get('/auto-reply')
+      .set('Authorization', 'Bearer valid-token');
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.rules)).toBe(true);
+  });
+
+  it('POST / — 401 without token', async () => {
+    const res = await request.post('/auto-reply').send({
+      name: 'Test',
+      trigger_type: 'birthday',
+      reply_template: 'Happy birthday!',
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it('POST / — 400 missing required fields', async () => {
+    const res = await request
+      .post('/auto-reply')
+      .set('Authorization', 'Bearer valid-token')
+      .send({});
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty('error');
+  });
+
+  it('POST / — 201 with valid payload', async () => {
+    const res = await request
+      .post('/auto-reply')
+      .set('Authorization', 'Bearer valid-token')
+      .send({
+        name: 'Birthday Auto Reply',
+        trigger_type: 'birthday',
+        reply_template: 'Happy birthday, {name}!',
+      });
+    expect(res.status).toBe(201);
+    expect(res.body.rule).toHaveProperty('name', 'Birthday Auto Reply');
+  });
+
+  it('PATCH /:id — 200 toggles enabled', async () => {
+    const res = await request
+      .patch('/auto-reply/rule-1')
+      .set('Authorization', 'Bearer valid-token')
+      .send({ enabled: false });
+    expect(res.status).toBe(200);
+    expect(res.body.rule.enabled).toBe(false);
+  });
+
+  it('DELETE /:id — 200 removes rule', async () => {
+    const res = await request
+      .delete('/auto-reply/rule-1')
+      .set('Authorization', 'Bearer valid-token');
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // 404 catch-all
 // ---------------------------------------------------------------------------
 describe('404 handler', () => {

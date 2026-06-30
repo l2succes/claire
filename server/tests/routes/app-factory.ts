@@ -169,6 +169,42 @@ export function createApp() {
   });
 
   // ------------------------------------------------------------------
+  // /auto-reply
+  // ------------------------------------------------------------------
+  const MOCK_RULE = {
+    id: 'rule-1',
+    user_id: 'test-user',
+    name: 'Birthday reply',
+    enabled: true,
+    trigger_type: 'birthday',
+    keywords: null,
+    reply_template: 'Happy birthday, {name}!',
+    platforms: null,
+    max_per_hour: 5,
+    max_per_day: 20,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
+  app.get('/auto-reply', requireAuth, (_req, res) => {
+    res.json({ rules: [MOCK_RULE] });
+  });
+  app.post('/auto-reply', requireAuth, (req, res): void => {
+    const { name, trigger_type, reply_template } = req.body ?? {};
+    if (!name || !trigger_type || !reply_template) {
+      res.status(400).json({ error: 'Missing required fields' });
+      return;
+    }
+    res.status(201).json({ rule: { ...MOCK_RULE, ...req.body } });
+  });
+  app.patch('/auto-reply/:id', requireAuth, (req, res) => {
+    res.json({ rule: { ...MOCK_RULE, ...req.body, id: req.params.id } });
+  });
+  app.delete('/auto-reply/:id', requireAuth, (_req, res) => {
+    res.json({ success: true });
+  });
+
+  // ------------------------------------------------------------------
   // 404 catch-all
   // ------------------------------------------------------------------
   app.use((_req, res) => {
