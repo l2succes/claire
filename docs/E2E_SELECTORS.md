@@ -48,6 +48,8 @@ All stable `testID` values (rendered as `data-testid` on web via React Native We
 | Selector | Element |
 |---|---|
 | `dashboard-screen` | Root `ScrollView` |
+| `morning-brief-container` | Wrapper `View` around `MorningBrief` (only rendered when brief text is available) |
+| `urgent-cards-container` | Wrapper `View` holding one or more `UrgentCard` rows (only rendered when `urgent_messages` are present) |
 
 ### Messages / Inbox (`/(tabs)/messages`)
 

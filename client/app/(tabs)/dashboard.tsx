@@ -14,7 +14,10 @@ import { router } from 'expo-router';
 import Animated, { FadeInDown, LinearTransition } from 'react-native-reanimated';
 import { MessageCard } from '../../components/MessageCard';
 import { PlatformBadge } from '../../components/PlatformIcon';
+import { MorningBrief } from '../../components/MorningBrief';
+import { UrgentCard, UrgentMessage } from '../../components/UrgentCard';
 import { supabase } from '../../services/supabase';
+import { API_BASE_URL } from '../../services/platforms';
 import { useAuthStore } from '../../stores/authStore';
 import { usePlatformStore, useHasAnyConnection } from '../../stores/platformStore';
 import { Platform, PLATFORM_DISPLAY } from '../../types/platform';
@@ -110,6 +113,9 @@ export default function DashboardScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   // chat_id -> true for chats that have at least one open promise
   const [openPromiseChatIds, setOpenPromiseChatIds] = useState<Set<string>>(new Set());
+  // Morning brief + urgent messages from /ai/morning-brief
+  const [briefText, setBriefText] = useState<string | null>(null);
+  const [urgentMessages, setUrgentMessages] = useState<UrgentMessage[]>([]);
 
   const user = useAuthStore((state) => state.user);
   const { initialize, isInitialized } = usePlatformStore();
@@ -135,6 +141,30 @@ export default function DashboardScreen() {
   useEffect(() => {
     fetchOpenPromises();
   }, [fetchOpenPromises]);
+
+  const fetchMorningBrief = useCallback(async () => {
+    if (!user?.id) return;
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`${API_BASE_URL}/ai/morning-brief`, {
+        headers: session?.access_token
+          ? { Authorization: `Bearer ${session.access_token}` }
+          : {},
+      });
+      if (!res.ok) return;
+      const json = await res.json();
+      if (json.success && json.data) {
+        setBriefText(json.data.brief_text ?? null);
+        setUrgentMessages(json.data.urgent_messages ?? []);
+      }
+    } catch {
+      // Non-critical — silently ignore
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    fetchMorningBrief();
+  }, [fetchMorningBrief]);
 
   const fetchMessages = useCallback(async (pageNum = 0, append = false) => {
     if (!user?.id) return;
@@ -345,10 +375,55 @@ export default function DashboardScreen() {
         )}
         keyExtractor={(item) => item.conversation_key}
         testID="messages-list"
+        ListHeaderComponent={
+          <>
+            {briefText ? (
+              <View testID="morning-brief-container" className="pt-4">
+                <MorningBrief text={briefText} />
+              </View>
+            ) : null}
+            {urgentMessages.length > 0 ? (
+              <View testID="urgent-cards-container" className="gap-3 pb-3">
+                {urgentMessages.map((msg) => (
+                  <UrgentCard
+                    key={msg.id}
+                    message={msg}
+                    onPress={() =>
+                      router.push({
+                        pathname: '/chat/[chatId]',
+                        params: {
+                          chatId: msg.chat_id,
+                          contact_name: msg.contact_name || '',
+                          chat_name: msg.chat_name || '',
+                          platform: msg.platform || '',
+                          is_group: msg.is_group ? '1' : '0',
+                        },
+                      })
+                    }
+                    onQuickReply={(text, chatId) => {
+                      router.push({
+                        pathname: '/chat/[chatId]',
+                        params: {
+                          chatId,
+                          prefill: text,
+                        },
+                      });
+                    }}
+                  />
+                ))}
+              </View>
+            ) : null}
+          </>
+        }
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={() => { setRefreshing(true); setPage(0); fetchMessages(0, false); }}
+            onRefresh={() => {
+              setRefreshing(true);
+              setPage(0);
+              fetchMessages(0, false);
+              fetchMorningBrief();
+            }}
             tintColor="#6366f1"
           />
         }

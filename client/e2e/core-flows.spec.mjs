@@ -174,6 +174,28 @@ const MOCK_PLATFORM_SESSIONS = [
   },
 ];
 
+const MOCK_MORNING_BRIEF = {
+  brief_text: '2 messages need your attention — starting with Alice (WA) and Bob (TG).',
+  urgent_messages: [
+    {
+      id: 'msg-wa-1',
+      chat_id: 'mock-chat-wa-alice',
+      contact_name: 'Alice (WA)',
+      chat_name: null,
+      content: "I'll send you the report by Friday",
+      timestamp: new Date(Date.now() - 3600_000).toISOString(),
+      from_me: false,
+      is_group: false,
+      platform: 'whatsapp',
+      urgency_score: 55,
+      quick_replies: [
+        { text: 'Thanks, sounds good!', tone: 'friendly' },
+        { text: 'Please share it when ready.', tone: 'professional' },
+      ],
+    },
+  ],
+};
+
 // Chats table rows — needed by chat screen's fetchChatInfo() to resolve
 // platform_chat_id (used as the send target).
 const MOCK_CHATS = [
@@ -394,6 +416,15 @@ async function mockBackend(page) {
           },
         },
       }),
+    });
+  });
+
+  // Bun server API: morning brief
+  await page.route('**/ai/morning-brief**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ success: true, data: MOCK_MORNING_BRIEF }),
     });
   });
 
@@ -786,6 +817,33 @@ test.describe('Core loop — mock backend', () => {
 
     // Tray itself should also disappear when no cards remain
     await expect(page.getByTestId('smart-card-tray')).not.toBeVisible({ timeout: 3_000 });
+  });
+
+  // 12. Morning Brief — brief text renders from fixture endpoint (#32)
+  test('morning brief renders from /ai/morning-brief fixture', async ({ page }) => {
+    await signIn(page);
+
+    // Morning brief container should appear (fed by the mocked /ai/morning-brief endpoint)
+    await expect(page.getByTestId('morning-brief-container')).toBeVisible({ timeout: 10_000 });
+
+    // The fixture brief text should be visible
+    await expect(
+      page.getByText('2 messages need your attention')
+    ).toBeVisible({ timeout: 8_000 });
+  });
+
+  // 12b. Urgent card — renders from morning brief fixture (#32)
+  test('urgent card renders for the fixture urgent message', async ({ page }) => {
+    await signIn(page);
+
+    // The urgent cards container should be visible
+    await expect(page.getByTestId('urgent-cards-container')).toBeVisible({ timeout: 10_000 });
+
+    // Alice (WA) urgent card should be rendered (first urgent message in fixture)
+    // Scope within the container to avoid ambiguity with inbox card rows
+    await expect(
+      page.getByTestId('urgent-cards-container').getByText('Alice (WA)')
+    ).toBeVisible({ timeout: 8_000 });
   });
 });
 
