@@ -1,0 +1,176 @@
+name: Nightly E2E (real Docker stack)
+
+on:
+  schedule:
+    # 02:00 UTC every night
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      platforms:
+        description: 'Comma-separated platforms to test (whatsapp,telegram,instagram)'
+        required: false
+        default: 'whatsapp,telegram,instagram'
+
+concurrency:
+  group: nightly-e2e
+  cancel-in-progress: true
+
+jobs:
+  e2e-real-stack:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      # Supabase
+      POSTGRES_PASSWORD: postgres
+      JWT_SECRET: super-secret-jwt-token-with-at-least-32-characters-long
+      ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlhdCI6MTYxMzUzMTk4NSwiZXhwIjo0NzY5MjA1OTg1fQ.lR5-HEJ3s-3dR9mNWxTxXYHBPQ_Lbp5JQQqJ-a3lGf4
+      SERVICE_ROLE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIiwiaWF0IjoxNjEzNTMxOTg1LCJleHAiOjQ3NjkyMDU5ODV9.3nEkJUE6JQtv_p3WjxBHmQpAQi1pXXJnfB0JjJlEHCw
+      # Server
+      SUPABASE_URL: http://localhost:8000
+      SUPABASE_SERVICE_KEY: ${{ env.SERVICE_ROLE_KEY }}
+      PLATFORM_MODE: mock
+      MOCK_BRIDGE: 'true'
+      NODE_ENV: test
+      # Client
+      EXPO_PUBLIC_SUPABASE_URL: http://localhost:8000
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ env.ANON_KEY }}
+      EXPO_PUBLIC_API_URL: http://localhost:3001
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: |
+          cd server && bun install
+          cd ../client && bun install
+
+      # ------------------------------------------------------------------
+      # Boot Supabase stack (DB + Kong + GoTrue + PostgREST + Realtime)
+      # ------------------------------------------------------------------
+      - name: Start Supabase stack
+        working-directory: ./docker/supabase
+        run: |
+          docker compose -f docker-compose.supabase.yml up -d db kong auth rest realtime
+
+      - name: Wait for Supabase to be healthy
+        run: |
+          echo "Waiting for Supabase DB..."
+          timeout 60 bash -c 'until docker exec supabase-db pg_isready -U postgres; do sleep 2; done'
+          echo "Waiting for Supabase Kong gateway..."
+          timeout 60 bash -c 'until curl -sf http://localhost:8000/rest/v1/ -H "apikey: '"$ANON_KEY"'" -o /dev/null; do sleep 3; done'
+
+      - name: Apply database migrations
+        run: |
+          for f in supabase/migrations/*.sql; do
+            echo "Applying $f ..."
+            docker exec -i supabase-db psql -U postgres -d postgres < "$f"
+          done
+
+      - name: Seed test fixtures
+        run: |
+          docker exec -i supabase-db psql -U postgres -d postgres << 'SQL'
+          -- Test user
+          INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, role)
+          VALUES (
+            '00000000-0000-0000-0000-000000000001',
+            'test@claire.local',
+            crypt('password123', gen_salt('bf')),
+            now(),
+            'authenticated'
+          ) ON CONFLICT (id) DO NOTHING;
+
+          -- Platform session (WhatsApp, connected)
+          INSERT INTO public.platform_sessions (id, user_id, platform, status, platform_user_id)
+          VALUES (
+            'mock-session-1',
+            '00000000-0000-0000-0000-000000000001',
+            'whatsapp',
+            'connected',
+            '+15161234567'
+          ) ON CONFLICT (id) DO NOTHING;
+
+          -- Seed chat
+          INSERT INTO public.chats (id, user_id, platform, platform_chat_id, name)
+          VALUES (
+            'mock-chat-wa-alice',
+            '00000000-0000-0000-0000-000000000001',
+            'whatsapp',
+            'mock-chat-wa-alice',
+            'Alice (WA)'
+          ) ON CONFLICT DO NOTHING;
+
+          -- Seed messages
+          INSERT INTO public.messages (id, chat_id, user_id, platform, platform_message_id, content, contact_name, from_me, status, timestamp)
+          VALUES (
+            'msg-wa-1',
+            'mock-chat-wa-alice',
+            '00000000-0000-0000-0000-000000000001',
+            'whatsapp',
+            'wa-msg-1',
+            'I''ll send you the report by Friday',
+            'Alice (WA)',
+            false,
+            'delivered',
+            now() - interval '1 hour'
+          ) ON CONFLICT DO NOTHING;
+          SQL
+
+      # ------------------------------------------------------------------
+      # Start Bun server (MOCK_BRIDGE mode — no Matrix/bridges needed)
+      # ------------------------------------------------------------------
+      - name: Start Bun server
+        working-directory: ./server
+        run: |
+          MOCK_BRIDGE=true bun run src/index.ts &
+          echo "SERVER_PID=$!" >> $GITHUB_ENV
+          timeout 30 bash -c 'until curl -sf http://localhost:3001/health; do sleep 1; done'
+
+      # ------------------------------------------------------------------
+      # Install Playwright browsers and run e2e against the Expo web build
+      # ------------------------------------------------------------------
+      - name: Install Playwright browsers
+        working-directory: ./client
+        run: bunx playwright install chromium --with-deps
+
+      - name: Run Playwright e2e (mock-bridge, real Supabase)
+        working-directory: ./client
+        env:
+          MOCK_BRIDGE: 'true'
+          # Override the client to talk to the real (local) Supabase
+          EXPO_PUBLIC_SUPABASE_URL: http://localhost:8000
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ env.ANON_KEY }}
+          EXPO_PUBLIC_API_URL: http://localhost:3001
+        run: bunx playwright test --reporter=github
+
+      # ------------------------------------------------------------------
+      # Collect artifacts on failure
+      # ------------------------------------------------------------------
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-nightly
+          path: client/playwright-report/
+          retention-days: 7
+
+      - name: Upload Playwright trace
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-trace-nightly
+          path: client/test-results/
+          retention-days: 7
+
+      # ------------------------------------------------------------------
+      # Teardown
+      # ------------------------------------------------------------------
+      - name: Stop Docker stack
+        if: always()
+        working-directory: ./docker/supabase
+        run: docker compose -f docker-compose.supabase.yml down -v
