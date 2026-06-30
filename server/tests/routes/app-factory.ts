@@ -135,6 +135,31 @@ export function createApp() {
   });
 
   // ------------------------------------------------------------------
+  // /preferences
+  // ------------------------------------------------------------------
+  const MOCK_PREFERENCES = {
+    tone: 'friendly',
+    response_style: 'concise',
+    language: 'en',
+    notification_enabled: true,
+    preferences: {
+      quiet_hours_enabled: false,
+      quiet_hours_start: '22:00',
+      quiet_hours_end: '08:00',
+      notify_messages: true,
+      notify_promises: true,
+      notify_ai_suggestions: false,
+    },
+  };
+
+  app.get('/preferences', requireAuth, (_req, res) => {
+    res.json({ success: true, data: MOCK_PREFERENCES });
+  });
+  app.put('/preferences', requireAuth, (req, res) => {
+    res.json({ success: true, data: { ...MOCK_PREFERENCES, ...req.body } });
+  });
+
+  // ------------------------------------------------------------------
   // 404 catch-all
   // ------------------------------------------------------------------
   app.use((_req, res) => {

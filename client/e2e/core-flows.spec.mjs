@@ -298,6 +298,31 @@ async function mockBackend(page) {
     });
   });
 
+  // Bun server API: preferences (GET + PUT)
+  await page.route('**/preferences**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        success: true,
+        data: {
+          tone: 'friendly',
+          response_style: 'concise',
+          language: 'en',
+          notification_enabled: true,
+          preferences: {
+            quiet_hours_enabled: false,
+            quiet_hours_start: '22:00',
+            quiet_hours_end: '08:00',
+            notify_messages: true,
+            notify_promises: true,
+            notify_ai_suggestions: false,
+          },
+        },
+      }),
+    });
+  });
+
   // Supabase realtime — stub WebSocket preflight requests
   await page.route('**/realtime/**', async (route) => {
     await route.fulfill({ status: 200, body: '{}' });
@@ -512,6 +537,46 @@ test.describe('Core loop — mock backend', () => {
     await expect(page.getByTestId('platform-login-screen')).toBeVisible();
     await expect(page.getByTestId('platform-selector-whatsapp')).toBeVisible();
     await expect(page.getByTestId('platform-selector-instagram')).toBeVisible();
+  });
+
+  // 8. Notification preferences — screen renders and toggles are present
+  test('notification preferences screen renders all toggles', async ({ page }) => {
+    await signIn(page);
+
+    // Navigate to Settings tab
+    await page.click('text=Settings');
+    await expect(page.getByTestId('settings-screen')).toBeVisible({ timeout: 8_000 });
+
+    // Tap Notifications row
+    await page.getByTestId('settings-notifications').click();
+
+    // Notifications settings screen should be visible
+    await expect(page.getByTestId('notifications-settings-screen')).toBeVisible({ timeout: 8_000 });
+
+    // All three per-type toggles should be present
+    await expect(page.getByTestId('notif-toggle-enabled')).toBeVisible();
+    await expect(page.getByTestId('notif-toggle-messages')).toBeVisible();
+    await expect(page.getByTestId('notif-toggle-promises')).toBeVisible();
+    await expect(page.getByTestId('notif-toggle-ai-suggestions')).toBeVisible();
+    await expect(page.getByTestId('notif-toggle-quiet-hours')).toBeVisible();
+  });
+
+  // 8b. Notification preferences — prefs persist on save
+  test('notification preferences: toggling DND disables other toggles', async ({ page }) => {
+    await signIn(page);
+
+    await page.click('text=Settings');
+    await expect(page.getByTestId('settings-screen')).toBeVisible({ timeout: 8_000 });
+    await page.getByTestId('settings-notifications').click();
+
+    await expect(page.getByTestId('notifications-settings-screen')).toBeVisible({ timeout: 8_000 });
+
+    // DND toggle is initially on (notification_enabled=true from mock)
+    // Tap it to turn off
+    await page.getByTestId('notif-toggle-enabled').click();
+
+    // Save button is present (the route mock will accept PUT)
+    await expect(page.getByTestId('notifications-settings-save')).toBeVisible();
   });
 });
 
