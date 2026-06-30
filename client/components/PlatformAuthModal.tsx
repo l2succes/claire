@@ -64,6 +64,7 @@ export function PlatformAuthModal({
   const [showInstagramWebView, setShowInstagramWebView] = useState(false);
   const [instagramLoginSession, setInstagramLoginSession] = useState<InstagramLoginStep | null>(null);
   const [instagramConnecting, setInstagramConnecting] = useState(false);
+  const [instagramError, setInstagramError] = useState<string | null>(null);
 
   // Reset state when modal opens/closes
   useEffect(() => {
@@ -73,6 +74,7 @@ export function PlatformAuthModal({
       setShowInstagramWebView(false);
       setInstagramLoginSession(null);
       setInstagramConnecting(false);
+      setInstagramError(null);
       clearError();
     }
   }, [visible, clearError]);
@@ -104,6 +106,7 @@ export function PlatformAuthModal({
   };
 
   const handleInstagramWebViewOpen = async () => {
+    setInstagramError(null);
     try {
       const session = await platformsApi.instagramLoginStart(
         platformCapabilities.isWeb ? 'web' : 'native'
@@ -112,6 +115,9 @@ export function PlatformAuthModal({
       setShowInstagramWebView(true);
     } catch (err) {
       console.error('[Instagram] Failed to start login session:', err);
+      setInstagramError(
+        err instanceof Error ? err.message : 'Failed to start Instagram login'
+      );
     }
   };
 
@@ -121,6 +127,7 @@ export function PlatformAuthModal({
     const { sessionId, loginId, stepId } = instagramLoginSession;
 
     setInstagramConnecting(true);
+    setInstagramError(null);
     try {
       await platformsApi.instagramLoginSubmit(sessionId, loginId, stepId, submission);
       pollAuthStatus(Platform.INSTAGRAM, sessionId, (session) => {
@@ -129,10 +136,14 @@ export function PlatformAuthModal({
           onSuccess();
         } else if (session.status === 'failed') {
           setInstagramConnecting(false);
+          setInstagramError(session.error || 'Instagram connection failed');
         }
       });
-    } catch {
+    } catch (err) {
       setInstagramConnecting(false);
+      setInstagramError(
+        err instanceof Error ? err.message : 'Failed to connect Instagram'
+      );
     }
   };
 
@@ -346,7 +357,7 @@ export function PlatformAuthModal({
 
     if (!activeAuthFlow || activeAuthFlow.step === 'initial') {
       return (
-        <View className="py-4">
+        <View className="py-4" testID="telegram-phone-step">
           <Text className="text-gray-600 dark:text-gray-300 text-center mb-4">
             Enter your phone number to receive a verification code
           </Text>
@@ -358,6 +369,7 @@ export function PlatformAuthModal({
             autoComplete="tel"
             className="bg-gray-100 dark:bg-gray-800 rounded-lg px-4 py-3 text-gray-900 dark:text-white text-lg mb-4"
             placeholderTextColor="#9ca3af"
+            testID="telegram-phone-input"
           />
           <Button
             variant="primary"
@@ -365,6 +377,7 @@ export function PlatformAuthModal({
             loading={isLoading}
             disabled={!phoneNumber}
             className="w-full"
+            testID="telegram-send-code-button"
           >
             Send Code
           </Button>
@@ -374,7 +387,7 @@ export function PlatformAuthModal({
 
     if (needsCode) {
       return (
-        <View className="py-4">
+        <View className="py-4" testID="telegram-code-step">
           <Text className="text-gray-600 dark:text-gray-300 text-center mb-2">
             Enter the verification code sent to
           </Text>
@@ -389,6 +402,7 @@ export function PlatformAuthModal({
             maxLength={6}
             className="bg-gray-100 dark:bg-gray-800 rounded-lg px-4 py-3 text-gray-900 dark:text-white text-2xl text-center tracking-widest mb-4"
             placeholderTextColor="#9ca3af"
+            testID="telegram-code-input"
           />
           <Button
             variant="primary"
@@ -396,6 +410,7 @@ export function PlatformAuthModal({
             loading={isLoading}
             disabled={verificationCode.length < 5}
             className="w-full"
+            testID="telegram-verify-button"
           >
             Verify
           </Button>
@@ -404,7 +419,7 @@ export function PlatformAuthModal({
     }
 
     return (
-      <View className="items-center py-8">
+      <View className="items-center py-8" testID="telegram-sending-state">
         <ActivityIndicator size="large" color={display.color} />
         <Text className="text-gray-500 dark:text-gray-400 mt-4">
           Sending verification code...
@@ -421,6 +436,33 @@ export function PlatformAuthModal({
           <Text className="text-gray-500 dark:text-gray-400 mt-4">
             Connecting to Instagram...
           </Text>
+        </View>
+      );
+    }
+
+    if (instagramError) {
+      return (
+        <View className="items-center py-8" testID="instagram-error-state">
+          <View className="w-16 h-16 rounded-full bg-red-100 items-center justify-center mb-4">
+            <AlertCircle size={32} color="#ef4444" />
+          </View>
+          <Text className="text-xl font-semibold text-gray-900 dark:text-white">
+            Connection Failed
+          </Text>
+          <Text className="text-gray-500 dark:text-gray-400 mt-2 text-center px-4">
+            {instagramError}
+          </Text>
+          <Button
+            variant="primary"
+            onPress={() => {
+              setInstagramError(null);
+              handleInstagramWebViewOpen();
+            }}
+            className="mt-6"
+            testID="instagram-retry-button"
+          >
+            Try Again
+          </Button>
         </View>
       );
     }
