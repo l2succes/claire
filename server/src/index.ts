@@ -10,6 +10,7 @@ import { logger, stream } from './utils/logger';
 import { supabase } from './services/supabase';
 import { redis } from './services/redis';
 import { sessionMonitor } from './services/session-monitor';
+import { reminderScheduler } from './services/reminder-scheduler';
 import authRoutes from './routes/auth';
 import messageRoutes from './routes/messages';
 import aiRoutes from './routes/ai';
@@ -351,6 +352,9 @@ const server = app.listen(PORT, async () => {
   // Start session monitor
   sessionMonitor.start();
 
+  // Start promise reminder scheduler
+  reminderScheduler.start();
+
   // Initialize platforms
   await initializePlatforms();
 });
@@ -360,6 +364,7 @@ process.on('SIGTERM', async () => {
   logger.info('SIGTERM received, shutting down gracefully');
 
   sessionMonitor.stop();
+  await reminderScheduler.stop();
   await platformManager.shutdown();
 
   server.close(() => {
