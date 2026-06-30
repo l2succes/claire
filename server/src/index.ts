@@ -2,8 +2,11 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
+import * as Sentry from '@sentry/node';
 import { config, platformConfig, matrixConfig, serverConfig } from './config';
+import { initSentry } from './utils/sentry';
 import { logger, stream } from './utils/logger';
+
 import { supabase } from './services/supabase';
 import { sessionMonitor } from './services/session-monitor';
 import authRoutes from './routes/auth';
@@ -20,8 +23,16 @@ import { imessageAdapter } from './adapters/imessage';
 import { instagramAdapter } from './adapters/instagram';
 import { MatrixBridgeAdapter } from './adapters/matrix';
 
+// Initialise Sentry as early as possible (no-op when SENTRY_DSN is unset)
+initSentry();
+
 const app = express();
 const PORT = config.PORT;
+
+// Sentry request handler — must come first in the middleware chain
+if (config.SENTRY_DSN) {
+  Sentry.setupExpressErrorHandler(app);
+}
 
 // Middleware
 app.use(helmet());
@@ -97,9 +108,11 @@ app.get('/health', async (req, res) => {
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   logger.error('Unhandled error:', err);
-  
+  if (config.SENTRY_DSN) {
+    Sentry.captureException(err);
+  }
   res.status(err.status || 500).json({
-    error: config.NODE_ENV === 'production' 
+    error: config.NODE_ENV === 'production'
       ? 'Internal server error'
       : err.message,
   });
