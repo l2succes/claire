@@ -202,6 +202,7 @@ export default function HomeScreen() {
       className="flex-1 bg-gray-50 dark:bg-gray-900"
       contentContainerStyle={{ paddingTop: 12, paddingBottom: 32 }}
       showsVerticalScrollIndicator={false}
+      testID="dashboard-screen"
     >
       {/* Morning Brief */}
       <MorningBrief text={DUMMY_MORNING_BRIEF} />

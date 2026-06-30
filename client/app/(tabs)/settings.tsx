@@ -124,18 +124,21 @@ export default function SettingsScreen() {
     description,
     onPress,
     danger = false,
+    testID,
   }: {
     icon: typeof User;
     title: string;
     description: string;
     onPress?: () => void;
     danger?: boolean;
+    testID?: string;
   }) => (
     <TouchableOpacity
       onPress={onPress}
       disabled={!onPress}
       className="bg-white dark:bg-gray-800 rounded-lg px-4 py-3 mb-3 flex-row items-center"
       activeOpacity={onPress ? 0.7 : 1}
+      testID={testID}
     >
       <View
         className={`w-10 h-10 rounded-full items-center justify-center mr-3 ${
@@ -261,18 +264,21 @@ export default function SettingsScreen() {
           icon={User}
           title="Account"
           description="Manage your account settings"
+          testID="settings-account"
         />
 
         <SettingsSection
           icon={Bell}
           title="Notifications"
           description="Configure notification preferences"
+          testID="settings-notifications"
         />
 
         <SettingsSection
           icon={Sparkles}
           title="AI Settings"
           description="Customize AI response behavior"
+          testID="settings-ai"
         />
 
         {/* Logout */}
@@ -283,6 +289,7 @@ export default function SettingsScreen() {
             description="Sign out of your account"
             onPress={handleLogout}
             danger
+            testID="settings-logout"
           />
         </View>
 
