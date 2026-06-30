@@ -123,4 +123,14 @@ CI must be green either way: lint + typecheck + jest + web build + **mock Playwr
    - **Interactive (in a Claude Code session):** `/claire-loop until-green`.
    - **Unattended/detached (dedicated machine):** `nohup zsh -ic 'scripts/loop-runner.sh 40' >/tmp/claire-loop.out 2>&1 &` — runs one ticket per fresh `claude -p` session until the pickable backlog drains; logs to `.context/loop-runner.log`. Monitor with `tail -f .context/loop-runner.log`; review parked PRs with `gh pr list --label needs-review`.
 
+### Watching a run
+
+`claude -p` runs headless — there is no live TUI. Visibility comes from three places:
+
+- **Live dashboard** (second terminal, no restart): `scripts/loop-watch.sh` — shows the active ticket (git worktree), runner heartbeat, open PRs, latest CI, queue counts, and the ledger, refreshing every few seconds.
+- **Live agent trace** (its actual tool calls/messages): the runner defaults to `LOOP_VERBOSE=1`, streaming `--output-format stream-json` formatted by `scripts/loop-fmt.jq` into `.context/loop-runner.log` (raw JSONL saved to `.context/loop-trace.jsonl`). Tail it directly with: `tail -f .context/loop-trace.jsonl | jq -Rrf scripts/loop-fmt.jq`. Set `LOOP_VERBOSE=0` for terse final-result-only logs.
+- **Durable trail:** the agent claims each issue with a `🔁 loop: starting` comment, opens branches/PRs, and appends to `.context/loop-state.md`. `gh pr list`, `gh issue list`, and `gh run watch` show progress and parked (`needs-review`) PRs.
+
+> A run already in flight was launched with the old runner (text-only output); to get the live trace, stop it and relaunch with the updated `scripts/loop-runner.sh`.
+
 Because GitHub Issues + `.context/loop-state.md` are the shared truth, you can stop/restart, or move to another machine, and the loop resumes where it left off.
