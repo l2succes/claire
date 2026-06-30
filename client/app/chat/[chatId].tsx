@@ -398,14 +398,19 @@ export default function ChatScreen() {
           />
         )}
 
-        {/* AI Response Suggestions */}
-        {messages.filter(m => !m.from_me).length > 0 && (
-          <ResponseSuggestion
-            chatId={chatId!}
-            messageId={[...messages].reverse().find(m => !m.from_me)?.id ?? ''}
-            onSelectSuggestion={(text) => setInputText(text)}
-          />
-        )}
+        {/* AI Response Suggestions / Draft reply button */}
+        {messages.filter(m => !m.from_me).length > 0 && (() => {
+          const lastInbound = [...messages].reverse().find(m => !m.from_me);
+          return (
+            <ResponseSuggestion
+              chatId={chatId!}
+              messageId={lastInbound?.id ?? ''}
+              messageContent={lastInbound?.content}
+              isGroup={is_group === '1'}
+              onSelectSuggestion={(text) => setInputText(text)}
+            />
+          );
+        })()}
 
         {/* Contact Clarification Card */}
         {showClarificationCard && (

@@ -526,6 +526,22 @@ async function mockBackend(page) {
     });
   });
 
+  // Bun server API: on-demand AI response generation (POST /ai/responses/generate)
+  await page.route('**/ai/responses/generate**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        success: true,
+        data: {
+          messageId: 'chatmsg-1',
+          suggestions: ['Sure, I can do that!', 'Sounds good, let me check.'],
+          confidence: 0.9,
+        },
+      }),
+    });
+  });
+
   // Supabase realtime — stub WebSocket preflight requests
   await page.route('**/realtime/**', async (route) => {
     await route.fulfill({ status: 200, body: '{}' });
@@ -732,6 +748,62 @@ test.describe('Core loop — mock backend', () => {
     await expect(page.getByTestId('chat-input')).toHaveValue(
       'Sounds great, but let me check my schedule first!',
       { timeout: 3_000 }
+    );
+  });
+
+  // 5e. On-demand "Draft reply" button — tapping fills the composer via /ai/responses/generate (#22)
+  test('draft reply button populates composer via on-demand generate', async ({ page }) => {
+    // Override ai_suggestions to return empty (no pre-stored suggestions) so the
+    // Draft reply button is shown instead of the suggestion strip.
+    await page.route('**/rest/v1/**', async (route) => {
+      const url = route.request().url();
+      const method = route.request().method();
+      if (url.includes('/ai_suggestions')) {
+        // Return empty list for both GET and PATCH
+        await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+      } else if (url.includes('/messages')) {
+        if (url.includes('chat_id=eq.')) {
+          await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_CHAT_MESSAGES) });
+        } else {
+          await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_INBOX_MESSAGES) });
+        }
+      } else if (url.includes('/chats')) {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_CHATS[0]) });
+      } else if (url.includes('/platform_sessions')) {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_PLATFORM_SESSIONS) });
+      } else if (url.includes('/smart_cards')) {
+        if (method === 'PATCH') {
+          await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+        } else {
+          await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+        }
+      } else if (url.includes('/contact_profiles')) {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(null) });
+      } else {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+      }
+    });
+
+    await signIn(page);
+
+    await expect(
+      page.locator('[data-testid^="message-card-"]').first()
+    ).toBeVisible({ timeout: 8_000 });
+    await page.locator('[data-testid^="message-card-"]').first().click();
+
+    await expect(page.getByTestId('chat-screen')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId('chat-message-list')).toBeVisible({ timeout: 8_000 });
+
+    // Draft reply button should appear (no stored suggestions)
+    await expect(page.getByTestId('draft-reply-button')).toBeVisible({ timeout: 8_000 });
+
+    // Tap the button — calls /ai/responses/generate (mocked)
+    await page.getByTestId('draft-reply-button').click();
+
+    // Composer should be filled with the first suggestion from the mock response
+    await expect(page.getByTestId('chat-input')).toHaveValue(
+      'Sure, I can do that!',
+      { timeout: 8_000 }
     );
   });
 
