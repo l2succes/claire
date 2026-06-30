@@ -1606,4 +1606,152 @@ test.describe('Platform connect flows — mock backend', () => {
     // Modal should still be visible (login flow in progress or WebView opened)
     await expect(page.getByTestId('platform-auth-modal')).toBeVisible({ timeout: 3_000 });
   });
+
+  // ---------------------------------------------------------------------------
+  // Auto-reply rules (#40)
+  // ---------------------------------------------------------------------------
+
+  test('auto-reply rules screen renders from settings', async ({ page }) => {
+    const MOCK_RULES = [];
+
+    // Intercept /auto-reply API
+    await page.route('**/auto-reply**', async (route) => {
+      const method = route.request().method();
+      if (method === 'GET') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ rules: MOCK_RULES }),
+        });
+      } else {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+      }
+    });
+
+    await signIn(page);
+
+    // Navigate to Settings tab
+    await page.click('text=Settings');
+    await expect(page.getByTestId('settings-screen')).toBeVisible({ timeout: 8_000 });
+
+    // Tap Auto-Reply Rules entry
+    await page.getByTestId('settings-auto-reply').click();
+    await expect(page.getByTestId('auto-reply-settings-screen')).toBeVisible({ timeout: 10_000 });
+
+    // Empty state should show
+    await expect(page.getByTestId('auto-reply-empty')).toBeVisible({ timeout: 5_000 });
+  });
+
+  test('auto-reply: create a keyword rule', async ({ page }) => {
+    const createdRule = {
+      id: 'rule-1',
+      name: 'OOO Reply',
+      enabled: true,
+      trigger_type: 'keyword',
+      keywords: ['vacation', 'ooo'],
+      reply_template: "I'm out of office, back soon!",
+      max_per_hour: 5,
+      max_per_day: 20,
+      created_at: new Date().toISOString(),
+    };
+
+    let rulesStore = [];
+
+    await page.route('**/auto-reply**', async (route) => {
+      const method = route.request().method();
+      if (method === 'GET') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ rules: rulesStore }),
+        });
+      } else if (method === 'POST') {
+        rulesStore = [createdRule];
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ rule: createdRule }),
+        });
+      } else {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+      }
+    });
+
+    await signIn(page);
+    await page.click('text=Settings');
+    await expect(page.getByTestId('settings-screen')).toBeVisible({ timeout: 8_000 });
+    await page.getByTestId('settings-auto-reply').click();
+    await expect(page.getByTestId('auto-reply-settings-screen')).toBeVisible({ timeout: 10_000 });
+
+    // Open create modal via "+" button
+    await page.getByTestId('auto-reply-add-rule').click();
+    await expect(page.getByTestId('auto-reply-create-modal')).toBeVisible({ timeout: 5_000 });
+
+    // Fill in the form
+    await page.getByTestId('auto-reply-name-input').fill('OOO Reply');
+    // keyword trigger is default — verify the keywords input is visible
+    await expect(page.getByTestId('auto-reply-keywords-input')).toBeVisible({ timeout: 3_000 });
+    await page.getByTestId('auto-reply-keywords-input').fill('vacation, ooo');
+    await page.getByTestId('auto-reply-template-input').fill("I'm out of office, back soon!");
+
+    // Save the rule
+    await page.getByTestId('auto-reply-modal-save').click();
+
+    // Modal closes and the new rule appears in the list
+    await expect(page.getByTestId('auto-reply-create-modal')).not.toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId('auto-reply-rules-list')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId(`auto-reply-rule-${createdRule.id}`)).toBeVisible({ timeout: 5_000 });
+  });
+
+  test('auto-reply: toggle a rule on/off', async ({ page }) => {
+    const rule = {
+      id: 'rule-toggle-1',
+      name: 'Thanks Reply',
+      enabled: true,
+      trigger_type: 'thanks',
+      reply_template: 'You are welcome!',
+      max_per_hour: 5,
+      max_per_day: 20,
+      created_at: new Date().toISOString(),
+    };
+
+    await page.route('**/auto-reply**', async (route) => {
+      const method = route.request().method();
+      if (method === 'GET') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ rules: [rule] }),
+        });
+      } else if (method === 'PATCH') {
+        const body = JSON.parse(route.request().postData() || '{}');
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ rule: { ...rule, enabled: body.enabled } }),
+        });
+      } else {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+      }
+    });
+
+    await signIn(page);
+    await page.click('text=Settings');
+    await expect(page.getByTestId('settings-screen')).toBeVisible({ timeout: 8_000 });
+    await page.getByTestId('settings-auto-reply').click();
+    await expect(page.getByTestId('auto-reply-settings-screen')).toBeVisible({ timeout: 10_000 });
+
+    // The rule card should be present
+    await expect(page.getByTestId(`auto-reply-rule-${rule.id}`)).toBeVisible({ timeout: 5_000 });
+
+    // The toggle should exist (enabled state)
+    const toggle = page.getByTestId(`auto-reply-toggle-${rule.id}`);
+    await expect(toggle).toBeVisible({ timeout: 5_000 });
+
+    // Click the toggle to disable
+    await toggle.click();
+
+    // Toggle interaction succeeded (no error alert)
+    await expect(page.getByTestId('auto-reply-settings-screen')).toBeVisible({ timeout: 3_000 });
+  });
 });
