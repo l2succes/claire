@@ -36,7 +36,7 @@ All work is tracked as **GitHub Issues** on `l2succes/claire`.
 gh issue list --state open --label ready --json number,title,labels,milestone \
   --jq 'map(.pri = (([.labels[].name]|map(select(test("^p[0-9]$")))|first) // "p9")) | sort_by(.milestone.title, .pri) | .[] | "#\(.number) [\(.milestone.title|split(" ")[0])] \(.pri) \(.title)"'
 ```
-Skip anything labeled `blocked` or whose body lists `Depends on:` an issue that is still open.
+Skip anything labeled `blocked` or `needs-review` (already built, PR parked), or whose body lists `Depends on:` an issue that is still open.
 
 The backlog is created (idempotently) by `scripts/loop-init.sh` via `/claire-loop-init`.
 
@@ -57,7 +57,7 @@ The backlog is created (idempotently) by `scripts/loop-init.sh` via `/claire-loo
 6. **PR** — `gh pr create --base main` with `Closes #<num>`, the risk tier, and how it was verified.
 7. **Merge decision:**
    - `risk/auto-merge` → `gh pr merge --squash --auto` (lands when CI is green).
-   - `risk/human-gate` → leave open, add `needs-review` to the issue, ping the user. **Never auto-merge human-gate.**
+   - `risk/human-gate` → leave open; **remove `ready`, add `needs-review`** (so the loop won't re-pick it); ping the user. **Never auto-merge human-gate.** A human merges after review, clearing it from the queue.
 8. **Record** — tick the milestone in the tracking issue when complete; append to `.context/loop-state.md`:
    `<iso-time> | #<num> <title> | PR #<pr> | <merged|needs-review|blocked>`.
 9. **Clean up** worktree; repeat.
@@ -119,6 +119,8 @@ CI must be green either way: lint + typecheck + jest + web build + **mock Playwr
 3. `cd server && bun install && cd ../client && bun install`
 4. Copy env files: `server/.env`, `client/.env`. The mock-bridge loop needs **no** Docker and **no** real WhatsApp/Matrix — Docker is only for the real-stack nightly run.
 5. **First time only:** `/claire-loop-init` to populate the backlog. Skip if another machine already created it (issues are shared server-side).
-6. Run the loop: `/claire-loop until-green`.
+6. Run the loop, either way:
+   - **Interactive (in a Claude Code session):** `/claire-loop until-green`.
+   - **Unattended/detached (dedicated machine):** `nohup zsh -ic 'scripts/loop-runner.sh 40' >/tmp/claire-loop.out 2>&1 &` — runs one ticket per fresh `claude -p` session until the pickable backlog drains; logs to `.context/loop-runner.log`. Monitor with `tail -f .context/loop-runner.log`; review parked PRs with `gh pr list --label needs-review`.
 
 Because GitHub Issues + `.context/loop-state.md` are the shared truth, you can stop/restart, or move to another machine, and the loop resumes where it left off.

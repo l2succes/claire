@@ -27,7 +27,7 @@ autonomously, until the bound in `$ARGUMENTS` is hit. Full spec: `docs/AUTONOMOU
      --jq 'map(.pri = (([.labels[].name]|map(select(test("^p[0-9]$")))|first) // "p9")) | sort_by(.milestone.title, .pri) | .[] | "#\(.number) [\(.milestone.title|split(" ")[0])] \(.pri) \(.title)"'
    ```
    Choose the **lowest milestone (M0 first), then lowest priority number (p0 first)**.
-   Skip any issue labeled `blocked`, or whose body says `Depends on:` an issue that is still open. (Hint: M0 issues **#7 web build, #8 MOCK_BRIDGE, #9 testIDs, #10 Playwright, #11 CI** are prerequisites for most e2e work — finish them first, roughly in that order.)
+   Skip any issue labeled `blocked` or `needs-review` (already built, PR parked), or whose body says `Depends on:` an issue that is still open. (Hint: M0 issues **#7 web build, #8 MOCK_BRIDGE, #9 testIDs, #10 Playwright, #11 CI** are prerequisites for most e2e work — finish them first, roughly in that order.)
 3. **Claim:** comment `🔁 loop: starting` on the issue. Create an isolated branch:
    `git worktree add ../wt-<num> -b feat/<area>-<slug> origin/main` (or a normal branch if not parallelizing).
 4. **Implement** strictly to the issue's Acceptance Criteria. Reuse existing code (see `docs/AUTONOMOUS_LOOP.md` "reuse map"). Add/extend mock Playwright e2e + unit tests.
@@ -44,7 +44,7 @@ autonomously, until the bound in `$ARGUMENTS` is hit. Full spec: `docs/AUTONOMOU
    ```
 7. **Merge decision:**
    - Issue labeled `risk/auto-merge` → `gh pr merge --squash --auto` (merges when CI is green).
-   - Issue labeled `risk/human-gate` → leave PR open, add `needs-review` to the issue, post one line to the user. **Never auto-merge human-gate.**
+   - Issue labeled `risk/human-gate` → leave PR open; **remove `ready` and add `needs-review`** on the issue (so the loop won't re-pick it), post one line to the user. **Never auto-merge human-gate.** A human merges it after review, which clears it from the queue.
 8. **Record:** check the milestone box in the "Road to v1 — tracking" issue if the milestone is complete; append a line to `.context/loop-state.md`:
    `<iso-time> | #<num> <title> | PR #<pr> | <merged|needs-review|blocked>`.
    (Get the timestamp with `date -u +%FT%TZ`.)
