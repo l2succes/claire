@@ -105,6 +105,40 @@ describe('/ai', () => {
     expect(Array.isArray(res.body.suggestions)).toBe(true);
   });
 
+  it('POST /responses/feedback — 401 without token', async () => {
+    const res = await request
+      .post('/ai/responses/feedback')
+      .send({ messageId: 'msg1', action: 'accept' });
+    expect(res.status).toBe(401);
+  });
+
+  it('POST /responses/feedback — accept action persists (200)', async () => {
+    const res = await request
+      .post('/ai/responses/feedback')
+      .set('Authorization', 'Bearer valid-token')
+      .send({ messageId: 'msg1', selectedIndex: 0, feedback: 'positive' });
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+  });
+
+  it('POST /responses/feedback — reject action persists (200)', async () => {
+    const res = await request
+      .post('/ai/responses/feedback')
+      .set('Authorization', 'Bearer valid-token')
+      .send({ messageId: 'msg1', feedback: 'negative' });
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+  });
+
+  it('POST /responses/feedback — edit action (customResponse) persists (200)', async () => {
+    const res = await request
+      .post('/ai/responses/feedback')
+      .set('Authorization', 'Bearer valid-token')
+      .send({ messageId: 'msg1', customResponse: 'My edited reply' });
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+  });
+
   it('GET /analytics — 401 without token', async () => {
     const res = await request.get('/ai/analytics');
     expect(res.status).toBe(401);
