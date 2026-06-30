@@ -347,8 +347,7 @@ test.describe('Core loop — mock backend', () => {
   test('inbox shows seeded messages after sign-in', async ({ page }) => {
     await signIn(page);
 
-    // Click Messages tab (client-side navigation preserves auth state)
-    await page.click('text=Messages');
+    // Dashboard is now the canonical inbox — no tab navigation needed
     await expect(page.getByTestId('messages-screen')).toBeVisible({ timeout: 10_000 });
     await expect(page.getByTestId('messages-list')).toBeVisible();
 
@@ -362,7 +361,6 @@ test.describe('Core loop — mock backend', () => {
   test('opening a chat shows message list', async ({ page }) => {
     await signIn(page);
 
-    await page.click('text=Messages');
     await expect(
       page.locator('[data-testid^="message-card-"]').first()
     ).toBeVisible({ timeout: 8_000 });
@@ -381,7 +379,6 @@ test.describe('Core loop — mock backend', () => {
     // the navigation that causes the fetch, so we don't miss it.
     const sessionsResponsePromise = page.waitForResponse('**/platforms/**', { timeout: 10_000 }).catch(() => null);
 
-    await page.click('text=Messages');
     await expect(
       page.locator('[data-testid^="message-card-"]').first()
     ).toBeVisible({ timeout: 8_000 });
@@ -405,7 +402,6 @@ test.describe('Core loop — mock backend', () => {
   test('AI suggestion text appears in chat', async ({ page }) => {
     await signIn(page);
 
-    await page.click('text=Messages');
     await expect(
       page.locator('[data-testid^="message-card-"]').first()
     ).toBeVisible({ timeout: 8_000 });

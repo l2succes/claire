@@ -1,6 +1,5 @@
 import { Tabs, Redirect } from 'expo-router';
 import {
-  Sparkles,
   MessageCircle,
   CheckSquare,
   Settings,
@@ -49,19 +48,16 @@ export default function TabLayout() {
       <Tabs.Screen
         name="dashboard"
         options={{
-          title: 'Home',
+          title: 'Messages',
           tabBarIcon: ({ color, size }) => (
-            <Sparkles size={size} color={color} />
+            <MessageCircle size={size} color={color} />
           ),
         }}
       />
       <Tabs.Screen
         name="messages"
         options={{
-          title: 'Messages',
-          tabBarIcon: ({ color, size }) => (
-            <MessageCircle size={size} color={color} />
-          ),
+          href: null,
         }}
       />
       <Tabs.Screen
