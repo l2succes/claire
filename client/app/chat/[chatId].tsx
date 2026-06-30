@@ -14,6 +14,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { usePlatformStore } from '../../stores/platformStore';
 import { PlatformBadge } from '../../components/PlatformIcon';
 import { ChatSmartCardTray } from '../../components/ChatSmartCardTray';
+import { ResponseSuggestion } from '../../components/ResponseSuggestion';
 import { useConversationSettingsStore } from '../../stores/conversationSettingsStore';
 import { Platform } from '../../types/platform';
 
@@ -375,6 +376,15 @@ export default function ChatScreen() {
                 <Text style={{ color: '#9ca3af', fontSize: 15 }}>No messages yet</Text>
               </View>
             }
+          />
+        )}
+
+        {/* AI Response Suggestions */}
+        {messages.filter(m => !m.from_me).length > 0 && (
+          <ResponseSuggestion
+            chatId={chatId!}
+            messageId={[...messages].reverse().find(m => !m.from_me)?.id ?? ''}
+            onSelectSuggestion={(text) => setInputText(text)}
           />
         )}
 
