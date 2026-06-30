@@ -377,4 +377,72 @@ router.get('/morning-brief',
   }
 );
 
+/**
+ * GET /ai/group-summary/:chatId
+ * Returns an AI-generated text summary of recent group-chat activity.
+ *
+ * In MOCK_BRIDGE mode (no real AI configured) the endpoint returns a
+ * deterministic canned summary so Playwright e2e tests pass with zero
+ * external deps.
+ */
+router.get('/group-summary/:chatId',
+  requireAuth,
+  async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { chatId } = req.params;
+
+      // Fetch the 50 most-recent messages for this group chat
+      const { data: messages, error } = await supabase
+        .from('messages')
+        .select('content, contact_name, timestamp, from_me')
+        .eq('chat_id', chatId)
+        .eq('user_id', userId)
+        .order('timestamp', { ascending: false })
+        .limit(50);
+
+      if (error) throw error;
+
+      if (!messages || messages.length === 0) {
+        return res.json({
+          success: true,
+          data: { summary: 'No messages yet in this group.' },
+        });
+      }
+
+      // Build a compact transcript for the AI prompt
+      const transcript = messages
+        .slice()
+        .reverse()
+        .map((m) => `${m.contact_name || (m.from_me ? 'You' : 'Unknown')}: ${m.content}`)
+        .join('\n');
+
+      let summary: string;
+
+      if (!aiProcessor.isConfigured) {
+        // Mock mode — deterministic fallback so tests pass without real AI
+        const participants = new Set(messages.map((m) => m.contact_name || 'Unknown'));
+        summary = `This group has ${messages.length} recent messages from ${participants.size} participant${participants.size === 1 ? '' : 's'}. Topics discussed include updates and coordination. (mock summary)`;
+      } else {
+        summary = await aiProcessor.summarizeText(
+          'You are a concise assistant. Summarize the following group chat transcript in 2-3 sentences, focusing on the main topics and any action items.',
+          transcript,
+        );
+      }
+
+      res.json({
+        success: true,
+        data: { summary },
+      });
+    } catch (error) {
+      logger.error('Error generating group summary:', error);
+      res.status(500).json({ success: false, error: 'Failed to generate group summary' });
+    }
+  }
+);
+
 export default router;

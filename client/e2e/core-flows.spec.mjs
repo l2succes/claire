@@ -252,6 +252,32 @@ const MOCK_CHATS = [
   },
 ];
 
+// Group chat fixture — used by the group-summary e2e test
+const MOCK_GROUP_CHAT_ID = 'mock-chat-wa-group-1';
+const MOCK_GROUP_INBOX_MESSAGE = {
+  id: 'msg-group-1',
+  chat_id: MOCK_GROUP_CHAT_ID,
+  contact_name: null,
+  chat_name: 'Friday Crew',
+  contact_phone: null,
+  content: 'Hey team, meeting at 3pm!',
+  timestamp: new Date(Date.now() - 1800_000).toISOString(),
+  from_me: false,
+  is_group: true,
+  platform: 'whatsapp',
+  platform_message_id: 'wa-group-msg-1',
+  status: 'delivered',
+  chats: { name: 'Friday Crew', platform_chat_id: MOCK_GROUP_CHAT_ID },
+  ai_suggestions: [],
+};
+
+const MOCK_GROUP_SUMMARY_RESP = {
+  success: true,
+  data: {
+    summary: 'The group discussed meeting logistics and upcoming plans. (mock summary)',
+  },
+};
+
 // ---------------------------------------------------------------------------
 // Route mocking helper — intercept all Supabase + server API calls.
 //
@@ -479,6 +505,15 @@ async function mockBackend(page) {
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({ success: true, data: MOCK_MORNING_BRIEF }),
+    });
+  });
+
+  // Bun server API: group summary
+  await page.route('**/ai/group-summary/**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(MOCK_GROUP_SUMMARY_RESP),
     });
   });
 
@@ -1057,6 +1092,80 @@ test.describe('Core loop — mock backend', () => {
     if (firstCardTestId) {
       await expect(page.getByTestId(firstCardTestId)).toBeVisible({ timeout: 3_000 });
     }
+  });
+
+  // 15. Group-chat summary — banner renders and shows summary text after expand (#41)
+  test('group chat summary banner renders and shows summary on expand', async ({ page }) => {
+    // Override the messages endpoint to return a group message as the first inbox entry
+    await page.route('**/rest/v1/**', async (route) => {
+      const url = route.request().url();
+      if (url.includes('/messages')) {
+        if (url.includes('chat_id=eq.')) {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify([
+              {
+                id: 'gchatmsg-1',
+                content: 'Hey team, meeting at 3pm!',
+                timestamp: new Date(Date.now() - 1800_000).toISOString(),
+                from_me: false,
+                contact_name: 'Alice',
+                contact_phone: null,
+                content_type: 'text',
+              },
+            ]),
+          });
+        } else {
+          // Inbox: return only the group message so the first card leads to a group chat
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify([MOCK_GROUP_INBOX_MESSAGE, ...MOCK_INBOX_MESSAGES]),
+          });
+        }
+      } else if (url.includes('/chats')) {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            id: MOCK_GROUP_CHAT_ID,
+            user_id: MOCK_USER_ID,
+            platform: 'whatsapp',
+            platform_chat_id: MOCK_GROUP_CHAT_ID,
+            name: 'Friday Crew',
+          }),
+        });
+      } else {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+      }
+    });
+
+    await signIn(page);
+
+    // First message card should be the group chat
+    await expect(
+      page.locator('[data-testid^="message-card-"]').first()
+    ).toBeVisible({ timeout: 8_000 });
+
+    // Navigate into the group chat (first card = Friday Crew)
+    await page.locator('[data-testid^="message-card-"]').first().click();
+
+    await expect(page.getByTestId('chat-screen')).toBeVisible({ timeout: 10_000 });
+
+    // Group summary banner should be present for group chats
+    await expect(page.getByTestId('group-chat-summary')).toBeVisible({ timeout: 8_000 });
+
+    // Tap the toggle to expand
+    await page.getByTestId('group-chat-summary-toggle').click();
+
+    // Summary content area should appear
+    await expect(page.getByTestId('group-chat-summary-content')).toBeVisible({ timeout: 5_000 });
+
+    // Summary text (mocked) should appear
+    await expect(
+      page.getByText('The group discussed meeting logistics and upcoming plans.')
+    ).toBeVisible({ timeout: 8_000 });
   });
 });
 
