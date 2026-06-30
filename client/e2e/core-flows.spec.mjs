@@ -438,6 +438,16 @@ async function mockBackend(page) {
     });
   });
 
+  // Bun server API: snooze message
+  await page.route('**/messages/*/snooze**', async (route) => {
+    const method = route.request().method();
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ success: true }),
+    });
+  });
+
   // Bun server API: preferences (GET + PUT)
   await page.route('**/preferences**', async (route) => {
     await route.fulfill({
@@ -970,6 +980,83 @@ test.describe('Core loop — mock backend', () => {
 
     // Input should be cleared after send
     await expect(page.getByTestId('chat-input')).toHaveValue('', { timeout: 5_000 });
+  });
+
+  // 14. Snooze — long-pressing a message card opens the snooze modal (#38)
+  test('long-pressing a message card opens the snooze picker', async ({ page }) => {
+    await signIn(page);
+
+    await expect(page.getByTestId('messages-screen')).toBeVisible({ timeout: 10_000 });
+    await expect(
+      page.locator('[data-testid^="message-card-"]').first()
+    ).toBeVisible({ timeout: 8_000 });
+
+    // Long-press to trigger onLongPress (Playwright click with delay triggers long-press)
+    await page.locator('[data-testid^="message-card-"]').first().click({ delay: 600 });
+
+    // Snooze modal should appear
+    await expect(page.getByTestId('snooze-modal-overlay')).toBeVisible({ timeout: 5_000 });
+
+    // Snooze options should be present
+    await expect(page.getByTestId('snooze-option-3h')).toBeVisible();
+    await expect(page.getByTestId('snooze-option-tomorrow')).toBeVisible();
+  });
+
+  // 14b. Snooze — selecting an option hides the message from inbox (#38)
+  test('snoozing a message hides it from the inbox', async ({ page }) => {
+    await signIn(page);
+
+    await expect(page.getByTestId('messages-screen')).toBeVisible({ timeout: 10_000 });
+    await expect(
+      page.locator('[data-testid^="message-card-"]').first()
+    ).toBeVisible({ timeout: 8_000 });
+
+    // Get the ID of the first card so we can check it disappears
+    const firstCard = page.locator('[data-testid^="message-card-"]').first();
+    const firstCardTestId = await firstCard.getAttribute('data-testid');
+
+    // Long-press to open snooze modal
+    await firstCard.click({ delay: 600 });
+    await expect(page.getByTestId('snooze-modal-overlay')).toBeVisible({ timeout: 5_000 });
+
+    // Tap "Later today (3 hours)" option
+    await page.getByTestId('snooze-option-3h').click();
+
+    // Modal should close
+    await expect(page.getByTestId('snooze-modal-overlay')).not.toBeVisible({ timeout: 3_000 });
+
+    // The snoozed card should be removed from the inbox (optimistic hide)
+    if (firstCardTestId) {
+      await expect(page.getByTestId(firstCardTestId)).not.toBeVisible({ timeout: 3_000 });
+    }
+  });
+
+  // 14c. Snooze — cancelling dismisses the modal without snoozing (#38)
+  test('cancelling the snooze modal keeps the message in inbox', async ({ page }) => {
+    await signIn(page);
+
+    await expect(page.getByTestId('messages-screen')).toBeVisible({ timeout: 10_000 });
+    await expect(
+      page.locator('[data-testid^="message-card-"]').first()
+    ).toBeVisible({ timeout: 8_000 });
+
+    const firstCard = page.locator('[data-testid^="message-card-"]').first();
+    const firstCardTestId = await firstCard.getAttribute('data-testid');
+
+    // Long-press to open snooze modal
+    await firstCard.click({ delay: 600 });
+    await expect(page.getByTestId('snooze-modal-overlay')).toBeVisible({ timeout: 5_000 });
+
+    // Tap Cancel
+    await page.getByTestId('snooze-cancel').click();
+
+    // Modal should close
+    await expect(page.getByTestId('snooze-modal-overlay')).not.toBeVisible({ timeout: 3_000 });
+
+    // The card should still be in the inbox (not snoozed)
+    if (firstCardTestId) {
+      await expect(page.getByTestId(firstCardTestId)).toBeVisible({ timeout: 3_000 });
+    }
   });
 });
 

@@ -315,6 +315,90 @@ router.post(
 );
 
 /**
+ * POST /messages/:messageId/snooze
+ * Snooze a message until a future time; it resurfaces in the inbox after that.
+ */
+const snoozeMessageSchema = z.object({
+  body: z.object({
+    // ISO timestamp or minutes from now
+    snooze_until: z.string().optional(),
+    snooze_minutes: z.number().int().positive().optional(),
+  }).refine((d) => d.snooze_until || d.snooze_minutes, {
+    message: 'Provide snooze_until or snooze_minutes',
+  }),
+});
+
+router.post(
+  '/:messageId/snooze',
+  requireAuth,
+  validateRequest(snoozeMessageSchema),
+  async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      const { messageId } = req.params;
+      const { snooze_until, snooze_minutes } = req.body;
+
+      const snoozeDate = snooze_until
+        ? new Date(snooze_until)
+        : new Date(Date.now() + (snooze_minutes as number) * 60_000);
+
+      if (isNaN(snoozeDate.getTime()) || snoozeDate <= new Date()) {
+        return res.status(400).json({ error: 'snooze_until must be a future timestamp' });
+      }
+
+      const { data, error } = await supabase
+        .from('messages')
+        .update({ snoozed_until: snoozeDate.toISOString() })
+        .eq('id', messageId)
+        .eq('user_id', userId)
+        .select('id, snoozed_until')
+        .single();
+
+      if (error || !data) {
+        return res.status(404).json({ error: 'Message not found' });
+      }
+
+      res.json({ success: true, message: data });
+    } catch (error) {
+      logger.error('Failed to snooze message:', error);
+      res.status(500).json({ error: 'Failed to snooze message' });
+    }
+  }
+);
+
+/**
+ * DELETE /messages/:messageId/snooze
+ * Un-snooze a message (clear snoozed_until)
+ */
+router.delete(
+  '/:messageId/snooze',
+  requireAuth,
+  async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      const { messageId } = req.params;
+
+      const { data, error } = await supabase
+        .from('messages')
+        .update({ snoozed_until: null })
+        .eq('id', messageId)
+        .eq('user_id', userId)
+        .select('id')
+        .single();
+
+      if (error || !data) {
+        return res.status(404).json({ error: 'Message not found' });
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      logger.error('Failed to un-snooze message:', error);
+      res.status(500).json({ error: 'Failed to un-snooze message' });
+    }
+  }
+);
+
+/**
  * DELETE /messages/:messageId
  * Delete a message
  */
