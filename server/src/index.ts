@@ -15,6 +15,7 @@ import aiRoutes from './routes/ai';
 import platformRoutes from './routes/platforms';
 import conversationRoutes from './routes/conversations';
 import preferencesRoutes from './routes/preferences';
+import { aiRateLimit, authRateLimit } from './middleware/rate-limit';
 import { platformManager } from './adapters';
 import { aiProcessor } from './services/ai-processor';
 import { whatsappAdapter } from './adapters/whatsapp';
@@ -54,9 +55,9 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(morgan('combined', { stream }));
 
 // Routes
-app.use('/auth', authRoutes);
+app.use('/auth', authRateLimit, authRoutes);
 app.use('/messages', messageRoutes);
-app.use('/ai', aiRoutes);
+app.use('/ai', aiRateLimit, aiRoutes);
 app.use('/platforms', platformRoutes);
 app.use('/conversations', conversationRoutes);
 app.use('/preferences', preferencesRoutes);
