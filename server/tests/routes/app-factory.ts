@@ -98,6 +98,43 @@ export function createApp() {
   });
 
   // ------------------------------------------------------------------
+  // /promises
+  // ------------------------------------------------------------------
+  const MOCK_PROMISE = {
+    id: 'promise-1',
+    user_id: 'test-user',
+    message_id: 'msg-1',
+    chat_id: 'chat-1',
+    content: "I'll send the report by Friday",
+    type: 'commitment',
+    priority: 'medium',
+    status: 'pending',
+    from_me: true,
+    created_at: new Date().toISOString(),
+  };
+
+  app.get('/promises', requireAuth, (_req, res) => {
+    res.json({ promises: [MOCK_PROMISE], total: 1 });
+  });
+  app.get('/promises/:id', requireAuth, (req, res): void => {
+    if (req.params.id !== MOCK_PROMISE.id) {
+      res.status(404).json({ error: 'Promise not found' });
+      return;
+    }
+    res.json({ promise: MOCK_PROMISE });
+  });
+  app.patch('/promises/:id', requireAuth, (req, res) => {
+    res.json({ promise: { ...MOCK_PROMISE, ...req.body, id: req.params.id } });
+  });
+  app.post('/promises/:id/snooze', requireAuth, (req, res) => {
+    const snoozedUntil = req.body?.until ?? new Date(Date.now() + 86_400_000).toISOString();
+    res.json({ promise: { ...MOCK_PROMISE, id: req.params.id, deadline: snoozedUntil } });
+  });
+  app.delete('/promises/:id', requireAuth, (_req, res) => {
+    res.json({ success: true });
+  });
+
+  // ------------------------------------------------------------------
   // 404 catch-all
   // ------------------------------------------------------------------
   app.use((_req, res) => {

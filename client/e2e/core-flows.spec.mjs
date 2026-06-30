@@ -450,6 +450,61 @@ test.describe('Core loop — mock backend', () => {
     await expect(page.getByTestId('promises-screen')).toBeVisible({ timeout: 10_000 });
   });
 
+  // 6b. Promises screen — seeded promise item appears in the list
+  test('Promises screen shows seeded promise item', async ({ page }) => {
+    await signIn(page);
+
+    await page.click('text=Promises');
+    await expect(page.getByTestId('promises-screen')).toBeVisible({ timeout: 10_000 });
+
+    // The promises list should be visible
+    await expect(page.getByTestId('promises-list')).toBeVisible({ timeout: 8_000 });
+
+    // The seeded promise item should appear
+    await expect(
+      page.locator('[data-testid^="promise-item-"]').first()
+    ).toBeVisible({ timeout: 8_000 });
+  });
+
+  // 6c. Promises screen — tab switching works
+  test('Promises screen tab switching renders correct tab', async ({ page }) => {
+    await signIn(page);
+
+    await page.click('text=Promises');
+    await expect(page.getByTestId('promises-screen')).toBeVisible({ timeout: 10_000 });
+
+    // Switch to Done tab
+    await page.getByTestId('promises-tab-done').click();
+    // Done tab is now active — either empty state or items show
+    await expect(page.getByTestId('promises-list')).toBeVisible({ timeout: 5_000 });
+
+    // Switch to Overdue tab
+    await page.getByTestId('promises-tab-overdue').click();
+    await expect(page.getByTestId('promises-list')).toBeVisible({ timeout: 5_000 });
+
+    // Switch back to Open
+    await page.getByTestId('promises-tab-open').click();
+    await expect(page.getByTestId('promises-list')).toBeVisible({ timeout: 5_000 });
+  });
+
+  // 6d. Promises screen — mark complete interaction
+  test('Promises screen mark complete button is present on open promise', async ({ page }) => {
+    await signIn(page);
+
+    await page.click('text=Promises');
+    await expect(page.getByTestId('promises-screen')).toBeVisible({ timeout: 10_000 });
+
+    // Wait for the promise item to appear
+    await expect(
+      page.locator('[data-testid^="promise-item-"]').first()
+    ).toBeVisible({ timeout: 8_000 });
+
+    // The "Done" button should be visible on open promises
+    await expect(
+      page.locator('[data-testid^="promise-complete-"]').first()
+    ).toBeVisible({ timeout: 5_000 });
+  });
+
   // 7. Platform connection screen — all required selectors present
   test('platform connection screen shows platform selectors', async ({ page }) => {
     await page.goto('/login');
