@@ -1,0 +1,151 @@
+name: Nightly — Send Reliability (WA/TG/IG)
+
+# Runs at 02:00 UTC every day.
+# Can also be triggered manually (workflow_dispatch) for ad-hoc testing.
+#
+# Purpose: verify that the /platforms/:platform/send round-trip works end-to-end
+# against real Matrix bridges.  Requires the following repository secrets to be
+# configured by an operator:
+#
+#   MATRIX_HOMESERVER_URL  — e.g. https://matrix.claire.local:8448
+#   MATRIX_ACCESS_TOKEN    — access token for @claire_bot:claire.local
+#   WA_SESSION_ID          — pre-authenticated WhatsApp session ID stored in Redis
+#   WA_LOOPBACK_CHAT_ID    — platform_chat_id of the WhatsApp self-chat / test number
+#   TG_SESSION_ID          — pre-authenticated Telegram session ID stored in Redis
+#   TG_LOOPBACK_CHAT_ID    — Telegram self-chat / test user ID
+#   IG_SESSION_ID          — pre-authenticated Instagram session ID stored in Redis
+#   IG_LOOPBACK_CHAT_ID    — Instagram self-chat / test user ID
+#   SUPABASE_URL           — PostgREST endpoint for the nightly DB
+#   SUPABASE_SERVICE_KEY   — service-role key (bypasses RLS for test fixtures)
+#   REDIS_URL              — Redis URL where sessions are stored
+#
+# The job POSTs a unique timestamped message to each platform's loopback chat and
+# asserts a 200 success response.  No real contacts are spammed — all three targets
+# should be the account owner's own number / username.
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+jobs:
+  send-reliability:
+    name: Send round-trip — ${{ matrix.platform }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: whatsapp
+            session_id_secret: WA_SESSION_ID
+            chat_id_secret: WA_LOOPBACK_CHAT_ID
+          - platform: telegram
+            session_id_secret: TG_SESSION_ID
+            chat_id_secret: TG_LOOPBACK_CHAT_ID
+          - platform: instagram
+            session_id_secret: IG_SESSION_ID
+            chat_id_secret: IG_LOOPBACK_CHAT_ID
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install server dependencies
+        working-directory: ./server
+        run: bun install --frozen-lockfile
+
+      # Start the Bun server in PLATFORM_MODE=matrix with real Matrix config.
+      # The server process is kept alive for the duration of the send test.
+      - name: Start server
+        working-directory: ./server
+        env:
+          PORT: 3001
+          PLATFORM_MODE: matrix
+          MATRIX_HOMESERVER_URL: ${{ secrets.MATRIX_HOMESERVER_URL }}
+          MATRIX_ACCESS_TOKEN: ${{ secrets.MATRIX_ACCESS_TOKEN }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          REDIS_URL: ${{ secrets.REDIS_URL }}
+          # Disable JWT verification in CI — the send test generates its own token
+          # by calling the auth endpoint with the service key directly.
+          JWT_SECRET: nightly-ci-secret
+        run: |
+          bun run src/index.ts &
+          # Wait for server to be ready (poll /health)
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3001/health > /dev/null 2>&1; then
+              echo "Server is up"
+              break
+            fi
+            sleep 2
+          done
+
+      # Obtain a short-lived JWT using the Supabase service key so the send
+      # endpoint accepts the request without a real user login.
+      - name: Obtain CI auth token
+        id: auth
+        run: |
+          TOKEN=$(curl -sf \
+            -X POST "${{ secrets.SUPABASE_URL }}/auth/v1/token?grant_type=password" \
+            -H "apikey: ${{ secrets.SUPABASE_SERVICE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"email":"nightly-ci@claire.local","password":"ci-only"}' \
+            | jq -r '.access_token // empty')
+          if [ -z "$TOKEN" ]; then
+            echo "::warning::Could not obtain CI auth token — send test will be skipped for ${{ matrix.platform }}"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Send message — ${{ matrix.platform }}
+        if: steps.auth.outputs.skip == 'false'
+        env:
+          SESSION_ID: ${{ secrets[matrix.session_id_secret] }}
+          CHAT_ID: ${{ secrets[matrix.chat_id_secret] }}
+          AUTH_TOKEN: ${{ steps.auth.outputs.token }}
+        run: |
+          TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          PAYLOAD=$(jq -n \
+            --arg sid "$SESSION_ID" \
+            --arg cid "$CHAT_ID" \
+            --arg msg "Nightly send-reliability check — ${{ matrix.platform }} — $TIMESTAMP" \
+            '{sessionId: $sid, chatId: $cid, content: $msg}')
+
+          HTTP_STATUS=$(curl -sf \
+            -o /tmp/send_response.json \
+            -w "%{http_code}" \
+            -X POST "http://localhost:3001/platforms/${{ matrix.platform }}/send" \
+            -H "Authorization: Bearer $AUTH_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD")
+
+          echo "HTTP status: $HTTP_STATUS"
+          cat /tmp/send_response.json || true
+
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "::error::Send failed for ${{ matrix.platform }} — HTTP $HTTP_STATUS"
+            cat /tmp/send_response.json || true
+            exit 1
+          fi
+
+          SUCCESS=$(jq -r '.success' /tmp/send_response.json 2>/dev/null || echo "false")
+          if [ "$SUCCESS" != "true" ]; then
+            echo "::error::Send returned success=false for ${{ matrix.platform }}"
+            cat /tmp/send_response.json || true
+            exit 1
+          fi
+
+          echo "Send OK for ${{ matrix.platform }}"
+
+      - name: Report skip
+        if: steps.auth.outputs.skip == 'true'
+        run: |
+          echo "::notice::Send test for ${{ matrix.platform }} was skipped (no CI auth token). Configure the Supabase nightly-ci user and its secrets to enable real-stack testing."
