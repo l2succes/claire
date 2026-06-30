@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@anthropic-ai/bedrock-sdk": "^0.27.0",
+    "@sentry/node": "^10.62.0",
     "@supabase/supabase-js": "^2.39.1",
     "bull": "^4.11.5",
     "chokidar": "^5.0.0",

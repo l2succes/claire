@@ -4,9 +4,18 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import * as SplashScreen from 'expo-splash-screen';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import * as Sentry from '@sentry/react-native';
 import { useAuthStore } from '../stores/authStore';
 import { setupNotifications } from '../services/notifications';
 import '../global.css';
+
+const SENTRY_DSN = process.env.EXPO_PUBLIC_SENTRY_DSN;
+if (SENTRY_DSN) {
+  Sentry.init({
+    dsn: SENTRY_DSN,
+    tracesSampleRate: 1.0,
+  });
+}
 
 SplashScreen.preventAutoHideAsync();
 
