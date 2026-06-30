@@ -237,6 +237,69 @@ describe('/promises', () => {
 });
 
 // ---------------------------------------------------------------------------
+// /preferences (notification prefs)
+// ---------------------------------------------------------------------------
+describe('/preferences', () => {
+  it('GET / — 401 without token', async () => {
+    const res = await request.get('/preferences');
+    expect(res.status).toBe(401);
+    expect(res.body).toHaveProperty('error');
+  });
+
+  it('GET / — 200 with valid token, returns notification fields', async () => {
+    const res = await request
+      .get('/preferences')
+      .set('Authorization', 'Bearer valid-token');
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(typeof res.body.data.notification_enabled).toBe('boolean');
+    expect(typeof res.body.data.preferences.quiet_hours_enabled).toBe('boolean');
+    expect(typeof res.body.data.preferences.quiet_hours_start).toBe('string');
+    expect(typeof res.body.data.preferences.notify_messages).toBe('boolean');
+    expect(typeof res.body.data.preferences.notify_promises).toBe('boolean');
+    expect(typeof res.body.data.preferences.notify_ai_suggestions).toBe('boolean');
+  });
+
+  it('PUT / — 401 without token', async () => {
+    const res = await request
+      .put('/preferences')
+      .send({ notification_enabled: false });
+    expect(res.status).toBe(401);
+  });
+
+  it('PUT / — 200 persists notification_enabled', async () => {
+    const res = await request
+      .put('/preferences')
+      .set('Authorization', 'Bearer valid-token')
+      .send({ notification_enabled: false });
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.notification_enabled).toBe(false);
+  });
+
+  it('PUT / — 200 persists quiet_hours preferences', async () => {
+    const res = await request
+      .put('/preferences')
+      .set('Authorization', 'Bearer valid-token')
+      .send({
+        preferences: {
+          quiet_hours_enabled: true,
+          quiet_hours_start: '23:00',
+          quiet_hours_end: '07:00',
+          notify_messages: false,
+          notify_promises: true,
+          notify_ai_suggestions: false,
+        },
+      });
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.preferences.quiet_hours_enabled).toBe(true);
+    expect(res.body.data.preferences.quiet_hours_start).toBe('23:00');
+    expect(res.body.data.preferences.notify_messages).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // 404 catch-all
 // ---------------------------------------------------------------------------
 describe('404 handler', () => {

@@ -271,6 +271,7 @@ export default function SettingsScreen() {
           icon={Bell}
           title="Notifications"
           description="Configure notification preferences"
+          onPress={() => router.push('/settings/notifications')}
           testID="settings-notifications"
         />
 
