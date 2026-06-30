@@ -16,6 +16,7 @@ import {
   LogOut,
   Plus,
   RefreshCw,
+  Zap,
 } from 'lucide-react-native';
 import { useAuthStore } from '../../stores/authStore';
 import { usePlatformStore } from '../../stores/platformStore';
@@ -281,6 +282,14 @@ export default function SettingsScreen() {
           description="Customize AI response behavior"
           onPress={() => router.push('/settings/ai')}
           testID="settings-ai"
+        />
+
+        <SettingsSection
+          icon={Zap}
+          title="Auto-Reply Rules"
+          description="Set up automatic replies for specific triggers"
+          onPress={() => router.push('/settings/auto-reply')}
+          testID="settings-auto-reply"
         />
 
         {/* Logout */}
