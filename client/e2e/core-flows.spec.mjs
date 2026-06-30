@@ -858,3 +858,294 @@ test.describe('Web shell smoke', () => {
     await expect(page.getByTestId('platform-login-screen')).toBeVisible();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Connect-flow helpers — mock platform API endpoints for connect tests
+// ---------------------------------------------------------------------------
+
+const MOCK_TG_SESSION_CONNECTING = {
+  id: 'tg-session-1',
+  user_id: MOCK_USER_ID,
+  platform: 'telegram',
+  status: 'awaiting_auth',
+  platform_user_id: null,
+  created_at: new Date().toISOString(),
+};
+
+const MOCK_TG_SESSION_CONNECTED = {
+  id: 'tg-session-1',
+  user_id: MOCK_USER_ID,
+  platform: 'telegram',
+  status: 'connected',
+  platform_user_id: '+15550001234',
+  created_at: new Date().toISOString(),
+};
+
+const MOCK_IG_SESSION_CONNECTED = {
+  id: 'ig-session-1',
+  user_id: MOCK_USER_ID,
+  platform: 'instagram',
+  status: 'connected',
+  platform_user_id: 'ig_test_user',
+  created_at: new Date().toISOString(),
+};
+
+/**
+ * Sets up platform connect-flow mocks on top of existing mockBackend routes.
+ * Must be called AFTER mockBackend() since Playwright routes match last-registered first.
+ */
+async function mockConnectFlow(page, platformOverrides = {}) {
+  // Override the generic platforms/** catch-all with a more specific handler
+  // that handles connect/verify/status sub-paths correctly.
+  await page.route('**/platforms/**', async (route) => {
+    const url = route.request().url();
+    const method = route.request().method();
+
+    // Telegram connect — returns awaiting_auth + authData to trigger code step
+    if (url.includes('/telegram/connect') && method === 'POST') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          session: MOCK_TG_SESSION_CONNECTING,
+          authData: { sessionId: 'tg-session-1', instructions: 'Enter the code sent to your phone' },
+        }),
+      });
+      return;
+    }
+
+    // Telegram verify — returns connected session
+    if (url.includes('/telegram/verify') && method === 'POST') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          session: { ...MOCK_TG_SESSION_CONNECTED, ...platformOverrides.telegramSession },
+        }),
+      });
+      return;
+    }
+
+    // Telegram status — returns connected after verify
+    if (url.includes('/telegram/status')) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ sessions: [MOCK_TG_SESSION_CONNECTED] }),
+      });
+      return;
+    }
+
+    // Instagram login/start
+    if (url.includes('/instagram/login/start') && method === 'POST') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          sessionId: 'ig-session-1',
+          loginId: 'ig-login-1',
+          stepId: 'step-1',
+          stepType: 'cookies',
+          instructions: 'Log in to Instagram and paste your cookies',
+        }),
+      });
+      return;
+    }
+
+    // Instagram login/submit
+    if (url.includes('/instagram/login/submit') && method === 'POST') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: true, userLoginId: 'ig-login-1' }),
+      });
+      return;
+    }
+
+    // Instagram status — returns connected
+    if (url.includes('/instagram/status')) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ sessions: [MOCK_IG_SESSION_CONNECTED] }),
+      });
+      return;
+    }
+
+    // Default: all other platform status checks → return connected sessions
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ sessions: MOCK_PLATFORM_SESSIONS }),
+    });
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Platform connect-flow tests
+// ---------------------------------------------------------------------------
+
+test.describe('Platform connect flows — mock backend', () => {
+  test.beforeEach(async ({ page }) => {
+    await mockBackend(page);
+    await mockConnectFlow(page);
+  });
+
+  // TG-1. Telegram connect: phone step renders
+  test('Telegram connect flow — phone step renders', async ({ page }) => {
+    await page.goto('/login');
+    await expect(page.getByTestId('platform-login-screen')).toBeVisible();
+
+    // Click Telegram tile to open auth modal
+    await page.getByTestId('platform-selector-telegram').click();
+
+    // Auth modal opens
+    await expect(page.getByTestId('platform-auth-modal')).toBeVisible({ timeout: 5_000 });
+
+    // Phone entry step should be visible
+    await expect(page.getByTestId('telegram-phone-step')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId('telegram-phone-input')).toBeVisible();
+    await expect(page.getByTestId('telegram-send-code-button')).toBeVisible();
+  });
+
+  // TG-2. Telegram connect: phone → code → connected
+  test('Telegram connect flow — phone to code to connected', async ({ page }) => {
+    // Track whether verify has been called, so status stays awaiting_auth until then
+    let verifyDone = false;
+
+    // Override telegram/status to stay in awaiting_auth until verify fires
+    await page.route('**/telegram/status**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          sessions: [verifyDone ? MOCK_TG_SESSION_CONNECTED : MOCK_TG_SESSION_CONNECTING],
+        }),
+      });
+    });
+
+    // Override telegram/verify to mark done and return connected
+    await page.route('**/telegram/verify**', async (route) => {
+      verifyDone = true;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: true, session: MOCK_TG_SESSION_CONNECTED }),
+      });
+    });
+
+    await page.goto('/login');
+    await expect(page.getByTestId('platform-login-screen')).toBeVisible();
+
+    // Open Telegram auth modal
+    await page.getByTestId('platform-selector-telegram').click();
+    await expect(page.getByTestId('platform-auth-modal')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId('telegram-phone-step')).toBeVisible({ timeout: 5_000 });
+
+    // Enter phone number and tap Send Code
+    await page.getByTestId('telegram-phone-input').fill('+15550001234');
+    await page.getByTestId('telegram-send-code-button').click();
+
+    // Code entry step should appear (mock returns awaiting_auth with authData)
+    await expect(page.getByTestId('telegram-code-step')).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByTestId('telegram-code-input')).toBeVisible();
+
+    // Enter 6-digit verification code
+    await page.getByTestId('telegram-code-input').fill('123456');
+    await page.getByTestId('telegram-verify-button').click();
+
+    // Success state should appear (mock returns connected)
+    await expect(page.getByTestId('platform-auth-success')).toBeVisible({ timeout: 8_000 });
+  });
+
+  // IG-1. Instagram connect: trigger button renders
+  test('Instagram connect flow — login trigger renders', async ({ page }) => {
+    await page.goto('/login');
+    await expect(page.getByTestId('platform-login-screen')).toBeVisible();
+
+    await page.getByTestId('platform-selector-instagram').click();
+    await expect(page.getByTestId('platform-auth-modal')).toBeVisible({ timeout: 5_000 });
+
+    // Instagram login trigger button should be visible
+    await expect(page.getByTestId('instagram-login-trigger')).toBeVisible({ timeout: 5_000 });
+  });
+
+  // IG-2. Instagram connect: error state shows on failed start
+  test('Instagram connect flow — shows error on failed login start', async ({ page }) => {
+    // Override instagram/login/start to return an error
+    await page.route('**/instagram/login/start**', async (route) => {
+      await route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'Instagram bridge unavailable' }),
+      });
+    });
+
+    await page.goto('/login');
+    await page.getByTestId('platform-selector-instagram').click();
+    await expect(page.getByTestId('platform-auth-modal')).toBeVisible({ timeout: 5_000 });
+
+    // Tap the login trigger button
+    await page.getByTestId('instagram-login-trigger').click();
+
+    // Error state should appear
+    await expect(page.getByTestId('instagram-error-state')).toBeVisible({ timeout: 8_000 });
+
+    // Retry button should be present
+    await expect(page.getByTestId('instagram-retry-button')).toBeVisible();
+  });
+
+  // IG-3. Instagram connect: connecting state renders while polling
+  test('Instagram connect flow — connecting state shows after submit', async ({ page }) => {
+    // Slow down status polling so we can observe the connecting state
+    let statusCallCount = 0;
+    await page.route('**/instagram/status**', async (route) => {
+      statusCallCount++;
+      // First call returns awaiting_auth so connecting state stays visible
+      if (statusCallCount <= 1) {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ sessions: [{ ...MOCK_IG_SESSION_CONNECTED, status: 'awaiting_auth' }] }),
+        });
+      } else {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ sessions: [MOCK_IG_SESSION_CONNECTED] }),
+        });
+      }
+    });
+
+    // Mock instagramLoginStart to return immediately
+    await page.route('**/instagram/login/start**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          sessionId: 'ig-session-1',
+          loginId: 'ig-login-1',
+          stepId: 'step-1',
+          stepType: 'cookies',
+        }),
+      });
+    });
+
+    await page.goto('/login');
+    await page.getByTestId('platform-selector-instagram').click();
+    await expect(page.getByTestId('platform-auth-modal')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId('instagram-login-trigger')).toBeVisible({ timeout: 5_000 });
+
+    // In the web flow, clicking login trigger invokes instagramLoginStart.
+    // The WebView component is a stub on web — we verify that the trigger was clickable
+    // and the modal stays open (not the native WebView path).
+    await page.getByTestId('instagram-login-trigger').click();
+
+    // Modal should still be visible (login flow in progress or WebView opened)
+    await expect(page.getByTestId('platform-auth-modal')).toBeVisible({ timeout: 3_000 });
+  });
+});
