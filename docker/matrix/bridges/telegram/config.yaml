@@ -42,6 +42,14 @@ bridge:
         target: webp
         convert_from_webm: true
 
+    # Double puppeting: allows the bridge to act as the real Matrix user
+    # so outgoing messages from the user's Telegram account appear as their
+    # actual Matrix account instead of a ghost user (_telegram_<id>:claire.local).
+    # Docs: https://docs.mau.fi/bridges/general/double-puppeting.html
+    double_puppet:
+        secrets:
+            claire.local: "as_token:2c56eef57e69ac4430912b838e9124eca9ea1aaf036dcfabdb74857b2e8f8973"
+
 logging:
     min_level: info
     writers:

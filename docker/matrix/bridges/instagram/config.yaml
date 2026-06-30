@@ -34,6 +34,14 @@ bridge:
 
     private_chat_portal_meta: true
 
+    # Double puppeting: allows the bridge to act as the real Matrix user
+    # so outgoing messages from the user's Instagram account appear as their
+    # actual Matrix account instead of a ghost user (meta_<id>:claire.local).
+    # Docs: https://docs.mau.fi/bridges/general/double-puppeting.html
+    double_puppet:
+        secrets:
+            claire.local: "as_token:JfIHXyofgCLVDfyfeDXFWtDMDDCRyBfsG5x7GLDXn4Ay0DwNYUQXH2YiTIogNul9"
+
 provisioning:
     shared_secret: "claire-instagram-bridge-secret-key-2026"
 

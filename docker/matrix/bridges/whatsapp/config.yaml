@@ -41,6 +41,15 @@ bridge:
     private_chat_portal_meta: true
     parallel_member_sync: true
 
+    # Double puppeting: allows the bridge to act as the real Matrix user
+    # so outgoing messages from the user's phone appear as their actual Matrix
+    # account instead of a ghost user (@whatsapp_<phone>:claire.local).
+    # Docs: https://docs.mau.fi/bridges/general/double-puppeting.html
+    double_puppet:
+        secrets:
+            # Map of server_name -> homeserver as_token (prefixed with "as_token:")
+            claire.local: "as_token:15c581d944fdb469a5339345f3ff8d90550f19819a18a95c62ccf41e6947bfe6"
+
 logging:
     min_level: info
     writers:

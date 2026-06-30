@@ -18,6 +18,10 @@ export class MatrixEventConverter {
 
   /**
    * Convert a Matrix m.room.message event to UnifiedMessage
+   *
+   * @param selfGhostUserId - The session's own ghost user ID (used without double-puppeting).
+   * @param matrixUserId    - The session's real Matrix user ID (used with double-puppeting).
+   *                          When set, messages from this sender are treated as isFromMe.
    */
   async toUnifiedMessage(
     event: MatrixEvent,
@@ -25,7 +29,8 @@ export class MatrixEventConverter {
     sessionId: string,
     sessionUserId: string,
     platform: Platform,
-    selfGhostUserId?: string
+    selfGhostUserId?: string,
+    matrixUserId?: string
   ): Promise<UnifiedMessage> {
     const content = event.getContent() as MatrixMessageContent;
     const sender = event.getSender() || '';
@@ -37,10 +42,17 @@ export class MatrixEventConverter {
       ? this.userMapper.cleanDisplayName(senderMember.name)
       : undefined;
 
-    // Determine if message is from us:
-    // - sender matches our own ghost user (e.g. @whatsapp_15166100494:claire.local)
-    // - sender is not a ghost user at all (i.e. the bot user @claire_bot:...)
-    const isFromMe = sender === selfGhostUserId || !this.userMapper.isGhostUser(sender);
+    // Determine if message is from us.
+    // Without double puppeting:
+    //   - sender matches our own ghost user (e.g. @whatsapp_15166100494:claire.local)
+    //   - OR sender is not a ghost (i.e. the bot user @claire_bot:...)
+    // With double puppeting:
+    //   - sender is the real Matrix user ID (e.g. @user123:claire.local)
+    //   - The above non-ghost check still covers this since the real Matrix user
+    //     is not a ghost user. When matrixUserId is provided we narrow to an exact match.
+    const isFromMe =
+      sender === selfGhostUserId ||
+      this.userMapper.isDoublePuppetUser(sender, matrixUserId);
 
     // Get chat participant (the ghost user in the room, excluding self)
     const chatId = this.extractChatId(room, platform, selfGhostUserId);
