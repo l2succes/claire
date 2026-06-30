@@ -239,6 +239,26 @@ export const platformsApi = {
     );
     return response.data;
   },
+
+  /**
+   * Generate an on-demand AI draft reply for a given message.
+   * Returns the first generated suggestion text.
+   */
+  async generateDraftReply(
+    messageId: string,
+    content: string,
+    chatType: 'individual' | 'group' = 'individual'
+  ): Promise<string> {
+    const response = await api.post<{
+      success: boolean;
+      data: { suggestions: string[]; confidence: number };
+    }>('/ai/responses/generate', { messageId, content, chatType });
+    const suggestions = response.data?.data?.suggestions;
+    if (!suggestions || suggestions.length === 0) {
+      throw new Error('No suggestions returned');
+    }
+    return suggestions[0];
+  },
 };
 
 /**

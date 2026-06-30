@@ -2,10 +2,13 @@ import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator } from 'rea
 import { useState, useEffect } from 'react';
 import { Sparkles, Send, RefreshCw, ThumbsUp, ThumbsDown } from 'lucide-react-native';
 import { supabase } from '../services/supabase';
+import { platformsApi } from '../services/platforms';
 
 interface ResponseSuggestionProps {
   messageId: string;
   chatId: string;
+  messageContent?: string;
+  isGroup?: boolean;
   suggestions?: string[];
   onSelectSuggestion: (suggestion: string) => void;
   onGenerateNew?: () => void;
@@ -22,6 +25,8 @@ interface AISuggestion {
 
 export function ResponseSuggestion({
   messageId,
+  messageContent,
+  isGroup,
   suggestions: propSuggestions,
   onSelectSuggestion,
   onGenerateNew,
@@ -29,6 +34,8 @@ export function ResponseSuggestion({
 }: ResponseSuggestionProps) {
   const [suggestions, setSuggestions] = useState<AISuggestion[]>([]);
   const [loading, setLoading] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState<string | null>(null);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
 
   useEffect(() => {
@@ -74,6 +81,25 @@ export function ResponseSuggestion({
       console.error('Error fetching AI suggestions:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDraftReply = async () => {
+    if (!messageContent || generating) return;
+    setGenerating(true);
+    setGenerateError(null);
+    try {
+      const draft = await platformsApi.generateDraftReply(
+        messageId,
+        messageContent,
+        isGroup ? 'group' : 'individual'
+      );
+      onSelectSuggestion(draft);
+    } catch (err) {
+      console.error('Draft reply generation failed:', err);
+      setGenerateError('Could not generate a draft. Please try again.');
+    } finally {
+      setGenerating(false);
     }
   };
 
@@ -138,8 +164,49 @@ export function ResponseSuggestion({
     );
   }
 
+  // No stored suggestions — show "Draft reply" button if messageContent available
   if (suggestions.length === 0) {
-    return null;
+    if (!messageContent) return null;
+    return (
+      <View
+        style={{
+          paddingHorizontal: 12,
+          paddingVertical: 6,
+          alignItems: 'flex-start',
+        }}
+        testID="draft-reply-container"
+      >
+        <TouchableOpacity
+          onPress={handleDraftReply}
+          disabled={generating}
+          testID="draft-reply-button"
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: generating ? '#e5e7eb' : '#eff6ff',
+            borderRadius: 16,
+            paddingHorizontal: 12,
+            paddingVertical: 7,
+            borderWidth: 1,
+            borderColor: generating ? '#d1d5db' : '#bfdbfe',
+          }}
+        >
+          {generating ? (
+            <ActivityIndicator size="small" color="#3b82f6" style={{ marginRight: 6 }} />
+          ) : (
+            <Sparkles size={14} color="#3b82f6" style={{ marginRight: 6 }} />
+          )}
+          <Text style={{ fontSize: 13, color: generating ? '#9ca3af' : '#2563eb', fontWeight: '500' }}>
+            {generating ? 'Drafting…' : 'Draft reply'}
+          </Text>
+        </TouchableOpacity>
+        {generateError && (
+          <Text style={{ fontSize: 12, color: '#dc2626', marginTop: 4 }} testID="draft-reply-error">
+            {generateError}
+          </Text>
+        )}
+      </View>
+    );
   }
 
   return (
@@ -199,9 +266,9 @@ export function ResponseSuggestion({
                       suggestion.feedback === 'positive' ? 'bg-green-100 dark:bg-green-900/30 rounded' : ''
                     }`}
                   >
-                    <ThumbsUp 
-                      size={14} 
-                      color={suggestion.feedback === 'positive' ? '#10b981' : '#6b7280'} 
+                    <ThumbsUp
+                      size={14}
+                      color={suggestion.feedback === 'positive' ? '#10b981' : '#6b7280'}
                     />
                   </TouchableOpacity>
                   <TouchableOpacity
@@ -210,9 +277,9 @@ export function ResponseSuggestion({
                       suggestion.feedback === 'negative' ? 'bg-red-100 dark:bg-red-900/30 rounded' : ''
                     }`}
                   >
-                    <ThumbsDown 
-                      size={14} 
-                      color={suggestion.feedback === 'negative' ? '#ef4444' : '#6b7280'} 
+                    <ThumbsDown
+                      size={14}
+                      color={suggestion.feedback === 'negative' ? '#ef4444' : '#6b7280'}
                     />
                   </TouchableOpacity>
                 </View>

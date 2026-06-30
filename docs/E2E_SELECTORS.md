@@ -129,6 +129,9 @@ All stable `testID` values (rendered as `data-testid` on web via React Native We
 | `ai-suggestion-scroll` | Horizontal `ScrollView` containing chips |
 | `ai-suggestion-chip-<index>` | Individual suggestion card `TouchableOpacity` (0-based) |
 | `ai-suggestion-use-<index>` | "Use" button inside chip (0-based); tapping fills the composer |
+| `draft-reply-container` | Wrapper `View` shown when no stored suggestions exist |
+| `draft-reply-button` | "Draft reply" `TouchableOpacity`; calls `/ai/responses/generate` on-demand |
+| `draft-reply-error` | Error text shown if generation fails |
 
 ---
 
