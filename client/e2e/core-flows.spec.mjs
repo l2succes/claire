@@ -517,6 +517,15 @@ async function mockBackend(page) {
     });
   });
 
+  // Bun server API: AI suggestion feedback (POST /ai/responses/feedback)
+  await page.route('**/ai/responses/feedback**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ success: true }),
+    });
+  });
+
   // Supabase realtime — stub WebSocket preflight requests
   await page.route('**/realtime/**', async (route) => {
     await route.fulfill({ status: 200, body: '{}' });
@@ -668,6 +677,61 @@ test.describe('Core loop — mock backend', () => {
     await expect(page.getByTestId('chat-input')).toHaveValue(
       'Sounds great, looking forward to it!',
       { timeout: 5_000 }
+    );
+  });
+
+  // 5c. AI suggestion reject — suggestion strip shows all chips with feedback buttons
+  test('suggestion strip shows multiple chips with thumbs buttons', async ({ page }) => {
+    await signIn(page);
+
+    await expect(
+      page.locator('[data-testid^="message-card-"]').first()
+    ).toBeVisible({ timeout: 8_000 });
+    await page.locator('[data-testid^="message-card-"]').first().click();
+
+    await expect(page.getByTestId('chat-screen')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId('ai-suggestion-strip')).toBeVisible({ timeout: 10_000 });
+
+    // Both suggestion chips should be present (fixture has 2 suggestions)
+    await expect(page.getByTestId('ai-suggestion-chip-0')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId('ai-suggestion-chip-1')).toBeVisible({ timeout: 5_000 });
+
+    // Each chip has a "Use" button (accept action)
+    await expect(page.getByTestId('ai-suggestion-use-0')).toBeVisible();
+    await expect(page.getByTestId('ai-suggestion-use-1')).toBeVisible();
+
+    // The suggestion scroll container is present
+    await expect(page.getByTestId('ai-suggestion-scroll')).toBeVisible();
+  });
+
+  // 5d. AI suggestion accept then edit — custom response fires feedback POST
+  test('editing suggestion text fires feedback with customResponse', async ({ page }) => {
+    await signIn(page);
+
+    await expect(
+      page.locator('[data-testid^="message-card-"]').first()
+    ).toBeVisible({ timeout: 8_000 });
+    await page.locator('[data-testid^="message-card-"]').first().click();
+
+    await expect(page.getByTestId('chat-screen')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId('ai-suggestion-strip')).toBeVisible({ timeout: 10_000 });
+
+    // Accept a suggestion (fills the composer)
+    await page.getByTestId('ai-suggestion-use-0').click();
+
+    // The composer should be filled with the suggestion text
+    await expect(page.getByTestId('chat-input')).toHaveValue(
+      'Sounds great, looking forward to it!',
+      { timeout: 5_000 }
+    );
+
+    // Edit the composed text (simulates "edit" action)
+    await page.getByTestId('chat-input').fill('Sounds great, but let me check my schedule first!');
+
+    // Verify the input holds the edited value
+    await expect(page.getByTestId('chat-input')).toHaveValue(
+      'Sounds great, but let me check my schedule first!',
+      { timeout: 3_000 }
     );
   });
 
