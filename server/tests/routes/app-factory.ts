@@ -33,10 +33,19 @@ export function createApp() {
   app.use(express.urlencoded({ extended: true }));
 
   // ------------------------------------------------------------------
-  // /health
+  // /health — mirrors the richer shape from production (issue #47)
   // ------------------------------------------------------------------
   app.get('/health', (_req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+    res.json({
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      environment: process.env.NODE_ENV ?? 'test',
+      checks: {
+        db: { status: 'ok', latencyMs: 1 },
+        redis: { status: 'ok', latencyMs: 1 },
+      },
+    });
   });
 
   // ------------------------------------------------------------------

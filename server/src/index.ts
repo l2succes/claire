@@ -8,6 +8,7 @@ import { initSentry } from './utils/sentry';
 import { logger, stream } from './utils/logger';
 
 import { supabase } from './services/supabase';
+import { redis } from './services/redis';
 import { sessionMonitor } from './services/session-monitor';
 import authRoutes from './routes/auth';
 import messageRoutes from './routes/messages';
@@ -94,16 +95,57 @@ app.get('/media/:server/:mediaId', async (req, res) => {
   }
 });
 
-// Health check
-app.get('/health', async (req, res) => {
-  const health = {
-    status: 'ok',
+// Health / readiness check — reports DB, Redis, and Matrix (when configured)
+app.get('/health', async (_req, res) => {
+  const checks: Record<string, { status: 'ok' | 'error'; latencyMs?: number; error?: string }> = {};
+
+  // --- Supabase / DB ---
+  try {
+    const t0 = Date.now();
+    const { error } = await supabase.from('chats').select('id').limit(1);
+    checks.db = error
+      ? { status: 'error', error: error.message }
+      : { status: 'ok', latencyMs: Date.now() - t0 };
+  } catch (err) {
+    checks.db = { status: 'error', error: (err as Error).message };
+  }
+
+  // --- Redis ---
+  try {
+    const t0 = Date.now();
+    const ok = await redis.ping();
+    checks.redis = ok
+      ? { status: 'ok', latencyMs: Date.now() - t0 }
+      : { status: 'error', error: 'PONG not received' };
+  } catch (err) {
+    checks.redis = { status: 'error', error: (err as Error).message };
+  }
+
+  // --- Matrix (only when PLATFORM_MODE=matrix) ---
+  if (matrixConfig.enabled && matrixConfig.homeserverUrl) {
+    try {
+      const t0 = Date.now();
+      const resp = await fetch(`${matrixConfig.homeserverUrl}/_matrix/client/versions`, {
+        signal: AbortSignal.timeout(3000),
+      });
+      checks.matrix = resp.ok
+        ? { status: 'ok', latencyMs: Date.now() - t0 }
+        : { status: 'error', error: `HTTP ${resp.status}` };
+    } catch (err) {
+      checks.matrix = { status: 'error', error: (err as Error).message };
+    }
+  }
+
+  const allOk = Object.values(checks).every((c) => c.status === 'ok');
+  const httpStatus = allOk ? 200 : 503;
+
+  res.status(httpStatus).json({
+    status: allOk ? 'ok' : 'degraded',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     environment: config.NODE_ENV,
-  };
-  
-  res.json(health);
+    checks,
+  });
 });
 
 // Error handling middleware

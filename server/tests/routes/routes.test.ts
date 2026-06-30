@@ -29,6 +29,23 @@ describe('GET /health', () => {
     expect(res.body.status).toBe('ok');
     expect(typeof res.body.timestamp).toBe('string');
   });
+
+  it('includes per-dependency checks object', async () => {
+    const res = await request.get('/health');
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('checks');
+    expect(res.body.checks).toHaveProperty('db');
+    expect(res.body.checks).toHaveProperty('redis');
+    expect(res.body.checks.db.status).toBe('ok');
+    expect(res.body.checks.redis.status).toBe('ok');
+  });
+
+  it('includes uptime and environment fields', async () => {
+    const res = await request.get('/health');
+    expect(res.status).toBe(200);
+    expect(typeof res.body.uptime).toBe('number');
+    expect(typeof res.body.environment).toBe('string');
+  });
 });
 
 // ---------------------------------------------------------------------------
