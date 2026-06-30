@@ -29,7 +29,7 @@ media_store_path: /data/media_store
 uploads_path: /data/uploads
 
 # Generate with: openssl rand -hex 32
-registration_shared_secret: "8b661183fd624e8f63468dc290cb0ba9ecbe8133906b1f58d6eb45caa1dd6e98"
+registration_shared_secret: "CHANGE_ME_TO_SECURE_SECRET"
 
 enable_registration: false
 enable_registration_without_verification: false
@@ -41,8 +41,8 @@ app_service_config_files:
   - /data/appservices/instagram.yaml
 
 # Generate these with: openssl rand -hex 32
-macaroon_secret_key: "8b661183fd624e8f63468dc290cb0ba9ecbe8133906b1f58d6eb45caa1dd6e98"
-form_secret: "8b661183fd624e8f63468dc290cb0ba9ecbe8133906b1f58d6eb45caa1dd6e98"
+macaroon_secret_key: "CHANGE_ME_TO_SECURE_SECRET"
+form_secret: "CHANGE_ME_TO_SECURE_SECRET"
 signing_key_path: "/data/claire.local.signing.key"
 
 report_stats: false

@@ -20,12 +20,20 @@ yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
 
-# Environment variables
+# Environment variables — never commit real credentials
+# Safe to commit: *.example files, server/.env.test (all-fake values)
 .env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
+# Expo overrides / local backups that may hold real URLs / tokens
+client/.env.override
+client/.env.local.backup
+client/.env.production
+# Explicit catch-all for real .env files in any subdirectory
+**/.env.production
+**/.env.local
 
 # IDE
 .vscode/

@@ -55,11 +55,14 @@ ngrok http 8000
 ```
 
 **2. Update Railway with the ngrok URL**
+
+Get your Supabase keys from `docker/supabase/.env` (or the Supabase dashboard → Project Settings → API).
+
 ```bash
 railway variables set \
   SUPABASE_URL="https://xxxx.ngrok-free.app" \
-  SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-  SUPABASE_SERVICE_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU" \
+  SUPABASE_ANON_KEY="<your-supabase-anon-key>" \
+  SUPABASE_SERVICE_KEY="<your-supabase-service-role-key>" \
   DATABASE_URL="postgresql://postgres:postgres@localhost:5432/postgres"
   # Note: DATABASE_URL still uses localhost since Railway can't direct-connect to your Postgres
   # For DB access from Railway, use Supabase REST API (PostgREST) via the ngrok URL
@@ -95,11 +98,13 @@ psql "$CLOUD_DB" < /tmp/claire_data.sql
 
 ```
 client/
-  .env                  # Base defaults (committed)
-  .env.local            # Your device overrides (NOT committed, gitignored)
-  .env.production       # Production keys (NOT committed, gitignored)
+  .env.example          # Template — copy to .env.local and fill in values (committed)
+  .env.local            # Your device overrides — NEVER commit (gitignored)
+  .env.production       # Production keys — NEVER commit (gitignored)
   eas.json              # EAS build profiles
 ```
+
+> **Setup:** `cp client/.env.example client/.env.local` then fill in your values.
 
 Expo loads env files in this priority order (later = higher priority):
 ```
@@ -168,7 +173,7 @@ cd client && bunx expo config --type introspect 2>/dev/null | grep EXPO_PUBLIC
 cd server && bun run --watch src/index.ts
 
 # Switch server to use Railway
-# (nothing to do — it's always running at https://claire-production-1450.up.railway.app)
+# (nothing to do — it auto-deploys on push to main)
 
 # View Railway logs
 railway logs --lines 50

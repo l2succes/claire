@@ -17,8 +17,8 @@ appservice:
         username: telegrambot
         displayname: Telegram Bridge Bot
         avatar: mxc://maunium.net/tJCRmUyJDsgRNgqhOgoJMuOY
-    as_token: 2c56eef57e69ac4430912b838e9124eca9ea1aaf036dcfabdb74857b2e8f8973
-    hs_token: 2c56eef57e69ac4430912b838e9124eca9ea1aaf036dcfabdb74857b2e8f8973
+    as_token: GENERATE_ME_WITH_OPENSSL_RAND_HEX_32
+    hs_token: GENERATE_ME_WITH_OPENSSL_RAND_HEX_32
 
 telegram:
     # Get from https://my.telegram.org/apps
