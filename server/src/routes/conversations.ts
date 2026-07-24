@@ -39,7 +39,7 @@ router.get('/:chatId/settings', requireAuth, async (req: Request, res: Response)
         .order('priority', { ascending: false }),
     ]);
 
-    res.json({
+    return res.json({
       success: true,
       data: {
         category: categoryRes.data?.category || null,
@@ -49,7 +49,7 @@ router.get('/:chatId/settings', requireAuth, async (req: Request, res: Response)
     });
   } catch (error) {
     logger.error('Error fetching conversation settings:', error);
-    res.status(500).json({ error: 'Failed to fetch settings' });
+    return res.status(500).json({ error: 'Failed to fetch settings' });
   }
 });
 
@@ -87,10 +87,10 @@ router.put('/:chatId/category', requireAuth, async (req: Request, res: Response)
       logger.error('Background smart card generation failed:', err)
     );
 
-    res.json({ success: true, data });
+    return res.json({ success: true, data });
   } catch (error) {
     logger.error('Error setting category:', error);
-    res.status(500).json({ error: 'Failed to set category' });
+    return res.status(500).json({ error: 'Failed to set category' });
   }
 });
 
@@ -125,10 +125,10 @@ router.put('/:chatId/profile', requireAuth, async (req: Request, res: Response) 
 
     if (error) throw error;
 
-    res.json({ success: true, data });
+    return res.json({ success: true, data });
   } catch (error) {
     logger.error('Error updating profile:', error);
-    res.status(500).json({ error: 'Failed to update profile' });
+    return res.status(500).json({ error: 'Failed to update profile' });
   }
 });
 
@@ -142,7 +142,7 @@ router.post('/:chatId/smart-cards', requireAuth, async (req: Request, res: Respo
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ error: 'Not authenticated' });
 
-    const cards = await smartCardGenerator.generateCards(chatId, userId);
+    await smartCardGenerator.generateCards(chatId, userId);
 
     // Fetch the persisted cards (with IDs)
     const { data: savedCards } = await supabase
@@ -153,10 +153,10 @@ router.post('/:chatId/smart-cards', requireAuth, async (req: Request, res: Respo
       .eq('dismissed', false)
       .order('priority', { ascending: false });
 
-    res.json({ success: true, data: savedCards || [] });
+    return res.json({ success: true, data: savedCards || [] });
   } catch (error) {
     logger.error('Error generating smart cards:', error);
-    res.status(500).json({ error: 'Failed to generate smart cards' });
+    return res.status(500).json({ error: 'Failed to generate smart cards' });
   }
 });
 
@@ -179,10 +179,10 @@ router.delete('/:chatId/smart-cards/:cardId', requireAuth, async (req: Request, 
 
     if (error) throw error;
 
-    res.json({ success: true });
+    return res.json({ success: true });
   } catch (error) {
     logger.error('Error dismissing smart card:', error);
-    res.status(500).json({ error: 'Failed to dismiss card' });
+    return res.status(500).json({ error: 'Failed to dismiss card' });
   }
 });
 
@@ -205,10 +205,10 @@ router.post('/:chatId/smart-cards/:cardId/acted', requireAuth, async (req: Reque
 
     if (error) throw error;
 
-    res.json({ success: true });
+    return res.json({ success: true });
   } catch (error) {
     logger.error('Error marking card as acted:', error);
-    res.status(500).json({ error: 'Failed to update card' });
+    return res.status(500).json({ error: 'Failed to update card' });
   }
 });
 
@@ -238,10 +238,10 @@ router.post('/:chatId/refresh-insights', requireAuth, async (req: Request, res: 
 
     if (error) throw error;
 
-    res.json({ success: true, data });
+    return res.json({ success: true, data });
   } catch (error) {
     logger.error('Error refreshing insights:', error);
-    res.status(500).json({ error: 'Failed to refresh insights' });
+    return res.status(500).json({ error: 'Failed to refresh insights' });
   }
 });
 

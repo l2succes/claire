@@ -26,7 +26,7 @@ const getSessionSchema = z.object({
  * GET /auth/confirm
  * Handle email confirmation redirects
  */
-router.get('/confirm', (req: Request, res: Response) => {
+router.get('/confirm', (_req: Request, res: Response) => {
   res.sendFile(path.join(__dirname, 'email-confirm.html'));
 });
 
@@ -35,7 +35,7 @@ router.get('/confirm', (req: Request, res: Response) => {
  * Handle OAuth callback redirects (Google, etc.)
  * This is a simple passthrough that extracts tokens and redirects to the app
  */
-router.get('/callback', (req: Request, res: Response) => {
+router.get('/callback', (_req: Request, res: Response) => {
   // Return HTML that handles the OAuth callback
   res.send(`
     <!DOCTYPE html>
@@ -106,7 +106,7 @@ router.get('/callback', (req: Request, res: Response) => {
 
           if (accessToken) {
             // Redirect to app with tokens
-            window.location.href = \`/\#access_token=\${accessToken}&refresh_token=\${refreshToken || ''}\`;
+            window.location.href = \`/#access_token=\${accessToken}&refresh_token=\${refreshToken || ''}\`;
           } else {
             // No tokens, redirect to signin
             window.location.href = '/';
@@ -122,25 +122,24 @@ router.get('/callback', (req: Request, res: Response) => {
  * POST /auth/session/create-test
  * Create a test WhatsApp session (development only)
  */
-router.post('/session/create-test', async (req: Request, res: Response) => {
+router.post('/session/create-test', async (_req: Request, res: Response) => {
   try {
     // Only allow in development mode
     if (process.env.NODE_ENV === 'production') {
       return res.status(403).json({ error: 'Test mode not available in production' });
     }
 
-    const testUserId = 'test-user-123';
     const sessionId = `test-${Date.now()}`;
     
     // Return mock QR code for testing
-    res.json({
+    return res.json({
       sessionId,
       status: 'qr',
       qrCode: 'https://via.placeholder.com/280x280/10b981/ffffff?text=Test+QR+Code',
     });
   } catch (error) {
     logger.error('Failed to create test session:', error);
-    res.status(500).json({ error: 'Failed to create test session' });
+    return res.status(500).json({ error: 'Failed to create test session' });
   }
 });
 
@@ -180,14 +179,14 @@ router.post(
         logger.error('Failed to store session in database:', error);
       }
 
-      res.json({
+      return res.json({
         sessionId: session.id,
         status: session.status,
         qrCode: session.qrCode,
       });
     } catch (error) {
       logger.error('Failed to create WhatsApp session:', error);
-      res.status(500).json({ error: 'Failed to create session' });
+      return res.status(500).json({ error: 'Failed to create session' });
     }
   }
 );
@@ -220,10 +219,10 @@ router.get(
         });
       }
 
-      res.json({ qrCode, status: session.status });
+      return res.json({ qrCode, status: session.status });
     } catch (error) {
       logger.error('Failed to get QR code:', error);
-      res.status(500).json({ error: 'Failed to get QR code' });
+      return res.status(500).json({ error: 'Failed to get QR code' });
     }
   }
 );
@@ -246,7 +245,7 @@ router.get(
         return res.status(404).json({ error: 'Session not found' });
       }
 
-      res.json({
+      return res.json({
         id: session.id,
         status: session.status,
         phoneNumber: session.phoneNumber,
@@ -254,7 +253,7 @@ router.get(
       });
     } catch (error) {
       logger.error('Failed to get session status:', error);
-      res.status(500).json({ error: 'Failed to get session status' });
+      return res.status(500).json({ error: 'Failed to get session status' });
     }
   }
 );
@@ -272,7 +271,7 @@ router.get('/sessions', requireAuth, async (req: Request, res: Response) => {
 
     const sessions = await whatsappAuth.getUserSessions(userId);
     
-    res.json({
+    return res.json({
       sessions: sessions.map(s => ({
         id: s.id,
         status: s.status,
@@ -283,7 +282,7 @@ router.get('/sessions', requireAuth, async (req: Request, res: Response) => {
     });
   } catch (error) {
     logger.error('Failed to get user sessions:', error);
-    res.status(500).json({ error: 'Failed to get sessions' });
+    return res.status(500).json({ error: 'Failed to get sessions' });
   }
 });
 
@@ -313,10 +312,10 @@ router.delete(
         .update({ status: 'disconnected' })
         .eq('id', sessionId);
 
-      res.json({ message: 'Session disconnected' });
+      return res.json({ message: 'Session disconnected' });
     } catch (error) {
       logger.error('Failed to disconnect session:', error);
-      res.status(500).json({ error: 'Failed to disconnect session' });
+      return res.status(500).json({ error: 'Failed to disconnect session' });
     }
   }
 );
@@ -338,13 +337,13 @@ router.post('/login', async (req: Request, res: Response) => {
       return res.status(401).json({ error: error.message });
     }
 
-    res.json({
+    return res.json({
       user: data.user,
       session: data.session,
     });
   } catch (error) {
     logger.error('Login failed:', error);
-    res.status(500).json({ error: 'Login failed' });
+    return res.status(500).json({ error: 'Login failed' });
   }
 });
 
@@ -368,13 +367,13 @@ router.post('/signup', async (req: Request, res: Response) => {
       return res.status(400).json({ error: error.message });
     }
 
-    res.json({
+    return res.json({
       user: data.user,
       session: data.session,
     });
   } catch (error) {
     logger.error('Signup failed:', error);
-    res.status(500).json({ error: 'Signup failed' });
+    return res.status(500).json({ error: 'Signup failed' });
   }
 });
 
@@ -382,13 +381,13 @@ router.post('/signup', async (req: Request, res: Response) => {
  * POST /auth/logout
  * Logout current session
  */
-router.post('/logout', requireAuth, async (req: Request, res: Response) => {
+router.post('/logout', requireAuth, async (_req: Request, res: Response) => {
   try {
     await supabase.auth.signOut();
-    res.json({ message: 'Logged out successfully' });
+    return res.json({ message: 'Logged out successfully' });
   } catch (error) {
     logger.error('Logout failed:', error);
-    res.status(500).json({ error: 'Logout failed' });
+    return res.status(500).json({ error: 'Logout failed' });
   }
 });
 

@@ -35,6 +35,7 @@ class ResponseSafety {
   private unprofessionalPatterns = [
     /\b(love you|babe|honey|sweetheart)\b/i,
     /\b(drunk|wasted|party hard)\b/i,
+    // eslint-disable-next-line no-misleading-character-class -- intentional emoji set for romantic-tone detection
     /[😍😘💋❤️💕]/,
   ];
 
@@ -239,6 +240,7 @@ class ResponseSafety {
   private makeProfessional(suggestion: string): string {
     return suggestion
       .replace(/\b(love you|babe|honey|sweetheart)\b/gi, 'appreciate you')
+      // eslint-disable-next-line no-misleading-character-class -- intentional emoji set to strip
       .replace(/[😍😘💋❤️💕]/g, '')
       .replace(/\b(drunk|wasted)\b/gi, 'busy')
       .replace(/party hard/gi, 'celebrate');

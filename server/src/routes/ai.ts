@@ -69,6 +69,7 @@ router.post('/responses/generate',
         );
         res.write(`data: ${JSON.stringify({ type: 'complete', data: streamResponse })}\n\n`);
         res.end();
+        return;
       } else {
         // Regular response
         const response = await aiProcessor.generateResponse(
@@ -78,14 +79,14 @@ router.post('/responses/generate',
           chatType
         );
 
-        res.json({
+        return res.json({
           success: true,
           data: response,
         });
       }
     } catch (error) {
       logger.error('Error generating AI response:', error);
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         error: 'Failed to generate response suggestions',
       });
@@ -116,13 +117,13 @@ router.post('/responses/feedback',
         customResponse
       );
 
-      res.json({
+      return res.json({
         success: true,
         message: 'Feedback updated successfully',
       });
     } catch (error) {
       logger.error('Error updating feedback:', error);
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         error: 'Failed to update feedback',
       });
@@ -152,13 +153,13 @@ router.get('/analytics',
 
       const analytics = await aiProcessor.getAnalytics(userId, dateRange);
 
-      res.json({
+      return res.json({
         success: true,
         data: analytics,
       });
     } catch (error) {
       logger.error('Error getting analytics:', error);
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         error: 'Failed to get analytics',
       });
@@ -184,13 +185,13 @@ router.post('/analyze/sentiment',
 
       const sentiment = await aiProcessor.analyzeSentiment(content);
 
-      res.json({
+      return res.json({
         success: true,
         data: { sentiment },
       });
     } catch (error) {
       logger.error('Error analyzing sentiment:', error);
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         error: 'Failed to analyze sentiment',
       });
@@ -216,13 +217,13 @@ router.post('/analyze/topics',
 
       const topics = await aiProcessor.extractTopics(content);
 
-      res.json({
+      return res.json({
         success: true,
         data: { topics },
       });
     } catch (error) {
       logger.error('Error extracting topics:', error);
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         error: 'Failed to extract topics',
       });
@@ -235,17 +236,17 @@ router.post('/analyze/topics',
  */
 router.get('/cache/stats',
   requireAuth,
-  async (req: Request, res: Response) => {
+  async (_req: Request, res: Response) => {
     try {
       const stats = await responseCache.getStats();
 
-      res.json({
+      return res.json({
         success: true,
         data: stats,
       });
     } catch (error) {
       logger.error('Error getting cache stats:', error);
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         error: 'Failed to get cache statistics',
       });
@@ -268,13 +269,13 @@ router.delete('/cache/user',
 
       await responseCache.clearUserCache(userId);
 
-      res.json({
+      return res.json({
         success: true,
         message: 'User cache cleared successfully',
       });
     } catch (error) {
       logger.error('Error clearing user cache:', error);
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         error: 'Failed to clear cache',
       });
@@ -366,13 +367,13 @@ router.get('/morning-brief',
         brief_text = `${urgentCount} message${urgentCount === 1 ? '' : 's'} need${urgentCount === 1 ? 's' : ''} your attention — starting with ${names}.`;
       }
 
-      res.json({
+      return res.json({
         success: true,
         data: { brief_text, urgent_messages },
       });
     } catch (error) {
       logger.error('Error building morning brief:', error);
-      res.status(500).json({ success: false, error: 'Failed to build morning brief' });
+      return res.status(500).json({ success: false, error: 'Failed to build morning brief' });
     }
   }
 );
@@ -434,13 +435,13 @@ router.get('/group-summary/:chatId',
         );
       }
 
-      res.json({
+      return res.json({
         success: true,
         data: { summary },
       });
     } catch (error) {
       logger.error('Error generating group summary:', error);
-      res.status(500).json({ success: false, error: 'Failed to generate group summary' });
+      return res.status(500).json({ success: false, error: 'Failed to generate group summary' });
     }
   }
 );

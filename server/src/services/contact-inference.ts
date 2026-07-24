@@ -103,7 +103,7 @@ class ContactInferenceService {
   /**
    * Infer name from message content
    */
-  private inferName(content: string, phoneNumber?: string): string | undefined {
+  private inferName(content: string, _phoneNumber?: string): string | undefined {
     // Look for self-introduction patterns
     const introPatterns = [
       /\b(?:i am|i'm|this is|it's|its)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\b/,
@@ -137,11 +137,6 @@ class ContactInferenceService {
         }
       }
     }
-    
-    // Look for addressing patterns (when they address us)
-    const addressPatterns = [
-      /\b(?:hi|hello|hey|dear)\s+([A-Z][a-z]+)\b/,
-    ];
     
     // Count occurrences of potential names
     const nameOccurrences: Map<string, number> = new Map();

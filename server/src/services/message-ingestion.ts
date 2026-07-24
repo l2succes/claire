@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events';
-import { Message, Chat, Contact, GroupChat } from 'whatsapp-web.js';
+import { Message, Chat, Contact } from 'whatsapp-web.js';
 import { whatsappAuth } from '../auth/whatsapp-auth';
 import { messageQueue } from './message-queue';
 import { supabase } from './supabase';
@@ -13,6 +13,14 @@ export interface IncomingMessage {
   contact?: Contact;
   timestamp: Date;
 }
+
+// Rows we read back after inserts/upserts only need their id.
+interface IdRow {
+  id: string;
+}
+
+// Columns selected for message reads (message + related contact/chat).
+const MESSAGE_SELECT = '*, contact:contacts(*), chat:chats(*)';
 
 export class MessageIngestionService extends EventEmitter {
   private processingMessages: Set<string> = new Set();
@@ -105,56 +113,55 @@ export class MessageIngestionService extends EventEmitter {
   }
 
   /**
-   * Store message in database
+   * Store message in the Supabase `messages` table.
    */
-  private async storeMessage(data: IncomingMessage) {
+  private async storeMessage(data: IncomingMessage): Promise<IdRow | null> {
     try {
       const { message, chat, contact, userId } = data;
 
-      // First, ensure contact exists in database
-      let dbContact = null;
+      // Ensure the contact exists (incoming messages only).
+      let dbContact: IdRow | null = null;
       if (contact && !message.fromMe) {
-        dbContact = await this.upsertContact(userId, contact, chat);
+        dbContact = await this.upsertContact(userId, contact);
       }
 
-      // Handle group chats
-      let groupId = null;
-      if (chat.isGroup) {
-        const groupChat = chat as GroupChat;
-        groupId = await this.upsertGroup(groupChat);
+      // messages.chat_id is NOT NULL, so the chat row must exist first.
+      const chatId = await this.upsertChat(userId, chat, dbContact?.id ?? null);
+      if (!chatId) {
+        throw new Error(`Failed to resolve chat for message ${message.id._serialized}`);
       }
 
-      // Prepare message data
-      const messageData = {
-        userId,
-        whatsappMessageId: message.id._serialized,
-        senderId: message.fromMe ? null : dbContact?.id || null,
-        receiverId: message.fromMe && dbContact ? dbContact.id : null,
-        groupId,
-        content: message.body || '',
-        mediaUrl: message.hasMedia ? null : null, // Will be updated when media is downloaded
-        mediaType: this.getMediaType(message),
-        timestamp: data.timestamp,
-        isFromMe: message.fromMe,
-        isRead: false,
-        isReplied: false,
-        metadata: {
-          hasQuotedMsg: message.hasQuotedMsg,
-          isForwarded: message.isForwarded,
-          isStatus: message.isStatus,
-          isBroadcast: message.broadcast,
-          type: message.type,
-          deviceType: message.deviceType,
-        },
-      };
+      const { data: storedMessage, error } = await supabase
+        .from('messages')
+        .upsert(
+          {
+            user_id: userId,
+            chat_id: chatId,
+            contact_id: dbContact?.id ?? null,
+            whatsapp_id: message.id._serialized,
+            content: message.body || '',
+            from_me: message.fromMe,
+            type: this.getMediaType(message) ?? 'text',
+            timestamp: data.timestamp.toISOString(),
+            is_group: chat.isGroup,
+            metadata: {
+              hasQuotedMsg: message.hasQuotedMsg,
+              isForwarded: message.isForwarded,
+              isStatus: message.isStatus,
+              isBroadcast: message.broadcast,
+              type: message.type,
+              deviceType: message.deviceType,
+            },
+          },
+          { onConflict: 'whatsapp_id' }
+        )
+        .select('id')
+        .single();
 
-      // Store in database using Prisma
-      const storedMessage = await prisma.message.create({
-        data: messageData,
-      });
+      if (error) throw error;
 
       // Handle media if present
-      if (message.hasMedia) {
+      if (message.hasMedia && storedMessage) {
         this.downloadAndStoreMedia(storedMessage.id, message);
       }
 
@@ -166,29 +173,26 @@ export class MessageIngestionService extends EventEmitter {
   }
 
   /**
-   * Upsert contact in database
+   * Upsert a contact into the Supabase `contacts` table.
    */
-  private async upsertContact(userId: string, contact: Contact, chat: Chat) {
+  private async upsertContact(userId: string, contact: Contact): Promise<IdRow | null> {
     try {
       const contactData = {
-        userId,
-        whatsappId: contact.id._serialized,
-        phoneNumber: contact.number,
+        user_id: userId,
+        whatsapp_id: contact.id._serialized,
+        phone_number: contact.number,
         name: contact.pushname || contact.name || null,
-        avatarUrl: await contact.getProfilePicUrl() || null,
-        isVerified: contact.isMyContact,
+        avatar_url: (await contact.getProfilePicUrl()) || null,
       };
 
-      return await prisma.contact.upsert({
-        where: {
-          userId_whatsappId: {
-            userId,
-            whatsappId: contact.id._serialized,
-          },
-        },
-        update: contactData,
-        create: contactData,
-      });
+      const { data, error } = await supabase
+        .from('contacts')
+        .upsert(contactData, { onConflict: 'user_id,whatsapp_id' })
+        .select('id')
+        .single();
+
+      if (error) throw error;
+      return data;
     } catch (error) {
       logger.error('Error upserting contact:', error);
       return null;
@@ -196,34 +200,35 @@ export class MessageIngestionService extends EventEmitter {
   }
 
   /**
-   * Upsert group in database
+   * Upsert a chat (individual or group) into the Supabase `chats` table.
+   * Returns the chat id, which is required to store messages.
    */
-  private async upsertGroup(groupChat: GroupChat) {
+  private async upsertChat(userId: string, chat: Chat, contactId: string | null): Promise<string | null> {
     try {
-      const groupData = {
-        whatsappId: groupChat.id._serialized,
-        name: groupChat.name,
-        description: groupChat.description || null,
-        participantCount: groupChat.participants.length,
+      const chatData = {
+        user_id: userId,
+        whatsapp_chat_id: chat.id._serialized,
+        contact_id: contactId,
+        name: chat.name || null,
+        is_group: chat.isGroup,
       };
 
-      const group = await prisma.group.upsert({
-        where: {
-          whatsappId: groupChat.id._serialized,
-        },
-        update: groupData,
-        create: groupData,
-      });
+      const { data, error } = await supabase
+        .from('chats')
+        .upsert(chatData, { onConflict: 'user_id,whatsapp_chat_id' })
+        .select('id')
+        .single();
 
-      return group.id;
+      if (error) throw error;
+      return data?.id ?? null;
     } catch (error) {
-      logger.error('Error upserting group:', error);
+      logger.error('Error upserting chat:', error);
       return null;
     }
   }
 
   /**
-   * Download and store media
+   * Download media and store it in Supabase Storage, then update the message.
    */
   private async downloadAndStoreMedia(messageId: string, message: Message) {
     try {
@@ -232,7 +237,7 @@ export class MessageIngestionService extends EventEmitter {
 
       // Upload to Supabase Storage
       const fileName = `${messageId}-${Date.now()}.${media.mimetype.split('/')[1]}`;
-      const { data: uploadData, error } = await supabase.storage
+      const { error } = await supabase.storage
         .from('message-media')
         .upload(fileName, Buffer.from(media.data, 'base64'), {
           contentType: media.mimetype,
@@ -249,13 +254,14 @@ export class MessageIngestionService extends EventEmitter {
         .getPublicUrl(fileName);
 
       // Update message with media URL
-      await prisma.message.update({
-        where: { id: messageId },
-        data: {
-          mediaUrl: urlData.publicUrl,
-          mediaType: this.getMediaTypeFromMime(media.mimetype),
-        },
-      });
+      await supabase
+        .from('messages')
+        .update({
+          media_url: urlData.publicUrl,
+          media_mime_type: media.mimetype,
+          type: this.getMediaTypeFromMime(media.mimetype),
+        })
+        .eq('id', messageId);
 
       logger.info(`Media stored for message ${messageId}`);
     } catch (error) {
@@ -271,14 +277,10 @@ export class MessageIngestionService extends EventEmitter {
       // ACK states: 0 = pending, 1 = sent, 2 = received, 3 = read, 4 = played
       if (ack === 3) {
         // Message was read
-        await prisma.message.update({
-          where: {
-            whatsappMessageId: message.id._serialized,
-          },
-          data: {
-            isRead: true,
-          },
-        });
+        await supabase
+          .from('messages')
+          .update({ status: 'read' })
+          .eq('whatsapp_id', message.id._serialized);
 
         this.emit('message:read', { sessionId, messageId: message.id._serialized });
       }
@@ -292,18 +294,10 @@ export class MessageIngestionService extends EventEmitter {
    */
   private async handleMessageRevoke(sessionId: string, message: Message) {
     try {
-      await prisma.message.update({
-        where: {
-          whatsappMessageId: message.id._serialized,
-        },
-        data: {
-          content: '[Message deleted]',
-          metadata: {
-            deleted: true,
-            deletedAt: new Date(),
-          },
-        },
-      });
+      await supabase
+        .from('messages')
+        .update({ content: '[Message deleted]', is_deleted: true })
+        .eq('whatsapp_id', message.id._serialized);
 
       this.emit('message:deleted', { sessionId, messageId: message.id._serialized });
     } catch (error) {
@@ -316,7 +310,7 @@ export class MessageIngestionService extends EventEmitter {
    */
   private getMediaType(message: Message): string | null {
     if (!message.hasMedia) return null;
-    
+
     switch (message.type) {
       case 'image':
         return 'image';
@@ -359,80 +353,69 @@ export class MessageIngestionService extends EventEmitter {
   }
 
   /**
-   * Get messages for a user
+   * Get messages for a user (most recent first).
    */
   async getUserMessages(userId: string, limit: number = 50, offset: number = 0) {
-    return await prisma.message.findMany({
-      where: { userId },
-      orderBy: { timestamp: 'desc' },
-      take: limit,
-      skip: offset,
-      include: {
-        sender: true,
-        receiver: true,
-        group: true,
-        promises: true,
-      },
-    });
+    const { data, error } = await supabase
+      .from('messages')
+      .select(MESSAGE_SELECT)
+      .eq('user_id', userId)
+      .order('timestamp', { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (error) throw error;
+    return data ?? [];
   }
 
   /**
-   * Get messages for a specific chat
+   * Get messages for a specific chat.
    */
   async getChatMessages(userId: string, chatId: string, limit: number = 50) {
-    return await prisma.message.findMany({
-      where: {
-        userId,
-        OR: [
-          { senderId: chatId },
-          { receiverId: chatId },
-          { groupId: chatId },
-        ],
-      },
-      orderBy: { timestamp: 'desc' },
-      take: limit,
-      include: {
-        sender: true,
-        receiver: true,
-        group: true,
-      },
-    });
+    const { data, error } = await supabase
+      .from('messages')
+      .select(MESSAGE_SELECT)
+      .eq('user_id', userId)
+      .eq('chat_id', chatId)
+      .order('timestamp', { ascending: false })
+      .limit(limit);
+
+    if (error) throw error;
+    return data ?? [];
   }
 
   /**
-   * Search messages
+   * Search messages by content (case-insensitive).
    */
   async searchMessages(userId: string, query: string, limit: number = 50) {
-    return await prisma.message.findMany({
-      where: {
-        userId,
-        content: {
-          contains: query,
-          mode: 'insensitive',
-        },
-      },
-      orderBy: { timestamp: 'desc' },
-      take: limit,
-      include: {
-        sender: true,
-        receiver: true,
-        group: true,
-      },
-    });
+    const { data, error } = await supabase
+      .from('messages')
+      .select(MESSAGE_SELECT)
+      .eq('user_id', userId)
+      .ilike('content', `%${query}%`)
+      .order('timestamp', { ascending: false })
+      .limit(limit);
+
+    if (error) throw error;
+    return data ?? [];
   }
 
   /**
-   * Mark message as replied
+   * Mark a message as replied. The schema has no dedicated reply columns, so
+   * the reply is recorded via status + metadata.
    */
   async markAsReplied(messageId: string, replyContent: string) {
-    return await prisma.message.update({
-      where: { id: messageId },
-      data: {
-        isReplied: true,
-        actualReply: replyContent,
-        replyStatus: 'SENT',
-      },
-    });
+    const { data, error } = await supabase
+      .from('messages')
+      .update({
+        status: 'replied',
+        metadata: { replied: true, actualReply: replyContent },
+      })
+      .eq('id', messageId)
+      .select('id')
+      .single();
+
+    if (error) throw error;
+    return data;
   }
 }
 
