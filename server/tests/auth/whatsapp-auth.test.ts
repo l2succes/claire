@@ -1,16 +1,54 @@
+import { describe, it, expect, beforeEach, mock } from 'bun:test';
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Bun-style module mocks. (Ported from Jest auto-mocks; bun:test does not
+// preload tests/setup.ts, so heavy deps like whatsapp-web.js are mocked here.)
+// ──────────────────────────────────────────────────────────────────────────────
+const redisMock = {
+  get: mock(async (..._args: unknown[]) => null as string | null),
+  set: mock(async (..._args: unknown[]) => 'OK'),
+  setex: mock(async (..._args: unknown[]) => 'OK'),
+  del: mock(async (..._args: unknown[]) => 1),
+  keys: mock(async (..._args: unknown[]) => [] as string[]),
+  exists: mock(async (..._args: unknown[]) => 0),
+  expire: mock(async (..._args: unknown[]) => 1),
+  quit: mock(async () => 'OK'),
+};
+mock.module('../../src/services/redis', () => ({ redis: redisMock }));
+
+mock.module('../../src/utils/logger', () => ({
+  logger: { info: mock(() => {}), warn: mock(() => {}), error: mock(() => {}), debug: mock(() => {}) },
+  stream: { write: mock(() => {}) },
+}));
+
+// whatsapp-web.js launches puppeteer on Client.initialize() — stub it out.
+mock.module('whatsapp-web.js', () => ({
+  Client: mock(function MockClient() {
+    return {
+      on: mock(() => {}),
+      initialize: mock(async () => {}),
+      destroy: mock(async () => {}),
+      getState: mock(async () => 'CONNECTED'),
+      sendMessage: mock(async () => ({ id: { _serialized: 'mock-msg-id' } })),
+      info: undefined,
+    };
+  }),
+  LocalAuth: mock(function MockLocalAuth() { return {}; }),
+}));
+
 import { WhatsAppAuthService } from '../../src/auth/whatsapp-auth';
 import { redis } from '../../src/services/redis';
 
-// Mock dependencies
-jest.mock('../../src/services/redis');
-jest.mock('../../src/utils/logger');
+type AnyMock = ReturnType<typeof mock>;
 
 describe('WhatsAppAuthService', () => {
   let authService: WhatsAppAuthService;
 
   beforeEach(() => {
-    jest.clearAllMocks();
-    (redis.keys as jest.Mock).mockResolvedValue([]);
+    // Clear call history and restore default implementations between tests.
+    for (const m of Object.values(redisMock)) (m as AnyMock).mockClear();
+    redisMock.get.mockResolvedValue(null);
+    redisMock.keys.mockResolvedValue([]);
     authService = new WhatsAppAuthService();
   });
 
@@ -121,9 +159,10 @@ describe('WhatsAppAuthService', () => {
     });
 
     it('should handle disconnecting non-existent session gracefully', async () => {
+      // Should resolve (not reject) — disconnecting an unknown session is a no-op.
       await expect(
         authService.disconnectSession('non-existent')
-      ).resolves.not.toThrow();
+      ).resolves.toBeUndefined();
     });
   });
 

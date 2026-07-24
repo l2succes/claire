@@ -93,93 +93,6 @@ export class RealtimeSyncService extends EventEmitter {
   }
 
   /**
-   * Handle database change events
-   */
-  private handleDatabaseChange(table: string, payload: any) {
-    const { eventType, new: newRecord, old: oldRecord } = payload;
-    
-    logger.debug(`Database change in ${table}:`, eventType);
-    
-    // Broadcast to relevant users
-    switch (table) {
-      case 'messages':
-        this.broadcastMessageChange(eventType, newRecord, oldRecord);
-        break;
-      case 'contacts':
-        this.broadcastContactChange(eventType, newRecord, oldRecord);
-        break;
-      case 'promises':
-        this.broadcastPromiseChange(eventType, newRecord, oldRecord);
-        break;
-    }
-  }
-
-  /**
-   * Handle message updates (read receipts, etc.)
-   */
-  private handleMessageUpdate(payload: any) {
-    const { new: message } = payload;
-    
-    if (message.isRead) {
-      this.broadcastToUser(message.userId, 'message:read', {
-        messageId: message.id,
-        readAt: message.updatedAt,
-      });
-    }
-    
-    if (message.isReplied) {
-      this.broadcastToUser(message.userId, 'message:replied', {
-        messageId: message.id,
-        reply: message.actualReply,
-        repliedAt: message.updatedAt,
-      });
-    }
-  }
-
-  /**
-   * Broadcast message changes to relevant users
-   */
-  private async broadcastMessageChange(eventType: string, newRecord: any, oldRecord: any) {
-    const message = newRecord || oldRecord;
-    if (!message) return;
-
-    const event = eventType === 'INSERT' ? 'message:new' : 
-                  eventType === 'UPDATE' ? 'message:updated' : 
-                  'message:deleted';
-
-    // newRecord already contains all columns (REPLICA IDENTITY FULL)
-    this.broadcastToUser(message.user_id, event, message);
-  }
-
-  /**
-   * Broadcast contact changes
-   */
-  private broadcastContactChange(eventType: string, newRecord: any, oldRecord: any) {
-    const contact = newRecord || oldRecord;
-    if (!contact) return;
-
-    const event = eventType === 'INSERT' ? 'contact:new' : 
-                  eventType === 'UPDATE' ? 'contact:updated' : 
-                  'contact:deleted';
-
-    this.broadcastToUser(contact.userId, event, contact);
-  }
-
-  /**
-   * Broadcast promise changes
-   */
-  private broadcastPromiseChange(eventType: string, newRecord: any, oldRecord: any) {
-    const promise = newRecord || oldRecord;
-    if (!promise) return;
-
-    const event = eventType === 'INSERT' ? 'promise:new' : 
-                  eventType === 'UPDATE' ? 'promise:updated' : 
-                  'promise:deleted';
-
-    this.broadcastToUser(promise.userId, event, promise);
-  }
-
-  /**
    * Handle user broadcast events
    */
   private handleUserBroadcast(userId: string, payload: any) {
@@ -370,7 +283,7 @@ export class RealtimeSyncService extends EventEmitter {
    */
   async cleanup() {
     // Unsubscribe all users
-    for (const [channelName, channel] of this.userChannels) {
+    for (const [, channel] of this.userChannels) {
       await supabase.removeChannel(channel);
     }
     this.userChannels.clear();

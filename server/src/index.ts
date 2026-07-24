@@ -64,7 +64,7 @@ app.use('/conversations', conversationRoutes);
 app.use('/preferences', preferencesRoutes);
 
 // Handle Supabase email confirmation redirects
-app.get('/', (req, res) => {
+app.get('/', (_req, res) => {
   // If there's a hash fragment with tokens, serve the confirmation page
   res.sendFile(__dirname + '/routes/email-confirm.html');
 });
@@ -149,7 +149,7 @@ app.get('/health', async (_req, res) => {
 });
 
 // Error handling middleware
-app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   logger.error('Unhandled error:', err);
   if (config.SENTRY_DSN) {
     Sentry.captureException(err);
@@ -162,7 +162,7 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 });
 
 // 404 handler
-app.use((req, res) => {
+app.use((_req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
@@ -268,7 +268,8 @@ async function initializePlatforms() {
             const match = mxc.match(/^mxc:\/\/([^/]+)\/(.+)$/);
             return match ? `/media/${match[1]}/${match[2]}` : null;
           })(),
-          media_mime_type: message.platformMetadata?.mediaInfo?.mimetype || null,
+          media_mime_type:
+            (message.platformMetadata?.mediaInfo as { mimetype?: string } | undefined)?.mimetype || null,
         }, { onConflict: 'whatsapp_id', ignoreDuplicates: true })
         .select('id')
         .maybeSingle();

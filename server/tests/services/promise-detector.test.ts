@@ -5,7 +5,7 @@
  * these tests run with zero real infrastructure.
  */
 
-import { describe, it, expect, beforeEach, mock } from 'bun:test';
+import { describe, it, expect, beforeEach, afterAll, mock, spyOn } from 'bun:test';
 
 // ---------------------------------------------------------------------------
 // Mock heavy dependencies before importing the module under test
@@ -25,23 +25,30 @@ mock.module('../../src/services/supabase', () => ({
   },
 }));
 
-// Mock aiProcessor — controls whether LLM path is exercised
+// Control whether/what the LLM path returns. We spy on the REAL aiProcessor
+// singleton rather than replacing the whole module — replacing the module is
+// global in bun:test and would leak into ai-processor.test.ts (which needs the
+// real implementation). Spies are restored in afterAll.
 let mockCallAI: (...args: any[]) => Promise<string> = async () => '{"promises":[]}';
 let mockIsConfigured = true;
 
-// We expose the mock object directly so that the import binding in
-// promise-detector.ts gets a stable reference whose properties change per-test.
-const mockAiProcessorObj = {
-  get isConfigured() { return mockIsConfigured; },
-  callAI: (...args: any[]) => mockCallAI(...args),
-};
-
-mock.module('../../src/services/ai-processor', () => ({
-  aiProcessor: mockAiProcessorObj,
-}));
-
-// Import after mocking
+import { aiProcessor } from '../../src/services/ai-processor';
 import { promiseDetector } from '../../src/services/promise-detector';
+
+const callAISpy = spyOn(aiProcessor as any, 'callAI').mockImplementation(
+  (...args: any[]) => mockCallAI(...args)
+);
+// isConfigured is a prototype getter — override it on the instance for the test.
+Object.defineProperty(aiProcessor, 'isConfigured', {
+  configurable: true,
+  get: () => mockIsConfigured,
+});
+
+afterAll(() => {
+  callAISpy.mockRestore();
+  // Remove the instance override so the prototype getter is restored.
+  delete (aiProcessor as any).isConfigured;
+});
 
 // ---------------------------------------------------------------------------
 // Helpers

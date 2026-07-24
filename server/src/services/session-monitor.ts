@@ -113,7 +113,7 @@ export class SessionMonitorService extends EventEmitter {
       const isConnected = whatsappAuth.isSessionConnected(sessionId);
       const client = whatsappAuth.getClient(sessionId);
       
-      let health = this.sessionHealth.get(sessionId) || {
+      const health = this.sessionHealth.get(sessionId) || {
         sessionId,
         userId,
         status: 'healthy',

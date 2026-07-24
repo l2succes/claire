@@ -301,7 +301,7 @@ class MessageQueueService {
    * Process media job
    */
   private async processMediaJob(job: Job) {
-    const { messageId, mediaUrl, mediaType } = job.data;
+    const { messageId } = job.data;
     
     try {
       logger.info(`Processing media for message ${messageId}`);

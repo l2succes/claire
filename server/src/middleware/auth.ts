@@ -42,10 +42,10 @@ export const requireAuth = async (
     req.user = user;
     req.token = token;
     
-    next();
+    return next();
   } catch (error) {
     logger.error('Auth middleware error:', error);
-    res.status(401).json({ error: 'Authentication failed' });
+    return res.status(401).json({ error: 'Authentication failed' });
   }
 };
 
@@ -54,7 +54,7 @@ export const requireAuth = async (
  */
 export const optionalAuth = async (
   req: Request,
-  res: Response,
+  _res: Response,
   next: NextFunction
 ) => {
   try {
@@ -77,11 +77,11 @@ export const optionalAuth = async (
       req.token = token;
     }
     
-    next();
+    return next();
   } catch (error) {
     // Don't fail on optional auth
     logger.debug('Optional auth failed:', error);
-    next();
+    return next();
   }
 };
 
@@ -98,7 +98,7 @@ export const requireRole = (role: string) => {
       return res.status(403).json({ error: 'Insufficient permissions' });
     }
 
-    next();
+    return next();
   };
 };
 
@@ -133,6 +133,6 @@ export const rateLimit = (
     }
     
     userRequests.count++;
-    next();
+    return next();
   };
 };

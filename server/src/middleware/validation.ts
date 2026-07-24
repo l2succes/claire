@@ -15,7 +15,7 @@ export const validateRequest = (schema: ZodSchema) => {
         params: req.params,
       });
       
-      next();
+      return next();
     } catch (error: any) {
       logger.warn('Validation error:', error);
       
@@ -26,7 +26,7 @@ export const validateRequest = (schema: ZodSchema) => {
         });
       }
       
-      res.status(400).json({
+      return res.status(400).json({
         error: 'Invalid request',
       });
     }
@@ -38,7 +38,7 @@ export const validateRequest = (schema: ZodSchema) => {
  */
 export const sanitizeInput = (
   req: Request,
-  res: Response,
+  _res: Response,
   next: NextFunction
 ) => {
   const sanitize = (obj: any): any => {
@@ -72,7 +72,7 @@ export const sanitizeInput = (
   req.query = sanitize(req.query);
   req.params = sanitize(req.params);
   
-  next();
+  return next();
 };
 
 /**
@@ -85,7 +85,7 @@ export const requireContentType = (contentType: string) => {
         error: `Content-Type must be ${contentType}`,
       });
     }
-    next();
+    return next();
   };
 };
 
@@ -103,6 +103,6 @@ export const limitRequestSize = (maxSizeBytes: number) => {
       });
     }
     
-    next();
+    return next();
   };
 };

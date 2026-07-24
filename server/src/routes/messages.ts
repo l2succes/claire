@@ -46,11 +46,11 @@ router.get(
   validateRequest(getMessagesSchema),
   async (req: Request, res: Response) => {
     try {
-      const userId = req.user?.id;
+      const userId = req.user?.id as string;
       const { limit, offset, chatId, search } = req.query as any;
 
       let messages;
-      
+
       if (search) {
         messages = await messageIngestion.searchMessages(userId, search, limit);
       } else if (chatId) {
@@ -59,7 +59,7 @@ router.get(
         messages = await messageIngestion.getUserMessages(userId, limit, offset);
       }
 
-      res.json({
+      return res.json({
         messages,
         pagination: {
           limit,
@@ -69,7 +69,94 @@ router.get(
       });
     } catch (error) {
       logger.error('Failed to get messages:', error);
-      res.status(500).json({ error: 'Failed to retrieve messages' });
+      return res.status(500).json({ error: 'Failed to retrieve messages' });
+    }
+  }
+);
+
+/**
+ * GET /messages/chats
+ * Get list of chats (conversations)
+ */
+router.get(
+  '/chats',
+  requireAuth,
+  async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id as string;
+
+      const { data: chats, error } = await supabase
+        .from('chats')
+        .select('*, contact:contacts(*)')
+        .eq('user_id', userId)
+        .order('last_message_at', { ascending: false, nullsFirst: false });
+
+      if (error) throw error;
+
+      return res.json(chats ?? []);
+    } catch (error) {
+      logger.error('Failed to get chats:', error);
+      return res.status(500).json({ error: 'Failed to retrieve chats' });
+    }
+  }
+);
+
+/**
+ * GET /messages/stats
+ * Get message statistics
+ */
+router.get(
+  '/stats',
+  requireAuth,
+  async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id as string;
+      const startOfDay = new Date(new Date().setHours(0, 0, 0, 0)).toISOString();
+
+      const baseCount = () =>
+        supabase
+          .from('messages')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', userId);
+
+      const countFor = (
+        build: (q: ReturnType<typeof baseCount>) => ReturnType<typeof baseCount>
+      ) => build(baseCount());
+
+      const [total, unread, replied, today] = await Promise.all([
+        countFor(q => q),
+        countFor(q => q.eq('from_me', false).or('status.is.null,status.neq.read')),
+        countFor(q => q.eq('status', 'replied')),
+        countFor(q => q.gte('timestamp', startOfDay)),
+      ]);
+
+      return res.json({
+        total: total.count ?? 0,
+        unread: unread.count ?? 0,
+        replied: replied.count ?? 0,
+        today: today.count ?? 0,
+      });
+    } catch (error) {
+      logger.error('Failed to get message stats:', error);
+      return res.status(500).json({ error: 'Failed to retrieve statistics' });
+    }
+  }
+);
+
+/**
+ * GET /messages/queue/stats
+ * Get message queue statistics
+ */
+router.get(
+  '/queue/stats',
+  requireAuth,
+  async (_req: Request, res: Response) => {
+    try {
+      const stats = await messageQueue.getAllQueueStats();
+      return res.json(stats);
+    } catch (error) {
+      logger.error('Failed to get queue stats:', error);
+      return res.status(500).json({ error: 'Failed to retrieve queue statistics' });
     }
   }
 );
@@ -83,30 +170,25 @@ router.get(
   requireAuth,
   async (req: Request, res: Response) => {
     try {
-      const userId = req.user?.id;
+      const userId = req.user?.id as string;
       const { messageId } = req.params;
 
-      const message = await prisma.message.findFirst({
-        where: {
-          id: messageId,
-          userId,
-        },
-        include: {
-          sender: true,
-          receiver: true,
-          group: true,
-          promises: true,
-        },
-      });
+      const { data: message, error } = await supabase
+        .from('messages')
+        .select('*, contact:contacts(*), chat:chats(*)')
+        .eq('id', messageId)
+        .eq('user_id', userId)
+        .maybeSingle();
 
+      if (error) throw error;
       if (!message) {
         return res.status(404).json({ error: 'Message not found' });
       }
 
-      res.json(message);
+      return res.json(message);
     } catch (error) {
       logger.error('Failed to get message:', error);
-      res.status(500).json({ error: 'Failed to retrieve message' });
+      return res.status(500).json({ error: 'Failed to retrieve message' });
     }
   }
 );
@@ -121,8 +203,8 @@ router.post(
   validateRequest(sendMessageSchema),
   async (req: Request, res: Response) => {
     try {
-      const userId = req.user?.id;
-      const { sessionId, to, message, quotedMessageId } = req.body;
+      const userId = req.user?.id as string;
+      const { sessionId, to, message } = req.body;
 
       // Verify session belongs to user
       const session = await whatsappAuth.getSession(sessionId);
@@ -137,35 +219,49 @@ router.post(
 
       // Send message via WhatsApp
       const sentMessage = await whatsappAuth.sendMessage(sessionId, to, message);
-      
+
       if (!sentMessage) {
         return res.status(500).json({ error: 'Failed to send message' });
       }
 
+      // Ensure a chat row exists for the recipient (messages.chat_id is NOT NULL).
+      const { data: chatRow } = await supabase
+        .from('chats')
+        .upsert(
+          { user_id: userId, whatsapp_chat_id: to, is_group: false },
+          { onConflict: 'user_id,whatsapp_chat_id' }
+        )
+        .select('id')
+        .single();
+
       // Store in database
-      const storedMessage = await prisma.message.create({
-        data: {
-          userId,
-          whatsappMessageId: sentMessage.id._serialized,
+      const { data: storedMessage, error: storeError } = await supabase
+        .from('messages')
+        .insert({
+          user_id: userId,
+          chat_id: chatRow?.id,
+          whatsapp_id: sentMessage.id._serialized,
           content: message,
-          timestamp: new Date(sentMessage.timestamp * 1000),
-          isFromMe: true,
-          isRead: false,
-          isReplied: false,
-          replyStatus: 'SENT',
-        },
-      });
+          from_me: true,
+          type: 'text',
+          status: 'sent',
+          timestamp: new Date(sentMessage.timestamp * 1000).toISOString(),
+        })
+        .select('*')
+        .single();
+
+      if (storeError) throw storeError;
 
       // Broadcast via realtime
       await realtimeSync.broadcastToUser(userId, 'message:sent', storedMessage);
 
-      res.json({
+      return res.json({
         message: storedMessage,
         whatsappId: sentMessage.id._serialized,
       });
     } catch (error) {
       logger.error('Failed to send message:', error);
-      res.status(500).json({ error: 'Failed to send message' });
+      return res.status(500).json({ error: 'Failed to send message' });
     }
   }
 );
@@ -180,114 +276,18 @@ router.post(
   validateRequest(markReadSchema),
   async (req: Request, res: Response) => {
     try {
-      const userId = req.user?.id;
+      const userId = req.user?.id as string;
       const { messageIds } = req.body;
 
       await realtimeSync.syncReadStatus(userId, messageIds);
 
-      res.json({ 
+      return res.json({
         success: true,
         markedCount: messageIds.length,
       });
     } catch (error) {
       logger.error('Failed to mark messages as read:', error);
-      res.status(500).json({ error: 'Failed to mark messages as read' });
-    }
-  }
-);
-
-/**
- * GET /messages/chats
- * Get list of chats (conversations)
- */
-router.get(
-  '/chats',
-  requireAuth,
-  async (req: Request, res: Response) => {
-    try {
-      const userId = req.user?.id;
-
-      // Get unique chats with last message
-      const chats = await prisma.$queryRaw`
-        WITH latest_messages AS (
-          SELECT DISTINCT ON (COALESCE(sender_id, receiver_id, group_id))
-            *,
-            COALESCE(sender_id, receiver_id, group_id) as chat_id
-          FROM messages
-          WHERE user_id = ${userId}
-          ORDER BY COALESCE(sender_id, receiver_id, group_id), timestamp DESC
-        )
-        SELECT 
-          lm.*,
-          c.name as contact_name,
-          c.avatar_url as contact_avatar,
-          g.name as group_name
-        FROM latest_messages lm
-        LEFT JOIN contacts c ON lm.chat_id = c.id
-        LEFT JOIN groups g ON lm.chat_id = g.id
-        ORDER BY lm.timestamp DESC
-      `;
-
-      res.json(chats);
-    } catch (error) {
-      logger.error('Failed to get chats:', error);
-      res.status(500).json({ error: 'Failed to retrieve chats' });
-    }
-  }
-);
-
-/**
- * GET /messages/stats
- * Get message statistics
- */
-router.get(
-  '/stats',
-  requireAuth,
-  async (req: Request, res: Response) => {
-    try {
-      const userId = req.user?.id;
-
-      const [totalMessages, unreadCount, repliedCount, todayCount] = await Promise.all([
-        prisma.message.count({ where: { userId } }),
-        prisma.message.count({ where: { userId, isRead: false, isFromMe: false } }),
-        prisma.message.count({ where: { userId, isReplied: true } }),
-        prisma.message.count({
-          where: {
-            userId,
-            timestamp: {
-              gte: new Date(new Date().setHours(0, 0, 0, 0)),
-            },
-          },
-        }),
-      ]);
-
-      res.json({
-        total: totalMessages,
-        unread: unreadCount,
-        replied: repliedCount,
-        today: todayCount,
-      });
-    } catch (error) {
-      logger.error('Failed to get message stats:', error);
-      res.status(500).json({ error: 'Failed to retrieve statistics' });
-    }
-  }
-);
-
-/**
- * GET /messages/queue/stats
- * Get message queue statistics
- */
-router.get(
-  '/queue/stats',
-  requireAuth,
-  async (req: Request, res: Response) => {
-    try {
-      const stats = await messageQueue.getAllQueueStats();
-      res.json(stats);
-    } catch (error) {
-      logger.error('Failed to get queue stats:', error);
-      res.status(500).json({ error: 'Failed to retrieve queue statistics' });
+      return res.status(500).json({ error: 'Failed to mark messages as read' });
     }
   }
 );
@@ -301,15 +301,15 @@ router.post(
   requireAuth,
   async (req: Request, res: Response) => {
     try {
-      const userId = req.user?.id;
+      const userId = req.user?.id as string;
       const { chatId, isTyping } = req.body;
 
       await realtimeSync.sendTypingIndicator(userId, chatId, isTyping);
 
-      res.json({ success: true });
+      return res.json({ success: true });
     } catch (error) {
       logger.error('Failed to send typing indicator:', error);
-      res.status(500).json({ error: 'Failed to send typing indicator' });
+      return res.status(500).json({ error: 'Failed to send typing indicator' });
     }
   }
 );
@@ -334,7 +334,7 @@ router.post(
   validateRequest(snoozeMessageSchema),
   async (req: Request, res: Response) => {
     try {
-      const userId = req.user?.id;
+      const userId = req.user?.id as string;
       const { messageId } = req.params;
       const { snooze_until, snooze_minutes } = req.body;
 
@@ -358,10 +358,10 @@ router.post(
         return res.status(404).json({ error: 'Message not found' });
       }
 
-      res.json({ success: true, message: data });
+      return res.json({ success: true, message: data });
     } catch (error) {
       logger.error('Failed to snooze message:', error);
-      res.status(500).json({ error: 'Failed to snooze message' });
+      return res.status(500).json({ error: 'Failed to snooze message' });
     }
   }
 );
@@ -375,7 +375,7 @@ router.delete(
   requireAuth,
   async (req: Request, res: Response) => {
     try {
-      const userId = req.user?.id;
+      const userId = req.user?.id as string;
       const { messageId } = req.params;
 
       const { data, error } = await supabase
@@ -390,40 +390,38 @@ router.delete(
         return res.status(404).json({ error: 'Message not found' });
       }
 
-      res.json({ success: true });
+      return res.json({ success: true });
     } catch (error) {
       logger.error('Failed to un-snooze message:', error);
-      res.status(500).json({ error: 'Failed to un-snooze message' });
+      return res.status(500).json({ error: 'Failed to un-snooze message' });
     }
   }
 );
 
 /**
  * DELETE /messages/:messageId
- * Delete a message
+ * Delete a message (soft delete)
  */
 router.delete(
   '/:messageId',
   requireAuth,
   async (req: Request, res: Response) => {
     try {
-      const userId = req.user?.id;
+      const userId = req.user?.id as string;
       const { messageId } = req.params;
 
-      // Soft delete by updating content
-      const message = await prisma.message.update({
-        where: {
-          id: messageId,
-          userId,
-        },
-        data: {
-          content: '[Message deleted]',
-          metadata: {
-            deleted: true,
-            deletedAt: new Date(),
-          },
-        },
-      });
+      // Soft delete by flagging and blanking content
+      const { data: message, error } = await supabase
+        .from('messages')
+        .update({ content: '[Message deleted]', is_deleted: true })
+        .eq('id', messageId)
+        .eq('user_id', userId)
+        .select('*')
+        .single();
+
+      if (error || !message) {
+        return res.status(404).json({ error: 'Message not found' });
+      }
 
       // Broadcast deletion
       await realtimeSync.broadcastToUser(userId, 'message:deleted', {
@@ -431,10 +429,10 @@ router.delete(
         deletedAt: new Date(),
       });
 
-      res.json({ success: true, message });
+      return res.json({ success: true, message });
     } catch (error) {
       logger.error('Failed to delete message:', error);
-      res.status(500).json({ error: 'Failed to delete message' });
+      return res.status(500).json({ error: 'Failed to delete message' });
     }
   }
 );
