@@ -1,38 +1,39 @@
+import { beforeEach, describe, expect, it, mock } from 'bun:test';
 import express from 'express';
 import request from 'supertest';
 
 // Shared mock query object — reset in beforeEach
 const mockQuery: any = {
-  select: jest.fn().mockReturnThis(),
-  insert: jest.fn().mockReturnThis(),
-  update: jest.fn().mockReturnThis(),
-  delete: jest.fn().mockReturnThis(),
-  eq: jest.fn().mockReturnThis(),
-  order: jest.fn().mockReturnThis(),
-  range: jest.fn().mockReturnThis(),
-  single: jest.fn(),
+  select: mock().mockReturnThis(),
+  insert: mock().mockReturnThis(),
+  update: mock().mockReturnThis(),
+  delete: mock().mockReturnThis(),
+  eq: mock().mockReturnThis(),
+  order: mock().mockReturnThis(),
+  range: mock().mockReturnThis(),
+  single: mock(),
 };
 
-// Mock supabase BEFORE importing the router under test
-jest.mock('../../src/services/supabase', () => ({
+mock.module('../../src/services/supabase', () => ({
   supabase: {
-    from: jest.fn(() => mockQuery),
+    from: mock(() => mockQuery),
+  },
+  authHelpers: {
+    verifyToken: mock(async () => ({
+      id: 'user-123',
+      email: 'test@example.com',
+    })),
   },
 }));
 
-// Mock auth middleware to inject a user
-jest.mock('../../src/middleware/auth', () => ({
-  requireAuth: (req: any, _res: any, next: any) => {
-    req.user = { id: 'user-123' };
-    next();
-  },
-}));
-
-// Import after mocks are registered
-import promiseRoutes from '../../src/routes/promises';
+const { default: promiseRoutes } = await import('../../src/routes/promises');
 
 const app = express();
 app.use(express.json());
+app.use((req, _res, next) => {
+  req.headers.authorization = 'Bearer test-token';
+  next();
+});
 app.use('/promises', promiseRoutes);
 
 const VALID_UUID = '00000000-0000-0000-0000-000000000001';
