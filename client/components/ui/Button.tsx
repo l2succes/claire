@@ -46,6 +46,7 @@ export function Button({
 
   return (
     <TouchableOpacity
+      accessibilityRole="button"
       disabled={disabled || loading}
       className={cn(
         'rounded-lg items-center justify-center',
