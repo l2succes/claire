@@ -3,7 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import * as Sentry from '@sentry/node';
-import { config, platformConfig, matrixConfig, serverConfig } from './config';
+import { config, platformConfig, matrixConfig, mockBridgeConfig, serverConfig } from './config';
 import { initSentry } from './utils/sentry';
 import { logger, stream } from './utils/logger';
 
@@ -17,6 +17,7 @@ import platformRoutes from './routes/platforms';
 import conversationRoutes from './routes/conversations';
 import preferencesRoutes from './routes/preferences';
 import { aiRateLimit, authRateLimit } from './middleware/rate-limit';
+import seedRoutes from './routes/seed';
 import { platformManager } from './adapters';
 import { aiProcessor } from './services/ai-processor';
 import { whatsappAdapter } from './adapters/whatsapp';
@@ -24,6 +25,7 @@ import { telegramAdapter } from './adapters/telegram';
 import { imessageAdapter } from './adapters/imessage';
 import { instagramAdapter } from './adapters/instagram';
 import { MatrixBridgeAdapter } from './adapters/matrix';
+import { mockBridgeAdapter } from './adapters/mock';
 
 // Initialise Sentry as early as possible (no-op when SENTRY_DSN is unset)
 initSentry();
@@ -62,6 +64,8 @@ app.use('/ai', aiRateLimit, aiRoutes);
 app.use('/platforms', platformRoutes);
 app.use('/conversations', conversationRoutes);
 app.use('/preferences', preferencesRoutes);
+// Seed/reset route — only functional when MOCK_BRIDGE=true (guarded inside route)
+app.use('/seed', seedRoutes);
 
 // Handle Supabase email confirmation redirects
 app.get('/', (_req, res) => {
@@ -145,6 +149,7 @@ app.get('/health', async (_req, res) => {
     uptime: process.uptime(),
     environment: config.NODE_ENV,
     checks,
+    mockBridge: mockBridgeConfig.enabled,
   });
 });
 
@@ -168,36 +173,42 @@ app.use((_req, res) => {
 
 // Initialize platform adapters
 async function initializePlatforms() {
-  const mode = matrixConfig.enabled ? 'matrix' : 'direct';
-  logger.info(`Initializing platform adapters in ${mode} mode...`);
-
-  if (matrixConfig.enabled) {
-    // Matrix mode: Use MatrixBridgeAdapter for all platforms via bridges
-    logger.info('Using Matrix bridges for platform integration');
-
-    const matrixAdapter = new MatrixBridgeAdapter({
-      homeserverUrl: matrixConfig.homeserverUrl!,
-      serverName: matrixConfig.serverName!,
-      adminAccessToken: matrixConfig.adminToken,
-      botUserId: matrixConfig.botUserId,
-    });
-
-    platformManager.setMatrixMode(matrixAdapter);
+  if (mockBridgeConfig.enabled) {
+    // Mock mode: replace all real adapters with a scripted fake adapter
+    logger.info('MOCK_BRIDGE=true — using mock bridge adapter (no Docker/Matrix required)');
+    platformManager.setMatrixMode(mockBridgeAdapter);
   } else {
-    // Direct mode: Use native platform adapters
-    logger.info('Using direct platform adapters');
+    const mode = matrixConfig.enabled ? 'matrix' : 'direct';
+    logger.info(`Initializing platform adapters in ${mode} mode...`);
 
-    if (platformConfig.whatsapp.enabled) {
-      platformManager.registerAdapter(whatsappAdapter);
-    }
-    if (platformConfig.telegram.enabled) {
-      platformManager.registerAdapter(telegramAdapter);
-    }
-    if (platformConfig.imessage.enabled) {
-      platformManager.registerAdapter(imessageAdapter);
-    }
-    if (platformConfig.instagram.enabled) {
-      platformManager.registerAdapter(instagramAdapter);
+    if (matrixConfig.enabled) {
+      // Matrix mode: Use MatrixBridgeAdapter for all platforms via bridges
+      logger.info('Using Matrix bridges for platform integration');
+
+      const matrixAdapter = new MatrixBridgeAdapter({
+        homeserverUrl: matrixConfig.homeserverUrl!,
+        serverName: matrixConfig.serverName!,
+        adminAccessToken: matrixConfig.adminToken,
+        botUserId: matrixConfig.botUserId,
+      });
+
+      platformManager.setMatrixMode(matrixAdapter);
+    } else {
+      // Direct mode: Use native platform adapters
+      logger.info('Using direct platform adapters');
+
+      if (platformConfig.whatsapp.enabled) {
+        platformManager.registerAdapter(whatsappAdapter);
+      }
+      if (platformConfig.telegram.enabled) {
+        platformManager.registerAdapter(telegramAdapter);
+      }
+      if (platformConfig.imessage.enabled) {
+        platformManager.registerAdapter(imessageAdapter);
+      }
+      if (platformConfig.instagram.enabled) {
+        platformManager.registerAdapter(instagramAdapter);
+      }
     }
   }
 
