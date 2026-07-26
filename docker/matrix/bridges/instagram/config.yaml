@@ -16,8 +16,8 @@ appservice:
     bot:
         username: metabot
         displayname: Instagram Bridge Bot
-    as_token: JfIHXyofgCLVDfyfeDXFWtDMDDCRyBfsG5x7GLDXn4Ay0DwNYUQXH2YiTIogNul9
-    hs_token: AnOjYg3WlsvlknIjIuanULCRpHVlFg7ncFakCAoDhRrn0YYYgKUMp7reNDNCUpkx
+    as_token: GENERATE_ME_WITH_OPENSSL_RAND_HEX_32
+    hs_token: GENERATE_ME_WITH_OPENSSL_RAND_HEX_32
 
 meta:
     mode: instagram
@@ -35,7 +35,7 @@ bridge:
     private_chat_portal_meta: true
 
 provisioning:
-    shared_secret: "claire-instagram-bridge-secret-key-2026"
+    shared_secret: GENERATE_PROVISIONING_SHARED_SECRET
 
 logging:
     min_level: info

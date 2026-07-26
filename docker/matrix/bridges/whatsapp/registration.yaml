@@ -1,7 +1,7 @@
 id: whatsapp
 url: http://mautrix-whatsapp:29318
-as_token: MmkZGM5s1hfzCRy0sjfnyzUBLjbrHb1lixh650XGA0g9c5Qh0aYLc21pZsKaqVv4
-hs_token: IirGOh2aYcmAJyYGUEyLUDkZLSF5omlQ0kucHjiyR20BfwQeuZGo5Ige0mrFO93N
+as_token: GENERATE_ME_WITH_OPENSSL_RAND_HEX_32
+hs_token: GENERATE_ME_WITH_OPENSSL_RAND_HEX_32
 sender_localpart: 8ez6Bwcxjr4cufRV3N3n6gTVbP1y8KcW
 rate_limited: false
 namespaces:

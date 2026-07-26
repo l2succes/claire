@@ -15,6 +15,7 @@ generate_tokens() {
     local bridge=$1
     local as_token=$(openssl rand -hex 32)
     local hs_token=$(openssl rand -hex 32)
+    local provisioning_secret=$(openssl rand -hex 32)
 
     echo "Generating tokens for $bridge bridge..."
 
@@ -22,6 +23,7 @@ generate_tokens() {
     if [[ -f "$MATRIX_DIR/bridges/$bridge/config.yaml" ]]; then
         sed -i.bak "s/GENERATE_ME_WITH_OPENSSL_RAND_HEX_32/$as_token/1" "$MATRIX_DIR/bridges/$bridge/config.yaml"
         sed -i.bak "s/GENERATE_ME_WITH_OPENSSL_RAND_HEX_32/$hs_token/1" "$MATRIX_DIR/bridges/$bridge/config.yaml"
+        sed -i.bak "s/GENERATE_PROVISIONING_SHARED_SECRET/$provisioning_secret/1" "$MATRIX_DIR/bridges/$bridge/config.yaml"
         rm -f "$MATRIX_DIR/bridges/$bridge/config.yaml.bak"
     fi
 

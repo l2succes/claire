@@ -1,7 +1,7 @@
 id: meta
 url: http://mautrix-instagram:29319
-as_token: JfIHXyofgCLVDfyfeDXFWtDMDDCRyBfsG5x7GLDXn4Ay0DwNYUQXH2YiTIogNul9
-hs_token: AnOjYg3WlsvlknIjIuanULCRpHVlFg7ncFakCAoDhRrn0YYYgKUMp7reNDNCUpkx
+as_token: GENERATE_ME_WITH_OPENSSL_RAND_HEX_32
+hs_token: GENERATE_ME_WITH_OPENSSL_RAND_HEX_32
 sender_localpart: 6LhFKDeFCgCGdHsleVzWj3SV3b30uPx8
 rate_limited: false
 namespaces:
