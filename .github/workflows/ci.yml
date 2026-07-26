@@ -82,9 +82,35 @@ jobs:
           cd server && bun run typecheck
           cd ../client && bun run typecheck
 
+  e2e:
+    name: Mock end-to-end tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install client dependencies
+        working-directory: ./client
+        run: bun install
+
+      - name: Install Playwright Chromium
+        working-directory: ./client
+        run: bunx playwright install --with-deps chromium
+
+      - name: Run mock end-to-end tests
+        working-directory: ./client
+        env:
+          MOCK_BRIDGE: "true"
+        run: bunx playwright test
+
   build:
     runs-on: ubuntu-latest
-    needs: [test, lint]
+    needs: [test, lint, e2e]
 
     steps:
       - uses: actions/checkout@v4
@@ -106,7 +132,4 @@ jobs:
 
       - name: Build client for web
         working-directory: ./client
-        # Web build under react-native-web is tracked in #7 and not green yet.
-        # Don't block CI on it; remove continue-on-error once #7 lands.
-        continue-on-error: true
         run: bunx expo export -p web
