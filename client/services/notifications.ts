@@ -1,6 +1,10 @@
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
+import Constants from 'expo-constants';
 import { platformCapabilities } from '../utils/platformCapabilities';
+import { supabase } from './supabase';
+
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001';
 
 if (platformCapabilities.supportsNativeNotifications) {
   Notifications.setNotificationHandler({
@@ -43,8 +47,17 @@ export async function setupNotifications() {
   }
 
   try {
+    const projectId =
+      Constants.easConfig?.projectId ??
+      Constants.expoConfig?.extra?.eas?.projectId;
+
+    if (!projectId) {
+      console.error('Cannot get Expo push token: EAS project ID is not configured');
+      return null;
+    }
+
     const token = await Notifications.getExpoPushTokenAsync({
-      projectId: 'your-project-id',
+      projectId,
     });
 
     console.log('Push token:', token.data);
@@ -52,6 +65,37 @@ export async function setupNotifications() {
   } catch (error) {
     console.error('Error getting push token:', error);
     return null;
+  }
+}
+
+/**
+ * Register an Expo push token with the server.
+ * No-op on web (graceful).
+ */
+export async function registerPushToken(token: string): Promise<void> {
+  if (!platformCapabilities.supportsNativeNotifications) {
+    logWebNoop('registerPushToken');
+    return;
+  }
+
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) return;
+
+    const response = await fetch(`${API_BASE_URL}/push-tokens`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ token }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Push token registration failed with status ${response.status}`);
+    }
+  } catch (error) {
+    console.error('Failed to register push token:', error);
   }
 }
 
