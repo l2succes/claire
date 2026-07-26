@@ -18,6 +18,7 @@ import conversationRoutes from './routes/conversations';
 import preferencesRoutes from './routes/preferences';
 import { aiRateLimit, authRateLimit } from './middleware/rate-limit';
 import seedRoutes from './routes/seed';
+import promiseRoutes from './routes/promises';
 import { platformManager } from './adapters';
 import { aiProcessor } from './services/ai-processor';
 import { whatsappAdapter } from './adapters/whatsapp';
@@ -66,6 +67,7 @@ app.use('/conversations', conversationRoutes);
 app.use('/preferences', preferencesRoutes);
 // Seed/reset route — only functional when MOCK_BRIDGE=true (guarded inside route)
 app.use('/seed', seedRoutes);
+app.use('/promises', promiseRoutes);
 
 // Handle Supabase email confirmation redirects
 app.get('/', (_req, res) => {
