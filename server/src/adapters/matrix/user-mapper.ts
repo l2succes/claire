@@ -77,6 +77,26 @@ export class MatrixUserMapper {
   }
 
   /**
+   * Check if a sender is the real (double-puppeted) Matrix user for a session.
+   * With double puppeting enabled, the bridge impersonates the user's real Matrix
+   * account so outgoing-from-phone messages arrive with sender = the Matrix user ID
+   * (e.g. "@user123:claire.local") instead of a ghost user.
+   *
+   * Returns true when:
+   *   1. The sender is a real Matrix user (not a ghost, not a bridge bot).
+   *   2. Either no matrixUserId is given (backward-compat: any real user = self),
+   *      or the sender matches the known real Matrix user ID for this session.
+   */
+  isDoublePuppetUser(sender: string, matrixUserId?: string): boolean {
+    if (this.isBridgeBot(sender)) return false;
+    if (this.isGhostUser(sender)) return false;
+    // If we know the session's real Matrix user ID, verify the match.
+    if (matrixUserId) return sender === matrixUserId;
+    // No matrixUserId known yet — any real (non-ghost) user is treated as self.
+    return true;
+  }
+
+  /**
    * Detect which platform a ghost user belongs to
    */
   detectPlatformFromUser(userId: string): Platform | null {

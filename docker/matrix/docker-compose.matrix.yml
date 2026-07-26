@@ -40,6 +40,7 @@ services:
       - ./bridges/whatsapp/registration.yaml:/data/appservices/whatsapp.yaml:ro
       - ./bridges/telegram/registration.yaml:/data/appservices/telegram.yaml:ro
       - ./bridges/instagram/registration.yaml:/data/appservices/instagram.yaml:ro
+      - ./doublepuppet/registration.yaml:/data/appservices/doublepuppet.yaml:ro
     environment:
       - SYNAPSE_CONFIG_PATH=/data/homeserver.yaml
     ports:

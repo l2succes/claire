@@ -39,6 +39,7 @@ app_service_config_files:
   - /data/appservices/whatsapp.yaml
   - /data/appservices/telegram.yaml
   - /data/appservices/instagram.yaml
+  - /data/appservices/doublepuppet.yaml
 
 # Generate these with: openssl rand -hex 32
 macaroon_secret_key: "CHANGE_ME_TO_SECURE_SECRET"

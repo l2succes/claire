@@ -80,6 +80,12 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
   private sessionPlatforms: Map<string, Platform> = new Map();
   // Maps sessionId -> the user's own ghost user ID (e.g. @whatsapp_15166100494:claire.local)
   private sessionSelfGhostIds: Map<string, string> = new Map();
+  // Maps sessionId -> real Matrix user ID for double-puppeting (e.g. @user123:claire.local)
+  private sessionMatrixUserIds: Map<string, string> = new Map();
+  // Whether double puppeting is enabled (bridges configured with double_puppet.secrets)
+  private readonly doublePuppetEnabled: boolean = process.env.ENABLE_DOUBLE_PUPPETING === 'true';
+  // Event IDs that this server sent (to avoid double-counting bot's own sends as incoming)
+  private localSentEventIds: Set<string> = new Set();
 
   constructor(private config: MatrixConfig) {
     super();
@@ -155,6 +161,8 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     this.sessionControlRooms.clear();
     this.sessionPlatforms.clear();
     this.sessionSelfGhostIds.clear();
+    this.sessionMatrixUserIds.clear();
+    this.localSentEventIds.clear();
     this.roomMapper.clearCache();
 
     this.log('info', 'Matrix bridge adapter shutdown complete');
@@ -196,7 +204,18 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
       if (event.getType() !== 'm.room.message') return;
 
       const sender = event.getSender();
-      if (sender === this.matrixClient!.getUserId()) return; // Ignore bot's own sends
+      const eventId = event.getId();
+
+      // Skip events we sent ourselves (avoids echo loops).
+      // When double-puppeting is disabled we use the simpler sender check.
+      // When double-puppeting is enabled the bridge may send events as the bot user
+      // (originating from the user's phone) — we must NOT skip those; instead we
+      // rely on localSentEventIds to filter only our own SDK-originated sends.
+      if (this.doublePuppetEnabled) {
+        if (eventId && this.localSentEventIds.has(eventId)) return;
+      } else {
+        if (sender === this.matrixClient!.getUserId()) return;
+      }
 
       // Check if this is a control room message (from bridge bot)
       // Must happen BEFORE the m.notice filter — login success is sent as m.notice
@@ -222,13 +241,17 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
       if (!session) return;
 
       const selfGhostId = this.sessionSelfGhostIds.get(chatInfo.sessionId);
+      const matrixUserId = this.doublePuppetEnabled
+        ? this.sessionMatrixUserIds.get(chatInfo.sessionId)
+        : undefined;
       const unifiedMessage = await this.eventConverter.toUnifiedMessage(
         event,
         room,
         chatInfo.sessionId,
         session.userId,
         chatInfo.platform,
-        selfGhostId
+        selfGhostId,
+        matrixUserId
       );
 
       this.emitPlatformEvent('message', chatInfo.sessionId, unifiedMessage);
@@ -315,6 +338,15 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
       session.lastConnectedAt = new Date();
       // Persist selfGhostId alongside session for restore after restart
       (session as any).selfGhostId = this.sessionSelfGhostIds.get(sessionId) || null;
+      // Track real Matrix user ID for double-puppeting
+      if (this.doublePuppetEnabled) {
+        const matrixUserId = this.matrixClient?.getUserId();
+        if (matrixUserId) {
+          this.sessionMatrixUserIds.set(sessionId, matrixUserId);
+          (session as any).matrixUserId = matrixUserId;
+          this.log('info', `Double-puppeting enabled for session ${sessionId} as ${matrixUserId}`);
+        }
+      }
       await this.saveSessionToRedis(session);
       this.bridgeAuthManager.markAuthenticated(sessionId);
       this.emitPlatformEvent('session_ready', sessionId, {});
@@ -532,6 +564,15 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
       (session as any).selfGhostId = selfGhostId;
     }
 
+    // Track real Matrix user ID for double-puppeting
+    if (this.doublePuppetEnabled) {
+      const matrixUserId = this.matrixClient?.getUserId();
+      if (matrixUserId) {
+        this.sessionMatrixUserIds.set(sessionId, matrixUserId);
+        (session as any).matrixUserId = matrixUserId;
+      }
+    }
+
     this.sessions.set(sessionId, session);
     await this.saveSessionToRedis(session);
     this.bridgeAuthManager.markAuthenticated(sessionId);
@@ -556,6 +597,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     this.sessionControlRooms.delete(sessionId);
     this.sessionPlatforms.delete(sessionId);
     this.sessionSelfGhostIds.delete(sessionId);
+    this.sessionMatrixUserIds.delete(sessionId);
 
     await this.updateSessionStatus(sessionId, PlatformStatus.DISCONNECTED);
     this.emitPlatformEvent('session_disconnected', sessionId, { reason: 'manual' });
@@ -703,6 +745,17 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
         body: message.content,
       });
       eventId = response.event_id;
+    }
+
+    // Track this event ID so we don't echo it back as an incoming message
+    // when double-puppeting is enabled (the bridge will relay it back as the bot user).
+    if (this.doublePuppetEnabled && eventId) {
+      this.localSentEventIds.add(eventId);
+      // Prune old IDs to prevent unbounded growth (keep last 1000)
+      if (this.localSentEventIds.size > 1000) {
+        const oldest = this.localSentEventIds.values().next().value;
+        if (oldest) this.localSentEventIds.delete(oldest);
+      }
     }
 
     return {
@@ -877,6 +930,9 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     const timeline = room.getLiveTimeline();
     const events = timeline.getEvents().slice(-limit);
     const selfGhostId = this.sessionSelfGhostIds.get(sessionId);
+    const matrixUserId = this.doublePuppetEnabled
+      ? this.sessionMatrixUserIds.get(sessionId)
+      : undefined;
 
     const messages: UnifiedMessage[] = [];
     for (const event of events) {
@@ -888,7 +944,8 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
             sessionId,
             session.userId,
             platform,
-            selfGhostId
+            selfGhostId,
+            matrixUserId
           )
         );
       }
@@ -921,6 +978,14 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
             this.log('info', `Restored selfGhostId for session ${sessionId}: ${selfGhostId}`);
           } else {
             this.log('warn', `Session ${sessionId} missing selfGhostId - sender detection may fail`);
+          }
+          // Restore real Matrix user ID for double-puppeting
+          if (this.doublePuppetEnabled) {
+            const matrixUserId = (session as any).matrixUserId || this.matrixClient?.getUserId();
+            if (matrixUserId) {
+              this.sessionMatrixUserIds.set(sessionId, matrixUserId);
+              this.log('info', `Restored matrixUserId for session ${sessionId}: ${matrixUserId}`);
+            }
           }
           this.log('info', `Restored Matrix session: ${sessionId} (selfGhost: ${selfGhostId || 'unknown'})`);
         }
@@ -1020,6 +1085,9 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     let messageCount = 0;
 
     const selfGhostId = this.sessionSelfGhostIds.get(sessionId);
+    const matrixUserId = this.doublePuppetEnabled
+      ? this.sessionMatrixUserIds.get(sessionId)
+      : undefined;
 
     for (const room of rooms) {
       const chatInfo = this.roomMapper.getRoomChatInfo(room.roomId);
@@ -1036,7 +1104,8 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
           sessionId,
           session.userId,
           platform,
-          selfGhostId
+          selfGhostId,
+          matrixUserId
         );
 
         this.emitPlatformEvent('message', sessionId, unifiedMessage);

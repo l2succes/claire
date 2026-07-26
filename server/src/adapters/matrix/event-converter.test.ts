@@ -313,3 +313,113 @@ describe('Instagram Group', () => {
     expect(msg.chatType).toBe('group');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Double puppeting — isFromMe with real Matrix user ID (issue #33)
+//
+// When double-puppeting is enabled, the bridge sends outgoing-from-phone
+// messages as the user's real Matrix account instead of a ghost user.
+// The matrixUserId parameter passed to toUnifiedMessage identifies this sender.
+// ---------------------------------------------------------------------------
+
+describe('Double puppeting — WhatsApp DM', () => {
+  const selfGhost = '@whatsapp_15166100494:claire.local';
+  const botUserId = '@claire_bot:claire.local';
+  const otherGhost = '@whatsapp_19998887776:claire.local';
+  const room = makeRoom('!wa-dp-dm:claire.local', 'Jane', [
+    makeMember(botUserId),
+    makeMember(otherGhost),
+    // Note: no selfGhost in room when double-puppeting is fully active
+  ]);
+
+  it('isFromMe is true when sender is the real Matrix user (double-puppet)', async () => {
+    // With double-puppeting, bot user appears as sender for own messages
+    const event = makeEvent(botUserId, 'hey from phone');
+    const msg = await converter.toUnifiedMessage(
+      event,
+      room,
+      'sess1',
+      'user1',
+      Platform.WHATSAPP,
+      selfGhost,    // selfGhostId still passed for fallback
+      botUserId     // matrixUserId = real Matrix user for this session
+    );
+    expect(msg.isFromMe).toBe(true);
+  });
+
+  it('isFromMe is false for messages from the other side (double-puppet mode)', async () => {
+    const event = makeEvent(otherGhost, 'reply');
+    const msg = await converter.toUnifiedMessage(
+      event,
+      room,
+      'sess1',
+      'user1',
+      Platform.WHATSAPP,
+      selfGhost,
+      botUserId
+    );
+    expect(msg.isFromMe).toBe(false);
+  });
+
+  it('isDoublePuppetUser: returns false for ghost user', () => {
+    expect(userMapper.isDoublePuppetUser('@whatsapp_123:claire.local', botUserId)).toBe(false);
+  });
+
+  it('isDoublePuppetUser: returns false for bridge bot', () => {
+    expect(userMapper.isDoublePuppetUser('@whatsappbot:claire.local', botUserId)).toBe(false);
+  });
+
+  it('isDoublePuppetUser: returns true for exact matrixUserId match', () => {
+    expect(userMapper.isDoublePuppetUser('@claire_bot:claire.local', '@claire_bot:claire.local')).toBe(true);
+  });
+
+  it('isDoublePuppetUser: returns false when matrixUserId differs from sender', () => {
+    expect(userMapper.isDoublePuppetUser('@other_user:claire.local', '@claire_bot:claire.local')).toBe(false);
+  });
+});
+
+describe('Double puppeting — Telegram DM', () => {
+  const botUserId = '@claire_bot:claire.local';
+  const tgOther = '@_telegram_999888777:claire.local';
+  const room = makeRoom('!tg-dp-dm:claire.local', 'TG User', [
+    makeMember(botUserId),
+    makeMember(tgOther),
+  ]);
+
+  it('isFromMe is true when real Matrix user sent (Telegram, double-puppet)', async () => {
+    const event = makeEvent(botUserId, 'tg reply from phone');
+    const msg = await converter.toUnifiedMessage(
+      event,
+      room,
+      'sess1',
+      'user1',
+      Platform.TELEGRAM,
+      undefined,    // no selfGhost for Telegram without double-puppet baseline
+      botUserId
+    );
+    expect(msg.isFromMe).toBe(true);
+  });
+});
+
+describe('Double puppeting — Instagram DM', () => {
+  const botUserId = '@claire_bot:claire.local';
+  const igOther = '@meta_111222333:claire.local';
+  const room = makeRoom('!ig-dp-dm:claire.local', 'IG User', [
+    makeMember(botUserId),
+    makeMember(igOther),
+  ]);
+
+  it('isFromMe is true when real Matrix user sent (Instagram, double-puppet)', async () => {
+    const event = makeEvent(botUserId, 'ig reply from phone');
+    const msg = await converter.toUnifiedMessage(
+      event,
+      room,
+      'sess1',
+      'user1',
+      Platform.INSTAGRAM,
+      undefined,
+      botUserId
+    );
+    expect(msg.isFromMe).toBe(true);
+  });
+});
