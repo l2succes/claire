@@ -21,10 +21,19 @@ import {
   MessageContentType,
 } from '../types';
 import { whatsappConfig } from '../../config';
+import { normalizeWhatsAppPhoneNumber } from './phone-number';
+import {
+  getPendingPairingSessions,
+  selectReusablePairingSession,
+} from './pairing-session';
+
+interface WhatsAppSessionConfig {
+  phoneNumber?: string;
+}
 
 export class WhatsAppAdapter extends BasePlatformAdapter {
   readonly platform = Platform.WHATSAPP;
-  readonly authMethod = AuthMethod.QR_CODE;
+  readonly authMethod = AuthMethod.PAIRING_CODE;
   readonly capabilities: PlatformCapabilities = {
     canSendText: true,
     canSendMedia: true,
@@ -78,8 +87,26 @@ export class WhatsAppAdapter extends BasePlatformAdapter {
   async createSession(
     userId: string,
     sessionId: string,
-    _config?: unknown
+    config?: unknown
   ): Promise<PlatformSession> {
+    const userSessions = await this.getUserSessions(userId);
+    const pendingSessions = getPendingPairingSessions(userSessions);
+    const reusableSession = selectReusablePairingSession(
+      pendingSessions,
+      new Set(this.clients.keys())
+    );
+
+    for (const pendingSession of pendingSessions) {
+      if (pendingSession.id !== reusableSession?.id) {
+        await this.removePairingSession(pendingSession.id);
+      }
+    }
+
+    if (reusableSession) {
+      this.log('info', `[whatsapp] Reusing pending pairing session ${reusableSession.id} for user ${userId}`);
+      return reusableSession;
+    }
+
     if (this.clients.has(sessionId)) {
       throw new Error('Session already exists');
     }
@@ -88,7 +115,11 @@ export class WhatsAppAdapter extends BasePlatformAdapter {
     this.sessions.set(sessionId, session);
     await this.saveSessionToRedis(session);
 
-    const client = this.createClient(sessionId);
+    const phoneNumberInput = (config as WhatsAppSessionConfig | undefined)?.phoneNumber;
+    const phoneNumber = phoneNumberInput
+      ? normalizeWhatsAppPhoneNumber(phoneNumberInput)
+      : undefined;
+    const client = this.createClient(sessionId, phoneNumber);
 
     this.setupClientListeners(client, sessionId);
     this.clients.set(sessionId, client);
@@ -98,7 +129,23 @@ export class WhatsAppAdapter extends BasePlatformAdapter {
     return session;
   }
 
-  private createClient(sessionId: string): Client {
+  private async removePairingSession(sessionId: string): Promise<void> {
+    const client = this.clients.get(sessionId);
+    if (client) {
+      try {
+        await client.destroy();
+      } catch (error) {
+        this.log('warn', `[whatsapp] Failed to destroy stale pairing client ${sessionId}`, { error });
+      }
+      this.clients.delete(sessionId);
+    }
+
+    this.sessions.delete(sessionId);
+    await this.deleteSessionFromRedis(sessionId);
+    this.log('info', `[whatsapp] Removed stale pairing session ${sessionId}`);
+  }
+
+  private createClient(sessionId: string, phoneNumber?: string): Client {
     const isLinux = process.platform === 'linux';
     const puppeteerArgs = [
       '--no-sandbox',
@@ -109,6 +156,7 @@ export class WhatsAppAdapter extends BasePlatformAdapter {
       '--disable-gpu',
       '--disable-extensions',
       '--disable-crash-reporter',
+      '--no-crashpad',
       '--disable-features=VizDisplayCompositor',
       '--disable-background-networking',
       '--disable-default-apps',
@@ -120,17 +168,41 @@ export class WhatsAppAdapter extends BasePlatformAdapter {
 
     this.log('info', `[whatsapp] Creating client for session ${sessionId} on ${process.platform}`);
 
-    return new Client({
+    const client = new Client({
       authStrategy: new LocalAuth({
         clientId: sessionId,
         dataPath: whatsappConfig.sessionPath,
       }),
+      pairWithPhoneNumber: phoneNumber
+        ? {
+            phoneNumber,
+            showNotification: true,
+            intervalMs: 180_000,
+          }
+        : undefined,
       puppeteer: {
         headless: whatsappConfig.puppeteerHeadless,
-        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/lib/chromium/chromium',
+        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
         args: puppeteerArgs,
       },
     });
+
+    // whatsapp-web.js starts this request without awaiting it during initialize().
+    // WhatsApp may temporarily reject rapid re-pairing attempts; catch that
+    // rejection so it does not terminate the entire Bun process. The library's
+    // in-page interval remains active and can emit the next generated code.
+    const requestPairingCode = client.requestPairingCode.bind(client);
+    client.requestPairingCode = async (...args): Promise<string> => {
+      try {
+        return await requestPairingCode(...args);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        this.log('warn', `[whatsapp] Pairing code request deferred for ${sessionId}: ${message}`);
+        return '';
+      }
+    };
+
+    return client;
   }
 
   private setupClientListeners(client: Client, sessionId: string): void {
@@ -169,6 +241,17 @@ export class WhatsAppAdapter extends BasePlatformAdapter {
       await this.saveSessionToRedis(session);
 
       this.emitPlatformEvent('qr_code', sessionId, { qrCode: qrDataUrl });
+    });
+
+    // Phone-number pairing code generation
+    client.on('code', async (pairingCode: string) => {
+      this.log('info', `[whatsapp] Pairing code generated for session ${sessionId}`);
+
+      session.status = PlatformStatus.AWAITING_AUTH;
+      session.authData = { pairingCode };
+      await this.saveSessionToRedis(session);
+
+      this.emitPlatformEvent('pairing_code', sessionId, { pairingCode });
     });
 
     // Loading screen progress
@@ -388,11 +471,20 @@ export class WhatsAppAdapter extends BasePlatformAdapter {
 
   async getAuthData(sessionId: string): Promise<unknown> {
     const session = await this.getSession(sessionId);
+    if (session?.authData?.pairingCode) {
+      return {
+        method: AuthMethod.PAIRING_CODE,
+        pairingCode: session.authData.pairingCode,
+        status: session.status,
+        instructions: 'Enter this code in WhatsApp under Linked Devices',
+      };
+    }
+
     return {
-      method: 'qr_code',
+      method: session?.authMethod ?? AuthMethod.PAIRING_CODE,
       qrCode: session?.authData?.qrCode,
       status: session?.status,
-      instructions: 'Scan the QR code with WhatsApp on your phone',
+      instructions: 'Enter your phone number to request a WhatsApp pairing code',
     };
   }
 

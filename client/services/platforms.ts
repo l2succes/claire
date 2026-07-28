@@ -294,6 +294,7 @@ export const pollAuthStatus = (
       // Check timeout
       if (Date.now() - startTime > timeoutMs) {
         stopped = true;
+        const isWhatsAppPairing = platform === Platform.WHATSAPP;
         onUpdate({
           id: sessionId,
           platform,
@@ -301,7 +302,9 @@ export const pollAuthStatus = (
           status: PlatformStatus.FAILED,
           authMethod: AuthMethod.QR_CODE,
           createdAt: new Date().toISOString(),
-          error: 'Authentication timed out',
+          error: isWhatsAppPairing
+            ? 'WhatsApp did not issue a pairing code yet. Wait a few minutes, then try again.'
+            : 'Authentication timed out',
         });
         return;
       }

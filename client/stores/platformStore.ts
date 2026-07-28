@@ -263,7 +263,9 @@ export const usePlatformStore = create<PlatformState>((set, get) => ({
               },
             });
           }
-        }
+        },
+        2000,
+        platform === Platform.WHATSAPP ? 30000 : 300000
       );
 
       set({ _pollController: pollController });

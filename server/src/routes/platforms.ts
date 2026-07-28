@@ -480,7 +480,7 @@ router.post('/:platform/connect', async (req: Request, res: Response) => {
     const session = await adapter.createSession(userId, newSessionId, config);
 
     // For QR-based auth, return auth data
-    const authData = await adapter.getAuthData(newSessionId);
+    const authData = await adapter.getAuthData(session.id);
 
     return res.json({
       success: true,

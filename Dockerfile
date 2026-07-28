@@ -32,7 +32,9 @@ RUN apt-get update && apt-get install -y \
 
 # Tell Puppeteer to use system Chromium
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
-    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium \
+    HOME=/app \
+    XDG_CONFIG_HOME=/app/.config
 
 WORKDIR /app
 
@@ -79,7 +81,7 @@ WORKDIR /app
 RUN groupadd -r claire && useradd -r -g claire claire
 
 # Create directories for sessions and data
-RUN mkdir -p /app/sessions /app/.wwebjs_auth /app/.wwebjs_cache /data \
+RUN mkdir -p /app/sessions /app/.wwebjs_auth /app/.wwebjs_cache /app/.config /data \
     && chown -R claire:claire /app /data
 
 # Copy production dependencies from deps stage
