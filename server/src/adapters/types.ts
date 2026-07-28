@@ -33,6 +33,7 @@ export enum PlatformStatus {
  */
 export enum AuthMethod {
   QR_CODE = 'qr_code',
+  PAIRING_CODE = 'pairing_code',
   BOT_TOKEN = 'bot_token',
   LOCAL_DATABASE = 'local_db',
   USERNAME_PASSWORD = 'credentials',
@@ -175,10 +176,10 @@ export interface PlatformSession {
 
   authData?: {
     qrCode?: string;
+    pairingCode?: string;
     token?: string;
     sessionPath?: string;
     state?: unknown;
-    pairingCode?: string;
   };
 
   createdAt: Date;
