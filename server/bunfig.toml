@@ -1,8 +1,11 @@
 # Server-specific Bun configuration
 
 [test]
-# Test configuration for server
-root = "./tests"
+# Test configuration for server.
+# Scan the whole project (not just ./tests) so colocated src/**/*.test.ts files
+# — e.g. the WhatsApp pairing + Matrix converter suites — are gated in CI too.
+# (bun excludes node_modules by default.)
+root = "."
 coverage = true
 # NOTE: coverage is reported but not enforced. The codebase currently sits ~50%;
 # a hard 0.7 threshold failed `bun test` (exit 1) even with all tests passing and
