@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import { z } from 'zod';
 import path from 'path';
+import { validatePlatformMode } from './platform-mode';
 
 // Load .env from the server directory regardless of CWD
 dotenv.config({ path: path.join(__dirname, '../../.env') });
@@ -79,15 +80,17 @@ const parseEnv = () => {
   try {
     const env = envSchema.parse(process.env);
 
-    // Validate matrix config when in matrix mode
-    if (env.PLATFORM_MODE === 'matrix') {
-      if (!env.MATRIX_HOMESERVER_URL) {
-        throw new Error('MATRIX_HOMESERVER_URL is required when PLATFORM_MODE=matrix');
-      }
-      if (!env.MATRIX_SERVER_NAME) {
-        throw new Error('MATRIX_SERVER_NAME is required when PLATFORM_MODE=matrix');
-      }
-    }
+    // Validate platform mode + matrix config, and refuse a silent direct-mode
+    // fallback in production (#96).
+    validatePlatformMode({
+      nodeEnv: env.NODE_ENV,
+      platformMode: env.PLATFORM_MODE,
+      platformModeExplicit: process.env.PLATFORM_MODE !== undefined,
+      mockBridge: env.MOCK_BRIDGE,
+      matrixHomeserverUrl: env.MATRIX_HOMESERVER_URL,
+      matrixServerName: env.MATRIX_SERVER_NAME,
+      matrixAdminToken: env.MATRIX_ADMIN_TOKEN,
+    });
 
     return env;
   } catch (error) {

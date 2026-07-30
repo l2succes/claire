@@ -12,6 +12,7 @@ import { redis } from './services/redis';
 import { sessionMonitor } from './services/session-monitor';
 import { reminderScheduler } from './services/reminder-scheduler';
 import { verifySchemaCached } from './services/schema-verification';
+import { resolvePlatformMode } from './config/platform-mode';
 import authRoutes from './routes/auth';
 import messageRoutes from './routes/messages';
 import aiRoutes from './routes/ai';
@@ -179,6 +180,10 @@ app.get('/health', async (_req, res) => {
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     environment: config.NODE_ENV,
+    platformMode: resolvePlatformMode({
+      mockBridge: mockBridgeConfig.enabled,
+      platformMode: matrixConfig.mode,
+    }),
     checks,
     mockBridge: mockBridgeConfig.enabled,
   });
@@ -211,6 +216,16 @@ async function initializePlatforms() {
   } else {
     const mode = matrixConfig.enabled ? 'matrix' : 'direct';
     logger.info(`Initializing platform adapters in ${mode} mode...`);
+
+    // #96: direct mode in production diverges from the documented Matrix
+    // architecture. Config validation already blocks a *silent* default, so
+    // reaching here means direct mode was chosen explicitly — flag it loudly.
+    if (config.NODE_ENV === 'production' && mode === 'direct') {
+      logger.warn(
+        '⚠️  Running platform adapters in DIRECT mode in production — this diverges ' +
+          'from the documented Synapse/mautrix architecture. Set PLATFORM_MODE=matrix if unintended.'
+      );
+    }
 
     if (matrixConfig.enabled) {
       // Matrix mode: Use MatrixBridgeAdapter for all platforms via bridges
