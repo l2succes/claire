@@ -12,7 +12,8 @@
     "test:coverage": "bun test --coverage",
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "verify:schema": "bun run src/scripts/verify-schema.ts"
   },
   "dependencies": {
     "@anthropic-ai/bedrock-sdk": "^0.27.0",

@@ -11,6 +11,7 @@ import { supabase } from './services/supabase';
 import { redis } from './services/redis';
 import { sessionMonitor } from './services/session-monitor';
 import { reminderScheduler } from './services/reminder-scheduler';
+import { verifySchemaCached } from './services/schema-verification';
 import authRoutes from './routes/auth';
 import messageRoutes from './routes/messages';
 import aiRoutes from './routes/ai';
@@ -111,7 +112,10 @@ app.get('/media/:server/:mediaId', async (req, res) => {
 
 // Health / readiness check — reports DB, Redis, and Matrix (when configured)
 app.get('/health', async (_req, res) => {
-  const checks: Record<string, { status: 'ok' | 'error'; latencyMs?: number; error?: string }> = {};
+  const checks: Record<
+    string,
+    { status: 'ok' | 'error'; latencyMs?: number; error?: string; detail?: unknown }
+  > = {};
 
   // --- Supabase / DB ---
   try {
@@ -122,6 +126,23 @@ app.get('/health', async (_req, res) => {
       : { status: 'ok', latencyMs: Date.now() - t0 };
   } catch (err) {
     checks.db = { status: 'error', error: (err as Error).message };
+  }
+
+  // --- Schema drift (#99): deploy must not be ahead of the DB schema ---
+  if (checks.db?.status === 'ok') {
+    try {
+      const t0 = Date.now();
+      const result = await verifySchemaCached();
+      checks.schema = result.ok
+        ? { status: 'ok', latencyMs: Date.now() - t0 }
+        : {
+            status: 'error',
+            error: `Schema drift: ${result.drift.map((d) => d.table).join(', ')}`,
+            detail: result.drift,
+          };
+    } catch (err) {
+      checks.schema = { status: 'error', error: (err as Error).message };
+    }
   }
 
   // --- Redis ---
