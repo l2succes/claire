@@ -458,18 +458,32 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     };
 
     // Initiate auth flow
-    await this.bridgeAuthManager.initiateAuth(
-      this.matrixClient,
-      controlRoom.roomId,
-      platform,
-      sessionId,
-      bridgeConfig
-    );
+    if (!(bridgeConfig as Record<string, unknown>).skipBridgeAuth) {
+      await this.bridgeAuthManager.initiateAuth(
+        this.matrixClient,
+        controlRoom.roomId,
+        platform,
+        sessionId,
+        bridgeConfig
+      );
+    }
 
     session.status = PlatformStatus.AWAITING_AUTH;
     await this.saveSessionToRedis(session);
 
     return session;
+  }
+
+  async setSessionAuthData(
+    sessionId: string,
+    authData: PlatformSession['authData'],
+    status: PlatformStatus = PlatformStatus.AWAITING_AUTH
+  ): Promise<void> {
+    const session = await this.getSession(sessionId);
+    if (!session) throw new Error('Session not found');
+    session.authData = authData;
+    session.status = status;
+    await this.saveSessionToRedis(session);
   }
 
   /**

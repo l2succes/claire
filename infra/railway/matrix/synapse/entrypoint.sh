@@ -26,7 +26,10 @@ replace /data/homeserver.yaml '__REG_SECRET__' "$SYNAPSE_REGISTRATION_SECRET"
 replace /data/homeserver.yaml '__MAC_SECRET__' "$SYNAPSE_MACAROON_SECRET"
 replace /data/homeserver.yaml '__FORM_SECRET__' "$SYNAPSE_FORM_SECRET"
 
-for file in /data/appservices/*.yaml; do replace "$file" 'claire.local' "$MATRIX_SERVER_NAME"; done
+for file in /data/appservices/*.yaml; do
+  replace "$file" 'claire.local' "$MATRIX_SERVER_NAME"
+  replace "$file" 'claire\.local' "$MATRIX_SERVER_NAME"
+done
 replace /data/appservices/whatsapp.yaml 'mautrix-whatsapp' 'mautrixwhatsapp.railway.internal'
 replace /data/appservices/telegram.yaml 'mautrix-telegram' 'mautrixtelegram.railway.internal'
 replace /data/appservices/instagram.yaml 'mautrix-instagram' 'mautrixinstagram.railway.internal'

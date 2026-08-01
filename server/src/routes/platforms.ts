@@ -23,6 +23,12 @@ const instagramBridgeClient = new BridgeHttpClient(
   process.env.INSTAGRAM_BRIDGE_USER_ID || '@claire_bot:claire.local'
 );
 
+const whatsappBridgeClient = new BridgeHttpClient(
+  process.env.WHATSAPP_BRIDGE_URL || 'http://mautrixwhatsapp.railway.internal:29318',
+  process.env.WHATSAPP_BRIDGE_SECRET || '',
+  process.env.WHATSAPP_BRIDGE_USER_ID || '@claire_bot:claire.local'
+);
+
 const router = Router();
 const INSTAGRAM_LOGIN_URL = 'https://www.instagram.com/accounts/login/';
 const REQUIRED_INSTAGRAM_COOKIES = ['sessionid', 'csrftoken', 'mid', 'ig_did', 'ds_user_id'];
@@ -476,6 +482,41 @@ router.post('/:platform/connect', async (req: Request, res: Response) => {
 
     // Generate session ID if not provided
     const newSessionId = sessionId || `${platform}-${userId}-${Date.now()}`;
+
+    if (platform === Platform.WHATSAPP && process.env.WHATSAPP_BRIDGE_SECRET) {
+      const flow = await whatsappBridgeClient.startLogin('phone');
+      const codeStep = await whatsappBridgeClient.submitUserInput(
+        flow.login_id,
+        flow.step_id,
+        { phone_number: config.phoneNumber }
+      );
+
+      const session = await (adapter as MatrixBridgeAdapter).createSession(
+        userId,
+        newSessionId,
+        { platform: Platform.WHATSAPP, phoneNumber: config.phoneNumber, skipBridgeAuth: true } as never
+      );
+      const pairingCode = codeStep.display_and_wait?.data;
+      await (adapter as MatrixBridgeAdapter).setSessionAuthData(
+        session.id,
+        pairingCode ? { pairingCode } : undefined
+      );
+
+      return res.json({
+        success: true,
+        session: {
+          id: session.id,
+          platform: session.platform,
+          status: session.status,
+          authMethod: session.authMethod,
+        },
+        authData: {
+          method: 'pairing_code',
+          pairingCode,
+          status: session.status,
+        },
+      });
+    }
 
     const session = await adapter.createSession(userId, newSessionId, config);
 

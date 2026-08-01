@@ -23,6 +23,10 @@ export interface LoginStepResponse {
   instructions?: string;
   complete?: { user_login_id: string };
   cookies?: unknown;
+  display_and_wait?: {
+    type?: string;
+    data?: string;
+  };
 }
 
 export class BridgeHttpClient {
@@ -85,6 +89,19 @@ export class BridgeHttpClient {
       'POST',
       `/v3/login/step/${encodeURIComponent(loginId)}/${encodeURIComponent(stepId)}/cookies`,
       cookies
+    );
+  }
+
+  async submitUserInput(
+    loginId: string,
+    stepId: string,
+    input: Record<string, string>
+  ): Promise<LoginStepResponse> {
+    logger.debug(`[BridgeHttpClient] submitUserInput login=${loginId} step=${stepId}`);
+    return this.request<LoginStepResponse>(
+      'POST',
+      `/v3/login/step/${encodeURIComponent(loginId)}/${encodeURIComponent(stepId)}/user_input`,
+      input
     );
   }
 }
