@@ -535,9 +535,20 @@ router.post('/:platform/connect', async (req: Request, res: Response) => {
     });
   } catch (error) {
     logger.error('Error connecting to platform:', error);
+    const errorMessage = (error as Error).message || 'Failed to connect to platform';
+
+    // WhatsApp applies its own pairing-code rate limit. Preserve that status so
+    // clients can distinguish a cooldown from an invalid phone number/code.
+    if (errorMessage.toLowerCase().includes('rate limited by whatsapp')) {
+      return res.status(429).json({
+        success: false,
+        error: errorMessage,
+      });
+    }
+
     return res.status(500).json({
       success: false,
-      error: (error as Error).message || 'Failed to connect to platform',
+      error: errorMessage,
     });
   }
 });

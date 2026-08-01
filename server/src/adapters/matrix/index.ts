@@ -455,6 +455,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     const bridgeConfig = {
       ...config?.bridgeConfig,
       ...(( config as unknown as Record<string, unknown> )?.phoneNumber ? { phoneNumber: ( config as unknown as Record<string, unknown> ).phoneNumber as string } : {}),
+      ...(( config as unknown as Record<string, unknown> )?.skipBridgeAuth ? { skipBridgeAuth: true } : {}),
     };
 
     // Initiate auth flow
