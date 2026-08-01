@@ -1,0 +1,10 @@
+id: claire-doublepuppet
+url:
+as_token: __DOUBLE_PUPPET_AS__
+hs_token: __DOUBLE_PUPPET_HS__
+sender_localpart: __DOUBLE_PUPPET_LOCAL__
+rate_limited: false
+namespaces:
+  users:
+    - regex: '@.*:claire\.local'
+      exclusive: false
