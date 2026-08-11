@@ -140,7 +140,9 @@ app.get('/media/:server/:mediaId', async (req, res) => {
     }
     const contentType = upstream.headers.get('content-type') || 'application/octet-stream';
     res.setHeader('Content-Type', contentType);
-    res.setHeader('Cache-Control', 'public, max-age=86400');
+    // Matrix media IDs are immutable. Cache aggressively so scrolling an
+    // inbox or reopening a chat does not re-download every attachment.
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
     const buffer = await upstream.arrayBuffer();
     return res.send(Buffer.from(buffer));
   } catch (err) {
@@ -339,6 +341,39 @@ async function initializePlatforms() {
         return;
       }
 
+      // Link incoming messages to the resolved Matrix contact. This gives the
+      // inbox a stable avatar/name relationship instead of trying to infer it
+      // from the latest message row on every render.
+      let contactId: string | null = null;
+      const senderContactId = !message.isFromMe
+        ? message.senderId?.match(/@(?:whatsapp|_telegram|meta|_imessage)_([^:]+):/)?.[1] || null
+        : null;
+      if (senderContactId) {
+        const platformContactId = senderContactId;
+        {
+          const { data: contact, error: contactError } = await supabase
+            .from('contacts')
+            .upsert({
+              user_id: message.userId,
+              platform: message.platform,
+              platform_contact_id: platformContactId,
+              whatsapp_id: platformContactId,
+              name: message.senderName || platformContactId,
+              phone_number: /^\d+$/.test(platformContactId) ? platformContactId : null,
+            }, { onConflict: 'user_id,platform,platform_contact_id' })
+            .select('id')
+            .single();
+          if (contactError) {
+            logger.debug('Failed to upsert contact:', contactError);
+          } else {
+            contactId = contact?.id || null;
+          }
+        }
+      }
+      if (contactId && message.chatType === 'individual') {
+        await supabase.from('chats').update({ contact_id: contactId }).eq('id', chat.id);
+      }
+
       // 2. Insert message record (ignoreDuplicates as a safety net)
       const { data: savedMsg, error: msgError } = await supabase
         .from('messages')
@@ -354,15 +389,16 @@ async function initializePlatforms() {
           content_type: message.contentType,
           timestamp: message.timestamp,
           is_group: message.chatType === 'group',
+          contact_id: contactId,
           contact_name: message.isFromMe ? null : (message.senderName || null),
-          contact_phone: message.isFromMe ? null : message.senderId?.replace(/@.*/, '') || null,
+          contact_phone: message.isFromMe ? null : senderContactId,
           metadata: message.platformMetadata || null,
           media_url: (() => {
             const mediaUrl = message.platformMetadata?.mediaUrl;
             if (!mediaUrl || typeof mediaUrl !== 'string') return null;
             if (mediaUrl.startsWith('/media/')) return mediaUrl;
             const match = mediaUrl.match(/^mxc:\/\/([^/]+)\/(.+)$/)
-              || mediaUrl.match(/\/_matrix\/media\/v3\/(?:thumbnail|download)\/([^/]+)\/([^?]+)/);
+              || mediaUrl.match(/\/_matrix\/(?:client\/v1\/media|media\/v3)\/(?:thumbnail|download)\/([^/]+)\/([^?]+)/);
             return match ? `/media/${encodeURIComponent(match[1])}/${encodeURIComponent(match[2])}` : mediaUrl;
           })(),
           media_mime_type:
@@ -437,53 +473,6 @@ async function initializePlatforms() {
         }
       }
 
-      // 3. Upsert contact for the sender (if not from me)
-      if (!message.isFromMe && message.senderId) {
-        // Extract platform contact ID from ghost user ID
-        // Patterns: @whatsapp_12345:... @_telegram_12345:... @meta_12345:... @_imessage_+15551234567:...
-        const contactMatch = message.senderId.match(/@(?:whatsapp|_telegram|meta|_imessage)_([^:]+):/);
-        const platformContactId = contactMatch?.[1];
-        if (platformContactId) {
-          const { error: contactError } = await supabase
-            .from('contacts')
-            .upsert({
-              user_id: message.userId,
-              platform: message.platform,
-              platform_contact_id: platformContactId,
-              whatsapp_id: platformContactId,
-              name: message.senderName || platformContactId,
-              phone_number: /^\d+$/.test(platformContactId) ? platformContactId : null,
-            }, { onConflict: 'user_id,platform,platform_contact_id' });
-
-          if (contactError) {
-            logger.debug('Failed to upsert contact:', contactError);
-          }
-        }
-      }
-
-      // 3. Upsert contact for the sender (if not from me)
-      if (!message.isFromMe && message.senderId) {
-        // Extract platform contact ID from ghost user ID
-        // Patterns: @whatsapp_12345:... @_telegram_12345:... @meta_12345:... @_imessage_+15551234567:...
-        const contactMatch = message.senderId.match(/@(?:whatsapp|_telegram|meta|_imessage)_([^:]+):/);
-        const platformContactId = contactMatch?.[1];
-        if (platformContactId) {
-          const { error: contactError } = await supabase
-            .from('contacts')
-            .upsert({
-              user_id: message.userId,
-              platform: message.platform,
-              platform_contact_id: platformContactId,
-              whatsapp_id: platformContactId,
-              name: message.senderName || platformContactId,
-              phone_number: /^\d+$/.test(platformContactId) ? platformContactId : null,
-            }, { onConflict: 'user_id,platform,platform_contact_id' });
-
-          if (contactError) {
-            logger.debug('Failed to upsert contact:', contactError);
-          }
-        }
-      }
     } catch (err) {
       logger.error('Error saving message to DB:', err);
     }

@@ -81,6 +81,11 @@ export interface MatrixMessageContent {
   format?: string;
   formatted_body?: string;
   url?: string;
+  // Encrypted Matrix media stores its MXC URL under `file.url` rather than
+  // top-level `url`. mautrix can surface either shape depending on the room.
+  file?: {
+    url?: string;
+  };
   info?: {
     mimetype?: string;
     size?: number;

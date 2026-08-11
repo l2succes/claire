@@ -44,6 +44,20 @@ function makeEvent(senderId: string, body: string, msgtype = 'm.text') {
   } as unknown as import('matrix-js-sdk').MatrixEvent;
 }
 
+function makeEncryptedMediaEvent(senderId: string) {
+  return {
+    getContent: () => ({
+      msgtype: 'm.video',
+      body: 'video.mp4',
+      file: { url: 'mxc://claire.local/encrypted-video-id' },
+      info: { mimetype: 'video/mp4', w: 720, h: 1280 },
+    }),
+    getSender: () => senderId,
+    getId: () => 'evt-encrypted-video',
+    getDate: () => new Date('2025-01-01T00:00:00Z'),
+  } as unknown as import('matrix-js-sdk').MatrixEvent;
+}
+
 // ---------------------------------------------------------------------------
 // WhatsApp — DM
 // ---------------------------------------------------------------------------
@@ -107,6 +121,14 @@ describe('WhatsApp DM (1:1)', () => {
       selfGhost
     );
     expect(msg.isFromMe).toBe(true);
+  });
+
+  it('uses an encrypted Matrix file URL for media', async () => {
+    const msg = await converter.toUnifiedMessage(
+      makeEncryptedMediaEvent(otherGhost), room, 'sess1', 'user1', Platform.WHATSAPP, selfGhost,
+    );
+    expect(msg.contentType).toBe('video');
+    expect(msg.platformMetadata?.mediaUrl).toBe('mxc://claire.local/encrypted-video-id');
   });
 });
 

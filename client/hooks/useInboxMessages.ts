@@ -42,6 +42,7 @@ interface RawMessage {
   contact_name?: string;
   snoozed_until?: string | null;
   chats?: { name?: string; platform_chat_id?: string } | null;
+  contacts?: { avatar_url?: string | null } | null;
   ai_suggestions?: Array<{ id: string; confidence?: number }>;
 }
 
@@ -70,6 +71,7 @@ function normalizeRows(rows: RawMessage[]) {
       id: row.id,
       conversation_key: key,
       contact_name: row.contact_name,
+      contact_avatar: row.contacts?.avatar_url || undefined,
       chat_name: row.chats?.name || (!row.from_me ? row.contact_name : undefined),
       content: row.content,
       timestamp: row.timestamp,
@@ -135,7 +137,25 @@ export function useInboxMessages(userId?: string) {
         .order('timestamp', { ascending: false })
         .range(from, from + pageSize - 1);
       if (error) throw error;
-      return { messages: normalizeRows((data ?? []) as RawMessage[]), hasMore: count ? from + pageSize < count : false };
+      const { data: contacts, error: contactsError } = await supabase
+        .from('contacts')
+        .select('platform, platform_contact_id, avatar_url')
+        .eq('user_id', userId)
+        .not('avatar_url', 'is', null);
+      if (contactsError) throw contactsError;
+      const avatars = new Map(
+        (contacts || []).map((contact) => [
+          `${contact.platform}:${contact.platform_contact_id}`,
+          contact.avatar_url,
+        ]),
+      );
+      const rows = (data ?? []).map((row) => ({
+        ...row,
+        contacts: {
+          avatar_url: avatars.get(`${row.platform || Platform.WHATSAPP}:${row.contact_phone || ''}`) || null,
+        },
+      })) as RawMessage[];
+      return { messages: normalizeRows(rows), hasMore: count ? from + pageSize < count : false };
     },
     getNextPageParam: (lastPage, allPages) => lastPage.hasMore ? allPages.length : undefined,
   });

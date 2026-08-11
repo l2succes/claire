@@ -19,6 +19,7 @@ import { ContactClarificationCard } from '../../components/ContactClarificationC
 import { useConversationSettingsStore } from '../../stores/conversationSettingsStore';
 import { GroupChatSummary } from '../../components/GroupChatSummary';
 import { Platform } from '../../types/platform';
+import { VideoView, useVideoPlayer } from 'expo-video';
 
 interface ChatMessage {
   id: string;
@@ -36,7 +37,7 @@ function normalizeMediaUrl(value?: string | null): string | null {
   if (!value) return null;
   if (value.startsWith('/media/')) return `${API_BASE_URL}${value}`;
   const mxc = value.match(/^mxc:\/\/([^/]+)\/(.+)$/)
-    || value.match(/\/_matrix\/media\/v3\/(?:thumbnail|download)\/([^/]+)\/([^?]+)/);
+    || value.match(/\/_matrix\/(?:client\/v1\/media|media\/v3)\/(?:thumbnail|download)\/([^/]+)\/([^?]+)/);
   if (mxc) return `${API_BASE_URL}/media/${encodeURIComponent(mxc[1])}/${encodeURIComponent(mxc[2])}`;
   return value;
 }
@@ -64,6 +65,22 @@ function MediaImage({ uri, messageId }: { uri: string; messageId: string }) {
         testID={`media-image-img-${messageId}`}
       />
     </View>
+  );
+}
+
+function MediaVideo({ uri, messageId }: { uri: string; messageId: string }) {
+  const player = useVideoPlayer(uri, (instance) => {
+    instance.loop = false;
+  });
+  return (
+    <VideoView
+      testID={`media-video-player-${messageId}`}
+      player={player}
+      nativeControls
+      contentFit="contain"
+      playsInline
+      style={{ width: 250, height: 180, borderRadius: 10, marginBottom: 4, backgroundColor: '#111827' }}
+    />
   );
 }
 
@@ -294,6 +311,18 @@ export default function ChatScreen() {
           </Text>
         </View>
       );
+    }
+
+    if (type === 'video' && item.media_url) {
+      const videoUri = normalizeMediaUrl(item.media_url);
+      if (videoUri) {
+        return (
+          <View>
+            <MediaVideo uri={videoUri} messageId={item.id} />
+            {item.content ? <Text style={{ fontSize: 14, color: textColor, marginTop: 2 }}>{item.content}</Text> : null}
+          </View>
+        );
+      }
     }
 
     if (type === 'video') {

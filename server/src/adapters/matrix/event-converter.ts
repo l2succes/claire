@@ -107,7 +107,8 @@ export class MatrixEventConverter {
           : 'remote-sender',
         msgtype: content.msgtype,
         format: content.format,
-        mediaUrl: content.url,
+        // Plain media uses `url`; encrypted media uses `file.url`.
+        mediaUrl: content.url || content.file?.url,
         mediaInfo: content.info,
       },
     };

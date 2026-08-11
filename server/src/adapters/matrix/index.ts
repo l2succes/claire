@@ -91,14 +91,22 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     const known = this.sessionSelfGhostIds.get(sessionId);
     const platformUserId = session.platformUserId;
     const derived = this.userMapper.selfGhostUserIds(platform, platformUserId);
-    return [...new Set([...(known ? [known] : []), ...derived])];
+    // The identity returned by the bridge login is authoritative. Keep a
+    // persisted ghost as an additional exact alias (not a fuzzy match) so a
+    // WhatsApp phone/LID transition does not turn the user's own messages
+    // into incoming ones after a restart.
+    if (derived.length > 0 && known !== derived[0]) {
+      this.sessionSelfGhostIds.set(sessionId, derived[0]);
+      (session as PlatformSession & { selfGhostId?: string }).selfGhostId = derived[0];
+    }
+    return [...new Set([...derived, ...(known ? [known] : [])])];
   }
 
   private mediaProxyPath(mediaUrl: unknown): string | null {
     if (typeof mediaUrl !== 'string' || !mediaUrl) return null;
     if (mediaUrl.startsWith('/media/')) return mediaUrl;
     const match = mediaUrl.match(/^mxc:\/\/([^/]+)\/(.+)$/)
-      || mediaUrl.match(/\/_matrix\/media\/v3\/(?:thumbnail|download)\/([^/]+)\/([^?]+)/);
+      || mediaUrl.match(/\/_matrix\/(?:client\/v1\/media|media\/v3)\/(?:thumbnail|download)\/([^/]+)\/([^?]+)/);
     return match ? `/media/${encodeURIComponent(match[1])}/${encodeURIComponent(match[2])}` : mediaUrl;
   }
 
@@ -117,12 +125,25 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
       ...(message.platformMetadata || {}),
     };
     const mediaInfo = message.platformMetadata?.mediaInfo as { mimetype?: string } | undefined;
+    const contact = this.userMapper.ghostUserToPlatformContact(message.senderId);
+    let contactId: string | null = null;
+    if (!message.isFromMe && contact) {
+      const { data: contactRow } = await supabase
+        .from('contacts')
+        .select('id')
+        .eq('user_id', message.userId)
+        .eq('platform', message.platform)
+        .eq('platform_contact_id', contact.platformContactId)
+        .maybeSingle();
+      contactId = contactRow?.id || null;
+    }
     const { error } = await supabase
       .from('messages')
       .update({
         from_me: message.isFromMe,
         contact_name: message.isFromMe ? null : (message.senderName || null),
-        contact_phone: message.isFromMe ? null : message.senderId.replace(/@.*/, ''),
+        contact_phone: message.isFromMe ? null : (contact?.platformContactId || null),
+        contact_id: contactId,
         type: message.contentType,
         content_type: message.contentType,
         metadata,
@@ -186,13 +207,15 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     // Register all existing rooms so messages can be routed to correct sessions
     await this.registerExistingRooms();
 
-    // Backfill recent history for any already-connected sessions
-    await this.backfillRestoredSessions();
-
     // Sync contacts from Matrix room members into the database
     for (const [sessionId] of this.sessionPlatforms) {
       await this.syncContacts(sessionId);
     }
+
+    // Backfill recent history for any already-connected sessions. Contacts
+    // are synced first so the repair path can attach avatar-bearing contacts
+    // to historic messages in the same pass.
+    await this.backfillRestoredSessions();
 
     this.log('info', 'Matrix bridge adapter initialized');
   }
@@ -997,7 +1020,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
    */
   private matrixMediaProxyUrl(mxcUrl: string): string | undefined {
     const match = mxcUrl.match(/^mxc:\/\/([^/]+)\/(.+)$/)
-      || mxcUrl.match(/\/_matrix\/media\/v3\/(?:thumbnail|download)\/([^/]+)\/([^?]+)/);
+      || mxcUrl.match(/\/_matrix\/(?:client\/v1\/media|media\/v3)\/(?:thumbnail|download)\/([^/]+)\/([^?]+)/);
     if (!match) return undefined;
 
     const apiBase = process.env.PUBLIC_API_URL
@@ -1199,15 +1222,14 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
       const session = this.sessions.get(sessionId);
       if (!session) return;
 
-      const selfGhostId = this.sessionSelfGhostIds.get(sessionId);
+      const platform = this.sessionPlatforms.get(sessionId);
+      if (!platform) return;
+      const selfGhostIds = this.getSelfGhostIds(sessionId, session, platform);
       let synced = 0;
 
       for (const contact of contacts) {
         // Skip the user's own ghost contact
-        if (selfGhostId) {
-          const selfContact = this.userMapper.ghostUserToPlatformContact(selfGhostId);
-          if (selfContact && selfContact.platformContactId === contact.platformContactId) continue;
-        }
+        if (selfGhostIds.some((id) => this.userMapper.ghostUserToPlatformContact(id)?.platformContactId === contact.platformContactId)) continue;
 
         const { error } = await supabase
           .from('contacts')
