@@ -161,17 +161,17 @@ const MOCK_AI_SUGGESTIONS = [
   {
     id: 'sug-1',
     message_id: 'chatmsg-1',
-    response_text: 'Sounds great, looking forward to it!',
+    suggestions: ['Sounds great, looking forward to it!'],
     confidence: 0.92,
-    is_selected: false,
+    selected_index: null,
     feedback: null,
   },
   {
     id: 'sug-2',
     message_id: 'chatmsg-1',
-    response_text: 'Perfect, thank you for the update.',
+    suggestions: ['Perfect, thank you for the update.'],
     confidence: 0.81,
-    is_selected: false,
+    selected_index: null,
     feedback: null,
   },
 ];
@@ -626,6 +626,16 @@ test.describe('Core loop — mock backend', () => {
 
     await expect(page.getByTestId('chat-screen')).toBeVisible({ timeout: 10_000 });
     await expect(page.getByTestId('chat-message-list')).toBeVisible({ timeout: 8_000 });
+  });
+
+  test('chat bubbles use sender identity for alignment', async ({ page }) => {
+    await signIn(page);
+    await expect(page.locator('[data-testid^="message-card-"]').first()).toBeVisible({ timeout: 8_000 });
+    await page.locator('[data-testid^="message-card-"]').first().click();
+    await expect(page.getByTestId('chat-message-list')).toBeVisible({ timeout: 8_000 });
+
+    await expect(page.locator('[data-testid^="message-row-"][data-testid$="-incoming"]').first()).toBeVisible();
+    await expect(page.locator('[data-testid^="message-row-"][data-testid$="-outgoing"]').first()).toBeVisible();
   });
 
   // 4. Send — typing and submitting a message clears the chat input
@@ -1097,7 +1107,9 @@ test.describe('Core loop — mock backend', () => {
     await expect(page.getByTestId('chat-message-list')).toBeVisible({ timeout: 8_000 });
 
     // The image fixture message should render (testID added in this ticket)
-    await expect(page.getByTestId('media-image-chatmsg-img')).toBeVisible({ timeout: 8_000 });
+    const image = page.getByTestId('media-image-img-chatmsg-img').locator('img');
+    await expect(image).toBeVisible({ timeout: 8_000 });
+    await expect(image).toHaveJSProperty('naturalWidth', 1);
   });
 
   // 13b. Media in — audio, video, and document fixtures render in chat (#35)
@@ -1423,12 +1435,13 @@ async function mockConnectFlow(page, platformOverrides = {}) {
       return;
     }
 
-    // Instagram status — returns connected
+    // Instagram starts disconnected in connection-flow tests. Individual
+    // tests opt into a connected response when they need to exercise polling.
     if (url.includes('/instagram/status')) {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ sessions: [MOCK_IG_SESSION_CONNECTED] }),
+        body: JSON.stringify({ sessions: [] }),
       });
       return;
     }
@@ -1450,6 +1463,18 @@ test.describe('Platform connect flows — mock backend', () => {
   test.beforeEach(async ({ page }) => {
     await mockBackend(page);
     await mockConnectFlow(page);
+  });
+
+  test('connected platform opens connection status instead of authentication', async ({ page }) => {
+    await page.goto('/login');
+    await expect(page.getByTestId('platform-login-screen')).toBeVisible();
+
+    // The default fixture has an already-connected WhatsApp session.
+    await page.getByTestId('platform-selector-whatsapp').click();
+
+    await expect(page.getByTestId('platform-connection-status')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByText('Already connected')).toBeVisible();
+    await expect(page.getByText('Requesting pairing code...')).not.toBeVisible();
   });
 
   // TG-1. Telegram connect: phone step renders
@@ -1559,23 +1584,13 @@ test.describe('Platform connect flows — mock backend', () => {
   // IG-3. Instagram connect: connecting state renders while polling
   test('Instagram connect flow — connecting state shows after submit', async ({ page }) => {
     // Slow down status polling so we can observe the connecting state
-    let statusCallCount = 0;
     await page.route('**/instagram/status**', async (route) => {
-      statusCallCount++;
-      // First call returns awaiting_auth so connecting state stays visible
-      if (statusCallCount <= 1) {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({ sessions: [{ ...MOCK_IG_SESSION_CONNECTED, status: 'awaiting_auth' }] }),
-        });
-      } else {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({ sessions: [MOCK_IG_SESSION_CONNECTED] }),
-        });
-      }
+      // Remain in an in-progress state while the web login UI is open.
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ sessions: [{ ...MOCK_IG_SESSION_CONNECTED, status: 'awaiting_auth' }] }),
+      });
     });
 
     // Mock instagramLoginStart to return immediately

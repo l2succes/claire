@@ -20,13 +20,14 @@ import {
   KeyboardAvoidingView,
   Platform as RNPlatform,
 } from 'react-native';
-import { X, Check, AlertCircle } from 'lucide-react-native';
+import { X, Check, AlertCircle, Wifi } from 'lucide-react-native';
 import { PlatformIconButton } from './PlatformIcon';
 import { Button } from './ui/Button';
 import {
   Platform,
   AuthMethod,
   PLATFORM_DISPLAY,
+  PlatformSession,
   getPlatformAuthMethod,
   InstagramLoginStep,
   InstagramLoginSubmission,
@@ -41,6 +42,7 @@ interface PlatformAuthModalProps {
   visible: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  existingSession?: PlatformSession | null;
 }
 
 export function PlatformAuthModal({
@@ -48,6 +50,7 @@ export function PlatformAuthModal({
   visible,
   onClose,
   onSuccess,
+  existingSession = null,
 }: PlatformAuthModalProps) {
   const {
     activeAuthFlow,
@@ -94,8 +97,13 @@ export function PlatformAuthModal({
 
   const authMethod = getPlatformAuthMethod(platform);
   const display = PLATFORM_DISPLAY[platform];
+  const authError = activeAuthFlow?.error || error || '';
+  const whatsappRateLimited =
+    platform === Platform.WHATSAPP &&
+    authError.toLowerCase().includes('rate limited by whatsapp');
 
   const handleConnect = async () => {
+    if (existingSession) return;
     if (authMethod === AuthMethod.PAIRING_CODE && phoneNumber) {
       await connectPlatform(platform, { phoneNumber });
     } else if (authMethod === AuthMethod.PHONE_CODE && phoneNumber) {
@@ -176,6 +184,40 @@ export function PlatformAuthModal({
       );
     }
 
+    if (existingSession) {
+      const account = existingSession.platformUsername
+        || existingSession.phoneNumber
+        || existingSession.platformUserId;
+      const connectedAt = existingSession.lastConnectedAt || existingSession.createdAt;
+
+      return (
+        <View className="items-center py-8" testID="platform-connection-status">
+          <View className="w-16 h-16 rounded-full bg-green-100 items-center justify-center mb-4">
+            <Wifi size={32} color="#22c55e" />
+          </View>
+          <Text className="text-xl font-semibold text-gray-900 dark:text-white">
+            Already connected
+          </Text>
+          <Text className="text-gray-500 dark:text-gray-400 mt-2 text-center">
+            {display.name} is connected and ready to sync messages.
+          </Text>
+          {account && (
+            <Text className="text-gray-900 dark:text-white font-medium mt-5" testID="platform-connected-account">
+              {account}
+            </Text>
+          )}
+          {connectedAt && (
+            <Text className="text-gray-500 dark:text-gray-400 text-sm mt-1">
+              Connected {new Date(connectedAt).toLocaleString()}
+            </Text>
+          )}
+          <Button variant="primary" onPress={onClose} className="mt-7" testID="platform-connection-done">
+            Done
+          </Button>
+        </View>
+      );
+    }
+
     // Error state
     if (activeAuthFlow?.step === 'error' || error) {
       return (
@@ -187,14 +229,17 @@ export function PlatformAuthModal({
             Connection Failed
           </Text>
           <Text className="text-gray-500 dark:text-gray-400 mt-2 text-center px-4">
-            {activeAuthFlow?.error || error || 'An error occurred'}
+            {whatsappRateLimited
+              ? 'WhatsApp has temporarily rate-limited pairing requests. Wait for the cooldown to clear, then close this dialog and start one fresh attempt.'
+              : authError || 'An error occurred'}
           </Text>
           <Button
             variant="primary"
             onPress={handleConnect}
+            disabled={whatsappRateLimited || isLoading}
             className="mt-6"
           >
-            Try Again
+            {whatsappRateLimited ? 'Wait and try later' : 'Try Again'}
           </Button>
         </View>
       );
@@ -516,7 +561,7 @@ export function PlatformAuthModal({
               </TouchableOpacity>
 
               <Text className="text-lg font-semibold text-gray-900 dark:text-white">
-                Connect {display.name}
+                {existingSession ? `${display.name} connection` : `Connect ${display.name}`}
               </Text>
 
               <View className="w-10" />
@@ -531,7 +576,7 @@ export function PlatformAuthModal({
             >
               {/* Platform Icon */}
               <View className="items-center mb-6">
-                <PlatformIconButton platform={platform} size={72} />
+                <PlatformIconButton platform={platform} size={72} connected={!!existingSession} />
               </View>
 
               {renderContent()}

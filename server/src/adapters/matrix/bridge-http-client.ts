@@ -20,6 +20,7 @@ export interface LoginStepResponse {
   login_id: string;    // login process ID (for subsequent step calls)
   type: 'user_input' | 'cookies' | 'display_and_wait' | 'complete';
   step_id: string;     // step ID (for the step URL)
+  txn_id?: string;
   instructions?: string;
   complete?: { user_login_id: string };
   cookies?: unknown;
@@ -40,8 +41,17 @@ export class BridgeHttpClient {
     this.provisioningBase = `${bridgeUrl}/_matrix/provision`;
   }
 
-  private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
-    const url = `${this.provisioningBase}${path}?user_id=${encodeURIComponent(this.matrixUserId)}`;
+  private async request<T>(
+    method: string,
+    path: string,
+    body?: unknown,
+    query: Record<string, string | undefined> = {}
+  ): Promise<T> {
+    const params = new URLSearchParams({ user_id: this.matrixUserId });
+    for (const [key, value] of Object.entries(query)) {
+      if (value) params.set(key, value);
+    }
+    const url = `${this.provisioningBase}${path}?${params.toString()}`;
     const res = await fetch(url, {
       method,
       headers: {
@@ -102,6 +112,28 @@ export class BridgeHttpClient {
       'POST',
       `/v3/login/step/${encodeURIComponent(loginId)}/${encodeURIComponent(stepId)}/user_input`,
       input
+    );
+  }
+
+  /**
+   * Start waiting for a display_and_wait step to finish.
+   *
+   * Mautrix keeps the login process alive through this long-poll request. It
+   * must be called immediately after receiving a code/QR step; merely showing
+   * the returned data leaves the bridge login process unclaimed and it can
+   * time out before the user confirms it on their phone.
+   */
+  async waitForDisplayAndWait(
+    loginId: string,
+    stepId: string,
+    txnId?: string
+  ): Promise<LoginStepResponse> {
+    logger.debug(`[BridgeHttpClient] waitForDisplayAndWait login=${loginId} step=${stepId}`);
+    return this.request<LoginStepResponse>(
+      'POST',
+      `/v3/login/step/${encodeURIComponent(loginId)}/${encodeURIComponent(stepId)}/display_and_wait`,
+      undefined,
+      { txn_id: txnId }
     );
   }
 }

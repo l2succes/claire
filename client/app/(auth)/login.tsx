@@ -19,15 +19,19 @@ export default function LoginScreen() {
   const [selectedPlatform, setSelectedPlatform] = useState<Platform | null>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
 
-  const { connectedSessions, initialize, isInitialized } = usePlatformStore();
+  const { connectedSessions, initialize, fetchConnectedSessions, isInitialized } = usePlatformStore();
   const hasConnection = useHasAnyConnection();
 
   // Initialize platform store on mount
   useEffect(() => {
     if (!isInitialized) {
-      initialize();
+      void initialize();
+      return;
     }
-  }, [initialize, isInitialized]);
+    // Sessions are server-authoritative. Refresh on re-entry instead of
+    // trusting a persisted "Connected" badge from a prior run.
+    void fetchConnectedSessions();
+  }, [fetchConnectedSessions, initialize, isInitialized]);
 
   const handlePlatformSelect = (platform: Platform) => {
     setSelectedPlatform(platform);
@@ -141,6 +145,11 @@ export default function LoginScreen() {
         visible={showAuthModal}
         onClose={handleAuthClose}
         onSuccess={handleAuthSuccess}
+        existingSession={selectedPlatform
+          ? connectedSessions.find((session) => (
+              session.platform === selectedPlatform && session.status === PlatformStatus.CONNECTED
+            ))
+          : null}
       />
     </View>
   );

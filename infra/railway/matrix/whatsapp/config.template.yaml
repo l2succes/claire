@@ -58,7 +58,7 @@ appservice:
     as_token: "__AS_TOKEN__"
     hs_token: "__HS_TOKEN__"
     # Localpart template for remote WhatsApp users.
-    username_template: _wa_{{.}}
+    username_template: whatsapp_{{.}}
 
 # Config for the bridge database. This must be top-level for current bridgev2 images.
 database:
@@ -122,7 +122,7 @@ whatsapp:
 bridge:
     # Localpart template of MXIDs for WhatsApp users.
     # {{.}} is replaced with the phone number of the WhatsApp user.
-    username_template: _wa_{{.}}
+    username_template: whatsapp_{{.}}
     # Displayname template for WhatsApp users.
     # {{.PushName}}     - nickname set by the WhatsApp user
     # {{.BusinessName}} - validated WhatsApp business name

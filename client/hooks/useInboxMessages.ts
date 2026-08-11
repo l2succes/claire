@@ -1,0 +1,274 @@
+import { useCallback, useEffect, useMemo } from 'react';
+import { useInfiniteQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query';
+import { supabase } from '../services/supabase';
+import { Platform } from '../types/platform';
+import { notifyWebMessageUpdate } from '../services/notifications';
+
+export interface InboxMessage {
+  id: string;
+  conversation_key: string;
+  contact_name?: string;
+  contact_avatar?: string;
+  chat_name?: string;
+  content: string;
+  timestamp: string;
+  from_me: boolean;
+  is_group: boolean;
+  status?: 'sent' | 'delivered' | 'read' | 'pending';
+  unread_count?: number;
+  has_ai_response?: boolean;
+  has_open_promise?: boolean;
+  chat_id: string;
+  contact_phone?: string;
+  platform?: Platform;
+  snoozed_until?: string | null;
+}
+
+interface MessagePage {
+  messages: InboxMessage[];
+  hasMore: boolean;
+}
+
+interface RawMessage {
+  id: string;
+  content: string;
+  timestamp: string;
+  from_me: boolean;
+  is_group: boolean;
+  status?: InboxMessage['status'];
+  platform?: Platform;
+  chat_id?: string;
+  contact_phone?: string;
+  contact_name?: string;
+  snoozed_until?: string | null;
+  chats?: { name?: string; platform_chat_id?: string } | null;
+  ai_suggestions?: Array<{ id: string; confidence?: number }>;
+}
+
+type InboxQueryData = InfiniteData<MessagePage, number>;
+
+function conversationKey(chatId: string, platform?: Platform) {
+  return `${platform || Platform.WHATSAPP}:${chatId}`;
+}
+
+function isStatusBroadcast(row: RawMessage) {
+  return row.chats?.platform_chat_id === 'status@broadcast' || row.chats?.name === 'WhatsApp Status Broadcast';
+}
+
+function normalizeRows(rows: RawMessage[]) {
+  const byConversation = new Map<string, InboxMessage>();
+
+  for (const row of rows) {
+    if (isStatusBroadcast(row)) continue;
+    const chatId = row.chat_id || row.id;
+    const platform = row.platform || Platform.WHATSAPP;
+    const key = conversationKey(chatId, platform);
+    const current = byConversation.get(key);
+    if (current && new Date(current.timestamp) >= new Date(row.timestamp)) continue;
+
+    byConversation.set(key, {
+      id: row.id,
+      conversation_key: key,
+      contact_name: row.contact_name,
+      chat_name: row.chats?.name || (!row.from_me ? row.contact_name : undefined),
+      content: row.content,
+      timestamp: row.timestamp,
+      from_me: row.from_me,
+      is_group: row.is_group,
+      status: row.status,
+      chat_id: chatId,
+      contact_phone: row.contact_phone,
+      has_ai_response: (row.ai_suggestions?.length ?? 0) > 0,
+      unread_count: 0,
+      platform,
+      snoozed_until: row.snoozed_until ?? null,
+    });
+  }
+
+  const seen = new Set<string>();
+  return [...byConversation.values()]
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+    .filter((message) => {
+      const key = `${message.platform}:${message.chat_name || message.contact_phone || message.chat_id}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+function sameMessage(a: InboxMessage, b: InboxMessage) {
+  return a.id === b.id && a.content === b.content && a.timestamp === b.timestamp &&
+    a.from_me === b.from_me && a.status === b.status && a.contact_name === b.contact_name &&
+    a.contact_avatar === b.contact_avatar && a.chat_name === b.chat_name &&
+    a.contact_phone === b.contact_phone && a.has_ai_response === b.has_ai_response &&
+    a.snoozed_until === b.snoozed_until;
+}
+
+function sortMessages(messages: InboxMessage[]) {
+  return [...messages].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+}
+
+export function useInboxMessages(userId?: string) {
+  const queryClient = useQueryClient();
+  const queryKey = useMemo(() => ['messages-feed', userId] as const, [userId]);
+
+  const query = useInfiniteQuery<MessagePage, Error, InboxQueryData, typeof queryKey, number>({
+    queryKey,
+    enabled: !!userId,
+    initialPageParam: 0,
+    staleTime: 60_000,
+    gcTime: 30 * 60_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
+    queryFn: async ({ pageParam }) => {
+      if (!userId) return { messages: [], hasMore: false };
+      const pageSize = 20;
+      const from = pageParam * pageSize;
+      const now = new Date().toISOString();
+      const { data, error, count } = await supabase
+        .from('messages')
+        .select(`id, content, timestamp, from_me, is_group, status, platform,
+          chat_id, contact_phone, contact_name, snoozed_until,
+          chats (name, platform_chat_id), ai_suggestions (id, confidence)`, { count: 'exact' })
+        .eq('user_id', userId)
+        .or(`snoozed_until.is.null,snoozed_until.lte.${now}`)
+        .order('timestamp', { ascending: false })
+        .range(from, from + pageSize - 1);
+      if (error) throw error;
+      return { messages: normalizeRows((data ?? []) as RawMessage[]), hasMore: count ? from + pageSize < count : false };
+    },
+    getNextPageParam: (lastPage, allPages) => lastPage.hasMore ? allPages.length : undefined,
+  });
+
+  const messages = useMemo(() => {
+    const merged = new Map<string, InboxMessage>();
+    for (const page of query.data?.pages ?? []) {
+      for (const message of page.messages) {
+        const existing = merged.get(message.conversation_key);
+        if (!existing || new Date(message.timestamp) > new Date(existing.timestamp)) merged.set(message.conversation_key, message);
+      }
+    }
+    return sortMessages([...merged.values()]);
+  }, [query.data]);
+
+  const patchRealtimeMessage = useCallback((row: Partial<RawMessage> & { id: string; content?: string; timestamp?: string }) => {
+    if (!row.chat_id && !row.id) return;
+    const platform = row.platform || Platform.WHATSAPP;
+    const key = conversationKey(row.chat_id || row.id, platform);
+    queryClient.setQueryData<InboxQueryData>(queryKey, (old) => {
+      if (!old) return old;
+      let found = false;
+      const pages = old.pages.map((page) => {
+        const messages = page.messages.map((message) => {
+          if (message.conversation_key !== key) return message;
+          found = true;
+          const next = { ...message,
+            id: row.id || message.id,
+            content: row.content ?? message.content,
+            timestamp: row.timestamp ?? message.timestamp,
+            from_me: row.from_me ?? message.from_me,
+            is_group: row.is_group ?? message.is_group,
+            status: row.status ?? message.status,
+            contact_name: row.contact_name || message.contact_name,
+            contact_phone: row.contact_phone || message.contact_phone,
+            platform,
+          };
+          return sameMessage(message, next) ? message : next;
+        });
+        return messages === page.messages ? page : { ...page, messages: sortMessages(messages) };
+      });
+      if (found) return { ...old, pages };
+      const newMessage: InboxMessage = {
+        id: row.id,
+        conversation_key: key,
+        contact_name: row.contact_name,
+        chat_name: row.contact_name,
+        content: row.content ?? '',
+        timestamp: row.timestamp ?? new Date().toISOString(),
+        from_me: row.from_me ?? false,
+        is_group: row.is_group ?? false,
+        status: row.status,
+        chat_id: row.chat_id || row.id,
+        contact_phone: row.contact_phone,
+        platform,
+        unread_count: 0,
+        has_ai_response: false,
+        snoozed_until: row.snoozed_until ?? null,
+      };
+      const first = old.pages[0];
+      if (!first) return { ...old, pages: [{ messages: [newMessage], hasMore: false }] };
+      return { ...old, pages: [{ ...first, messages: sortMessages([newMessage, ...first.messages]) }, ...old.pages.slice(1)] };
+    });
+  }, [queryClient, queryKey]);
+
+  const markAiResponse = useCallback((messageId: string) => {
+    queryClient.setQueryData<InboxQueryData>(queryKey, (old) => {
+      if (!old) return old;
+      let changed = false;
+      const pages = old.pages.map((page) => {
+        const messages = page.messages.map((message) => {
+          if (message.id !== messageId || message.has_ai_response) return message;
+          changed = true;
+          return { ...message, has_ai_response: true };
+        });
+        return changed ? { ...page, messages } : page;
+      });
+      return changed ? { ...old, pages } : old;
+    });
+  }, [queryClient, queryKey]);
+
+  useEffect(() => {
+    if (!userId) return;
+    let fallbackTimer: ReturnType<typeof setInterval> | undefined;
+    const startFallback = (intervalMs: number) => {
+      if (fallbackTimer) clearInterval(fallbackTimer);
+      fallbackTimer = setInterval(() => void query.refetch(), intervalMs);
+    };
+
+    // Realtime is the fast path. This low-frequency reconciliation prevents a
+    // missed database event from leaving an inbox stale indefinitely.
+    startFallback(60_000);
+    const channel = supabase
+      .channel(`messages-feed-${userId}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `user_id=eq.${userId}` }, ({ new: row }) => {
+        const message = row as RawMessage & { id: string };
+        patchRealtimeMessage(message);
+        if (!message.from_me) {
+          notifyWebMessageUpdate(
+            message.contact_name || 'New message',
+            message.content || 'Sent you an update',
+            { type: 'new_message', chatId: message.chat_id, platform: message.platform },
+          );
+        }
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages', filter: `user_id=eq.${userId}` }, ({ new: row }) => patchRealtimeMessage(row as RawMessage & { id: string }))
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ai_suggestions', filter: `user_id=eq.${userId}` }, ({ new: row }) => {
+        const suggestion = row as { message_id?: string };
+        if (suggestion.message_id) markAiResponse(suggestion.message_id);
+      })
+      .subscribe((status, error) => {
+        if (status === 'SUBSCRIBED') {
+          startFallback(60_000);
+          return;
+        }
+        console.warn('[Realtime] Inbox subscription unavailable:', status, error ?? '');
+        // Recover quickly while the socket is joining/reconnecting or the
+        // server reports a subscription error.
+        startFallback(10_000);
+      });
+    return () => {
+      if (fallbackTimer) clearInterval(fallbackTimer);
+      void channel.unsubscribe();
+    };
+  }, [userId, patchRealtimeMessage, markAiResponse, query.refetch]);
+
+  return {
+    ...query,
+    messages,
+    loading: query.isLoading,
+    loadingMore: query.isFetchingNextPage,
+    hasMore: !!query.hasNextPage,
+    fetchMessages: query.refetch,
+    fetchNextMessages: query.fetchNextPage,
+  };
+}

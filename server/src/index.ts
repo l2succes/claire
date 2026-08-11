@@ -24,10 +24,12 @@ import { aiRateLimit, authRateLimit } from './middleware/rate-limit';
 import seedRoutes from './routes/seed';
 import promiseRoutes from './routes/promises';
 import pushTokenRoutes from './routes/push-tokens';
+import contactRoutes from './routes/contacts';
 import { platformManager } from './adapters';
 import { aiProcessor } from './services/ai-processor';
 import { promiseDetector } from './services/promise-detector';
 import { autoReplyEngine } from './services/auto-reply-engine';
+import { pushNotificationService } from './services/push-notification';
 import { PlatformStatus } from './adapters/types';
 import { whatsappAdapter } from './adapters/whatsapp';
 import { telegramAdapter } from './adapters/telegram';
@@ -41,6 +43,41 @@ initSentry();
 
 const app = express();
 const PORT = config.PORT;
+
+async function notifyIncomingMessage(message: {
+  userId: string;
+  chatId: string;
+  platform: string;
+  senderName?: string;
+  content: string;
+  messageId: string;
+}): Promise<void> {
+  const { data: preferences, error } = await supabase
+    .from('user_preferences')
+    .select('notification_enabled, preferences')
+    .eq('user_id', message.userId)
+    .maybeSingle();
+  if (error) {
+    logger.debug('Notification preferences unavailable:', error.message);
+    return;
+  }
+
+  const options = (preferences?.preferences || {}) as { notify_messages?: boolean };
+  if (preferences?.notification_enabled === false || options.notify_messages === false) return;
+
+  await pushNotificationService.sendToUser(message.userId, {
+    title: message.senderName || 'New message',
+    body: message.content.trim().slice(0, 160) || 'Sent you an update',
+    sound: 'default',
+    channelId: 'messages',
+    data: {
+      type: 'new_message',
+      chatId: message.chatId,
+      platform: message.platform,
+      messageId: message.messageId,
+    },
+  });
+}
 
 // Sentry request handler — must come first in the middleware chain
 if (config.SENTRY_DSN) {
@@ -77,6 +114,7 @@ app.use('/preferences', preferencesRoutes);
 app.use('/seed', seedRoutes);
 app.use('/promises', promiseRoutes);
 app.use('/push-tokens', pushTokenRoutes);
+app.use('/contacts', contactRoutes);
 app.use('/auto-reply', autoReplyRoutes);
 
 // Handle Supabase email confirmation redirects
@@ -320,10 +358,12 @@ async function initializePlatforms() {
           contact_phone: message.isFromMe ? null : message.senderId?.replace(/@.*/, '') || null,
           metadata: message.platformMetadata || null,
           media_url: (() => {
-            const mxc = message.platformMetadata?.mediaUrl;
-            if (!mxc || typeof mxc !== 'string') return null;
-            const match = mxc.match(/^mxc:\/\/([^/]+)\/(.+)$/);
-            return match ? `/media/${match[1]}/${match[2]}` : null;
+            const mediaUrl = message.platformMetadata?.mediaUrl;
+            if (!mediaUrl || typeof mediaUrl !== 'string') return null;
+            if (mediaUrl.startsWith('/media/')) return mediaUrl;
+            const match = mediaUrl.match(/^mxc:\/\/([^/]+)\/(.+)$/)
+              || mediaUrl.match(/\/_matrix\/media\/v3\/(?:thumbnail|download)\/([^/]+)\/([^?]+)/);
+            return match ? `/media/${encodeURIComponent(match[1])}/${encodeURIComponent(match[2])}` : mediaUrl;
           })(),
           media_mime_type:
             (message.platformMetadata?.mediaInfo as { mimetype?: string } | undefined)?.mimetype || null,
@@ -335,6 +375,17 @@ async function initializePlatforms() {
         logger.error('Failed to upsert message:', msgError);
       } else {
         logger.debug(`Message saved: ${message.platformMessageId}`);
+
+        if (!message.isFromMe && savedMsg?.id) {
+          void notifyIncomingMessage({
+            userId: message.userId,
+            chatId: chat.id,
+            platform: message.platform,
+            senderName: message.senderName,
+            content: message.content,
+            messageId: savedMsg.id,
+          }).catch((error) => logger.debug('Incoming push notification skipped:', (error as Error).message));
+        }
 
         // Generate AI response suggestion for incoming messages (fire-and-forget)
         if (!message.isFromMe && savedMsg?.id && message.content?.trim() && aiProcessor.isConfigured) {

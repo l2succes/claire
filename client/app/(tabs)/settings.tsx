@@ -76,32 +76,11 @@ export default function SettingsScreen() {
   };
 
   const handlePlatformSelect = (platform: Platform) => {
-    // Check if already connected
-    const existingSession = connectedSessions.find(
-      (s) => s.platform === platform && s.status === PlatformStatus.CONNECTED
-    );
-
-    if (existingSession) {
-      Alert.alert(
-        'Already Connected',
-        `You already have a ${platform} connection. Would you like to disconnect it first?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Continue',
-            onPress: () => {
-              setSelectedPlatform(platform);
-              setShowPlatformSelector(false);
-              setShowAuthModal(true);
-            },
-          },
-        ]
-      );
-    } else {
-      setSelectedPlatform(platform);
-      setShowPlatformSelector(false);
-      setShowAuthModal(true);
-    }
+    // A connected card opens its status view, never another authentication
+    // flow. The modal also remains safe if this state changes while open.
+    setSelectedPlatform(platform);
+    setShowPlatformSelector(false);
+    setShowAuthModal(true);
   };
 
   const handleAuthSuccess = () => {
@@ -316,6 +295,11 @@ export default function SettingsScreen() {
         visible={showAuthModal}
         onClose={handleAuthClose}
         onSuccess={handleAuthSuccess}
+        existingSession={selectedPlatform
+          ? connectedSessions.find((session) => (
+              session.platform === selectedPlatform && session.status === PlatformStatus.CONNECTED
+            ))
+          : null}
       />
     </ScrollView>
   );

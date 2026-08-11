@@ -29,7 +29,7 @@ export class MatrixEventConverter {
     sessionId: string,
     sessionUserId: string,
     platform: Platform,
-    selfGhostUserId?: string,
+    selfGhostUserId?: string | string[],
     matrixUserId?: string
   ): Promise<UnifiedMessage> {
     const content = event.getContent() as MatrixMessageContent;
@@ -50,12 +50,15 @@ export class MatrixEventConverter {
     //   - sender is the real Matrix user ID (e.g. @user123:claire.local)
     //   - The above non-ghost check still covers this since the real Matrix user
     //     is not a ghost user. When matrixUserId is provided we narrow to an exact match.
-    const isFromMe =
-      sender === selfGhostUserId ||
-      this.userMapper.isDoublePuppetUser(sender, matrixUserId);
+    const selfGhostIds = Array.isArray(selfGhostUserId)
+      ? selfGhostUserId
+      : selfGhostUserId ? [selfGhostUserId] : [];
+    const selfGhostIdForRoom = selfGhostIds[0];
+    const isFromMe = selfGhostIds.includes(sender)
+      || this.userMapper.isDoublePuppetUser(sender, matrixUserId);
 
     // Get chat participant (the ghost user in the room, excluding self)
-    const chatId = this.extractChatId(room, platform, selfGhostUserId);
+    const chatId = this.extractChatId(room, platform, selfGhostIdForRoom);
 
     // Convert content type
     const contentType = this.matrixMsgTypeToContentType(content.msgtype);
@@ -80,7 +83,7 @@ export class MatrixEventConverter {
         if (chatId) return chatId;
 
         // For groups, room ID is acceptable
-        if (this.isGroupRoom(room, platform, selfGhostUserId)) {
+        if (this.isGroupRoom(room, platform, selfGhostIdForRoom)) {
           return room.roomId;
         }
 
@@ -88,7 +91,7 @@ export class MatrixEventConverter {
         // The room ID will work for sending but may cause issues with chat identification
         return room.roomId;
       })(),
-      chatType: this.isGroupRoom(room, platform, selfGhostUserId) ? 'group' : 'individual',
+      chatType: this.isGroupRoom(room, platform, selfGhostIdForRoom) ? 'group' : 'individual',
       chatName: this.userMapper.cleanDisplayName(room.name),
       timestamp: event.getDate() || new Date(),
       isFromMe,
@@ -98,6 +101,10 @@ export class MatrixEventConverter {
       platformMetadata: {
         matrixRoomId: room.roomId,
         matrixEventId: eventId,
+        matrixSenderId: sender,
+        senderDetection: isFromMe
+          ? (selfGhostIds.includes(sender) ? 'self-ghost' : 'double-puppet')
+          : 'remote-sender',
         msgtype: content.msgtype,
         format: content.format,
         mediaUrl: content.url,

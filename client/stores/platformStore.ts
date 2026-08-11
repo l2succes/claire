@@ -6,7 +6,6 @@
  */
 
 import { create } from 'zustand';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { platformsApi, pollAuthStatus } from '../services/platforms';
 import {
   Platform,
@@ -14,11 +13,8 @@ import {
   AuthMethod,
   PlatformInfo,
   PlatformSession,
-  AuthData,
   AuthFlowState,
 } from '../types/platform';
-
-const STORAGE_KEY = '@claire_platform_sessions';
 
 interface PlatformState {
   // State
@@ -36,7 +32,7 @@ interface PlatformState {
   // Actions
   initialize: () => Promise<void>;
   fetchAvailablePlatforms: () => Promise<void>;
-  fetchConnectedSessions: () => Promise<void>;
+  fetchConnectedSessions: () => Promise<PlatformSession[]>;
   connectPlatform: (platform: Platform, config?: Record<string, unknown>) => Promise<void>;
   disconnectPlatform: (platform: Platform, sessionId: string) => Promise<void>;
   reconnectPlatform: (platform: Platform, sessionId: string) => Promise<void>;
@@ -59,7 +55,7 @@ export const usePlatformStore = create<PlatformState>((set, get) => ({
   _pollController: null,
 
   /**
-   * Initialize the store - fetch platforms and restore sessions
+   * Initialize the store from the server-authoritative platform state.
    */
   initialize: async () => {
     if (get().isInitialized) return;
@@ -159,27 +155,13 @@ export const usePlatformStore = create<PlatformState>((set, get) => ({
       const sessions = await platformsApi.getAllSessions();
       set({ connectedSessions: sessions });
 
-      // Persist to storage
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
+      return sessions;
     } catch (error) {
       console.error('Failed to fetch sessions:', error);
-
-      // Try to restore from storage
-      try {
-        const stored = await AsyncStorage.getItem(STORAGE_KEY);
-        if (stored) {
-          const parsed: PlatformSession[] = JSON.parse(stored);
-          const seen = new Set<string>();
-          const deduped = parsed.filter((s) => {
-            if (seen.has(s.id)) return false;
-            seen.add(s.id);
-            return true;
-          });
-          set({ connectedSessions: deduped });
-        }
-      } catch {
-        // Ignore storage errors
-      }
+      // Never present a cached connection as authoritative. A stale badge can
+      // reopen an invalid auth flow or hide a disconnected bridge.
+      set({ connectedSessions: [] });
+      return [];
     }
   },
 
@@ -187,6 +169,16 @@ export const usePlatformStore = create<PlatformState>((set, get) => ({
    * Connect to a platform (start auth flow)
    */
   connectPlatform: async (platform: Platform, config?: Record<string, unknown>) => {
+    // Refresh before creating a login flow. The server repeats this guard so a
+    // second device or a stale cache cannot create duplicate bridge sessions.
+    const sessions = await get().fetchConnectedSessions();
+    if (sessions.some((session) => (
+      session.platform === platform && session.status === PlatformStatus.CONNECTED
+    ))) {
+      set({ error: `${platform} is already connected` });
+      return;
+    }
+
     // Stop any existing poll
     const currentPoll = get()._pollController;
     if (currentPoll) {
@@ -234,8 +226,6 @@ export const usePlatformStore = create<PlatformState>((set, get) => ({
               _pollController: null,
             }));
 
-            // Persist updated sessions
-            AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(get().connectedSessions));
           } else if (session.status === PlatformStatus.FAILED) {
             // Failed
             set({
@@ -265,7 +255,10 @@ export const usePlatformStore = create<PlatformState>((set, get) => ({
           }
         },
         2000,
-        platform === Platform.WHATSAPP ? 30000 : 300000
+        // Mautrix keeps phone-pairing codes active for several minutes. The
+        // previous 30-second timeout discarded a valid code while the user
+        // was still switching to WhatsApp and entering it.
+        platform === Platform.WHATSAPP ? 240000 : 300000
       );
 
       set({ _pollController: pollController });
@@ -292,8 +285,6 @@ export const usePlatformStore = create<PlatformState>((set, get) => ({
         isLoading: false,
       }));
 
-      // Update storage
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(get().connectedSessions));
     } catch (error) {
       set({
         isLoading: false,
@@ -318,8 +309,6 @@ export const usePlatformStore = create<PlatformState>((set, get) => ({
         isLoading: false,
       }));
 
-      // Update storage
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(get().connectedSessions));
     } catch (error) {
       set({
         isLoading: false,
@@ -357,8 +346,6 @@ export const usePlatformStore = create<PlatformState>((set, get) => ({
           isLoading: false,
         }));
 
-        // Persist
-        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(get().connectedSessions));
       } else {
         set({
           isLoading: false,
@@ -426,8 +413,6 @@ export const usePlatformStore = create<PlatformState>((set, get) => ({
       _pollController: null,
     });
 
-    // Clear storage
-    AsyncStorage.removeItem(STORAGE_KEY);
   },
 }));
 

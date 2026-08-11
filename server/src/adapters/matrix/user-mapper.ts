@@ -90,10 +90,27 @@ export class MatrixUserMapper {
   isDoublePuppetUser(sender: string, matrixUserId?: string): boolean {
     if (this.isBridgeBot(sender)) return false;
     if (this.isGhostUser(sender)) return false;
-    // If we know the session's real Matrix user ID, verify the match.
-    if (matrixUserId) return sender === matrixUserId;
-    // No matrixUserId known yet — any real (non-ghost) user is treated as self.
-    return true;
+    // A missing Matrix user ID is not evidence that the sender is us. This
+    // used to classify every real Matrix user in a bridged room as the local
+    // user, which made incoming group messages appear as outgoing messages.
+    return !!matrixUserId && sender === matrixUserId;
+  }
+
+  /** Return the exact ghost IDs that can represent this account. */
+  selfGhostUserIds(platform: Platform, platformContactId?: string): string[] {
+    if (!platformContactId) return [];
+    const normalized = platformContactId.replace(/^\+/, '');
+    const ids = new Set<string>([
+      this.platformContactToGhostUser(normalized, platform),
+      this.platformContactToGhostUser(platformContactId, platform),
+    ]);
+    // Some bridge versions persist the WhatsApp LID as the platform ID.
+    // Accept it only when it is explicitly supplied as the session identity;
+    // never treat an arbitrary WhatsApp ghost as self.
+    if (platform === Platform.WHATSAPP && normalized.startsWith('lid-')) {
+      ids.add(this.platformContactToGhostUser(normalized, platform));
+    }
+    return [...ids];
   }
 
   /**

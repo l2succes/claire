@@ -32,6 +32,41 @@ interface ChatMessage {
   media_mime_type?: string;
 }
 
+function normalizeMediaUrl(value?: string | null): string | null {
+  if (!value) return null;
+  if (value.startsWith('/media/')) return `${API_BASE_URL}${value}`;
+  const mxc = value.match(/^mxc:\/\/([^/]+)\/(.+)$/)
+    || value.match(/\/_matrix\/media\/v3\/(?:thumbnail|download)\/([^/]+)\/([^?]+)/);
+  if (mxc) return `${API_BASE_URL}/media/${encodeURIComponent(mxc[1])}/${encodeURIComponent(mxc[2])}`;
+  return value;
+}
+
+function MediaImage({ uri, messageId }: { uri: string; messageId: string }) {
+  const [failed, setFailed] = useState(false);
+  const [loading, setLoading] = useState(true);
+  if (failed) {
+    return (
+      <View testID={`media-image-fallback-${messageId}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 12 }}>
+        <AlertCircle size={16} color="#9ca3af" />
+        <Text style={{ fontSize: 14, color: '#9ca3af' }}>Media unavailable</Text>
+      </View>
+    );
+  }
+  return (
+    <View testID={`media-image-${messageId}`}>
+      {loading && <ActivityIndicator testID={`media-image-loading-${messageId}`} size="small" color="#9ca3af" />}
+      <Image
+        source={{ uri }}
+        style={{ width: 220, height: 160, borderRadius: 10, marginBottom: 4, opacity: loading ? 0 : 1 }}
+        resizeMode="cover"
+        onLoad={() => setLoading(false)}
+        onError={() => { setLoading(false); setFailed(true); }}
+        testID={`media-image-img-${messageId}`}
+      />
+    </View>
+  );
+}
+
 export default function ChatScreen() {
   const { chatId, contact_name, chat_name, platform, is_group } = useLocalSearchParams<{
     chatId: string;
@@ -63,6 +98,7 @@ export default function ChatScreen() {
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [inputText, setInputText] = useState('');
+  const [suggestionRefreshKey, setSuggestionRefreshKey] = useState(0);
   const platformChatIdRef = useRef<string | null>(null);
   const listRef = useRef<FlatList>(null);
 
@@ -110,7 +146,7 @@ export default function ChatScreen() {
     if (chatId) fetchConvSettings(chatId);
 
     const subscription = supabase
-      .channel(`chat-${chatId}`)
+      .channel(`chat-${chatId}-${user?.id ?? 'anonymous'}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `chat_id=eq.${chatId}` },
         (payload) => {
           setMessages((prev) => {
@@ -124,12 +160,23 @@ export default function ChatScreen() {
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages', filter: `chat_id=eq.${chatId}` },
         () => fetchMessages()
       )
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'ai_suggestions',
+        filter: user?.id ? `user_id=eq.${user.id}` : undefined,
+      },
+        (payload) => {
+          const messageId = (payload.new as { message_id?: string } | undefined)?.message_id;
+          if (messageId) setSuggestionRefreshKey((key) => key + 1);
+        }
+      )
       .subscribe((status, err) => {
         console.log('[Realtime] Chat subscription status:', status, err ?? '');
       });
 
     return () => { supabase.removeChannel(subscription); };
-  }, [chatId, fetchMessages, fetchChatInfo]);
+  }, [chatId, user?.id, fetchMessages, fetchChatInfo]);
 
   // Clear error when user starts typing
   useEffect(() => {
@@ -200,7 +247,6 @@ export default function ChatScreen() {
 
   const renderMessageBody = (item: ChatMessage, isMe: boolean) => {
     const textColor = isMe ? '#ffffff' : '#111827';
-    const subtextColor = isMe ? 'rgba(255,255,255,0.65)' : '#9ca3af';
     const iconColor = isMe ? 'rgba(255,255,255,0.8)' : '#6b7280';
 
     // Bridge decryption failure — show a muted placeholder instead of the raw error
@@ -218,17 +264,11 @@ export default function ChatScreen() {
     const type = item.content_type || 'text';
 
     if (type === 'image' && item.media_url) {
-      const imageUri = item.media_url.startsWith('/media/')
-        ? `${API_BASE_URL}${item.media_url}`
-        : item.media_url;
+      const imageUri = normalizeMediaUrl(item.media_url);
+      if (!imageUri) return null;
       return (
-        <View testID={`media-image-${item.id}`}>
-          <Image
-            source={{ uri: imageUri }}
-            style={{ width: 220, height: 160, borderRadius: 10, marginBottom: 4 }}
-            resizeMode="cover"
-            testID={`media-image-img-${item.id}`}
-          />
+        <View>
+          <MediaImage uri={imageUri} messageId={item.id} />
           {item.content ? (
             <Text style={{ fontSize: 14, color: textColor, marginTop: 2 }}>{item.content}</Text>
           ) : null}
@@ -295,7 +335,7 @@ export default function ChatScreen() {
         justifyContent: isMe ? 'flex-end' : 'flex-start',
         paddingHorizontal: 12,
         paddingVertical: 3,
-      }}>
+      }} testID={`message-row-${item.id}-${isMe ? 'outgoing' : 'incoming'}`}>
         <View style={{
           maxWidth: '78%',
           backgroundColor: isMe ? '#10b981' : '#f3f4f6',
@@ -304,7 +344,7 @@ export default function ChatScreen() {
           borderBottomLeftRadius: isMe ? 18 : 4,
           paddingHorizontal: 14,
           paddingVertical: 8,
-        }}>
+        }} testID={`message-bubble-${item.id}-${isMe ? 'outgoing' : 'incoming'}`}>
           {!isMe && is_group === '1' && item.contact_name && (
             <Text style={{ fontSize: 12, fontWeight: '600', color: '#6b7280', marginBottom: 2 }}>
               {item.contact_name}
@@ -403,10 +443,12 @@ export default function ChatScreen() {
           const lastInbound = [...messages].reverse().find(m => !m.from_me);
           return (
             <ResponseSuggestion
+              key={`${lastInbound?.id ?? ''}-${suggestionRefreshKey}`}
               chatId={chatId!}
               messageId={lastInbound?.id ?? ''}
               messageContent={lastInbound?.content}
               isGroup={is_group === '1'}
+              refreshKey={suggestionRefreshKey}
               onSelectSuggestion={(text) => setInputText(text)}
             />
           );

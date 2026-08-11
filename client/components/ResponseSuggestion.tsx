@@ -9,6 +9,7 @@ interface ResponseSuggestionProps {
   chatId: string;
   messageContent?: string;
   isGroup?: boolean;
+  refreshKey?: number;
   suggestions?: string[];
   onSelectSuggestion: (suggestion: string) => void;
   onGenerateNew?: () => void;
@@ -17,16 +18,29 @@ interface ResponseSuggestionProps {
 
 interface AISuggestion {
   id: string;
+  sourceId?: string;
   suggestion: string;
   confidence: number;
   is_selected?: boolean;
   feedback?: 'positive' | 'negative';
+  suggestionIndex?: number;
+}
+
+interface AISuggestionRow {
+  id: string;
+  suggestions?: unknown;
+  response_text?: unknown;
+  confidence?: number | null;
+  selected_index?: number | null;
+  is_selected?: boolean;
+  feedback?: 'positive' | 'negative' | null;
 }
 
 export function ResponseSuggestion({
   messageId,
   messageContent,
   isGroup,
+  refreshKey = 0,
   suggestions: propSuggestions,
   onSelectSuggestion,
   onGenerateNew,
@@ -52,10 +66,11 @@ export function ResponseSuggestion({
       // Fetch from database
       fetchAISuggestions();
     }
-  }, [messageId, propSuggestions]);
+  }, [messageId, propSuggestions, refreshKey]);
 
   const fetchAISuggestions = async () => {
     setLoading(true);
+    setSuggestions([]);
     try {
       const { data, error } = await supabase
         .from('ai_suggestions')
@@ -67,15 +82,24 @@ export function ResponseSuggestion({
       if (error) throw error;
 
       if (data && data.length > 0) {
-        setSuggestions(
-          data.map(item => ({
-            id: item.id,
-            suggestion: item.response_text,
-            confidence: item.confidence,
-            is_selected: item.is_selected,
-            feedback: item.feedback,
-          }))
-        );
+        const normalized = (data as AISuggestionRow[]).flatMap((item) => {
+          const texts: string[] = Array.isArray(item.suggestions)
+            ? item.suggestions.filter((text): text is string => typeof text === 'string')
+            : typeof item.response_text === 'string'
+              ? [item.response_text]
+              : [];
+
+          return texts.map((text, suggestionIndex) => ({
+            id: `${item.id}-${suggestionIndex}`,
+            sourceId: item.id,
+            suggestion: text,
+            confidence: item.confidence ?? 0,
+            is_selected: item.selected_index === suggestionIndex || item.is_selected === true,
+            feedback: item.feedback ?? undefined,
+            suggestionIndex,
+          }));
+        });
+        setSuggestions(normalized);
       }
     } catch (error) {
       console.error('Error fetching AI suggestions:', error);
@@ -108,12 +132,12 @@ export function ResponseSuggestion({
     onSelectSuggestion(suggestion.suggestion);
 
     // Mark as selected in database if it's from DB
-    if (!suggestion.id.startsWith('prop-')) {
+    if (suggestion.sourceId) {
       try {
         await supabase
           .from('ai_suggestions')
-          .update({ is_selected: true })
-          .eq('id', suggestion.id);
+          .update({ selected_index: suggestion.suggestionIndex ?? index })
+          .eq('id', suggestion.sourceId);
       } catch (error) {
         console.error('Error updating selection:', error);
       }
@@ -126,12 +150,12 @@ export function ResponseSuggestion({
     }
 
     // Update feedback in database
-    if (!suggestion.id.startsWith('prop-')) {
+    if (suggestion.sourceId) {
       try {
         await supabase
           .from('ai_suggestions')
           .update({ feedback })
-          .eq('id', suggestion.id);
+          .eq('id', suggestion.sourceId);
 
         // Update local state
         setSuggestions(prev =>

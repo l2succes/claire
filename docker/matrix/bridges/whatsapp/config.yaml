@@ -21,7 +21,7 @@ appservice:
     hs_token: GENERATE_ME_WITH_OPENSSL_RAND_HEX_32
 
 bridge:
-    username_template: "_wa_{{.}}"
+    username_template: "whatsapp_{{.}}"
     displayname_template: "{{.Name}} (WA)"
     command_prefix: "!wa"
 

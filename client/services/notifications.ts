@@ -22,6 +22,25 @@ function logWebNoop(method: string) {
   console.info(`[notifications] ${method} is a no-op on web`);
 }
 
+/** Browser notifications work while Claire is open. Background web push needs
+ * a service worker and VAPID credentials, separate from Expo native push. */
+export function supportsWebNotifications(): boolean {
+  return platformCapabilities.isWeb && typeof globalThis.Notification !== 'undefined';
+}
+
+export async function requestWebNotificationPermission(): Promise<NotificationPermission | 'unsupported'> {
+  if (!supportsWebNotifications()) return 'unsupported';
+  return globalThis.Notification.requestPermission();
+}
+
+export function notifyWebMessageUpdate(title: string, body: string, data?: Record<string, unknown>): void {
+  if (!supportsWebNotifications() || globalThis.Notification.permission !== 'granted') return;
+  // The foreground inbox already displays the update; reserve system banners
+  // for a backgrounded browser tab.
+  if (typeof document !== 'undefined' && document.visibilityState === 'visible') return;
+  new globalThis.Notification(title, { body, data });
+}
+
 export async function setupNotifications() {
   if (!platformCapabilities.supportsNativeNotifications) {
     logWebNoop('setupNotifications');

@@ -39,6 +39,18 @@ export const requireAuth = async (
       return res.status(401).json({ error: 'Invalid token' });
     }
 
+    // OAuth users can exist in auth.users without a corresponding Claire
+    // profile. Create it before routes or Matrix events write FK-dependent
+    // records such as chats and messages.
+    if (typeof (authHelpers as { ensureUserProfile?: (user: any) => Promise<void> }).ensureUserProfile === 'function') {
+      try {
+        await authHelpers.ensureUserProfile(user);
+      } catch (error) {
+        logger.error('User profile provisioning failed:', error);
+        return res.status(500).json({ error: 'User profile is not ready' });
+      }
+    }
+
     req.user = user;
     req.token = token;
     

@@ -9,12 +9,13 @@ import {
   ScrollView,
   Modal,
 } from 'react-native';
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { memo, useState, useEffect, useCallback, useMemo } from 'react';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Search, MessageCircle } from 'lucide-react-native';
 import { router } from 'expo-router';
-import Animated, { FadeInDown, LinearTransition } from 'react-native-reanimated';
 import { MessageCard } from '../../components/MessageCard';
 import { PlatformBadge } from '../../components/PlatformIcon';
+import { UnifiedUpdatesRail, UnifiedUpdateContact } from '../../components/UnifiedUpdatesRail';
 import { MorningBrief } from '../../components/MorningBrief';
 import { UrgentCard, UrgentMessage } from '../../components/UrgentCard';
 import { supabase } from '../../services/supabase';
@@ -22,35 +23,12 @@ import { API_BASE_URL } from '../../services/platforms';
 import { useAuthStore } from '../../stores/authStore';
 import { usePlatformStore, useHasAnyConnection } from '../../stores/platformStore';
 import { Platform, PLATFORM_DISPLAY } from '../../types/platform';
+import { useInboxMessages, InboxMessage } from '../../hooks/useInboxMessages';
 
-interface Message {
-  id: string;
-  conversation_key: string;
-  contact_name?: string;
-  contact_avatar?: string;
-  chat_name?: string;
-  content: string;
-  timestamp: string;
-  from_me: boolean;
-  is_group: boolean;
-  status?: 'sent' | 'delivered' | 'read' | 'pending';
-  unread_count?: number;
-  has_ai_response?: boolean;
-  has_open_promise?: boolean;
-  chat_id: string;
-  contact_phone?: string;
-  platform?: Platform;
-  snoozed_until?: string | null;
-}
+type Message = InboxMessage;
 
 type FilterType = 'all' | 'unread' | 'groups' | 'ai';
 type PlatformFilterType = Platform | 'all';
-const MESSAGE_ROW_LAYOUT = LinearTransition.springify().damping(18).stiffness(220);
-const MESSAGE_ROW_ENTERING = FadeInDown.duration(180);
-
-function getConversationKey(chatId: string, platform?: Platform) {
-  return `${platform || Platform.WHATSAPP}:${chatId}`;
-}
 
 function FilterPill({
   type,
@@ -103,21 +81,39 @@ function PlatformFilterPill({
   );
 }
 
+const ConversationRow = memo(function ConversationRow({
+  item,
+  hasOpenPromise,
+  onPress,
+  onLongPress,
+}: {
+  item: Message;
+  hasOpenPromise: boolean;
+  onPress: (message: Message) => void;
+  onLongPress: (message: Message) => void;
+}) {
+  return (
+    <Animated.View entering={FadeInDown.duration(180)}>
+      <MessageCard
+        message={{ ...item, has_open_promise: hasOpenPromise }}
+        onPress={() => onPress(item)}
+        onLongPress={() => onLongPress(item)}
+      />
+    </Animated.View>
+  );
+});
+
 export default function DashboardScreen() {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
   const [platformFilter, setPlatformFilter] = useState<PlatformFilterType>('all');
-  const [page, setPage] = useState(0);
-  const [hasMore, setHasMore] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
   // chat_id -> true for chats that have at least one open promise
   const [openPromiseChatIds, setOpenPromiseChatIds] = useState<Set<string>>(new Set());
   // Morning brief + urgent messages from /ai/morning-brief
   const [briefText, setBriefText] = useState<string | null>(null);
   const [urgentMessages, setUrgentMessages] = useState<UrgentMessage[]>([]);
+  const [updateContacts, setUpdateContacts] = useState<UnifiedUpdateContact[]>([]);
   // Snooze: message currently being snoozed (shows modal picker)
   const [snoozeTarget, setSnoozeTarget] = useState<Message | null>(null);
   // Locally snoozed message IDs: hide from inbox immediately (optimistic)
@@ -126,6 +122,14 @@ export default function DashboardScreen() {
   const user = useAuthStore((state) => state.user);
   const { initialize, isInitialized } = usePlatformStore();
   const hasConnection = useHasAnyConnection();
+  const {
+    messages,
+    loading,
+    hasMore,
+    loadingMore,
+    fetchMessages,
+    fetchNextMessages,
+  } = useInboxMessages(user?.id);
 
   useEffect(() => {
     if (!isInitialized) initialize();
@@ -147,6 +151,29 @@ export default function DashboardScreen() {
   useEffect(() => {
     fetchOpenPromises();
   }, [fetchOpenPromises]);
+
+  const fetchUpdateContacts = useCallback(async () => {
+    if (!user?.id) return;
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const response = await fetch(`${API_BASE_URL}/contacts`, {
+        headers: session?.access_token
+          ? { Authorization: `Bearer ${session.access_token}` }
+          : {},
+      });
+      if (!response.ok) return;
+      const json = await response.json();
+      if (json.success && Array.isArray(json.contacts)) {
+        setUpdateContacts(json.contacts.slice(0, 24) as UnifiedUpdateContact[]);
+      }
+    } catch {
+      // Contact bubbles are non-critical; keep the inbox usable if unavailable.
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    fetchUpdateContacts();
+  }, [fetchUpdateContacts]);
 
   const fetchMorningBrief = useCallback(async () => {
     if (!user?.id) return;
@@ -197,134 +224,6 @@ export default function DashboardScreen() {
     }
   }, []);
 
-  const fetchMessages = useCallback(async (pageNum = 0, append = false) => {
-    if (!user?.id) return;
-    const pageSize = 20;
-    const from = pageNum * pageSize;
-    const to = from + pageSize - 1;
-    const now = new Date().toISOString();
-    try {
-      const { data, error, count } = await supabase
-        .from('messages')
-        .select(
-          `id, content, timestamp, from_me, is_group, status, platform,
-           chat_id, platform_message_id, contact_phone, contact_name,
-           snoozed_until,
-           chats (name, platform_chat_id),
-           ai_suggestions (id, confidence)`,
-          { count: 'exact' }
-        )
-        .eq('user_id', user.id)
-        .or(`snoozed_until.is.null,snoozed_until.lte.${now}`)
-        .order('timestamp', { ascending: false })
-        .range(from, to);
-
-      if (error) throw error;
-
-      const chatMap = new Map<string, Message>();
-      (data || []).forEach((msg: any) => {
-        const chatId = msg.chat_id || msg.id;
-        const platform = msg.platform || Platform.WHATSAPP;
-        const conversationKey = getConversationKey(chatId, platform);
-        if (!chatMap.has(conversationKey) || new Date(msg.timestamp) > new Date(chatMap.get(conversationKey)!.timestamp)) {
-          chatMap.set(conversationKey, {
-            id: msg.id,
-            conversation_key: conversationKey,
-            contact_name: msg.contact_name,
-            chat_name: msg.chats?.name || (!msg.from_me ? msg.contact_name : null),
-            content: msg.content,
-            timestamp: msg.timestamp,
-            from_me: msg.from_me,
-            is_group: msg.is_group,
-            status: msg.status,
-            chat_id: chatId,
-            contact_phone: msg.contact_phone,
-            has_ai_response: msg.ai_suggestions?.length > 0,
-            unread_count: 0,
-            platform,
-            snoozed_until: msg.snoozed_until ?? null,
-          });
-        }
-      });
-
-      const sorted = Array.from(chatMap.values()).sort(
-        (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-      );
-
-      const seen = new Set<string>();
-      const latest = sorted.filter((msg) => {
-        const key = `${msg.platform}:${msg.chat_name || msg.contact_phone || msg.chat_id}`;
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
-
-      if (append) {
-        setMessages((prev) => {
-          const combined = [...prev, ...latest];
-          const seenConversationKeys = new Set<string>();
-          return combined.filter((m) => {
-            if (seenConversationKeys.has(m.conversation_key)) return false;
-            seenConversationKeys.add(m.conversation_key);
-            return true;
-          });
-        });
-      } else {
-        setMessages(latest);
-      }
-
-      setHasMore(count ? to < count - 1 : false);
-      setPage(pageNum);
-    } catch (e) {
-      console.error('Error fetching messages:', e);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-      setLoadingMore(false);
-    }
-  }, [user?.id]);
-
-  useEffect(() => {
-    if (!user?.id) return;
-    fetchMessages();
-    const sub = supabase
-      .channel(`messages-tab-${user.id}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `user_id=eq.${user.id}` }, (payload) => {
-        const row = payload.new as any;
-        const platform = row.platform || Platform.WHATSAPP;
-        const conversationKey = getConversationKey(row.chat_id, platform);
-        setMessages((prev) => {
-          const idx = prev.findIndex((m) => m.conversation_key === conversationKey);
-          if (idx >= 0) {
-            const updated: Message = {
-              ...prev[idx],
-              id: row.id,
-              conversation_key: conversationKey,
-              content: row.content,
-              timestamp: row.timestamp,
-              from_me: row.from_me,
-              is_group: row.is_group ?? prev[idx].is_group,
-              contact_name: row.contact_name || prev[idx].contact_name,
-              contact_phone: row.contact_phone || prev[idx].contact_phone,
-              platform,
-            };
-            return [updated, ...prev.filter((_, i) => i !== idx)];
-          }
-          fetchMessages();
-          return prev;
-        });
-      })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages', filter: `user_id=eq.${user.id}` }, () => fetchMessages())
-      .subscribe();
-    return () => { sub.unsubscribe(); };
-  }, [user?.id, fetchMessages]);
-
-  useEffect(() => {
-    if (!user?.id) return;
-    const interval = setInterval(() => fetchMessages(), 15_000);
-    return () => clearInterval(interval);
-  }, [user?.id, fetchMessages]);
-
   const filteredMessages = useMemo(() => {
     const now = new Date();
     // Exclude messages that are currently snoozed (optimistic local OR server-side)
@@ -352,7 +251,7 @@ export default function DashboardScreen() {
     return filtered;
   }, [messages, searchQuery, activeFilter, platformFilter, locallySnoozeIds]);
 
-  const navigateToChat = (msg: Message) => {
+  const navigateToChat = useCallback((msg: Message) => {
     router.push({
       pathname: '/chat/[chatId]',
       params: {
@@ -363,7 +262,16 @@ export default function DashboardScreen() {
         is_group: msg.is_group ? '1' : '0',
       },
     });
-  };
+  }, []);
+
+  const renderMessageRow = useCallback(({ item }: { item: Message }) => (
+    <ConversationRow
+      item={item}
+      hasOpenPromise={openPromiseChatIds.has(item.chat_id)}
+      onPress={navigateToChat}
+      onLongPress={setSnoozeTarget}
+    />
+  ), [navigateToChat, openPromiseChatIds]);
 
   if (loading) {
     return (
@@ -405,19 +313,15 @@ export default function DashboardScreen() {
       </View>
       <FlatList
         data={filteredMessages}
-        renderItem={({ item }) => (
-          <Animated.View entering={MESSAGE_ROW_ENTERING} layout={MESSAGE_ROW_LAYOUT}>
-            <MessageCard
-              message={{ ...item, has_open_promise: openPromiseChatIds.has(item.chat_id) }}
-              onPress={() => navigateToChat(item)}
-              onLongPress={() => setSnoozeTarget(item)}
-            />
-          </Animated.View>
-        )}
+        renderItem={renderMessageRow}
         keyExtractor={(item) => item.conversation_key}
         testID="messages-list"
+        maintainVisibleContentPosition={{ minIndexForVisible: 0, autoscrollToTopThreshold: 1 }}
         ListHeaderComponent={
           <>
+            {updateContacts.length > 0 ? (
+              <UnifiedUpdatesRail contacts={updateContacts} ownAvatarUrl={user?.avatar_url} />
+            ) : null}
             {briefText ? (
               <View testID="morning-brief-container" className="pt-4">
                 <MorningBrief text={briefText} />
@@ -461,14 +365,12 @@ export default function DashboardScreen() {
             refreshing={refreshing}
             onRefresh={() => {
               setRefreshing(true);
-              setPage(0);
-              fetchMessages(0, false);
-              fetchMorningBrief();
+              void Promise.all([fetchMessages(), fetchMorningBrief()]).finally(() => setRefreshing(false));
             }}
             tintColor="#6366f1"
           />
         }
-        onEndReached={() => { if (hasMore && !loadingMore) { setLoadingMore(true); fetchMessages(page + 1, true); } }}
+        onEndReached={() => { if (hasMore && !loadingMore) void fetchNextMessages(); }}
         onEndReachedThreshold={0.5}
         ListFooterComponent={
           loadingMore ? (

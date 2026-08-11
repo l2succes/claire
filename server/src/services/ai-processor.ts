@@ -50,7 +50,9 @@ class AIProcessor {
   }
 
   /**
-   * Call the configured AI provider, with fallback to the other provider on failure.
+   * Call the configured AI provider, with fallback only when the fallback is
+   * actually configured. This keeps a provider outage from being obscured by
+   * a misleading "Kimi not configured" error.
    */
   get isConfigured(): boolean {
     return !!(this.bedrock || this.kimiClient);
@@ -89,16 +91,32 @@ class AIProcessor {
       return completion.choices[0].message.content || '{}';
     };
 
-    const [primary, fallback] =
-      provider === 'bedrock' ? [callBedrock, callKimi] : [callKimi, callBedrock];
+    const primary = provider === 'bedrock' ? callBedrock : callKimi;
+    const fallback = provider === 'bedrock' ? callKimi : callBedrock;
+    const fallbackName = provider === 'bedrock' ? 'kimi' : 'bedrock';
 
     try {
       return await primary();
     } catch (err) {
-      logger.warn(`Primary AI provider (${provider}) failed, trying fallback:`, (err as Error).message);
+      const message = (err as Error).message || String(err);
+      if (!this.kimiClient && provider === 'bedrock') {
+        logger.error(`AI provider bedrock failed and no fallback is configured: ${message}`);
+        throw new Error(`AI_PROVIDER_UNAVAILABLE:bedrock:${message}`);
+      }
+      if (!this.bedrock && provider !== 'bedrock') {
+        logger.error(`AI provider kimi failed and no fallback is configured: ${message}`);
+        throw new Error(`AI_PROVIDER_UNAVAILABLE:kimi:${message}`);
+      }
+      logger.warn(`Primary AI provider (${provider}) failed; trying ${fallbackName}: ${message}`);
     }
 
-    return await fallback();
+    try {
+      return await fallback();
+    } catch (err) {
+      const message = (err as Error).message || String(err);
+      logger.error(`AI fallback provider ${fallbackName} failed: ${message}`);
+      throw new Error(`AI_PROVIDER_UNAVAILABLE:${provider}:${message}`);
+    }
   }
 
   /**

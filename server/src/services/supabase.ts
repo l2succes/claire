@@ -42,6 +42,38 @@ export const authHelpers = {
   },
 
   /**
+   * Keep the application profile row in sync with Supabase Auth. Some OAuth
+   * providers create auth.users without going through Claire's email signup
+   * flow, so the public.users row may not exist when the first platform event
+   * arrives.
+   */
+  async ensureUserProfile(user: {
+    id: string;
+    email?: string | null;
+    user_metadata?: Record<string, unknown> | null;
+  }) {
+    if (!user.email) {
+      throw new Error(`Authenticated user ${user.id} has no email address`);
+    }
+
+    const metadata = user.user_metadata || {};
+    const { error } = await supabase.from('users').upsert(
+      {
+        id: user.id,
+        email: user.email,
+        name: metadata.name || metadata.full_name || null,
+        avatar_url: metadata.avatar_url || metadata.picture || null,
+      },
+      { onConflict: 'id', ignoreDuplicates: true },
+    );
+
+    if (error) {
+      logger.error('Failed to ensure user profile:', error);
+      throw error;
+    }
+  },
+
+  /**
    * Create a new user
    */
   async createUser(email: string, password: string, metadata?: any) {

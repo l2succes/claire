@@ -159,7 +159,12 @@ router.get('/:platform/status', async (req: Request, res: Response) => {
       });
     }
 
-    const sessions = await adapter.getUserSessions(userId);
+    // Matrix uses one adapter for several bridge platforms. Filter here so
+    // /platforms/whatsapp/status can never make Telegram or Instagram appear
+    // connected in the client cache.
+    const sessions = (await adapter.getUserSessions(userId)).filter(
+      (session) => session.platform === platform,
+    );
 
     // Disable caching so polling always gets fresh session state / QR codes
     res.setHeader('Cache-Control', 'no-store');
@@ -171,6 +176,7 @@ router.get('/:platform/status', async (req: Request, res: Response) => {
         id: s.id,
         platform: s.platform,
         status: s.status,
+        authMethod: s.authMethod,
         platformUserId: s.platformUserId,
         platformUsername: s.platformUsername,
         phoneNumber: s.phoneNumber,
@@ -480,6 +486,50 @@ router.post('/:platform/connect', async (req: Request, res: Response) => {
       });
     }
 
+    // Connection creation is idempotent per user and platform. This is the
+    // server-side authority that protects against stale mobile caches, rapid
+    // taps, and two clients opening the login screen at the same time.
+    const existingSessions = (await adapter.getUserSessions(userId)).filter(
+      (existing) => existing.platform === platform,
+    );
+    const connectedSession = existingSessions.find(
+      (existing) => existing.status === PlatformStatus.CONNECTED,
+    );
+    if (connectedSession) {
+      return res.status(409).json({
+        success: false,
+        code: 'already_connected',
+        error: `${platform} is already connected`,
+        session: {
+          id: connectedSession.id,
+          platform: connectedSession.platform,
+          status: connectedSession.status,
+          authMethod: connectedSession.authMethod,
+        },
+      });
+    }
+
+    const resumableSession = existingSessions.find((existing) => (
+      existing.status === PlatformStatus.AWAITING_AUTH
+      || existing.status === PlatformStatus.AUTHENTICATING
+      || existing.status === PlatformStatus.RECONNECTING
+      || existing.status === PlatformStatus.INITIALIZING
+    ));
+    if (resumableSession) {
+      const authData = await adapter.getAuthData(resumableSession.id);
+      return res.json({
+        success: true,
+        resumed: true,
+        session: {
+          id: resumableSession.id,
+          platform: resumableSession.platform,
+          status: resumableSession.status,
+          authMethod: resumableSession.authMethod,
+        },
+        authData,
+      });
+    }
+
     // Generate session ID if not provided
     const newSessionId = sessionId || `${platform}-${userId}-${Date.now()}`;
 
@@ -501,6 +551,33 @@ router.post('/:platform/connect', async (req: Request, res: Response) => {
         session.id,
         pairingCode ? { pairingCode } : undefined
       );
+
+      if (codeStep.type === 'display_and_wait') {
+        // This is a long-poll request by design. The bridge only keeps the
+        // pairing process alive while this endpoint is being held open.
+        void whatsappBridgeClient
+          .waitForDisplayAndWait(flow.login_id, codeStep.step_id, codeStep.txn_id)
+          .then(async (result) => {
+            if (result.type === 'complete') {
+              await (adapter as MatrixBridgeAdapter).markSessionConnected(
+                session.id,
+                result.complete?.user_login_id
+              );
+              logger.info(`WhatsApp login complete for session ${session.id}`);
+              return;
+            }
+
+            await (adapter as MatrixBridgeAdapter).markSessionFailed(
+              session.id,
+              `WhatsApp login returned an unexpected ${result.type} step`
+            );
+          })
+          .catch(async (error) => {
+            const message = (error as Error).message || 'WhatsApp login failed';
+            logger.error(`WhatsApp pairing flow failed for session ${session.id}:`, error);
+            await (adapter as MatrixBridgeAdapter).markSessionFailed(session.id, message);
+          });
+      }
 
       return res.json({
         success: true,
@@ -727,8 +804,16 @@ router.post('/:platform/reconnect', async (req: Request, res: Response) => {
       success: true,
       session: {
         id: updatedSession?.id,
+        platform: updatedSession?.platform,
         status: updatedSession?.status,
+        authMethod: updatedSession?.authMethod,
+        platformUserId: updatedSession?.platformUserId,
+        platformUsername: updatedSession?.platformUsername,
+        phoneNumber: updatedSession?.phoneNumber,
+        createdAt: updatedSession?.createdAt,
         lastConnectedAt: updatedSession?.lastConnectedAt,
+        error: updatedSession?.error,
+        authData: updatedSession?.authData,
       },
     });
   } catch (error) {

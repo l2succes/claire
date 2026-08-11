@@ -11,6 +11,7 @@ import { router } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
 import { supabase } from '../../services/supabase';
 import { API_BASE_URL } from '../../services/platforms';
+import { requestWebNotificationPermission, supportsWebNotifications } from '../../services/notifications';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -219,6 +220,15 @@ export default function NotificationsSettingsScreen() {
     }
   };
 
+  const handleEnableBrowserNotifications = async () => {
+    const permission = await requestWebNotificationPermission();
+    if (permission === 'granted') {
+      Alert.alert('Browser notifications enabled', 'Claire will alert you about new messages while this web app is open.');
+    } else if (permission !== 'unsupported') {
+      Alert.alert('Browser notifications are off', 'Enable notifications for Claire in your browser settings to receive message alerts.');
+    }
+  };
+
   if (loading) {
     return (
       <View className="flex-1 items-center justify-center bg-gray-50 dark:bg-gray-900">
@@ -280,6 +290,19 @@ export default function NotificationsSettingsScreen() {
           testID="notif-toggle-messages"
           disabled={dndActive}
         />
+
+        {supportsWebNotifications() && (
+          <TouchableOpacity
+            onPress={handleEnableBrowserNotifications}
+            className="bg-white dark:bg-gray-800 rounded-xl px-4 py-3 mt-3"
+            testID="notif-enable-browser"
+          >
+            <Text className="font-semibold text-gray-900 dark:text-white">Enable browser notifications</Text>
+            <Text className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              Receive alerts while Claire is open in this browser.
+            </Text>
+          </TouchableOpacity>
+        )}
         <ToggleRow
           label="Promise reminders"
           value={prefs.notify_promises}

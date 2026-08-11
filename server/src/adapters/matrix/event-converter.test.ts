@@ -376,6 +376,15 @@ describe('Double puppeting — WhatsApp DM', () => {
   it('isDoublePuppetUser: returns false when matrixUserId differs from sender', () => {
     expect(userMapper.isDoublePuppetUser('@other_user:claire.local', '@claire_bot:claire.local')).toBe(false);
   });
+
+  it('does not classify an unknown real Matrix user as self when identity is missing', () => {
+    expect(userMapper.isDoublePuppetUser('@other_user:claire.local')).toBe(false);
+  });
+
+  it('derives exact self ghost IDs from the session platform identity', () => {
+    expect(userMapper.selfGhostUserIds(Platform.WHATSAPP, '+15166100494')).toContain(selfGhost);
+    expect(userMapper.selfGhostUserIds(Platform.WHATSAPP, 'lid-12345')).toContain('@whatsapp_lid-12345:claire.local');
+  });
 });
 
 describe('Double puppeting — Telegram DM', () => {

@@ -15,8 +15,10 @@ export enum Platform {
 export enum PlatformStatus {
   INITIALIZING = 'initializing',
   AWAITING_AUTH = 'awaiting_auth',
+  AUTHENTICATING = 'authenticating',
   CONNECTED = 'connected',
   DISCONNECTED = 'disconnected',
+  RECONNECTING = 'reconnecting',
   FAILED = 'failed',
 }
 
@@ -98,6 +100,7 @@ export interface AuthFlowState {
 
 export interface ConnectPlatformResponse {
   success: boolean;
+  resumed?: boolean;
   session: {
     id: string;
     platform: Platform;
