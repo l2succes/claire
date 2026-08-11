@@ -407,6 +407,16 @@ describe('Double puppeting — WhatsApp DM', () => {
     expect(userMapper.selfGhostUserIds(Platform.WHATSAPP, '+15166100494')).toContain(selfGhost);
     expect(userMapper.selfGhostUserIds(Platform.WHATSAPP, 'lid-12345')).toContain('@whatsapp_lid-12345:claire.local');
   });
+
+  it('normalizes a WhatsApp phone JID returned by provisioning', () => {
+    expect(userMapper.selfGhostUserIds(Platform.WHATSAPP, '15166100494@s.whatsapp.net'))
+      .toContain(selfGhost);
+  });
+
+  it('normalizes a WhatsApp LID JID returned by provisioning', () => {
+    expect(userMapper.selfGhostUserIds(Platform.WHATSAPP, '12345@lid'))
+      .toContain('@whatsapp_lid-12345:claire.local');
+  });
 });
 
 describe('Double puppeting — Telegram DM', () => {

@@ -666,9 +666,14 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
 
     const platform = this.sessionPlatforms.get(sessionId);
     if (platformUserId && platform) {
-      const selfGhostId = this.userMapper.platformContactToGhostUser(platformUserId, platform);
-      this.sessionSelfGhostIds.set(sessionId, selfGhostId);
-      (session as any).selfGhostId = selfGhostId;
+      // Provisioning can return a WhatsApp phone/LID JID rather than the
+      // Matrix ghost localpart. Persist the canonical derived alias; the full
+      // exact alias set remains available through getSelfGhostIds().
+      const selfGhostId = this.userMapper.selfGhostUserIds(platform, platformUserId)[0];
+      if (selfGhostId) {
+        this.sessionSelfGhostIds.set(sessionId, selfGhostId);
+        (session as any).selfGhostId = selfGhostId;
+      }
     }
 
     // Track real Matrix user ID for double-puppeting

@@ -99,16 +99,39 @@ export class MatrixUserMapper {
   /** Return the exact ghost IDs that can represent this account. */
   selfGhostUserIds(platform: Platform, platformContactId?: string): string[] {
     if (!platformContactId) return [];
-    const normalized = platformContactId.replace(/^\+/, '');
-    const ids = new Set<string>([
-      this.platformContactToGhostUser(normalized, platform),
-      this.platformContactToGhostUser(platformContactId, platform),
-    ]);
-    // Some bridge versions persist the WhatsApp LID as the platform ID.
-    // Accept it only when it is explicitly supplied as the session identity;
-    // never treat an arbitrary WhatsApp ghost as self.
-    if (platform === Platform.WHATSAPP && normalized.startsWith('lid-')) {
-      ids.add(this.platformContactToGhostUser(normalized, platform));
+    const raw = platformContactId.trim();
+    const ids = new Set<string>();
+    const add = (id: string) => {
+      if (id) ids.add(this.platformContactToGhostUser(id, platform));
+    };
+
+    // Most platforms use a plain numeric identifier. WhatsApp's provisioning
+    // endpoint, however, may report the same account as a phone JID
+    // (`15165551212@s.whatsapp.net`) or an LID JID (`12345@lid`). Matrix ghost
+    // localparts are normalized, so retain only the exact normalized aliases
+    // derived from the connected session — never infer that an arbitrary ghost
+    // in a room belongs to the current user.
+    add(raw);
+    add(raw.replace(/^\+/, ''));
+
+    if (platform === Platform.WHATSAPP) {
+      const jid = raw.match(/^([^@/:]+)(?::\d+)?@(s\.whatsapp\.net|c\.us|lid)$/i);
+      if (jid) {
+        const [, user, server] = jid;
+        if (server.toLowerCase() === 'lid') {
+          add(`lid-${user}`);
+        } else {
+          add(user.replace(/^\+/, ''));
+        }
+      }
+
+      // Some mautrix versions return a bare LID while others prefix it.
+      // Include both documented Matrix ghost spellings for that same, explicit
+      // session identity.
+      const lid = raw.match(/^(?:lid[-:]?)?([^@/:]+)$/i);
+      if (raw.toLowerCase().startsWith('lid-') || raw.toLowerCase().startsWith('lid:')) {
+        add(`lid-${lid?.[1] || raw.replace(/^lid[-:]?/i, '')}`);
+      }
     }
     return [...ids];
   }
