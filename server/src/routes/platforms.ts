@@ -17,9 +17,17 @@ import { requireAuth } from '../middleware/auth';
 import { BridgeHttpClient } from '../adapters/matrix/bridge-http-client';
 import { loginWithCredentials, submitTwoFactorCode } from '../services/instagram-login';
 
+// Railway services cannot reach each other through localhost. Keep localhost
+// for Docker/local development, but use the private-network bridge address in
+// Railway unless an explicit URL is configured.
+const defaultInstagramBridgeUrl =
+  process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID
+    ? 'http://mautrixinstagram.railway.internal:29319'
+    : 'http://localhost:29319';
+
 const instagramBridgeClient = new BridgeHttpClient(
-  process.env.INSTAGRAM_BRIDGE_URL || 'http://localhost:29319',
-  process.env.INSTAGRAM_BRIDGE_SECRET || '',
+  process.env.INSTAGRAM_BRIDGE_URL || defaultInstagramBridgeUrl,
+  process.env.INSTAGRAM_BRIDGE_SECRET || process.env.IG_PROVISIONING_SECRET || '',
   process.env.INSTAGRAM_BRIDGE_USER_ID || '@claire_bot:claire.local'
 );
 

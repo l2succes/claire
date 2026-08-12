@@ -38,8 +38,22 @@ async function cleanupPendingLogin(loginId: string): Promise<void> {
   pendingLogins.delete(loginId);
 }
 
+export function resolveInstagramBrowserPath(
+  env: NodeJS.ProcessEnv = process.env,
+  platform = process.platform,
+): string {
+  // Railway's production image installs Chromium at /usr/bin/chromium. The
+  // previous macOS-only fallback made every web Instagram sign-in fail before
+  // it even reached Instagram.
+  if (env.CHROME_PATH) return env.CHROME_PATH;
+  if (env.PUPPETEER_EXECUTABLE_PATH) return env.PUPPETEER_EXECUTABLE_PATH;
+  return platform === 'darwin'
+    ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+    : '/usr/bin/chromium';
+}
+
 async function launchBrowser(): Promise<Browser> {
-  const chromePath = process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+  const chromePath = resolveInstagramBrowserPath();
 
   return puppeteer.launch({
     headless: true,
