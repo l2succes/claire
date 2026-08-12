@@ -336,38 +336,11 @@ router.post('/instagram/login/credentials', async (req: Request, res: Response) 
     const result = await loginWithCredentials(username, password);
 
     if (result.status === 'success' && result.cookies) {
-      // Start a bridge login flow and submit the cookies immediately
-      try {
-        const flows = await instagramBridgeClient.getLoginFlows();
-        const flowId = flows[0]?.id;
-        if (!flowId) {
-          return res.status(502).json({ success: false, error: 'No login flows available from bridge' });
-        }
-
-        const step = await instagramBridgeClient.startLogin(flowId);
-        const bridgeResult = await instagramBridgeClient.submitCookies(
-          step.login_id, step.step_id, result.cookies
-        );
-
-        if (bridgeResult.type === 'complete') {
-          const userLoginId = bridgeResult.complete?.user_login_id;
-          const sessionId = `instagram-${userId}-${Date.now()}`;
-
-          const adapter = platformManager.getAdapter(Platform.INSTAGRAM);
-          if (adapter) {
-            await adapter.createSession(userId, sessionId, { platform: Platform.INSTAGRAM } as never);
-            const matrixAdapter = adapter as MatrixBridgeAdapter;
-            await matrixAdapter.markSessionConnected(sessionId, userLoginId);
-          }
-
-          return res.json({ success: true, cookies: result.cookies, sessionId, userLoginId });
-        }
-
-        return res.json({ success: true, cookies: result.cookies, bridgeStep: bridgeResult });
-      } catch (bridgeError) {
-        logger.error('Bridge submission failed after credential login:', bridgeError);
-        return res.json({ success: true, cookies: result.cookies });
-      }
+      // The client already created a provisioning login in /login/start before
+      // opening this credential form. Return cookies to complete *that same*
+      // flow via /login/submit. Starting another bridge login here left the
+      // original session pending and made a successful sign-in look failed.
+      return res.json({ success: true, cookies: result.cookies });
     }
 
     if (result.status === 'two_factor_required') {
@@ -416,37 +389,9 @@ router.post('/instagram/login/2fa', async (req: Request, res: Response) => {
     const result = await submitTwoFactorCode(loginId, code);
 
     if (result.status === 'success' && result.cookies) {
-      try {
-        const flows = await instagramBridgeClient.getLoginFlows();
-        const flowId = flows[0]?.id;
-        if (!flowId) {
-          return res.status(502).json({ success: false, error: 'No login flows available from bridge' });
-        }
-
-        const step = await instagramBridgeClient.startLogin(flowId);
-        const bridgeResult = await instagramBridgeClient.submitCookies(
-          step.login_id, step.step_id, result.cookies
-        );
-
-        if (bridgeResult.type === 'complete') {
-          const userLoginId = bridgeResult.complete?.user_login_id;
-          const sessionId = `instagram-${userId}-${Date.now()}`;
-
-          const adapter = platformManager.getAdapter(Platform.INSTAGRAM);
-          if (adapter) {
-            await adapter.createSession(userId, sessionId, { platform: Platform.INSTAGRAM } as never);
-            const matrixAdapter = adapter as MatrixBridgeAdapter;
-            await matrixAdapter.markSessionConnected(sessionId, userLoginId);
-          }
-
-          return res.json({ success: true, cookies: result.cookies, sessionId, userLoginId });
-        }
-
-        return res.json({ success: true, cookies: result.cookies, bridgeStep: bridgeResult });
-      } catch (bridgeError) {
-        logger.error('Bridge submission failed after 2FA:', bridgeError);
-        return res.json({ success: true, cookies: result.cookies });
-      }
+      // Continue the provisioning session from /login/start. See the matching
+      // credential path above for why a second bridge login is incorrect.
+      return res.json({ success: true, cookies: result.cookies });
     }
 
     return res.status(400).json({
