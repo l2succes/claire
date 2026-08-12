@@ -21,7 +21,7 @@ import { loginWithCredentials, submitTwoFactorCode } from '../services/instagram
 // for Docker/local development, but use the private-network bridge address in
 // Railway unless an explicit URL is configured.
 const defaultInstagramBridgeUrl =
-  process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID
+  process.env.NODE_ENV === 'production'
     ? 'http://mautrixinstagram.railway.internal:29319'
     : 'http://localhost:29319';
 

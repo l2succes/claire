@@ -32,6 +32,7 @@ export interface LoginStepResponse {
 
 export class BridgeHttpClient {
   private readonly provisioningBase: string;
+  private static readonly REQUEST_TIMEOUT_MS = 12_000;
 
   constructor(
     bridgeUrl: string,
@@ -52,14 +53,21 @@ export class BridgeHttpClient {
       if (value) params.set(key, value);
     }
     const url = `${this.provisioningBase}${path}?${params.toString()}`;
-    const res = await fetch(url, {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${this.sharedSecret}`,
-      },
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-    });
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.sharedSecret}`,
+        },
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+        signal: AbortSignal.timeout(BridgeHttpClient.REQUEST_TIMEOUT_MS),
+      });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Unknown network error';
+      throw new Error(`Bridge provisioning request to ${this.provisioningBase} failed: ${detail}`);
+    }
 
     const text = await res.text();
     let json: unknown;
