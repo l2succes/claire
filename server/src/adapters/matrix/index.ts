@@ -156,7 +156,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
   private async repairPersistedMessage(message: UnifiedMessage): Promise<void> {
     const { data: existing, error: lookupError } = await supabase
       .from('messages')
-      .select('id, metadata')
+      .select('id, chat_id, metadata')
       .eq('user_id', message.userId)
       .eq('platform_message_id', message.platformMessageId)
       .maybeSingle();
@@ -186,6 +186,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
         contact_name: message.isFromMe ? null : (message.senderName || null),
         contact_phone: message.isFromMe ? null : (contact?.platformContactId || null),
         contact_id: contactId,
+        is_group: message.chatType === 'group',
         type: message.contentType,
         content_type: message.contentType,
         metadata,
@@ -194,6 +195,16 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
       })
       .eq('id', existing.id);
     if (error) this.log('warn', `Failed to repair Matrix message ${message.platformMessageId}`, { error });
+    else {
+      const { error: chatError } = await supabase
+        .from('chats')
+        .update({
+          is_group: message.chatType === 'group',
+          name: message.chatName || message.chatId,
+        })
+        .eq('id', existing.chat_id);
+      if (chatError) this.log('warn', `Failed to repair Matrix chat for ${message.platformMessageId}`, { error: chatError });
+    }
   }
 
   constructor(private config: MatrixConfig) {
