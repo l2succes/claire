@@ -45,6 +45,11 @@ initSentry();
 const app = express();
 const PORT = config.PORT;
 
+// Railway terminates TLS at its edge and forwards the client address. Trust its
+// immediately preceding proxy so rate limiting can use the real client IP and
+// no longer emits noisy X-Forwarded-For validation errors.
+app.set('trust proxy', 1);
+
 async function notifyIncomingMessage(message: {
   userId: string;
   chatId: string;

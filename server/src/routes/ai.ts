@@ -304,7 +304,7 @@ router.get('/morning-brief',
       const { data: rows, error } = await supabase
         .from('messages')
         .select(`id, chat_id, content, timestamp, from_me, is_group, contact_name, chat_name, platform,
-                 chats(name, platform_chat_id)`)
+                 chats!messages_chat_id_fkey(name, platform_chat_id)`)
         .eq('user_id', userId)
         .eq('from_me', false)
         .gte('timestamp', since)
@@ -372,7 +372,13 @@ router.get('/morning-brief',
         data: { brief_text, urgent_messages },
       });
     } catch (error) {
-      logger.error('Error building morning brief:', error);
+      const databaseError = error as { code?: string; message?: string; details?: string; hint?: string };
+      logger.error('Error building morning brief:', {
+        code: databaseError.code,
+        message: databaseError.message,
+        details: databaseError.details,
+        hint: databaseError.hint,
+      });
       return res.status(500).json({ success: false, error: 'Failed to build morning brief' });
     }
   }

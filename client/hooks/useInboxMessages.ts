@@ -48,6 +48,22 @@ interface RawMessage {
 
 type InboxQueryData = InfiniteData<MessagePage, number>;
 
+function inboxTrace(event: string, details: Record<string, unknown> = {}) {
+  // Keep useful browser/native diagnostics without logging full message bodies
+  // or the complete authenticated user id.
+  console.info(`[Inbox] ${event}`, details);
+}
+
+function inboxError(event: string, error: { code?: string; message?: string; details?: string; hint?: string }, details: Record<string, unknown> = {}) {
+  console.error(`[Inbox] ${event}`, {
+    ...details,
+    code: error.code,
+    message: error.message,
+    details: error.details,
+    hint: error.hint,
+  });
+}
+
 function conversationKey(chatId: string, platform?: Platform) {
   return `${platform || Platform.WHATSAPP}:${chatId}`;
 }
@@ -131,22 +147,30 @@ export function useInboxMessages(userId?: string) {
       const pageSize = 20;
       const from = pageParam * pageSize;
       const now = new Date().toISOString();
+      const userTraceId = userId.slice(0, 8);
+      inboxTrace('fetch:start', { page: pageParam, pageSize, user: userTraceId });
       const { data, error, count } = await supabase
         .from('messages')
         .select(`id, content, timestamp, from_me, is_group, status, platform,
           chat_id, contact_phone, contact_name, snoozed_until,
-          chats (name, platform_chat_id, unread_count), ai_suggestions (id, confidence)`, { count: 'exact' })
+          chats!messages_chat_id_fkey (name, platform_chat_id, unread_count), ai_suggestions (id, confidence)`, { count: 'exact' })
         .eq('user_id', userId)
         .or(`snoozed_until.is.null,snoozed_until.lte.${now}`)
         .order('timestamp', { ascending: false })
         .range(from, from + pageSize - 1);
-      if (error) throw error;
+      if (error) {
+        inboxError('fetch:messages-failed', error, { page: pageParam, user: userTraceId });
+        throw error;
+      }
       const { data: contacts, error: contactsError } = await supabase
         .from('contacts')
         .select('platform, platform_contact_id, avatar_url')
         .eq('user_id', userId)
         .not('avatar_url', 'is', null);
-      if (contactsError) throw contactsError;
+      if (contactsError) {
+        inboxError('fetch:contacts-failed', contactsError, { page: pageParam, user: userTraceId });
+        throw contactsError;
+      }
       const avatars = new Map(
         (contacts || []).map((contact) => [
           `${contact.platform}:${contact.platform_contact_id}`,
@@ -159,7 +183,9 @@ export function useInboxMessages(userId?: string) {
           avatar_url: avatars.get(`${row.platform || Platform.WHATSAPP}:${row.contact_phone || ''}`) || null,
         },
       })) as RawMessage[];
-      return { messages: normalizeRows(rows), hasMore: count ? from + pageSize < count : false };
+      const messages = normalizeRows(rows);
+      inboxTrace('fetch:success', { page: pageParam, rows: rows.length, conversations: messages.length, total: count ?? null });
+      return { messages, hasMore: count ? from + pageSize < count : false };
     },
     getNextPageParam: (lastPage, allPages) => lastPage.hasMore ? allPages.length : undefined,
   });
@@ -259,6 +285,7 @@ export function useInboxMessages(userId?: string) {
       .channel(`messages-feed-${userId}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `user_id=eq.${userId}` }, ({ new: row }) => {
         const message = row as RawMessage & { id: string };
+        inboxTrace('realtime:message-insert', { chatId: message.chat_id, platform: message.platform, fromMe: message.from_me });
         patchRealtimeMessage(message);
         if (!message.from_me) {
           notifyWebMessageUpdate(
@@ -291,11 +318,12 @@ export function useInboxMessages(userId?: string) {
         if (suggestion.message_id) markAiResponse(suggestion.message_id);
       })
       .subscribe((status, error) => {
+        inboxTrace('realtime:status', { status, hasError: !!error });
         if (status === 'SUBSCRIBED') {
           startFallback(60_000);
           return;
         }
-        console.warn('[Realtime] Inbox subscription unavailable:', status, error ?? '');
+        console.warn('[Inbox] realtime subscription unavailable:', status, error ?? '');
         // Recover quickly while the socket is joining/reconnecting or the
         // server reports a subscription error.
         startFallback(10_000);

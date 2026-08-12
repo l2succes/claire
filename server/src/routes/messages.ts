@@ -191,7 +191,7 @@ router.get(
 
       const { data: message, error } = await supabase
         .from('messages')
-        .select('*, contact:contacts(*), chat:chats(*)')
+        .select('*, contact:contacts(*), chat:chats!messages_chat_id_fkey(*)')
         .eq('id', messageId)
         .eq('user_id', userId)
         .maybeSingle();

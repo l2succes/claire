@@ -127,7 +127,7 @@ export default function MessagesScreen() {
         .select(
           `id, content, timestamp, from_me, is_group, status, platform,
            chat_id, platform_message_id, contact_phone, contact_name,
-           chats (name, platform_chat_id),
+           chats!messages_chat_id_fkey (name, platform_chat_id),
            ai_suggestions (id, confidence)`,
           { count: 'exact' }
         )

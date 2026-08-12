@@ -20,7 +20,9 @@ interface IdRow {
 }
 
 // Columns selected for message reads (message + related contact/chat).
-const MESSAGE_SELECT = '*, contact:contacts(*), chat:chats(*)';
+// Be explicit about the child-to-parent relation. chats also stores a soft
+// read cursor, so relying on PostgREST's relationship inference is fragile.
+const MESSAGE_SELECT = '*, contact:contacts(*), chat:chats!messages_chat_id_fkey(*)';
 
 export class MessageIngestionService extends EventEmitter {
   private processingMessages: Set<string> = new Set();

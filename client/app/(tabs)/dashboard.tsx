@@ -125,6 +125,7 @@ export default function DashboardScreen() {
   const {
     messages,
     loading,
+    error: inboxError,
     hasMore,
     loadingMore,
     fetchMessages,
@@ -380,10 +381,12 @@ export default function DashboardScreen() {
           ) : null
         }
         ListEmptyComponent={
-          <View className="items-center py-16 px-8" testID="messages-empty">
+          <View className="items-center py-16 px-8" testID={inboxError ? 'messages-load-error' : 'messages-empty'}>
             <MessageCircle size={40} color="#9ca3af" />
             <Text className="text-gray-500 dark:text-gray-400 mt-3 text-center text-sm">
-              {searchQuery
+              {inboxError
+                ? 'Couldn’t load your messages.'
+                : searchQuery
                 ? 'No messages matching your search'
                 : platformFilter !== 'all'
                   ? `No ${PLATFORM_DISPLAY[platformFilter as Platform].name} messages`
@@ -391,7 +394,15 @@ export default function DashboardScreen() {
                     ? `No ${activeFilter} messages`
                     : 'No messages yet'}
             </Text>
-            {!searchQuery && activeFilter === 'all' && platformFilter === 'all' && !hasConnection && (
+            {inboxError ? (
+              <TouchableOpacity
+                testID="messages-retry"
+                onPress={() => void fetchMessages()}
+                className="mt-4 bg-indigo-600 px-6 py-2 rounded-full"
+              >
+                <Text className="text-white font-semibold text-sm">Try Again</Text>
+              </TouchableOpacity>
+            ) : !searchQuery && activeFilter === 'all' && platformFilter === 'all' && !hasConnection && (
               <TouchableOpacity
                 onPress={() => router.push('/(auth)/login')}
                 className="mt-4 bg-indigo-600 px-6 py-2 rounded-full"
