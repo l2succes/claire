@@ -174,6 +174,12 @@ export interface PlatformSession {
   platformUsername?: string;
   phoneNumber?: string;
 
+  /** Exact Matrix identities that can represent this connected account. */
+  selfGhostId?: string;
+  selfGhostIds?: string[];
+  /** Exact Matrix sender used only when double-puppeting is enabled. */
+  matrixUserId?: string;
+
   authData?: {
     qrCode?: string;
     pairingCode?: string;

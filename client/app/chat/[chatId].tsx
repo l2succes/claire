@@ -157,8 +157,20 @@ export default function ChatScreen() {
     }
   }, [chatId]);
 
+  const markConversationRead = useCallback(async () => {
+    if (!chatId) return;
+    const session = connectedSessions.find(
+      (candidate) => candidate.platform === (platform as Platform) && candidate.status === 'connected'
+    );
+    try {
+      await platformsApi.markChatRead(chatId, session?.id);
+    } catch (error) {
+      console.warn('Failed to mark conversation read:', error);
+    }
+  }, [chatId, platform, connectedSessions]);
+
   useEffect(() => {
-    fetchMessages();
+    fetchMessages().then(markConversationRead);
     fetchChatInfo();
     if (chatId) fetchConvSettings(chatId);
 
@@ -166,11 +178,13 @@ export default function ChatScreen() {
       .channel(`chat-${chatId}-${user?.id ?? 'anonymous'}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `chat_id=eq.${chatId}` },
         (payload) => {
+          const inserted = payload.new as ChatMessage;
           setMessages((prev) => {
             // Avoid duplicates (e.g. optimistic message already in list)
-            if (prev.some((m) => m.id === (payload.new as ChatMessage).id)) return prev;
-            return [...prev, payload.new as ChatMessage];
+            if (prev.some((m) => m.id === inserted.id)) return prev;
+            return [...prev, inserted];
           });
+          if (!inserted.from_me) void markConversationRead();
           setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
         }
       )
@@ -193,7 +207,7 @@ export default function ChatScreen() {
       });
 
     return () => { supabase.removeChannel(subscription); };
-  }, [chatId, user?.id, fetchMessages, fetchChatInfo]);
+  }, [chatId, user?.id, fetchMessages, fetchChatInfo, markConversationRead]);
 
   // Clear error when user starts typing
   useEffect(() => {

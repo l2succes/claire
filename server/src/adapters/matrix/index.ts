@@ -89,7 +89,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
 
   private getSelfGhostIds(sessionId: string, session: PlatformSession, platform: Platform): string[] {
     const known = this.sessionSelfGhostIds.get(sessionId);
-    const platformUserId = session.platformUserId;
+    const platformUserId = session.platformUserId || session.phoneNumber;
     const derived = this.userMapper.selfGhostUserIds(platform, platformUserId);
     // The identity returned by the bridge login is authoritative. Keep a
     // persisted ghost as an additional exact alias (not a fuzzy match) so a
@@ -97,9 +97,51 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     // into incoming ones after a restart.
     if (derived.length > 0 && known !== derived[0]) {
       this.sessionSelfGhostIds.set(sessionId, derived[0]);
-      (session as PlatformSession & { selfGhostId?: string }).selfGhostId = derived[0];
+      session.selfGhostId = derived[0];
     }
-    return [...new Set([...derived, ...(known ? [known] : [])])];
+    const configuredAliases = this.config.configuredSelfGhostIds?.[platform] || [];
+    return [...new Set([
+      ...derived,
+      ...(known ? [known] : []),
+      ...(session.selfGhostIds || []),
+      ...configuredAliases,
+    ])].filter((id) => this.userMapper.ghostUserToPlatformContact(id)?.platform === platform);
+  }
+
+  /**
+   * Ask the bridge to resolve the connected account's network ID to every
+   * exact Matrix ghost alias. This is essential for WhatsApp accounts that
+   * log in with a phone number but emit own-device messages as an LID ghost.
+   */
+  private async resolveAndPersistSelfGhostIds(
+    sessionId: string,
+    session: PlatformSession,
+    platform: Platform
+  ): Promise<string[]> {
+    const derived = this.getSelfGhostIds(sessionId, session, platform);
+    const platformUserId = session.platformUserId || session.phoneNumber;
+    if (!platformUserId || !this.config.resolveSelfGhostIds) {
+      session.selfGhostIds = derived;
+      return derived;
+    }
+
+    try {
+      const resolved = await this.config.resolveSelfGhostIds(platform, platformUserId);
+      const exactAliases = resolved.filter((id) => {
+        const contact = this.userMapper.ghostUserToPlatformContact(id);
+        return contact?.platform === platform;
+      });
+      const all = [...new Set([...derived, ...exactAliases])];
+      session.selfGhostIds = all;
+      await this.saveSessionToRedis(session);
+      if (exactAliases.length > 0) {
+        this.log('info', `Resolved self ghost aliases for ${sessionId}: ${exactAliases.join(', ')}`);
+      }
+      return all;
+    } catch (error) {
+      this.log('warn', `Could not resolve bridge identity aliases for ${sessionId}`, { error });
+      return derived;
+    }
   }
 
   private mediaProxyPath(mediaUrl: unknown): string | null {
@@ -477,21 +519,23 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     }
     if (!matchingSessionId) return;
 
-    const selfGhostId = this.sessionSelfGhostIds.get(matchingSessionId);
+    const matchingSession = this.sessions.get(matchingSessionId);
+    if (!matchingSession) return;
+    const selfGhostIds = this.getSelfGhostIds(matchingSessionId, matchingSession, platform);
 
     // For group rooms use room.roomId as stable chatId to avoid collision with DMs.
     // Exclude the self ghost user (present in groups but not DMs) to avoid false positives.
     // Strategy: prefer phone-based contacts for counting (ignore LID duplicates of the same person).
     // If ALL contacts are LID-based (mautrix v2 all-LID group), fall back to counting LID contacts.
     const allGhostContacts = room.getJoinedMembers()
-      .filter(m => !this.userMapper.isBridgeBot(m.userId) && m.userId !== selfGhostId)
+      .filter(m => !this.userMapper.isBridgeBot(m.userId) && !selfGhostIds.includes(m.userId))
       .map(m => this.userMapper.ghostUserToPlatformContact(m.userId))
       .filter((c): c is NonNullable<typeof c> => c !== null && c.platform === platform);
 
     const phoneContacts = allGhostContacts.filter(c => !c.platformContactId.startsWith('lid-'));
     const contactsForCounting = phoneContacts.length > 0 ? phoneContacts : allGhostContacts;
     const isGroup = contactsForCounting.length > 1;
-    const chatId = isGroup ? room.roomId : this.roomMapper.getPrimaryChatParticipant(room, selfGhostId);
+    const chatId = isGroup ? room.roomId : this.roomMapper.getPrimaryChatParticipant(room, selfGhostIds);
     if (!chatId) return;
 
     this.roomMapper.registerRoom(room.roomId, platform, chatId, matchingSessionId);
@@ -672,7 +716,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
       const selfGhostId = this.userMapper.selfGhostUserIds(platform, platformUserId)[0];
       if (selfGhostId) {
         this.sessionSelfGhostIds.set(sessionId, selfGhostId);
-        (session as any).selfGhostId = selfGhostId;
+        session.selfGhostId = selfGhostId;
       }
     }
 
@@ -681,11 +725,14 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
       const matrixUserId = this.matrixClient?.getUserId();
       if (matrixUserId) {
         this.sessionMatrixUserIds.set(sessionId, matrixUserId);
-        (session as any).matrixUserId = matrixUserId;
+        session.matrixUserId = matrixUserId;
       }
     }
 
     this.sessions.set(sessionId, session);
+    if (platform) {
+      await this.resolveAndPersistSelfGhostIds(sessionId, session, platform);
+    }
     await this.saveSessionToRedis(session);
     this.bridgeAuthManager.markAuthenticated(sessionId);
     this.emitPlatformEvent('session_ready', sessionId, {});
@@ -1055,7 +1102,8 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
       // Check if room is for this platform
       if (this.roomMapper.detectRoomPlatform(room) !== platform) continue;
 
-      const chatId = this.roomMapper.getPrimaryChatParticipant(room);
+      const selfGhostIds = this.getSelfGhostIds(sessionId, session, platform);
+      const chatId = this.roomMapper.getPrimaryChatParticipant(room, selfGhostIds);
       if (!chatId) continue;
 
       chats.push({
@@ -1145,9 +1193,10 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
           const platform = (session as PlatformSession & { platform?: Platform }).platform;
           if (platform) {
             this.sessionPlatforms.set(sessionId, platform);
+            await this.resolveAndPersistSelfGhostIds(sessionId, session, platform);
           }
           // Restore self ghost ID from persisted session data
-          const selfGhostId = (session as any).selfGhostId;
+          const selfGhostId = session.selfGhostId;
           if (selfGhostId) {
             this.sessionSelfGhostIds.set(sessionId, selfGhostId);
             this.log('info', `Restored selfGhostId for session ${sessionId}: ${selfGhostId}`);
@@ -1156,7 +1205,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
           }
           // Restore real Matrix user ID for double-puppeting
           if (this.doublePuppetEnabled) {
-            const matrixUserId = (session as any).matrixUserId || this.matrixClient?.getUserId();
+            const matrixUserId = session.matrixUserId || this.matrixClient?.getUserId();
             if (matrixUserId) {
               this.sessionMatrixUserIds.set(sessionId, matrixUserId);
               this.log('info', `Restored matrixUserId for session ${sessionId}: ${matrixUserId}`);
@@ -1312,6 +1361,11 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
           selfGhostIds,
           matrixUserId
         );
+
+        unifiedMessage.platformMetadata = {
+          ...(unifiedMessage.platformMetadata || {}),
+          syncKind: 'backfill',
+        };
 
         await this.repairPersistedMessage(unifiedMessage);
         this.emitPlatformEvent('message', sessionId, unifiedMessage);

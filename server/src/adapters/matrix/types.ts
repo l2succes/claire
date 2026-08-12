@@ -15,6 +15,12 @@ export interface MatrixConfig {
   serverName: string;
   adminAccessToken?: string;
   botUserId?: string;
+  /** Deployment-known exact aliases, used for bridge identities such as WhatsApp LIDs. */
+  configuredSelfGhostIds?: Partial<Record<Platform, string[]>>;
+  resolveSelfGhostIds?: (
+    platform: Platform,
+    platformUserId: string
+  ) => Promise<string[]>;
 }
 
 /**

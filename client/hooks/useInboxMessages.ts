@@ -41,7 +41,7 @@ interface RawMessage {
   contact_phone?: string;
   contact_name?: string;
   snoozed_until?: string | null;
-  chats?: { name?: string; platform_chat_id?: string } | null;
+  chats?: { name?: string; platform_chat_id?: string; unread_count?: number } | null;
   contacts?: { avatar_url?: string | null } | null;
   ai_suggestions?: Array<{ id: string; confidence?: number }>;
 }
@@ -81,7 +81,7 @@ function normalizeRows(rows: RawMessage[]) {
       chat_id: chatId,
       contact_phone: row.contact_phone,
       has_ai_response: (row.ai_suggestions?.length ?? 0) > 0,
-      unread_count: 0,
+      unread_count: row.chats?.unread_count ?? 0,
       platform,
       snoozed_until: row.snoozed_until ?? null,
     });
@@ -103,7 +103,7 @@ function sameMessage(a: InboxMessage, b: InboxMessage) {
     a.from_me === b.from_me && a.status === b.status && a.contact_name === b.contact_name &&
     a.contact_avatar === b.contact_avatar && a.chat_name === b.chat_name &&
     a.contact_phone === b.contact_phone && a.has_ai_response === b.has_ai_response &&
-    a.snoozed_until === b.snoozed_until;
+    a.snoozed_until === b.snoozed_until && a.unread_count === b.unread_count;
 }
 
 function sortMessages(messages: InboxMessage[]) {
@@ -131,7 +131,7 @@ export function useInboxMessages(userId?: string) {
         .from('messages')
         .select(`id, content, timestamp, from_me, is_group, status, platform,
           chat_id, contact_phone, contact_name, snoozed_until,
-          chats (name, platform_chat_id), ai_suggestions (id, confidence)`, { count: 'exact' })
+          chats (name, platform_chat_id, unread_count), ai_suggestions (id, confidence)`, { count: 'exact' })
         .eq('user_id', userId)
         .or(`snoozed_until.is.null,snoozed_until.lte.${now}`)
         .order('timestamp', { ascending: false })
@@ -191,6 +191,9 @@ export function useInboxMessages(userId?: string) {
             status: row.status ?? message.status,
             contact_name: row.contact_name || message.contact_name,
             contact_phone: row.contact_phone || message.contact_phone,
+            unread_count: row.from_me === false
+              ? (message.unread_count || 0) + 1
+              : message.unread_count,
             platform,
           };
           return sameMessage(message, next) ? message : next;
@@ -262,6 +265,23 @@ export function useInboxMessages(userId?: string) {
         }
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages', filter: `user_id=eq.${userId}` }, ({ new: row }) => patchRealtimeMessage(row as RawMessage & { id: string }))
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'chats', filter: `user_id=eq.${userId}` }, ({ new: row }) => {
+        const chat = row as { id: string; platform?: Platform; unread_count?: number };
+        const key = conversationKey(chat.id, chat.platform || Platform.WHATSAPP);
+        queryClient.setQueryData<InboxQueryData>(queryKey, (old) => {
+          if (!old) return old;
+          let changed = false;
+          const pages = old.pages.map((page) => ({
+            ...page,
+            messages: page.messages.map((message) => {
+              if (message.conversation_key !== key || message.unread_count === chat.unread_count) return message;
+              changed = true;
+              return { ...message, unread_count: chat.unread_count ?? 0 };
+            }),
+          }));
+          return changed ? { ...old, pages } : old;
+        });
+      })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ai_suggestions', filter: `user_id=eq.${userId}` }, ({ new: row }) => {
         const suggestion = row as { message_id?: string };
         if (suggestion.message_id) markAiResponse(suggestion.message_id);

@@ -204,6 +204,28 @@ describe('WhatsApp LID de-duplication', () => {
     );
     expect(msg.chatType).toBe('individual');
   });
+
+  it('classifies an exact session-derived LID alias as me and keeps it out of the chat ID', async () => {
+    const selfLidGhost = '@whatsapp_lid-118901925003385:claire.local';
+    const roomWithSelfLid = makeRoom('!wa-self-lid-dm:claire.local', 'John (WA)', [
+      makeMember('@claire_bot:claire.local'),
+      makeMember(selfGhost),
+      makeMember(selfLidGhost),
+      makeMember(phoneGhost),
+    ]);
+    const msg = await converter.toUnifiedMessage(
+      makeEvent(selfLidGhost, 'sent from primary phone'),
+      roomWithSelfLid,
+      'sess1',
+      'user1',
+      Platform.WHATSAPP,
+      [selfGhost, selfLidGhost]
+    );
+
+    expect(msg.isFromMe).toBe(true);
+    expect(msg.chatId).toBe('19998887776');
+    expect(msg.platformMetadata?.senderDetection).toBe('self-ghost');
+  });
 });
 
 // ---------------------------------------------------------------------------

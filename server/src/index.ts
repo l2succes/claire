@@ -15,6 +15,7 @@ import { verifySchemaCached } from './services/schema-verification';
 import { resolvePlatformMode } from './config/platform-mode';
 import authRoutes from './routes/auth';
 import messageRoutes from './routes/messages';
+import { BridgeHttpClient } from './adapters/matrix/bridge-http-client';
 import aiRoutes from './routes/ai';
 import platformRoutes from './routes/platforms';
 import conversationRoutes from './routes/conversations';
@@ -30,7 +31,7 @@ import { aiProcessor } from './services/ai-processor';
 import { promiseDetector } from './services/promise-detector';
 import { autoReplyEngine } from './services/auto-reply-engine';
 import { pushNotificationService } from './services/push-notification';
-import { PlatformStatus } from './adapters/types';
+import { Platform, PlatformStatus } from './adapters/types';
 import { whatsappAdapter } from './adapters/whatsapp';
 import { telegramAdapter } from './adapters/telegram';
 import { imessageAdapter } from './adapters/imessage';
@@ -276,6 +277,29 @@ async function initializePlatforms() {
         serverName: matrixConfig.serverName!,
         adminAccessToken: matrixConfig.adminToken,
         botUserId: matrixConfig.botUserId,
+        configuredSelfGhostIds: {
+          [Platform.WHATSAPP]: (process.env.WHATSAPP_SELF_GHOST_IDS || '')
+            .split(',')
+            .map((id) => id.trim())
+            .filter(Boolean),
+        },
+        resolveSelfGhostIds: async (platform, platformUserId) => {
+          if (platform !== Platform.WHATSAPP || !process.env.WHATSAPP_BRIDGE_SECRET) {
+            return [];
+          }
+
+          const bridge = new BridgeHttpClient(
+            process.env.WHATSAPP_BRIDGE_URL || 'http://mautrixwhatsapp.railway.internal:29318',
+            process.env.WHATSAPP_BRIDGE_SECRET,
+            process.env.WHATSAPP_BRIDGE_USER_ID || '@claire_bot:claire.local'
+          );
+          // The provisioning resolver returns the bridge's canonical phone
+          // ghost. Keep it as an additional exact alias; deployment-known LID
+          // aliases above cover primary-device events until mautrix exposes
+          // the phone<->LID map through provisioning.
+          const resolved = await bridge.resolveIdentifier(platformUserId, platformUserId);
+          return resolved.mxid ? [resolved.mxid] : [];
+        },
       });
 
       platformManager.setMatrixMode(matrixAdapter);
@@ -340,6 +364,11 @@ async function initializePlatforms() {
         logger.error('Failed to upsert chat:', chatError);
         return;
       }
+
+      // History replays and own-device messages must never create unread
+      // badges. Only a newly inserted live incoming message increments the
+      // local conversation counter below.
+      const isBackfill = message.platformMetadata?.syncKind === 'backfill';
 
       // Link incoming messages to the resolved Matrix contact. This gives the
       // inbox a stable avatar/name relationship instead of trying to infer it
@@ -411,6 +440,16 @@ async function initializePlatforms() {
         logger.error('Failed to upsert message:', msgError);
       } else {
         logger.debug(`Message saved: ${message.platformMessageId}`);
+
+        if (!message.isFromMe && !isBackfill && savedMsg?.id) {
+          const { error: unreadError } = await supabase.rpc('increment_chat_unread', {
+            target_chat_id: chat.id,
+            target_user_id: message.userId,
+          });
+          if (unreadError) {
+            logger.warn('Failed to increment chat unread count', { error: unreadError });
+          }
+        }
 
         if (!message.isFromMe && savedMsg?.id) {
           void notifyIncomingMessage({

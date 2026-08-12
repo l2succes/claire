@@ -141,4 +141,17 @@ describe('MatrixRoomMapper.getPrimaryChatParticipant', () => {
     ]);
     expect(roomMapper.getPrimaryChatParticipant(room, undefined)).toBeNull();
   });
+
+  it('excludes every exact phone and LID self alias', () => {
+    const room = makeRoom('!wa-lid-dm:claire.local', [
+      makeMember('@claire_bot:claire.local'),
+      makeMember('@whatsapp_15166100494:claire.local'),
+      makeMember('@whatsapp_lid-118901925003385:claire.local'),
+      makeMember('@whatsapp_19998887776:claire.local'),
+    ]);
+    expect(roomMapper.getPrimaryChatParticipant(room, [
+      '@whatsapp_15166100494:claire.local',
+      '@whatsapp_lid-118901925003385:claire.local',
+    ])).toBe('19998887776');
+  });
 });

@@ -8,6 +8,7 @@ import { supabase } from '../services/supabase';
 import { validateRequest } from '../middleware/validation';
 import { requireAuth } from '../middleware/auth';
 import { logger } from '../utils/logger';
+import { platformManager, Platform, PlatformStatus } from '../adapters';
 
 const router = Router();
 
@@ -33,6 +34,12 @@ const sendMessageSchema = z.object({
 const markReadSchema = z.object({
   body: z.object({
     messageIds: z.array(z.string()),
+  }),
+});
+
+const markChatReadSchema = z.object({
+  body: z.object({
+    sessionId: z.string().optional(),
   }),
 });
 
@@ -123,16 +130,25 @@ router.get(
         build: (q: ReturnType<typeof baseCount>) => ReturnType<typeof baseCount>
       ) => build(baseCount());
 
-      const [total, unread, replied, today] = await Promise.all([
+      const [total, unreadChats, replied, today] = await Promise.all([
         countFor(q => q),
-        countFor(q => q.eq('from_me', false).or('status.is.null,status.neq.read')),
+        supabase
+          .from('chats')
+          .select('unread_count')
+          .eq('user_id', userId)
+          .gt('unread_count', 0),
         countFor(q => q.eq('status', 'replied')),
         countFor(q => q.gte('timestamp', startOfDay)),
       ]);
 
+      const unread = (unreadChats.data || []).reduce(
+        (sum, chat) => sum + (chat.unread_count || 0),
+        0
+      );
+
       return res.json({
         total: total.count ?? 0,
-        unread: unread.count ?? 0,
+        unread,
         replied: replied.count ?? 0,
         today: today.count ?? 0,
       });
@@ -279,7 +295,36 @@ router.post(
       const userId = req.user?.id as string;
       const { messageIds } = req.body;
 
-      await realtimeSync.syncReadStatus(userId, messageIds);
+      const { data: messages, error: lookupError } = await supabase
+        .from('messages')
+        .select('id, chat_id, timestamp')
+        .eq('user_id', userId)
+        .in('id', messageIds);
+      if (lookupError) throw lookupError;
+
+      const chatIds = [...new Set((messages || []).map((message) => message.chat_id).filter(Boolean))];
+      const readAt = new Date().toISOString();
+      for (const chatId of chatIds) {
+        const latestRead = (messages || [])
+          .filter((message) => message.chat_id === chatId)
+          .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp))[0];
+        const { error } = await supabase
+          .from('chats')
+          .update({
+            unread_count: 0,
+            last_read_at: readAt,
+            last_read_message_id: latestRead?.id || null,
+          })
+          .eq('id', chatId)
+          .eq('user_id', userId);
+        if (error) throw error;
+      }
+
+      await realtimeSync.broadcastToUser(userId, 'messages:read', {
+        messageIds,
+        chatIds,
+        readAt,
+      });
 
       return res.json({
         success: true,
@@ -288,6 +333,72 @@ router.post(
     } catch (error) {
       logger.error('Failed to mark messages as read:', error);
       return res.status(500).json({ error: 'Failed to mark messages as read' });
+    }
+  }
+);
+
+/**
+ * POST /messages/chats/:chatId/read
+ * Advance Claire's local read cursor and mirror a Matrix read receipt when a
+ * connected session is available. The local write is the source of truth for
+ * unread badges across web, iOS, and Android.
+ */
+router.post(
+  '/chats/:chatId/read',
+  requireAuth,
+  validateRequest(markChatReadSchema),
+  async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id as string;
+      const { chatId } = req.params;
+      const { sessionId } = req.body as { sessionId?: string };
+
+      const { data: chat, error: chatError } = await supabase
+        .from('chats')
+        .select('id, platform, platform_chat_id')
+        .eq('id', chatId)
+        .eq('user_id', userId)
+        .maybeSingle();
+      if (chatError) throw chatError;
+      if (!chat) return res.status(404).json({ error: 'Chat not found' });
+
+      const { data: latest, error: messageError } = await supabase
+        .from('messages')
+        .select('id, platform_message_id, timestamp')
+        .eq('chat_id', chatId)
+        .eq('user_id', userId)
+        .order('timestamp', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (messageError) throw messageError;
+
+      const { error: updateError } = await supabase
+        .from('chats')
+        .update({
+          unread_count: 0,
+          last_read_at: new Date().toISOString(),
+          last_read_message_id: latest?.id || null,
+        })
+        .eq('id', chatId)
+        .eq('user_id', userId);
+      if (updateError) throw updateError;
+
+      if (sessionId && latest?.platform_message_id) {
+        const adapter = platformManager.getAdapter(chat.platform as Platform);
+        const session = await adapter?.getSession(sessionId);
+        if (adapter && session?.userId === userId && session.status === PlatformStatus.CONNECTED) {
+          try {
+            await adapter.markAsRead(sessionId, chat.platform_chat_id, latest.platform_message_id);
+          } catch (error) {
+            logger.warn('Local read state saved, but Matrix receipt failed', { error });
+          }
+        }
+      }
+
+      return res.json({ success: true, chatId, unreadCount: 0 });
+    } catch (error) {
+      logger.error('Failed to mark chat read:', error);
+      return res.status(500).json({ error: 'Failed to mark chat as read' });
     }
   }
 );

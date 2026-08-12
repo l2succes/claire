@@ -30,6 +30,14 @@ export interface LoginStepResponse {
   };
 }
 
+export interface ResolvedBridgeIdentifier {
+  id: string;
+  name?: string;
+  avatar_url?: string;
+  identifiers?: string[];
+  mxid?: string;
+}
+
 export class BridgeHttpClient {
   private readonly provisioningBase: string;
   private static readonly REQUEST_TIMEOUT_MS = 12_000;
@@ -90,6 +98,25 @@ export class BridgeHttpClient {
   async getLoginFlows(): Promise<LoginFlow[]> {
     const data = await this.request<{ flows: LoginFlow[] }>('GET', '/v3/login/flows');
     return data.flows;
+  }
+
+  /**
+   * Resolve a network identifier through the authenticated bridge login.
+   *
+   * WhatsApp now uses LIDs as its primary identity. Resolving the connected
+   * phone number is the authoritative way to discover the LID ghost that
+   * represents messages sent from the user's primary phone.
+   */
+  async resolveIdentifier(
+    identifier: string,
+    loginId?: string
+  ): Promise<ResolvedBridgeIdentifier> {
+    return this.request<ResolvedBridgeIdentifier>(
+      'GET',
+      `/v3/resolve_identifier/${encodeURIComponent(identifier)}`,
+      undefined,
+      { login_id: loginId }
+    );
   }
 
   async startLogin(flowId: string): Promise<LoginStepResponse> {

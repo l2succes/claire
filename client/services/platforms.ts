@@ -182,6 +182,11 @@ export const platformsApi = {
     return response.data;
   },
 
+  /** Persist Claire's read cursor and mirror it to Matrix when possible. */
+  async markChatRead(chatId: string, sessionId?: string): Promise<void> {
+    await api.post(`/messages/chats/${encodeURIComponent(chatId)}/read`, { sessionId });
+  },
+
   /**
    * Start Instagram login via bridge HTTP API.
    * Returns sessionId, loginId, stepId to pass into instagramLoginSubmit.

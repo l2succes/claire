@@ -130,13 +130,16 @@ export class MatrixRoomMapper {
   /**
    * Get the primary chat participant from a room
    */
-  getPrimaryChatParticipant(room: Room, selfGhostId?: string): string | null {
+  getPrimaryChatParticipant(room: Room, selfGhostIds?: string | string[]): string | null {
     const members = room.getJoinedMembers();
+    const selfIds = new Set(
+      Array.isArray(selfGhostIds) ? selfGhostIds : selfGhostIds ? [selfGhostIds] : []
+    );
 
     for (const member of members) {
       if (this.userMapper.isBridgeBot(member.userId)) continue;
       if (!this.userMapper.isGhostUser(member.userId)) continue;
-      if (selfGhostId && member.userId === selfGhostId) continue; // skip self
+      if (selfIds.has(member.userId)) continue; // skip every exact self alias
 
       const contactInfo = this.userMapper.ghostUserToPlatformContact(member.userId);
       if (contactInfo) {
