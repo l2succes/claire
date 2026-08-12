@@ -17,11 +17,15 @@ import { requireAuth } from '../middleware/auth';
 import { BridgeHttpClient } from '../adapters/matrix/bridge-http-client';
 import { loginWithCredentials, submitTwoFactorCode } from '../services/instagram-login';
 
-// Railway services cannot reach each other through localhost. Keep localhost
-// for Docker/local development, but use the private-network bridge address in
-// Railway unless an explicit URL is configured.
+// Railway services cannot reach each other through localhost. Railway does not
+// inject NODE_ENV by default, so its public-domain marker is also used to
+// identify a deployed container.
+const isRailwayProduction = process.env.NODE_ENV === 'production' || Boolean(process.env.RAILWAY_PUBLIC_DOMAIN);
+
+// Keep localhost for Docker/local development, but use the private-network
+// bridge address in a Railway deployment unless an explicit URL is configured.
 const defaultInstagramBridgeUrl =
-  process.env.NODE_ENV === 'production'
+  isRailwayProduction
     ? 'http://mautrixinstagram.railway.internal:29319'
     : 'http://localhost:29319';
 
@@ -35,11 +39,11 @@ const isLocalInstagramBridgeUrl = configuredInstagramBridgeUrl
 // Prefer the service's private DNS name in that case while still honoring any
 // intentional non-local production override.
 const instagramBridgeUrl =
-  process.env.NODE_ENV === 'production' && isLocalInstagramBridgeUrl
+  isRailwayProduction && isLocalInstagramBridgeUrl
     ? defaultInstagramBridgeUrl
     : configuredInstagramBridgeUrl || defaultInstagramBridgeUrl;
 
-if (process.env.NODE_ENV === 'production' && isLocalInstagramBridgeUrl) {
+if (isRailwayProduction && isLocalInstagramBridgeUrl) {
   logger.warn('Ignoring localhost INSTAGRAM_BRIDGE_URL in production');
 }
 
