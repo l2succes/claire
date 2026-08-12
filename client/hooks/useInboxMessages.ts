@@ -66,13 +66,17 @@ function normalizeRows(rows: RawMessage[]) {
     const key = conversationKey(chatId, platform);
     const current = byConversation.get(key);
     if (current && new Date(current.timestamp) >= new Date(row.timestamp)) continue;
+    const conversationName = row.chats?.name || (!row.from_me ? row.contact_name : undefined);
 
     byConversation.set(key, {
       id: row.id,
       conversation_key: key,
-      contact_name: row.contact_name,
+      // In a DM, the chat name is the other participant. The latest message's
+      // sender name may be our own profile, so never use it as the route/display
+      // contact. Group rows retain the latest remote sender separately.
+      contact_name: row.is_group ? row.contact_name : conversationName,
       contact_avatar: row.contacts?.avatar_url || undefined,
-      chat_name: row.chats?.name || (!row.from_me ? row.contact_name : undefined),
+      chat_name: conversationName,
       content: row.content,
       timestamp: row.timestamp,
       from_me: row.from_me,

@@ -143,11 +143,12 @@ export default function MessagesScreen() {
         const platform = msg.platform || Platform.WHATSAPP;
         const conversationKey = getConversationKey(chatId, platform);
         if (!chatMap.has(conversationKey) || new Date(msg.timestamp) > new Date(chatMap.get(conversationKey)!.timestamp)) {
+          const conversationName = msg.chats?.name || (!msg.from_me ? msg.contact_name : null);
           chatMap.set(conversationKey, {
             id: msg.id,
             conversation_key: conversationKey,
-            contact_name: msg.contact_name,
-            chat_name: msg.chats?.name || (!msg.from_me ? msg.contact_name : null),
+            contact_name: msg.is_group ? msg.contact_name : conversationName,
+            chat_name: conversationName,
             content: msg.content,
             timestamp: msg.timestamp,
             from_me: msg.from_me,
