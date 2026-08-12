@@ -25,8 +25,26 @@ const defaultInstagramBridgeUrl =
     ? 'http://mautrixinstagram.railway.internal:29319'
     : 'http://localhost:29319';
 
+const configuredInstagramBridgeUrl = process.env.INSTAGRAM_BRIDGE_URL;
+const isLocalInstagramBridgeUrl = configuredInstagramBridgeUrl
+  ? /^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?\/?$/i.test(configuredInstagramBridgeUrl)
+  : false;
+
+// A leftover localhost value is valid when running the Docker stack locally,
+// but can never reach the separate mautrix service from a Railway container.
+// Prefer the service's private DNS name in that case while still honoring any
+// intentional non-local production override.
+const instagramBridgeUrl =
+  process.env.NODE_ENV === 'production' && isLocalInstagramBridgeUrl
+    ? defaultInstagramBridgeUrl
+    : configuredInstagramBridgeUrl || defaultInstagramBridgeUrl;
+
+if (process.env.NODE_ENV === 'production' && isLocalInstagramBridgeUrl) {
+  logger.warn('Ignoring localhost INSTAGRAM_BRIDGE_URL in production');
+}
+
 const instagramBridgeClient = new BridgeHttpClient(
-  process.env.INSTAGRAM_BRIDGE_URL || defaultInstagramBridgeUrl,
+  instagramBridgeUrl,
   process.env.INSTAGRAM_BRIDGE_SECRET || process.env.IG_PROVISIONING_SECRET || '',
   process.env.INSTAGRAM_BRIDGE_USER_ID || '@claire_bot:claire.local'
 );
