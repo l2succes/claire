@@ -517,7 +517,7 @@ export function PlatformAuthModal({
         <Text className="text-gray-600 dark:text-gray-300 text-center mb-6">
           {getInstagramLoginMode() === 'embedded'
             ? 'Log in to Instagram to connect your account'
-            : 'Connect Instagram using the browser-assisted web flow'}
+            : 'Sign in securely to connect your Instagram messages'}
         </Text>
         <Button
           variant="primary"
@@ -528,7 +528,7 @@ export function PlatformAuthModal({
         >
           {getInstagramLoginMode() === 'embedded'
             ? 'Log in to Instagram'
-            : 'Continue in Browser'}
+            : 'Sign in to Instagram'}
         </Button>
       </View>
     );

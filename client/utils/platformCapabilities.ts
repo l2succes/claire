@@ -7,7 +7,10 @@ export const platformCapabilities = {
   isWeb,
   isNative,
   supportsNativeNotifications: isNative,
-  supportsEmbeddedInstagramLogin: isNative,
+  // Instagram's login page intentionally does not support embedded WebViews
+  // consistently. Use the server-assisted credential/2FA flow on every
+  // platform instead of presenting a dead-end native browser surface.
+  supportsEmbeddedInstagramLogin: false,
   supportsInstagramBrowserAssist: isWeb,
 };
 
