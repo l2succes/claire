@@ -16,9 +16,6 @@ appservice:
     address: http://mautrix-instagram:29319
     hostname: 0.0.0.0
     port: 29319
-    database:
-        type: sqlite3-fk-wal
-        uri: /data/mautrix-instagram.db
     id: instagram
     bot:
         username: metabot
@@ -26,6 +23,13 @@ appservice:
     as_token: __AS_TOKEN__
     hs_token: __HS_TOKEN__
     username_template: "meta_{{.}}"
+
+# Bridge v2 stores its database config at the top level. Keeping it under
+# appservice marks the entire file as a legacy bridge config and causes the
+# current Instagram image to exit before provisioning can answer a request.
+database:
+    type: sqlite3-fk-wal
+    uri: /data/mautrix-instagram.db
 
 bridge:
     displayname_template: "{{.Name}} (IG)"
@@ -35,9 +39,6 @@ bridge:
         "*": relay
         "claire.local": user
         "@claire_bot:claire.local": admin
-
-    private_chat_portal_meta: true
-
 
 # Double puppeting: allows the bridge to act as the real Matrix user so
 # outgoing messages appear as their actual Matrix account rather than a ghost.
