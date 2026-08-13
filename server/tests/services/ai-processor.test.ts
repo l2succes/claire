@@ -126,7 +126,7 @@ describe('AIProcessor', () => {
       expect(promptTemplatesMock.detectMessageType).toHaveBeenCalledWith('Hello');
       expect(responseSafetyMock.validateAndFilter).toHaveBeenCalled();
       expect(responseCacheMock.setWithConfidenceTTL).toHaveBeenCalled();
-      expect(responseCacheMock.get).toHaveBeenCalledWith('style-language-v1:test-msg-1:Hello', 'user-1');
+      expect(responseCacheMock.get).toHaveBeenCalledWith('short-style-language-v1:test-msg-1:Hello', 'user-1');
 
       // The processor appends a JSON-only instruction to the system prompt.
       const [systemArg] = callAI.mock.calls[0] as [string, string];
@@ -134,6 +134,7 @@ describe('AIProcessor', () => {
       expect(systemArg).toContain('Do not return acknowledgement-only filler');
       expect(systemArg).toContain('Match the reply language to the latest incoming message');
       expect(systemArg).toContain('Match the conversation\'s communication style');
+      expect(systemArg).toContain('Keep each default suggestion short');
       expect(promptTemplatesMock.buildPrompt).toHaveBeenCalledWith(
         'Hello',
         'social',

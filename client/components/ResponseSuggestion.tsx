@@ -1,6 +1,6 @@
 import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, TextInput } from 'react-native';
 import { useState, useEffect, useRef } from 'react';
-import { Sparkles, Send, RefreshCw, ThumbsUp, ThumbsDown, SlidersHorizontal, Brain } from 'lucide-react-native';
+import { Sparkles, Send, RefreshCw, ThumbsUp, ThumbsDown, SlidersHorizontal, Brain, Expand } from 'lucide-react-native';
 import { supabase } from '../services/supabase';
 import { platformsApi } from '../services/platforms';
 
@@ -138,7 +138,7 @@ export function ResponseSuggestion({
     }
   };
 
-  const handleGenerate = async (forceRefresh = false) => {
+  const handleGenerate = async (forceRefresh = false, extraGuidance?: string) => {
     if (!messageContent || generating) return;
     setGenerating(true);
     setGenerateError(null);
@@ -148,7 +148,7 @@ export function ResponseSuggestion({
         messageContent,
         isGroup ? 'group' : 'individual',
         {
-          guidance: guidance.trim() || undefined,
+          guidance: [guidance.trim(), extraGuidance].filter(Boolean).join('\n') || undefined,
           forceRefresh,
         }
       );
@@ -292,6 +292,17 @@ export function ResponseSuggestion({
             <SlidersHorizontal size={14} color="#2563eb" />
             <Text style={{ marginLeft: 4, color: '#2563eb', fontSize: 12, fontWeight: '600' }}>Guide</Text>
           </TouchableOpacity>
+          {suggestions.length > 0 && (
+            <TouchableOpacity
+              onPress={() => handleGenerate(true, 'Make each option a little longer and more detailed, while keeping the same language and conversational style.')}
+              disabled={generating}
+              testID="make-reply-options-longer"
+              style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, paddingVertical: 4 }}
+            >
+              <Expand size={14} color="#2563eb" />
+              <Text style={{ marginLeft: 4, color: '#2563eb', fontSize: 12, fontWeight: '600' }}>Make longer</Text>
+            </TouchableOpacity>
+          )}
           {suggestions.length > 0 && (
             <TouchableOpacity
               onPress={() => handleGenerate(true)}

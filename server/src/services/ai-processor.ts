@@ -34,7 +34,7 @@ interface GenerateResponseOptions {
 
 // Bump this whenever prompt rules materially change so cached suggestions use
 // the current tone and language behavior rather than a stale prompt result.
-const RESPONSE_PROMPT_VERSION = 'style-language-v1';
+const RESPONSE_PROMPT_VERSION = 'short-style-language-v1';
 
 interface ResponseAnalytics {
   messageId: string;
@@ -211,7 +211,7 @@ export class AIProcessor {
 
       // OpenAI uses JSON mode below; the instruction keeps Bedrock/Kimi output
       // compatible and prevents generic fallback replies when a model drifts.
-      const systemWithJson = `${system}\n\nYou MUST respond with valid JSON only, no markdown or explanation.\n\nReply quality requirements:\n- Return exactly 3 distinct, ready-to-send suggestions in a "suggestions" array.\n- Use the actual latest message and recent conversation details.\n- Make each option concrete: propose or answer the relevant plan, question, place, time, or next step when one is present.\n- Do not return acknowledgement-only filler such as "I understand", "Got it", or "Thanks for letting me know".\n- If the relationship is friend, sound warm, casual, and excited rather than formal.\n- Match the reply language to the latest incoming message and the dominant recent exchange. If the conversation is Spanish, write Spanish; preserve natural code-switching only when the conversation itself does it. The account language is a fallback, not an override.\n- Match the conversation's communication style: formality, sentence length, directness, energy, slang/idioms, punctuation, and emoji density. Sound natural for the owner without copying distinctive typos or overdoing slang.`;
+      const systemWithJson = `${system}\n\nYou MUST respond with valid JSON only, no markdown or explanation.\n\nReply quality requirements:\n- Return exactly 3 distinct, ready-to-send suggestions in a "suggestions" array.\n- Keep each default suggestion short: one natural sentence, usually 8-20 words. Include a second sentence only when it is essential to answer the message.\n- Use the actual latest message and recent conversation details.\n- Make each option concrete: propose or answer the relevant plan, question, place, time, or next step when one is present.\n- Do not return acknowledgement-only filler such as "I understand", "Got it", or "Thanks for letting me know".\n- If the relationship is friend, sound warm, casual, and excited rather than formal.\n- Match the reply language to the latest incoming message and the dominant recent exchange. If the conversation is Spanish, write Spanish; preserve natural code-switching only when the conversation itself does it. The account language is a fallback, not an override.\n- Match the conversation's communication style: formality, sentence length, directness, energy, slang/idioms, punctuation, and emoji density. Sound natural for the owner without copying distinctive typos or overdoing slang.\n- Only make replies longer when the user explicitly asks for more detail in their additional direction.`;
 
       const userPrompt = guidance
         ? `${user}\n\nAdditional direction from the user: ${guidance}`
