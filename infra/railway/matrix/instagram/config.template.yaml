@@ -19,7 +19,8 @@ appservice:
     address: http://mautrix-instagram:29319
     hostname: 0.0.0.0
     port: 29319
-    id: instagram
+    # This must exactly match the ID in Synapse's appservice registration.
+    id: meta
     bot:
         username: metabot
         displayname: Instagram Bridge Bot
