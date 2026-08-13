@@ -5,7 +5,7 @@
  * which are persisted server-side and injected into AI prompt context.
  */
 
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, TextInput } from 'react-native';
 import { useState, useEffect } from 'react';
 import { router } from 'expo-router';
 import { ChevronLeft, Check } from 'lucide-react-native';
@@ -33,6 +33,14 @@ interface Preferences {
   tone: Tone;
   response_style: Style;
   language: string;
+}
+
+interface VoiceProfile {
+  language: string;
+  profile: string;
+  sourceMessageCount: number;
+  pendingMessageCount: number;
+  status: 'idle' | 'building' | 'ready' | 'failed' | 'stale';
 }
 
 async function fetchPreferences(token: string): Promise<Preferences> {
@@ -63,6 +71,8 @@ export default function AISettingsScreen() {
   const [saving, setSaving] = useState(false);
   const [tone, setTone] = useState<Tone>('friendly');
   const [style, setStyle] = useState<Style>('concise');
+  const [voiceProfiles, setVoiceProfiles] = useState<VoiceProfile[]>([]);
+  const [rebuildingVoice, setRebuildingVoice] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -70,9 +80,13 @@ export default function AISettingsScreen() {
         const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token;
         if (!token) return;
-        const prefs = await fetchPreferences(token);
+        const [prefs, voiceResponse] = await Promise.all([
+          fetchPreferences(token),
+          fetch(`${API_BASE_URL}/preferences/voice-profiles`, { headers: { Authorization: `Bearer ${token}` } }),
+        ]);
         setTone(prefs.tone as Tone);
         setStyle(prefs.response_style as Style);
+        if (voiceResponse.ok) setVoiceProfiles((await voiceResponse.json()).data || []);
       } catch {
         // silently use defaults
       } finally {
@@ -93,6 +107,42 @@ export default function AISettingsScreen() {
       Alert.alert('Error', 'Failed to save settings. Please try again.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const rebuildVoice = async () => {
+    setRebuildingVoice(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('Not authenticated');
+      const response = await fetch(`${API_BASE_URL}/preferences/voice-profiles/rebuild`, { method: 'POST', headers: { Authorization: `Bearer ${session.access_token}` } });
+      if (!response.ok) throw new Error('Could not rebuild voice');
+      setVoiceProfiles((await response.json()).data || voiceProfiles);
+    } catch {
+      Alert.alert('Error', 'Could not rebuild your voice profile.');
+    } finally { setRebuildingVoice(false); }
+  };
+
+  const saveVoice = async (language: string, profile: string) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) return;
+    const response = await fetch(`${API_BASE_URL}/preferences/voice-profiles/${encodeURIComponent(language)}`, {
+      method: 'PUT', headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ profile }),
+    });
+    if (!response.ok) throw new Error('Could not save voice profile');
+  };
+
+  const resetVoice = async (language: string) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('Not authenticated');
+      const response = await fetch(`${API_BASE_URL}/preferences/voice-profiles/${encodeURIComponent(language)}`, {
+        method: 'DELETE', headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (!response.ok) throw new Error('Could not reset voice');
+      setVoiceProfiles(current => current.filter(profile => profile.language !== language));
+    } catch {
+      Alert.alert('Error', 'Could not reset this voice profile.');
     }
   };
 
@@ -155,6 +205,22 @@ export default function AISettingsScreen() {
               </View>
               {tone === t.value && <Check size={20} color="#10b981" />}
             </TouchableOpacity>
+          ))}
+        </View>
+
+        <View className="mb-6">
+          <View className="flex-row items-center mb-2">
+            <View className="flex-1"><Text className="text-lg font-semibold text-gray-900 dark:text-white">Your voice</Text><Text className="text-sm text-gray-500 dark:text-gray-400 mt-1">Claire learns observable writing patterns from messages you sent; it never stores message samples here.</Text></View>
+            <TouchableOpacity onPress={rebuildVoice} disabled={rebuildingVoice} className="bg-indigo-600 px-3 py-2 rounded-full" testID="voice-profile-rebuild">
+              {rebuildingVoice ? <ActivityIndicator size="small" color="#fff" /> : <Text className="text-white font-semibold text-xs">Rebuild</Text>}
+            </TouchableOpacity>
+          </View>
+          {voiceProfiles.length === 0 ? <Text className="text-sm text-gray-400">Rebuild your profile to learn from your sent messages.</Text> : voiceProfiles.map(profile => (
+            <View key={profile.language} className="bg-white dark:bg-gray-800 rounded-lg px-4 py-3 mb-2 border border-gray-200 dark:border-gray-700">
+              <Text className="font-semibold text-gray-900 dark:text-white">{profile.language.toUpperCase()} voice · {profile.sourceMessageCount} messages</Text>
+              <TextInput defaultValue={profile.profile} multiline maxLength={1500} onEndEditing={(event) => void saveVoice(profile.language, event.nativeEvent.text)} testID={`voice-profile-${profile.language}`} className="text-sm text-gray-700 dark:text-gray-200 mt-2" style={{ minHeight: 72, textAlignVertical: 'top' }} />
+              <TouchableOpacity onPress={() => void resetVoice(profile.language)} testID={`voice-profile-reset-${profile.language}`} className="self-start mt-2"><Text className="text-xs font-semibold text-red-600">Reset to manual preferences</Text></TouchableOpacity>
+            </View>
           ))}
         </View>
 

@@ -569,11 +569,14 @@ async function mockBackend(page) {
   };
   let assistantThreads = [];
   let assistantTurns = [];
+  let assistantScope = [];
   await page.route('**/ai/assistant/**', async (route) => {
     const url = new URL(route.request().url());
     const path = url.pathname;
     const method = route.request().method();
-    if (path.endsWith('/index/status')) {
+    if (path.endsWith('/mention-candidates') && method === 'GET') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data: [{ id: 'mock-chat-wa-alice', name: 'Alice (WA)', platform: 'whatsapp', is_group: false }] }) });
+    } else if (path.endsWith('/index/status')) {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data: { status: 'ready', indexedCount: 4, totalCount: 4, lastIndexedAt: new Date().toISOString(), lastError: null } }) });
     } else if (path.endsWith('/index') && method === 'POST') {
       await route.fulfill({ status: 202, contentType: 'application/json', body: JSON.stringify({ success: true, data: { status: 'indexing', indexedCount: 0, totalCount: 4, lastIndexedAt: null, lastError: null } }) });
@@ -585,9 +588,10 @@ async function mockBackend(page) {
     } else if (path.endsWith(`/threads/${assistantThread.id}`) && method === 'GET') {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data: { thread: assistantThread, turns: assistantTurns } }) });
     } else if (path.endsWith(`/threads/${assistantThread.id}/messages`) && method === 'POST') {
+      assistantScope = JSON.parse(route.request().postData() || '{}').chatIds || [];
       assistantTurns = [
-        { id: 'assistant-user-1', role: 'user', content: 'Where did I mention meeting Alice?', citations: [], created_at: new Date().toISOString() },
-        { id: 'assistant-answer-1', role: 'assistant', content: 'You discussed meeting Alice after the report is sent.', citations: [], created_at: new Date().toISOString() },
+        { id: 'assistant-user-1', role: 'user', content: 'Where did I mention meeting Alice?', citations: [], scope_chat_ids: assistantScope, created_at: new Date().toISOString() },
+        { id: 'assistant-answer-1', role: 'assistant', content: 'You discussed meeting Alice after the report is sent.', citations: [], scope_chat_ids: assistantScope, created_at: new Date().toISOString() },
       ];
       await route.fulfill({
         status: 200,
@@ -595,8 +599,8 @@ async function mockBackend(page) {
         body: JSON.stringify({
           success: true,
           data: {
-            answer: 'You discussed meeting Alice after the report is sent.',
-            citations: [{ messageId: 'chatmsg-1', chatId: 'mock-chat-wa-alice', excerpt: "Hi! I'll send you the report by Friday", senderName: 'Alice (WA)', fromMe: false, timestamp: new Date().toISOString(), platform: 'whatsapp', chatName: 'Alice (WA)', isGroup: false }],
+            answer: assistantScope.includes('mock-chat-wa-alice') ? 'Scoped Alice answer.' : 'You discussed meeting Alice after the report is sent.',
+            citations: [{ messageId: 'chatmsg-1', chatId: 'mock-chat-wa-alice', excerpt: "Hi! I'll send you the report by Friday", senderName: 'Alice (WA)', fromMe: false, timestamp: new Date().toISOString(), platform: 'whatsapp', chatName: 'Alice (WA)', isGroup: false, isPreferredScope: assistantScope.includes('mock-chat-wa-alice') }],
             indexing: { status: 'ready', indexedCount: 4, totalCount: 4, lastIndexedAt: new Date().toISOString(), lastError: null },
           },
         }),
@@ -908,6 +912,21 @@ test.describe('Core loop — mock backend', () => {
     await expect(page.getByTestId('assistant-sources')).toContainText("Hi! I'll send you the report by Friday");
     await page.getByTestId('assistant-source-chatmsg-1').click();
     await expect(page.getByTestId('chat-screen')).toBeVisible({ timeout: 8_000 });
+  });
+
+  test('Ask Claire @ targeting sends the selected conversation scope', async ({ page }) => {
+    await signIn(page);
+    await page.getByTestId('open-ask-claire').click();
+    await expect(page.getByTestId('assistant-screen')).toBeVisible({ timeout: 8_000 });
+
+    await page.getByTestId('assistant-input').fill('@');
+    await expect(page.getByTestId('assistant-mention-candidate-mock-chat-wa-alice')).toBeVisible({ timeout: 5_000 });
+    await page.getByTestId('assistant-mention-candidate-mock-chat-wa-alice').click();
+    await expect(page.getByTestId('assistant-mention-mock-chat-wa-alice')).toBeVisible();
+
+    await page.getByTestId('assistant-input').fill('What did we decide?');
+    await page.getByTestId('assistant-send').click();
+    await expect(page.getByTestId('assistant-turn-list')).toContainText('Scoped Alice answer.');
   });
 
   // 6. Promises tab — renders the promises screen

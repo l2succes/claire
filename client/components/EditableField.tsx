@@ -8,9 +8,10 @@ interface EditableFieldProps {
   placeholder: string;
   onSave: (value: string) => void;
   keyboardType?: 'default' | 'email-address' | 'phone-pad';
+  multiline?: boolean;
 }
 
-export function EditableField({ label, value, placeholder, onSave, keyboardType = 'default' }: EditableFieldProps) {
+export function EditableField({ label, value, placeholder, onSave, keyboardType = 'default', multiline = false }: EditableFieldProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [text, setText] = useState(value || '');
   const inputRef = useRef<TextInput>(null);
@@ -31,7 +32,7 @@ export function EditableField({ label, value, placeholder, onSave, keyboardType 
   return (
     <View style={{
       flexDirection: 'row',
-      alignItems: 'center',
+      alignItems: multiline ? 'flex-start' : 'center',
       paddingHorizontal: 16,
       paddingVertical: 10,
       borderBottomWidth: 1,
@@ -51,6 +52,10 @@ export function EditableField({ label, value, placeholder, onSave, keyboardType 
             placeholder={placeholder}
             placeholderTextColor="#9ca3af"
             keyboardType={keyboardType}
+            multiline={multiline}
+            maxLength={multiline ? 1500 : undefined}
+            textAlignVertical={multiline ? 'top' : undefined}
+            numberOfLines={multiline ? 4 : undefined}
             returnKeyType="done"
             onSubmitEditing={handleBlur}
           />

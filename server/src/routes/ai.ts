@@ -44,7 +44,10 @@ const assistantThreadSchema = z.object({
 });
 
 const assistantQuestionSchema = z.object({
-  body: z.object({ question: z.string().trim().min(1, 'Question is required').max(2_000) }),
+  body: z.object({
+    question: z.string().trim().min(1, 'Question is required').max(2_000),
+    chatIds: z.array(z.string().uuid()).max(5).optional().default([]),
+  }),
 });
 
 const getAnalyticsSchema = z.object({
@@ -186,11 +189,32 @@ router.post('/assistant/threads/:threadId/messages', requireAuth, validateReques
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ error: 'User not authenticated' });
     if (!conversationAssistant.isConfigured) return res.status(503).json({ success: false, error: 'AI is not configured' });
-    return res.json({ success: true, data: await conversationAssistant.ask(userId, req.params.threadId, req.body.question) });
+    return res.json({ success: true, data: await conversationAssistant.ask(userId, req.params.threadId, req.body.question, req.body.chatIds) });
   } catch (error) {
     if ((error as Error).message === 'ASSISTANT_THREAD_NOT_FOUND') return res.status(404).json({ success: false, error: 'Assistant thread not found' });
     logger.error('Error answering assistant question:', error);
     return res.status(500).json({ success: false, error: 'Failed to answer assistant question' });
+  }
+});
+
+router.get('/assistant/mention-candidates', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: 'User not authenticated' });
+    const query = String(req.query.q || '').trim();
+    const chats = supabase.from('chats')
+      .select('id, name, platform, is_group, last_message_at')
+      .eq('user_id', userId);
+    const candidates = query
+      ? chats.ilike('name', `%${query.replace(/[%_]/g, '')}%`)
+      : chats;
+    const { data, error } = await candidates
+      .order('last_message_at', { ascending: false }).limit(8);
+    if (error) throw error;
+    return res.json({ success: true, data: data || [] });
+  } catch (error) {
+    logger.error('Error finding assistant mention candidates:', error);
+    return res.status(500).json({ error: 'Failed to find conversations' });
   }
 });
 

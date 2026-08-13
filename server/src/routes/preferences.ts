@@ -4,6 +4,7 @@ import { requireAuth } from '../middleware/auth';
 import { validateRequest } from '../middleware/validation';
 import { supabase } from '../services/supabase';
 import { logger } from '../utils/logger';
+import { voiceProfileService } from '../services/voice-profile-service';
 
 const router = Router();
 
@@ -95,5 +96,53 @@ router.put(
     return res.json({ success: true, data });
   }
 );
+
+router.get('/voice-profiles', requireAuth, async (req: Request, res: Response) => {
+  try {
+    if (!req.user?.id) return res.status(401).json({ error: 'User not authenticated' });
+    return res.json({ success: true, data: await voiceProfileService.list(req.user.id) });
+  } catch (error) {
+    logger.error('Error listing voice profiles:', error);
+    return res.status(500).json({ error: 'Failed to load voice profiles' });
+  }
+});
+
+router.put('/voice-profiles/:language', requireAuth, async (req: Request, res: Response) => {
+  try {
+    if (!req.user?.id) return res.status(401).json({ error: 'User not authenticated' });
+    const profile = typeof req.body?.profile === 'string' ? req.body.profile : '';
+    if (profile.length > 1500) return res.status(400).json({ error: 'Voice profile must be 1,500 characters or less' });
+    return res.json({ success: true, data: await voiceProfileService.update(req.user.id, req.params.language, profile) });
+  } catch (error) {
+    logger.error('Error updating voice profile:', error);
+    return res.status(500).json({ error: 'Failed to update voice profile' });
+  }
+});
+
+// Reset removes only the saved aggregate summary. It never deletes message history,
+// so a later rebuild can safely derive a fresh profile from the user's sent messages.
+router.delete('/voice-profiles/:language', requireAuth, async (req: Request, res: Response) => {
+  try {
+    if (!req.user?.id) return res.status(401).json({ error: 'User not authenticated' });
+    const { error } = await supabase.from('user_voice_profiles')
+      .delete().eq('user_id', req.user.id).eq('language', req.params.language);
+    if (error) throw error;
+    return res.json({ success: true });
+  } catch (error) {
+    logger.error('Error resetting voice profile:', error);
+    return res.status(500).json({ error: 'Failed to reset voice profile' });
+  }
+});
+
+router.post('/voice-profiles/rebuild', requireAuth, async (req: Request, res: Response) => {
+  try {
+    if (!req.user?.id) return res.status(401).json({ error: 'User not authenticated' });
+    if (!voiceProfileService.isConfigured) return res.status(503).json({ error: 'AI is not configured' });
+    return res.status(202).json({ success: true, data: await voiceProfileService.rebuild(req.user.id) });
+  } catch (error) {
+    logger.error('Error rebuilding voice profiles:', error);
+    return res.status(500).json({ error: 'Failed to rebuild voice profiles' });
+  }
+});
 
 export default router;

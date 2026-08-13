@@ -8,6 +8,7 @@ import {
   AssistantIndexStatus,
   AssistantThread,
   AssistantTurn,
+  AssistantMentionCandidate,
   conversationAssistantApi,
 } from '../services/conversationAssistant';
 
@@ -35,6 +36,9 @@ function Sources({ citations }: { citations: AssistantCitation[] }) {
           <Text style={{ color: '#1e3a8a', fontSize: 12, fontWeight: '700' }}>
             {citation.fromMe ? 'You' : citation.senderName} · {new Date(citation.timestamp).toLocaleDateString()} · {citation.platform}
           </Text>
+          {citation.isPreferredScope === false && (
+            <Text style={{ color: '#64748b', fontSize: 11, marginTop: 2 }}>Also relevant from another conversation</Text>
+          )}
           <Text numberOfLines={3} style={{ color: '#334155', fontSize: 13, marginTop: 2 }}>{citation.excerpt}</Text>
         </TouchableOpacity>
       ))}
@@ -63,6 +67,22 @@ export default function AssistantScreen() {
   const [loading, setLoading] = useState(true);
   const [asking, setAsking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [mentions, setMentions] = useState<AssistantMentionCandidate[]>([]);
+  const [mentionCandidates, setMentionCandidates] = useState<AssistantMentionCandidate[]>([]);
+
+  const onQuestionChange = (value: string) => {
+    setQuestion(value);
+    const match = value.match(/@([^\s@]{0,40})$/);
+    if (!match) { setMentionCandidates([]); return; }
+    void conversationAssistantApi.mentionCandidates(match[1])
+      .then(setMentionCandidates).catch(() => setMentionCandidates([]));
+  };
+
+  const selectMention = (candidate: AssistantMentionCandidate) => {
+    setMentions(current => current.some(item => item.id === candidate.id) ? current : [...current, candidate]);
+    setQuestion(current => current.replace(/@([^\s@]{1,40})$/, ''));
+    setMentionCandidates([]);
+  };
 
   const loadThread = useCallback(async (thread: AssistantThread) => {
     setActiveThread(thread);
@@ -112,18 +132,22 @@ export default function AssistantScreen() {
     try {
       const thread = activeThread || await createThread();
       if (!thread) return;
-      const optimistic: AssistantTurn = { id: `optimistic-${Date.now()}`, role: 'user', content: text, citations: [], created_at: new Date().toISOString() };
+      const scopeChatIds = mentions.map(mention => mention.id);
+      const optimistic: AssistantTurn = { id: `optimistic-${Date.now()}`, role: 'user', content: text, citations: [], scope_chat_ids: scopeChatIds, created_at: new Date().toISOString() };
       setTurns(prev => [...prev, optimistic]);
       setQuestion('');
-      const result = await conversationAssistantApi.ask(thread.id, text);
+      setMentionCandidates([]);
+      const result = await conversationAssistantApi.ask(thread.id, text, scopeChatIds);
       setTurns(prev => [...prev, {
         id: `assistant-${Date.now()}`,
         role: 'assistant',
         content: result.answer,
         citations: result.citations,
+        scope_chat_ids: scopeChatIds,
         created_at: new Date().toISOString(),
       }]);
       setIndexStatus(result.indexing);
+      setMentions([]);
       const refreshedThreads = await conversationAssistantApi.listThreads();
       setThreads(refreshedThreads);
       setActiveThread(refreshedThreads.find(item => item.id === thread.id) || thread);
@@ -198,7 +222,15 @@ export default function AssistantScreen() {
           </ScrollView>
           {error && <Text testID="assistant-error" style={{ color: '#dc2626', fontSize: 12, paddingHorizontal: 16, paddingBottom: 6 }}>{error}</Text>}
           <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8, padding: 12, borderTopWidth: 1, borderColor: '#e5e7eb' }}>
-            <TextInput value={question} onChangeText={setQuestion} placeholder="Ask about a message, plan, or person…" multiline testID="assistant-input" style={{ flex: 1, minHeight: 42, maxHeight: 110, borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 9, color: '#0f172a' }} />
+            <View style={{ flex: 1 }}>
+              {mentions.length > 0 && <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingBottom: 5 }}>
+                {mentions.map(mention => <TouchableOpacity key={mention.id} onPress={() => setMentions(current => current.filter(item => item.id !== mention.id))} testID={`assistant-mention-${mention.id}`} style={{ backgroundColor: '#e0e7ff', borderRadius: 14, paddingHorizontal: 9, paddingVertical: 5 }}><Text style={{ color: '#4338ca', fontSize: 12, fontWeight: '700' }}>@{mention.name} ×</Text></TouchableOpacity>)}
+              </ScrollView>}
+              {mentionCandidates.length > 0 && <View testID="assistant-mention-candidates" style={{ position: 'absolute', bottom: 50, left: 0, right: 0, backgroundColor: '#fff', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, zIndex: 3 }}>
+                {mentionCandidates.map(candidate => <TouchableOpacity key={candidate.id} onPress={() => selectMention(candidate)} testID={`assistant-mention-candidate-${candidate.id}`} style={{ paddingHorizontal: 12, paddingVertical: 9, borderBottomWidth: 1, borderColor: '#f1f5f9' }}><Text style={{ color: '#0f172a', fontWeight: '700' }}>{candidate.name}</Text><Text style={{ color: '#64748b', fontSize: 11 }}>{candidate.platform}{candidate.is_group ? ' · group' : ''}</Text></TouchableOpacity>)}
+              </View>}
+              <TextInput value={question} onChangeText={onQuestionChange} placeholder="Ask about a message, plan, or @person…" multiline testID="assistant-input" style={{ minHeight: 42, maxHeight: 110, borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 9, color: '#0f172a' }} />
+            </View>
             <TouchableOpacity onPress={() => void ask()} disabled={asking || !question.trim()} testID="assistant-send" style={{ backgroundColor: asking || !question.trim() ? '#c7d2fe' : '#4f46e5', borderRadius: 22, padding: 11 }}><SendHorizonal size={20} color="#ffffff" /></TouchableOpacity>
           </View>
         </KeyboardAvoidingView>

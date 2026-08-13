@@ -28,6 +28,7 @@ export interface ContactProfile {
   location: string | null;
   key_facts: Array<{ fact: string; confidence: number; source: string }>;
   relationship_context: string | null;
+  ai_instruction: string | null;
   created_at: string;
   updated_at: string;
 }

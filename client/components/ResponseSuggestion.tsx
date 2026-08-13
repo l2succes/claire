@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, TextInput } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, TextInput, Modal } from 'react-native';
 import { useState, useEffect, useRef } from 'react';
 import { Sparkles, Send, RefreshCw, ThumbsUp, ThumbsDown, SlidersHorizontal, Brain, Expand } from 'lucide-react-native';
 import { supabase } from '../services/supabase';
@@ -247,12 +247,6 @@ export function ResponseSuggestion({
     }
   };
 
-  const getConfidenceColor = (score: number) => {
-    if (score >= 0.8) return 'text-green-600 dark:text-green-400';
-    if (score >= 0.6) return 'text-yellow-600 dark:text-yellow-400';
-    return 'text-orange-600 dark:text-orange-400';
-  };
-
   if (!messageContent) return null;
 
   return (
@@ -290,7 +284,7 @@ export function ResponseSuggestion({
             style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, paddingVertical: 4 }}
           >
             <SlidersHorizontal size={14} color="#2563eb" />
-            <Text style={{ marginLeft: 4, color: '#2563eb', fontSize: 12, fontWeight: '600' }}>Guide</Text>
+            <Text style={{ marginLeft: 4, color: '#2563eb', fontSize: 12, fontWeight: '600' }}>Adjust</Text>
           </TouchableOpacity>
           {suggestions.length > 0 && (
             <TouchableOpacity
@@ -317,12 +311,15 @@ export function ResponseSuggestion({
         </View>
       </View>
 
-      {showGuidance && (
-        <View style={{ marginBottom: 10 }} testID="reply-guidance-panel">
+      <Modal visible={showGuidance} transparent animationType="slide" onRequestClose={() => setShowGuidance(false)}>
+        <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(15,23,42,0.35)' }}>
+          <View testID="reply-guidance-panel" style={{ backgroundColor: '#fff', borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 20, gap: 10 }}>
+          <Text style={{ color: '#0f172a', fontSize: 17, fontWeight: '700' }}>Adjust these replies</Text>
+          <Text style={{ color: '#64748b', fontSize: 13 }}>Tell Claire what you want. Your direction applies only to this set.</Text>
           <TextInput
             value={guidance}
             onChangeText={setGuidance}
-            placeholder="e.g. warm, concise, and ask about Friday"
+            placeholder="e.g. less formal, more like me, say I'm down but busy"
             placeholderTextColor="#64748b"
             multiline
             maxLength={500}
@@ -339,16 +336,22 @@ export function ResponseSuggestion({
               fontSize: 13,
             }}
           />
+          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 12 }}>
+          <TouchableOpacity onPress={() => setShowGuidance(false)} style={{ paddingHorizontal: 12, paddingVertical: 9 }}>
+            <Text style={{ color: '#64748b', fontSize: 13, fontWeight: '700' }}>Cancel</Text>
+          </TouchableOpacity>
           <TouchableOpacity
             onPress={() => handleGenerate(true)}
             disabled={generating}
             testID="apply-reply-guidance-button"
             style={{ alignSelf: 'flex-start', marginTop: 7, backgroundColor: '#2563eb', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7 }}
           >
-            <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>Draft with guidance</Text>
+            <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>Regenerate</Text>
           </TouchableOpacity>
+          </View>
         </View>
-      )}
+        </View>
+      </Modal>
 
       {explanation && (
         <View testID="conversation-explanation" style={{ backgroundColor: '#ffffff', borderRadius: 10, borderWidth: 1, borderColor: '#bfdbfe', padding: 10, marginBottom: 10 }}>
@@ -395,15 +398,6 @@ export function ResponseSuggestion({
                 selectedIndex === index ? 'border-2 border-blue-500' : 'border border-gray-200 dark:border-gray-700'
               }`}
             >
-              {/* Confidence Score */}
-              {suggestion.confidence < 1 && (
-                <View className="flex-row items-center mb-1">
-                  <Text className={`text-xs font-medium ${getConfidenceColor(suggestion.confidence)}`}>
-                    {Math.round(suggestion.confidence * 100)}% confidence
-                  </Text>
-                </View>
-              )}
-
               {/* Suggestion Text */}
               <Text className="text-sm text-gray-800 dark:text-gray-200 mb-2" numberOfLines={3}>
                 {suggestion.suggestion}

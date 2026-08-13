@@ -39,6 +39,7 @@ const responseSafetyMock = {
   // Pass-through by default: return whatever the processor produced.
   validateAndFilter: mock(async (resp: any, _ctx: unknown) => resp),
 };
+const voiceProfileMock = { guidanceFor: mock(async () => 'Owner voice guidance') };
 const supabaseMock = {
   from: mock((_table: string) => ({
     update: mock(() => ({
@@ -52,6 +53,7 @@ mock.module('../../src/services/context-builder', () => ({ contextBuilder: conte
 mock.module('../../src/services/prompt-templates', () => ({ promptTemplates: promptTemplatesMock }));
 mock.module('../../src/services/response-cache', () => ({ responseCache: responseCacheMock }));
 mock.module('../../src/services/response-safety', () => ({ responseSafety: responseSafetyMock }));
+mock.module('../../src/services/voice-profile-service', () => ({ voiceProfileService: voiceProfileMock }));
 mock.module('../../src/services/supabase', () => ({ supabase: supabaseMock }));
 mock.module('../../src/utils/logger', () => ({
   logger: { info: mock(() => {}), warn: mock(() => {}), error: mock(() => {}), debug: mock(() => {}) },
@@ -67,7 +69,7 @@ type AnyMock = ReturnType<typeof mock>;
 const callAI = spyOn(aiProcessor as any, 'callAI');
 
 function resetMocks() {
-  for (const obj of [contextBuilderMock, promptTemplatesMock, responseCacheMock, responseSafetyMock, supabaseMock]) {
+  for (const obj of [contextBuilderMock, promptTemplatesMock, responseCacheMock, responseSafetyMock, voiceProfileMock, supabaseMock]) {
     for (const m of Object.values(obj)) (m as AnyMock).mockClear();
   }
   contextBuilderMock.buildContext.mockResolvedValue(conversationContext as any);
@@ -76,6 +78,7 @@ function resetMocks() {
   promptTemplatesMock.buildPrompt.mockReturnValue({ system: 'You are a helpful assistant', user: 'Generate a reply' });
   responseCacheMock.get.mockResolvedValue(null);
   responseSafetyMock.validateAndFilter.mockImplementation(async (resp: any) => resp);
+  voiceProfileMock.guidanceFor.mockResolvedValue('Owner voice guidance');
   callAI.mockReset();
 }
 
@@ -126,7 +129,7 @@ describe('AIProcessor', () => {
       expect(promptTemplatesMock.detectMessageType).toHaveBeenCalledWith('Hello');
       expect(responseSafetyMock.validateAndFilter).toHaveBeenCalled();
       expect(responseCacheMock.setWithConfidenceTTL).toHaveBeenCalled();
-      expect(responseCacheMock.get).toHaveBeenCalledWith('short-style-language-v1:test-msg-1:Hello', 'user-1');
+      expect(responseCacheMock.get).toHaveBeenCalledWith('voice-rules-v1:test-msg-1:Hello', 'user-1');
 
       // The processor appends a JSON-only instruction to the system prompt.
       const [systemArg] = callAI.mock.calls[0] as [string, string];
@@ -135,6 +138,11 @@ describe('AIProcessor', () => {
       expect(systemArg).toContain('Match the reply language to the latest incoming message');
       expect(systemArg).toContain('Match the conversation\'s communication style');
       expect(systemArg).toContain('Keep each default suggestion short');
+      expect(systemArg).toContain('Do not invent pet names');
+      expect(voiceProfileMock.guidanceFor).toHaveBeenCalled();
+      const [, userArg] = callAI.mock.calls[0] as [string, string];
+      expect(userArg).toContain('Instruction precedence: safety and output rules first');
+      expect(userArg).toContain('saved conversation instruction; then the learned owner voice');
       expect(promptTemplatesMock.buildPrompt).toHaveBeenCalledWith(
         'Hello',
         'social',
@@ -142,7 +150,7 @@ describe('AIProcessor', () => {
           relationship: 'friend',
           language: expect.stringContaining('dominant language in the latest message'),
         }),
-        'Context string',
+        expect.stringContaining('Owner voice guidance'),
         3
       );
     });
@@ -183,6 +191,7 @@ describe('AIProcessor', () => {
 
       expect(responseCacheMock.get).not.toHaveBeenCalled();
       const [, userPrompt] = callAI.mock.calls[0] as [string, string];
+      expect(userPrompt).toContain('Instruction precedence: safety and output rules first');
       expect(userPrompt).toContain('Additional direction from the user: Keep it playful');
       expect(responseCacheMock.setWithConfidenceTTL).not.toHaveBeenCalled();
     });

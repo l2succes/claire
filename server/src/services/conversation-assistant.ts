@@ -18,6 +18,8 @@ export interface AssistantCitation {
   platform: string;
   chatName: string | null;
   isGroup: boolean;
+  /** Present when an Ask Claire question targeted one or more conversations. */
+  isPreferredScope?: boolean;
 }
 
 interface RetrievedMessage extends AssistantCitation {
@@ -50,6 +52,7 @@ interface AssistantTurn {
   role: 'user' | 'assistant';
   content: string;
   citations: AssistantCitation[];
+  scope_chat_ids: string[];
   created_at: string;
 }
 
@@ -101,7 +104,7 @@ class ConversationAssistantService {
         .maybeSingle(),
       supabase
         .from('conversation_assistant_turns')
-        .select('id, role, content, citations, created_at')
+        .select('id, role, content, citations, scope_chat_ids, created_at')
         .eq('thread_id', threadId)
         .eq('user_id', userId)
         .order('created_at', { ascending: true }),
@@ -175,15 +178,16 @@ class ConversationAssistantService {
     if (error) throw error;
   }
 
-  async ask(userId: string, threadId: string, question: string): Promise<AssistantAnswer> {
+  async ask(userId: string, threadId: string, question: string, preferredChatIds: string[] = []): Promise<AssistantAnswer> {
     if (!this.openai) throw new Error('NO_AI_PROVIDER');
     const { thread, turns } = await this.getThread(userId, threadId);
     const cleanQuestion = question.trim();
     if (!cleanQuestion) throw new Error('QUESTION_REQUIRED');
 
-    const [citations, indexing] = await Promise.all([
-      this.retrieve(userId, cleanQuestion),
+    const [citations, indexing, conversationInstructions] = await Promise.all([
+      this.retrieve(userId, cleanQuestion, preferredChatIds),
       this.getIndexStatus(userId),
+      this.getConversationInstructions(userId, preferredChatIds),
     ]);
     const previousTurns = turns.slice(-6).map(turn => `${turn.role === 'user' ? 'User' : 'Claire'}: ${turn.content}`).join('\n');
     const sourceText = citations.map((citation, index) =>
@@ -197,11 +201,11 @@ class ConversationAssistantService {
       messages: [
         {
           role: 'system',
-          content: 'You are Claire, a private conversation research assistant. Answer only from the supplied sources. Never claim to have read a message that is not quoted. Be concise, state uncertainty when sources are insufficient, and do not suggest that you will send or edit messages. Interpret clear everyday and colloquial equivalents (for example, "link up", "see you", or "hang out" can mean meeting), but say so when the wording is an interpretation rather than an exact quote. Return JSON only: {"answer":"..."}.',
+          content: 'You are Claire, a private conversation research assistant. Answer only from the supplied sources. Never claim to have read a message that is not quoted. Be concise, state uncertainty when sources are insufficient, and do not suggest that you will send or edit messages. Interpret clear everyday and colloquial equivalents (for example, "link up", "see you", or "hang out" can mean meeting), but say so when the wording is an interpretation rather than an exact quote. For relationship or communication questions, give a warm practical read grounded in the excerpts, clearly distinguish observation from inference, and suggest a constructive next step. Return JSON only: {"answer":"..."}.',
         },
         {
           role: 'user',
-          content: `Question: ${cleanQuestion}\n\nPrevious assistant thread:\n${previousTurns || '(none)'}\n\nRetrieved sources:\n${sourceText || '(no matching messages found)'}`,
+          content: `Question: ${cleanQuestion}\n\nSelected conversation instructions:\n${conversationInstructions || '(none)'}\n\nPrevious assistant thread:\n${previousTurns || '(none)'}\n\nRetrieved sources:\n${sourceText || '(no matching messages found)'}`,
         },
       ],
     });
@@ -217,8 +221,8 @@ class ConversationAssistantService {
     const now = new Date().toISOString();
     const { error: turnsError } = await supabase.from('conversation_assistant_turns').insert([
       // The column is deliberately NOT NULL so every persisted turn has a stable shape.
-      { thread_id: thread.id, user_id: userId, role: 'user', content: cleanQuestion, citations: [] },
-      { thread_id: thread.id, user_id: userId, role: 'assistant', content: answer, citations },
+      { thread_id: thread.id, user_id: userId, role: 'user', content: cleanQuestion, citations: [], scope_chat_ids: preferredChatIds },
+      { thread_id: thread.id, user_id: userId, role: 'assistant', content: answer, citations, scope_chat_ids: preferredChatIds },
     ]);
     if (turnsError) throw turnsError;
 
@@ -259,16 +263,18 @@ class ConversationAssistantService {
     }
   }
 
-  private async retrieve(userId: string, query: string): Promise<AssistantCitation[]> {
-    const exactPromise = supabase.rpc('search_conversation_messages', {
+  private async retrieve(userId: string, query: string, preferredChatIds: string[] = []): Promise<AssistantCitation[]> {
+    const exactPromise = supabase.rpc('search_scoped_conversation_messages', {
       query_text: query,
       target_user_id: userId,
+      preferred_chat_ids: preferredChatIds,
       result_limit: RETRIEVAL_LIMIT,
     });
     const semanticPromise = this.embed(query)
-      .then(embedding => supabase.rpc('match_conversation_messages', {
+      .then(embedding => supabase.rpc('match_scoped_conversation_messages', {
         query_embedding: embedding,
         target_user_id: userId,
+        preferred_chat_ids: preferredChatIds,
         result_limit: RETRIEVAL_LIMIT,
       }))
       .catch(error => {
@@ -297,7 +303,18 @@ class ConversationAssistantService {
         score,
       });
     }
-    return [...merged.values()].sort((a, b) => b.score - a.score).slice(0, RETRIEVAL_LIMIT).map(({ score: _score, ...citation }) => citation);
+    return [...merged.values()].sort((a, b) => b.score - a.score).slice(0, RETRIEVAL_LIMIT).map(({ score: _score, ...citation }) => ({
+      ...citation,
+      ...(preferredChatIds.length ? { isPreferredScope: preferredChatIds.includes(citation.chatId) } : {}),
+    }));
+  }
+
+  private async getConversationInstructions(userId: string, chatIds: string[]): Promise<string> {
+    if (!chatIds.length) return '';
+    const { data, error } = await supabase.from('contact_profiles')
+      .select('chat_id, ai_instruction').eq('user_id', userId).in('chat_id', chatIds).not('ai_instruction', 'is', null);
+    if (error) throw error;
+    return (data || []).map(row => `Chat ${row.chat_id}: ${row.ai_instruction}`).join('\n');
   }
 
   private async embed(input: string): Promise<number[]> {

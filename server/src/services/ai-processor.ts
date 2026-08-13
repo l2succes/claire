@@ -7,6 +7,7 @@ import { contextBuilder } from './context-builder';
 import { promptTemplates } from './prompt-templates';
 import { responseCache } from './response-cache';
 import { responseSafety } from './response-safety';
+import { voiceProfileService } from './voice-profile-service';
 
 interface AIResponse {
   messageId: string;
@@ -34,7 +35,7 @@ interface GenerateResponseOptions {
 
 // Bump this whenever prompt rules materially change so cached suggestions use
 // the current tone and language behavior rather than a stale prompt result.
-const RESPONSE_PROMPT_VERSION = 'short-style-language-v1';
+const RESPONSE_PROMPT_VERSION = 'voice-rules-v1';
 
 interface ResponseAnalytics {
   messageId: string;
@@ -201,21 +202,25 @@ export class AIProcessor {
         language,
       };
 
+      const voiceGuidance = await voiceProfileService.guidanceFor(userId, conversationContext.messages);
       const { system, user } = promptTemplates.buildPrompt(
         content,
         messageType,
         promptContext,
-        contextBuilder.formatForPrompt(conversationContext),
+        `${contextBuilder.formatForPrompt(conversationContext)}${voiceGuidance ? `\n\n${voiceGuidance}` : ''}`,
         3
       );
 
       // OpenAI uses JSON mode below; the instruction keeps Bedrock/Kimi output
       // compatible and prevents generic fallback replies when a model drifts.
-      const systemWithJson = `${system}\n\nYou MUST respond with valid JSON only, no markdown or explanation.\n\nReply quality requirements:\n- Return exactly 3 distinct, ready-to-send suggestions in a "suggestions" array.\n- Keep each default suggestion short: one natural sentence, usually 8-20 words. Include a second sentence only when it is essential to answer the message.\n- Use the actual latest message and recent conversation details.\n- Make each option concrete: propose or answer the relevant plan, question, place, time, or next step when one is present.\n- Do not return acknowledgement-only filler such as "I understand", "Got it", or "Thanks for letting me know".\n- If the relationship is friend, sound warm, casual, and excited rather than formal.\n- Match the reply language to the latest incoming message and the dominant recent exchange. If the conversation is Spanish, write Spanish; preserve natural code-switching only when the conversation itself does it. The account language is a fallback, not an override.\n- Match the conversation's communication style: formality, sentence length, directness, energy, slang/idioms, punctuation, and emoji density. Sound natural for the owner without copying distinctive typos or overdoing slang.\n- Only make replies longer when the user explicitly asks for more detail in their additional direction.`;
+      const systemWithJson = `${system}\n\nYou MUST respond with valid JSON only, no markdown or explanation.\n\nReply quality requirements:\n- Return exactly 3 distinct, ready-to-send suggestions in a "suggestions" array.\n- Keep each default suggestion short: one natural sentence, usually 8-20 words. Include a second sentence only when it is essential to answer the message.\n- Use the actual latest message and recent conversation details.\n- Make each option concrete: propose or answer the relevant plan, question, place, time, or next step when one is present.\n- Do not return acknowledgement-only filler such as "I understand", "Got it", or "Thanks for letting me know".\n- If the relationship is friend, sound warm, casual, and excited rather than formal.\n- Match the reply language to the latest incoming message and the dominant recent exchange. If the conversation is Spanish, write Spanish; preserve natural code-switching only when the conversation itself does it. The account language is a fallback, not an override.\n- Match the conversation's communication style and the owner's voice guidance: formality, sentence length, directness, energy, slang/idioms, punctuation, and emoji density. Do not invent pet names, compliment language, emojis, or polish that are not supported by the owner examples.\n- Only make replies longer when the user explicitly asks for more detail in their additional direction.`;
 
+      // The context carries the saved chat instruction and voice summary. Make
+      // the intended order explicit before appending a one-off Adjust request.
+      const precedence = '\n\nInstruction precedence: safety and output rules first; then the user\'s Additional direction; then the saved conversation instruction; then the learned owner voice; then global preferences; then live conversation context.';
       const userPrompt = guidance
-        ? `${user}\n\nAdditional direction from the user: ${guidance}`
-        : user;
+        ? `${user}${precedence}\n\nAdditional direction from the user: ${guidance}`
+        : `${user}${precedence}`;
       const rawContent = await this.callAI(systemWithJson, userPrompt);
       const response = this.parseAIResponse(rawContent, messageId, messageType);
 
@@ -250,7 +255,7 @@ export class AIProcessor {
       || context.contact?.inferredRelationship
       || context.chatCategory
       || 'not yet specified';
-    const system = `You are Claire, a thoughtful private messaging assistant. Explain the latest message in context for the account owner. Do not invent facts or intentions. Return valid JSON only with exactly these keys: summary, latestMessageIntent, responseStrategy, suggestedNextStep, contextSignals. contextSignals must be an array of 2-4 concise facts grounded in the conversation. This is a ${chatType} chat. The relationship is ${relationship}.`;
+    const system = `You are Claire, a thoughtful private messaging assistant. Explain the latest message in context for the account owner. Do not invent facts or intentions. Return valid JSON only with exactly these keys: summary, latestMessageIntent, responseStrategy, suggestedNextStep, contextSignals. contextSignals must be an array of 2-4 concise facts grounded in the conversation. This is a ${chatType} chat. The relationship is ${relationship}. ${context.contact?.aiInstruction ? `Conversation instruction: ${context.contact.aiInstruction}` : ''}`;
     const user = `Latest message: "${content}"\n\nConversation context:\n${contextBuilder.formatForPrompt(context)}\n\nExplain what the latest message likely means, what matters in the context, and how the owner could respond.`;
 
     try {

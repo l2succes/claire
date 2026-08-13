@@ -29,6 +29,7 @@ import contactRoutes from './routes/contacts';
 import { platformManager } from './adapters';
 import { aiProcessor } from './services/ai-processor';
 import { conversationAssistant } from './services/conversation-assistant';
+import { voiceProfileService } from './services/voice-profile-service';
 import { promiseDetector } from './services/promise-detector';
 import { autoReplyEngine } from './services/auto-reply-engine';
 import { pushNotificationService } from './services/push-notification';
@@ -486,6 +487,13 @@ async function initializePlatforms() {
             timestamp: message.timestamp instanceof Date ? message.timestamp.toISOString() : String(message.timestamp),
             platform: message.platform,
           }).catch((err) => logger.debug('Conversation assistant index skipped:', (err as Error).message));
+        }
+
+        // Voice summaries are derived only from messages sent by the account
+        // owner; profiles store aggregate guidance, never the source text.
+        if (savedMsg?.id && message.isFromMe && message.content?.trim() && voiceProfileService.isConfigured) {
+          void voiceProfileService.markSentMessage(message.userId)
+            .catch((err) => logger.debug('Voice profile refresh skipped:', (err as Error).message));
         }
 
         // Detect and persist promises (fire-and-forget, both inbound and outbound)

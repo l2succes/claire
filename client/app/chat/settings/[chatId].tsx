@@ -143,6 +143,19 @@ export default function ConversationSettingsScreen() {
             onSelect={handleCategorySelect}
           />
 
+          <View style={{ backgroundColor: '#ffffff', marginBottom: 12 }}>
+            <Text style={{ fontSize: 13, fontWeight: '600', color: '#6b7280', paddingHorizontal: 16, paddingBottom: 4, paddingTop: 12 }}>
+              Claire in this chat
+            </Text>
+            <EditableField
+              label="Instruction"
+              value={chatSettings?.profile?.ai_instruction ?? null}
+              placeholder="e.g. Keep this warm, casual, and don't suggest flirting"
+              multiline
+              onSave={(v) => handleProfileUpdate('ai_instruction', v)}
+            />
+          </View>
+
           {/* Smart Cards */}
           <SmartCardList
             cards={chatSettings?.smartCards ?? []}

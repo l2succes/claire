@@ -104,10 +104,13 @@ router.put('/:chatId/profile', requireAuth, async (req: Request, res: Response) 
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ error: 'Not authenticated' });
 
-    const allowedFields = ['display_name', 'email', 'phone_number', 'location', 'relationship_context'];
+    const allowedFields = ['display_name', 'email', 'phone_number', 'location', 'relationship_context', 'ai_instruction'];
     const updates: Record<string, string> = {};
     for (const field of allowedFields) {
       if (req.body[field] !== undefined) {
+        if (field === 'ai_instruction' && (typeof req.body[field] !== 'string' || req.body[field].length > 1500)) {
+          return res.status(400).json({ error: 'Conversation instruction must be 1,500 characters or less' });
+        }
         updates[field] = req.body[field];
       }
     }

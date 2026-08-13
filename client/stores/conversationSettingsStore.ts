@@ -17,7 +17,7 @@ interface ConversationSettingsState {
 
   fetchSettings: (chatId: string) => Promise<void>;
   setCategory: (chatId: string, userId: string, category: ChatCategory) => Promise<void>;
-  updateProfile: (chatId: string, userId: string, updates: Partial<Pick<ContactProfile, 'display_name' | 'email' | 'phone_number' | 'location' | 'relationship_context'>>) => Promise<void>;
+  updateProfile: (chatId: string, userId: string, updates: Partial<Pick<ContactProfile, 'display_name' | 'email' | 'phone_number' | 'location' | 'relationship_context' | 'ai_instruction'>>) => Promise<void>;
   dismissClarificationCard: (chatId: string) => void;
   showClarificationCard: (chatId: string) => void;
   dismissCard: (chatId: string, cardId: string) => Promise<void>;
@@ -113,7 +113,7 @@ export const useConversationSettingsStore = create<ConversationSettingsState>((s
     }
   },
 
-  updateProfile: async (chatId: string, userId: string, updates: Partial<Pick<ContactProfile, 'display_name' | 'email' | 'phone_number' | 'location' | 'relationship_context'>>) => {
+  updateProfile: async (chatId: string, userId: string, updates: Partial<Pick<ContactProfile, 'display_name' | 'email' | 'phone_number' | 'location' | 'relationship_context' | 'ai_instruction'>>) => {
     // Optimistic update
     set((state) => {
       const current = state.settings[chatId] || defaultSettings;
@@ -124,7 +124,7 @@ export const useConversationSettingsStore = create<ConversationSettingsState>((s
             ...current,
             profile: current.profile
               ? { ...current.profile, ...updates }
-              : { id: '', user_id: userId, contact_id: null, chat_id: chatId, display_name: null, email: null, phone_number: null, location: null, key_facts: [], relationship_context: null, created_at: '', updated_at: '', ...updates } as ContactProfile,
+              : { id: '', user_id: userId, contact_id: null, chat_id: chatId, display_name: null, email: null, phone_number: null, location: null, key_facts: [], relationship_context: null, ai_instruction: null, created_at: '', updated_at: '', ...updates } as ContactProfile,
             // Once the relationship is saved, dismiss the card
             clarificationDismissed: updates.relationship_context !== undefined ? true : current.clarificationDismissed,
           },

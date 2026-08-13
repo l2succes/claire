@@ -27,6 +27,7 @@ interface ContactContext {
   inferredName?: string;
   inferredRelationship?: string;
   confidence?: number;
+  aiInstruction?: string;
 }
 
 interface UserPreferences {
@@ -161,7 +162,7 @@ export class ContextBuilder {
     const [profileResult, databaseContactResult] = await Promise.all([
       supabase
         .from('contact_profiles')
-        .select('display_name, relationship_context')
+        .select('display_name, relationship_context, ai_instruction')
         .eq('chat_id', chatId)
         .eq('user_id', userId)
         .maybeSingle(),
@@ -192,6 +193,7 @@ export class ContextBuilder {
     return {
       name: profile?.display_name || contact?.name,
       relationship: profile?.relationship_context || undefined,
+      aiInstruction: profile?.ai_instruction || undefined,
       notes: contact?.notes,
       inferredName: contact?.inferred_name,
       inferredRelationship: contact?.inferred_relationship,
@@ -389,6 +391,9 @@ export class ContextBuilder {
       }
       if (context.contact.notes) {
         prompt += `Notes: ${context.contact.notes}\n`;
+      }
+      if (context.contact.aiInstruction) {
+        prompt += `Conversation instruction: ${context.contact.aiInstruction}\n`;
       }
       prompt += '\n';
     }

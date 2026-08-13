@@ -11,6 +11,7 @@ export interface AssistantCitation {
   platform: string;
   chatName: string | null;
   isGroup: boolean;
+  isPreferredScope?: boolean;
 }
 
 export interface AssistantThread {
@@ -25,7 +26,15 @@ export interface AssistantTurn {
   role: 'user' | 'assistant';
   content: string;
   citations: AssistantCitation[];
+  scope_chat_ids?: string[];
   created_at: string;
+}
+
+export interface AssistantMentionCandidate {
+  id: string;
+  name: string;
+  platform: string;
+  is_group: boolean;
 }
 
 export interface AssistantIndexStatus {
@@ -58,10 +67,11 @@ export const conversationAssistantApi = {
   }),
   getThread: (threadId: string) => request<{ thread: AssistantThread; turns: AssistantTurn[] }>(`/ai/assistant/threads/${encodeURIComponent(threadId)}`),
   deleteThread: (threadId: string) => request<void>(`/ai/assistant/threads/${encodeURIComponent(threadId)}`, { method: 'DELETE' }),
-  ask: (threadId: string, question: string) => request<{ answer: string; citations: AssistantCitation[]; indexing: AssistantIndexStatus }>(
+  ask: (threadId: string, question: string, chatIds: string[] = []) => request<{ answer: string; citations: AssistantCitation[]; indexing: AssistantIndexStatus }>(
     `/ai/assistant/threads/${encodeURIComponent(threadId)}/messages`,
-    { method: 'POST', body: JSON.stringify({ question }) },
+    { method: 'POST', body: JSON.stringify({ question, chatIds }) },
   ),
+  mentionCandidates: (query: string) => request<AssistantMentionCandidate[]>(`/ai/assistant/mention-candidates?q=${encodeURIComponent(query)}`),
   getIndexStatus: () => request<AssistantIndexStatus>('/ai/assistant/index/status'),
   startIndex: () => request<AssistantIndexStatus>('/ai/assistant/index', { method: 'POST' }),
 };
