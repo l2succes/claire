@@ -14,10 +14,12 @@ import {
 
 function Sources({ citations }: { citations: AssistantCitation[] }) {
   if (!citations.length) return null;
+  const [showAll, setShowAll] = useState(false);
+  const visibleCitations = showAll ? citations : citations.slice(0, 3);
   return (
     <View style={{ marginTop: 10, gap: 6 }} testID="assistant-sources">
       <Text style={{ color: '#64748b', fontSize: 12, fontWeight: '700' }}>Sources</Text>
-      {citations.map((citation) => (
+      {visibleCitations.map((citation) => (
         <TouchableOpacity
           key={citation.messageId}
           testID={`assistant-source-${citation.messageId}`}
@@ -29,6 +31,7 @@ function Sources({ citations }: { citations: AssistantCitation[] }) {
               chat_name: citation.chatName || citation.senderName,
               platform: citation.platform,
               is_group: citation.isGroup ? '1' : '0',
+              highlightMessageId: citation.messageId,
             },
           })}
           style={{ borderWidth: 1, borderColor: '#dbeafe', backgroundColor: '#f8fbff', borderRadius: 10, padding: 9 }}
@@ -42,6 +45,13 @@ function Sources({ citations }: { citations: AssistantCitation[] }) {
           <Text numberOfLines={3} style={{ color: '#334155', fontSize: 13, marginTop: 2 }}>{citation.excerpt}</Text>
         </TouchableOpacity>
       ))}
+      {citations.length > 3 && (
+        <TouchableOpacity onPress={() => setShowAll(current => !current)} testID="assistant-sources-toggle" style={{ alignSelf: 'flex-start', paddingVertical: 5 }}>
+          <Text style={{ color: '#4f46e5', fontSize: 13, fontWeight: '700' }}>
+            {showAll ? 'Show less' : `View ${citations.length - 3} more`}
+          </Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 }

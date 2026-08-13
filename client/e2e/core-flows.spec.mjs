@@ -600,7 +600,13 @@ async function mockBackend(page) {
           success: true,
           data: {
             answer: assistantScope.includes('mock-chat-wa-alice') ? 'Scoped Alice answer.' : 'You discussed meeting Alice after the report is sent.',
-            citations: [{ messageId: 'chatmsg-1', chatId: 'mock-chat-wa-alice', excerpt: "Hi! I'll send you the report by Friday", senderName: 'Alice (WA)', fromMe: false, timestamp: new Date().toISOString(), platform: 'whatsapp', chatName: 'Alice (WA)', isGroup: false, isPreferredScope: assistantScope.includes('mock-chat-wa-alice') }],
+            citations: [
+              { messageId: 'chatmsg-1', chatId: 'mock-chat-wa-alice', excerpt: "Hi! I'll send you the report by Friday", senderName: 'Alice (WA)', fromMe: false, timestamp: new Date().toISOString(), platform: 'whatsapp', chatName: 'Alice (WA)', isGroup: false, isPreferredScope: assistantScope.includes('mock-chat-wa-alice') },
+              { messageId: 'chatmsg-2', chatId: 'mock-chat-wa-alice', excerpt: 'Thanks for letting me know', senderName: 'You', fromMe: true, timestamp: new Date().toISOString(), platform: 'whatsapp', chatName: 'Alice (WA)', isGroup: false },
+              { messageId: 'chatmsg-img', chatId: 'mock-chat-wa-alice', excerpt: 'Check out this photo', senderName: 'Alice (WA)', fromMe: false, timestamp: new Date().toISOString(), platform: 'whatsapp', chatName: 'Alice (WA)', isGroup: false },
+              { messageId: 'chatmsg-audio', chatId: 'mock-chat-wa-alice', excerpt: 'Voice message', senderName: 'Alice (WA)', fromMe: false, timestamp: new Date().toISOString(), platform: 'whatsapp', chatName: 'Alice (WA)', isGroup: false },
+              { messageId: 'chatmsg-video', chatId: 'mock-chat-wa-alice', excerpt: 'Short clip', senderName: 'Alice (WA)', fromMe: false, timestamp: new Date().toISOString(), platform: 'whatsapp', chatName: 'Alice (WA)', isGroup: false },
+            ],
             indexing: { status: 'ready', indexedCount: 4, totalCount: 4, lastIndexedAt: new Date().toISOString(), lastError: null },
           },
         }),
@@ -910,8 +916,13 @@ test.describe('Core loop — mock backend', () => {
 
     await expect(page.getByTestId('assistant-turn-list')).toContainText('You discussed meeting Alice after the report is sent.');
     await expect(page.getByTestId('assistant-sources')).toContainText("Hi! I'll send you the report by Friday");
+    await expect(page.locator('[data-testid^="assistant-source-"]')).toHaveCount(3);
+    await page.getByTestId('assistant-sources-toggle').click();
+    await expect(page.locator('[data-testid^="assistant-source-"]')).toHaveCount(5);
     await page.getByTestId('assistant-source-chatmsg-1').click();
     await expect(page.getByTestId('chat-screen')).toBeVisible({ timeout: 8_000 });
+    await expect(page).toHaveURL(/highlightMessageId=chatmsg-1/);
+    await expect(page.getByTestId('message-bubble-chatmsg-1-incoming')).toHaveCSS('border-top-width', '2px');
   });
 
   test('Ask Claire @ targeting sends the selected conversation scope', async ({ page }) => {

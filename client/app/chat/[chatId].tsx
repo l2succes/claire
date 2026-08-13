@@ -85,12 +85,13 @@ function MediaVideo({ uri, messageId }: { uri: string; messageId: string }) {
 }
 
 export default function ChatScreen() {
-  const { chatId, contact_name, chat_name, platform, is_group } = useLocalSearchParams<{
+  const { chatId, contact_name, chat_name, platform, is_group, highlightMessageId } = useLocalSearchParams<{
     chatId: string;
     contact_name: string;
     chat_name: string;
     platform: string;
     is_group: string;
+    highlightMessageId?: string;
   }>();
 
   const user = useAuthStore((state) => state.user);
@@ -118,6 +119,7 @@ export default function ChatScreen() {
   const [suggestionRefreshKey, setSuggestionRefreshKey] = useState(0);
   const platformChatIdRef = useRef<string | null>(null);
   const listRef = useRef<FlatList>(null);
+  const hasScrolledToHighlight = useRef(false);
 
   const displayName = is_group === '1'
     ? (chat_name || contact_name || 'Group')
@@ -137,13 +139,28 @@ export default function ChatScreen() {
         .order('timestamp', { ascending: true })
         .limit(100);
       if (error) throw error;
-      setMessages(data || []);
+      let loadedMessages = data || [];
+      // Assistant citations can reference older history than the normal chat
+      // window. Fetch the cited row explicitly so it is always reachable.
+      if (highlightMessageId && !loadedMessages.some(message => message.id === highlightMessageId)) {
+        const { data: highlightedMessage, error: highlightError } = await supabase
+          .from('messages')
+          .select('id, content, timestamp, from_me, contact_name, contact_phone, content_type, media_url, media_mime_type')
+          .eq('id', highlightMessageId)
+          .eq('chat_id', chatId)
+          .eq('user_id', user.id)
+          .maybeSingle();
+        if (highlightError) throw highlightError;
+        if (highlightedMessage) loadedMessages = [...loadedMessages, highlightedMessage];
+      }
+      setMessages([...new Map(loadedMessages.map(message => [message.id, message])).values()]
+        .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()));
     } catch (err) {
       console.error('Failed to fetch messages:', err);
     } finally {
       setLoading(false);
     }
-  }, [user?.id, chatId]);
+  }, [user?.id, chatId, highlightMessageId]);
 
   const fetchChatInfo = useCallback(async () => {
     if (!chatId) return;
@@ -208,6 +225,21 @@ export default function ChatScreen() {
 
     return () => { supabase.removeChannel(subscription); };
   }, [chatId, user?.id, fetchMessages, fetchChatInfo, markConversationRead]);
+
+  useEffect(() => {
+    hasScrolledToHighlight.current = false;
+  }, [highlightMessageId]);
+
+  useEffect(() => {
+    if (!highlightMessageId || hasScrolledToHighlight.current) return;
+    const index = messages.findIndex(message => message.id === highlightMessageId);
+    if (index < 0) return;
+    const timer = setTimeout(() => {
+      listRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.45 });
+      hasScrolledToHighlight.current = true;
+    }, 80);
+    return () => clearTimeout(timer);
+  }, [messages, highlightMessageId]);
 
   // Clear error when user starts typing
   useEffect(() => {
@@ -371,6 +403,7 @@ export default function ChatScreen() {
 
   const renderMessage = ({ item }: { item: ChatMessage }) => {
     const isMe = item.from_me;
+    const isHighlighted = item.id === highlightMessageId;
     const subtextColor = isMe ? 'rgba(255,255,255,0.65)' : '#9ca3af';
     return (
       <View style={{
@@ -382,12 +415,14 @@ export default function ChatScreen() {
         <View style={{
           maxWidth: '78%',
           backgroundColor: isMe ? '#10b981' : '#f3f4f6',
+          borderWidth: isHighlighted ? 2 : 0,
+          borderColor: isHighlighted ? '#4f46e5' : 'transparent',
           borderRadius: 18,
           borderBottomRightRadius: isMe ? 4 : 18,
           borderBottomLeftRadius: isMe ? 18 : 4,
           paddingHorizontal: 14,
           paddingVertical: 8,
-        }} testID={`message-bubble-${item.id}-${isMe ? 'outgoing' : 'incoming'}`}>
+        }} testID={`message-bubble-${item.id}-${isMe ? 'outgoing' : 'incoming'}`} accessibilityState={{ selected: isHighlighted }}>
           {!isMe && is_group === '1' && item.contact_name && (
             <Text style={{ fontSize: 12, fontWeight: '600', color: '#6b7280', marginBottom: 2 }}>
               {item.contact_name}
@@ -470,8 +505,12 @@ export default function ChatScreen() {
             keyExtractor={(item) => item.id}
             testID="chat-message-list"
             contentContainerStyle={{ paddingVertical: 8 }}
-            onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
-            onLayout={() => listRef.current?.scrollToEnd({ animated: false })}
+            onContentSizeChange={() => { if (!highlightMessageId) listRef.current?.scrollToEnd({ animated: false }); }}
+            onLayout={() => { if (!highlightMessageId) listRef.current?.scrollToEnd({ animated: false }); }}
+            onScrollToIndexFailed={({ index, averageItemLength }) => {
+              listRef.current?.scrollToOffset({ offset: Math.max(0, index * averageItemLength), animated: false });
+              setTimeout(() => listRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.45 }), 100);
+            }}
             keyboardShouldPersistTaps="handled"
             ListEmptyComponent={
               <View style={{ flex: 1, alignItems: 'center', paddingTop: 60 }} testID="chat-empty">
