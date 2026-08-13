@@ -54,11 +54,25 @@ export class ContextBuilder {
   ): Promise<ConversationContext> {
     try {
       // Get the current message to determine the chat
-      const { data: currentMessage } = await supabase
+      // Browser clients send the Claire message UUID; older queue jobs may send
+      // the legacy WhatsApp platform id. Resolve both, always scoped to the
+      // authenticated user so another user's context can never be selected.
+      const { data: databaseMessage } = await supabase
         .from('messages')
         .select('chat_id, contact_id')
-        .eq('whatsapp_id', messageId)
-        .single();
+        .eq('id', messageId)
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      const { data: legacyMessage } = databaseMessage
+        ? { data: null }
+        : await supabase
+          .from('messages')
+          .select('chat_id, contact_id')
+          .eq('whatsapp_id', messageId)
+          .eq('user_id', userId)
+          .maybeSingle();
+      const currentMessage = databaseMessage ?? legacyMessage;
 
       if (!currentMessage) {
         throw new Error(`Message ${messageId} not found`);
@@ -138,12 +152,22 @@ export class ContextBuilder {
   ): Promise<ContactContext | null> {
     if (!contactId) return null;
 
-    const { data: contact } = await supabase
+    const { data: databaseContact } = await supabase
       .from('contacts')
       .select('name, notes, inferred_name, inferred_relationship, inference_confidence')
-      .eq('whatsapp_id', contactId)
+      .eq('id', contactId)
       .eq('user_id', userId)
-      .single();
+      .maybeSingle();
+
+    const { data: legacyContact } = databaseContact
+      ? { data: null }
+      : await supabase
+        .from('contacts')
+        .select('name, notes, inferred_name, inferred_relationship, inference_confidence')
+        .eq('whatsapp_id', contactId)
+        .eq('user_id', userId)
+        .maybeSingle();
+    const contact = databaseContact ?? legacyContact;
 
     if (!contact) return null;
 

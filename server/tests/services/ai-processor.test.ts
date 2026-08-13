@@ -9,6 +9,7 @@
  */
 
 import { describe, it, expect, beforeEach, mock, spyOn } from 'bun:test';
+import { aiConfig } from '../../src/config';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Mock collaborating singletons before importing the module under test.
@@ -58,7 +59,7 @@ mock.module('../../src/utils/logger', () => ({
 }));
 
 // Import after mocking.
-import { aiProcessor } from '../../src/services/ai-processor';
+import { AIProcessor, aiProcessor } from '../../src/services/ai-processor';
 
 type AnyMock = ReturnType<typeof mock>;
 
@@ -81,6 +82,29 @@ function resetMocks() {
 beforeEach(resetMocks);
 
 describe('AIProcessor', () => {
+  describe('provider routing', () => {
+    it('uses OpenAI when OpenAI is the configured provider', async () => {
+      const configForTest = aiConfig as { provider: 'bedrock' | 'kimi' | 'openai' };
+      const originalProvider = configForTest.provider;
+      const processor = new AIProcessor();
+      const create = mock(async () => ({ choices: [{ message: { content: '{"suggestions":["Sounds good"],"confidence":0.9}' } }] }));
+
+      try {
+        configForTest.provider = 'openai';
+        (processor as any).bedrock = null;
+        (processor as any).kimiClient = null;
+        (processor as any).openaiClient = { chat: { completions: { create } } };
+
+        const result = await (processor as any).callAI('system prompt', 'user prompt');
+
+        expect(result).toContain('Sounds good');
+        expect(create).toHaveBeenCalledTimes(1);
+      } finally {
+        configForTest.provider = originalProvider;
+      }
+    });
+  });
+
   describe('generateResponse', () => {
     it('generates response suggestions on a cache miss', async () => {
       callAI.mockResolvedValue(

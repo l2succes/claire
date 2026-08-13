@@ -19,7 +19,7 @@ const envSchema = z.object({
   DATABASE_URL: z.string().url(),
   DIRECT_DATABASE_URL: z.string().url().optional(),
   
-  // OpenAI (optional — kept for legacy/Kimi OpenAI-compatible usage)
+  // OpenAI
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_MODEL: z.string().default('gpt-4-turbo-preview'),
 
@@ -30,7 +30,8 @@ const envSchema = z.object({
   BEDROCK_MODEL: z.string().default('us.anthropic.claude-sonnet-4-6-20250514-v1:0'),
 
   // AI provider selection and Kimi K2.5 fallback
-  AI_PROVIDER: z.enum(['bedrock', 'kimi', 'openai']).default('bedrock'),
+  // When unset, select the first explicitly configured provider below.
+  AI_PROVIDER: z.enum(['bedrock', 'kimi', 'openai']).optional(),
   KIMI_API_KEY: z.string().optional(),
   KIMI_BASE_URL: z.string().url().default('https://api.moonshot.cn/v1'),
   KIMI_MODEL: z.string().default('moonshot-v1-32k'),
@@ -139,7 +140,14 @@ export const openaiConfig = {
 };
 
 export const aiConfig = {
-  provider: config.AI_PROVIDER,
+  // Prefer an explicitly selected provider. If none is selected, an OpenAI key
+  // should make the AI features usable without silently attempting Bedrock.
+  provider: config.AI_PROVIDER
+    ?? (config.OPENAI_API_KEY ? 'openai' : config.KIMI_API_KEY ? 'kimi' : 'bedrock'),
+  openai: {
+    apiKey: config.OPENAI_API_KEY,
+    model: config.OPENAI_MODEL,
+  },
   bedrock: {
     accessKeyId: config.AWS_ACCESS_KEY_ID,
     secretAccessKey: config.AWS_SECRET_ACCESS_KEY,

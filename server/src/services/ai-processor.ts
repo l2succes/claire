@@ -29,9 +29,10 @@ interface ResponseAnalytics {
   cached: boolean;
 }
 
-class AIProcessor {
+export class AIProcessor {
   private bedrock: AnthropicBedrock | null;
   private kimiClient: OpenAI | null;
+  private openaiClient: OpenAI | null;
   private responseAnalytics: Map<string, ResponseAnalytics> = new Map();
 
   constructor() {
@@ -47,6 +48,16 @@ class AIProcessor {
     this.kimiClient = aiConfig.kimi.apiKey
       ? new OpenAI({ apiKey: aiConfig.kimi.apiKey, baseURL: aiConfig.kimi.baseUrl })
       : null;
+    this.openaiClient = aiConfig.openai.apiKey
+      ? new OpenAI({ apiKey: aiConfig.openai.apiKey })
+      : null;
+
+    logger.info('[ai] provider configuration', {
+      provider: aiConfig.provider,
+      bedrockConfigured: !!this.bedrock,
+      kimiConfigured: !!this.kimiClient,
+      openaiConfigured: !!this.openaiClient,
+    });
   }
 
   /**
@@ -55,15 +66,13 @@ class AIProcessor {
    * a misleading "Kimi not configured" error.
    */
   get isConfigured(): boolean {
-    return !!(this.bedrock || this.kimiClient);
+    return !!(this.bedrock || this.kimiClient || this.openaiClient);
   }
 
   private async callAI(systemPrompt: string, userPrompt: string): Promise<string> {
-    if (!this.bedrock && !this.kimiClient) {
+    if (!this.isConfigured) {
       throw new Error('NO_AI_PROVIDER');
     }
-
-    const provider = aiConfig.provider;
 
     const callBedrock = async () => {
       if (!this.bedrock) throw new Error('Bedrock not configured');
@@ -91,32 +100,42 @@ class AIProcessor {
       return completion.choices[0].message.content || '{}';
     };
 
-    const primary = provider === 'bedrock' ? callBedrock : callKimi;
-    const fallback = provider === 'bedrock' ? callKimi : callBedrock;
-    const fallbackName = provider === 'bedrock' ? 'kimi' : 'bedrock';
+    const callOpenAI = async () => {
+      if (!this.openaiClient) throw new Error('OpenAI not configured');
+      const completion = await this.openaiClient.chat.completions.create({
+        model: aiConfig.openai.model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        temperature: 0.7,
+        max_tokens: 1024,
+      });
+      return completion.choices[0].message.content || '{}';
+    };
 
-    try {
-      return await primary();
-    } catch (err) {
-      const message = (err as Error).message || String(err);
-      if (!this.kimiClient && provider === 'bedrock') {
-        logger.error(`AI provider bedrock failed and no fallback is configured: ${message}`);
-        throw new Error(`AI_PROVIDER_UNAVAILABLE:bedrock:${message}`);
+    const providers = {
+      bedrock: { configured: !!this.bedrock, call: callBedrock },
+      kimi: { configured: !!this.kimiClient, call: callKimi },
+      openai: { configured: !!this.openaiClient, call: callOpenAI },
+    };
+    const preferred = aiConfig.provider;
+    const orderedProviders = [preferred, ...(['openai', 'bedrock', 'kimi'] as const).filter(name => name !== preferred)];
+    const failures: string[] = [];
+
+    for (const provider of orderedProviders) {
+      const candidate = providers[provider];
+      if (!candidate.configured) continue;
+      try {
+        return await candidate.call();
+      } catch (error) {
+        const message = (error as Error).message || String(error);
+        failures.push(`${provider}:${message}`);
+        logger.warn(`[ai] provider ${provider} failed; trying next configured provider: ${message}`);
       }
-      if (!this.bedrock && provider !== 'bedrock') {
-        logger.error(`AI provider kimi failed and no fallback is configured: ${message}`);
-        throw new Error(`AI_PROVIDER_UNAVAILABLE:kimi:${message}`);
-      }
-      logger.warn(`Primary AI provider (${provider}) failed; trying ${fallbackName}: ${message}`);
     }
 
-    try {
-      return await fallback();
-    } catch (err) {
-      const message = (err as Error).message || String(err);
-      logger.error(`AI fallback provider ${fallbackName} failed: ${message}`);
-      throw new Error(`AI_PROVIDER_UNAVAILABLE:${provider}:${message}`);
-    }
+    throw new Error(`AI_PROVIDER_UNAVAILABLE:${preferred}:${failures.join(' | ') || 'no configured provider'}`);
   }
 
   /**
