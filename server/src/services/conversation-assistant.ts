@@ -123,7 +123,9 @@ class ConversationAssistantService {
 
   async getIndexStatus(userId: string): Promise<AssistantIndexStatus> {
     const [{ count: totalCount, error: totalError }, { count: indexedCount, error: indexedError }, { data: state, error: stateError }] = await Promise.all([
-      supabase.from('messages').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('is_deleted', false).not('content', 'is', null),
+      // Only text/caption rows are eligible in v1. Empty media/system rows must not keep
+      // the resumable backfill permanently marked as incomplete.
+      supabase.from('messages').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('is_deleted', false).not('content', 'is', null).neq('content', ''),
       supabase.from('conversation_message_embeddings').select('message_id', { count: 'exact', head: true }).eq('user_id', userId),
       supabase.from('conversation_assistant_index_state').select('status, indexed_count, total_count, last_indexed_at, last_error').eq('user_id', userId).maybeSingle(),
     ]);
