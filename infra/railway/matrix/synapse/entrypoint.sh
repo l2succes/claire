@@ -14,6 +14,9 @@ cp /claire-templates/appservices/*.yaml /data/appservices/
 
 replace() {
   file="$1"; key="$2"; value="$3"
+  # Treat template markers literally. The appservice namespace patterns use
+  # `claire\\.local`, and a regex-based replacement leaves that escaped form
+  # behind, which prevents Synapse from authorizing the bridge bot.
   KEY="$key" VALUE="$value" perl -0pi -e 's/\Q$ENV{KEY}\E/$ENV{VALUE}/g' "$file"
 }
 
