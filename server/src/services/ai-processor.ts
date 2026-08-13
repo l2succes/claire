@@ -32,6 +32,10 @@ interface GenerateResponseOptions {
   forceRefresh?: boolean;
 }
 
+// Bump this whenever prompt rules materially change so cached suggestions use
+// the current tone and language behavior rather than a stale prompt result.
+const RESPONSE_PROMPT_VERSION = 'style-language-v1';
+
 interface ResponseAnalytics {
   messageId: string;
   userId: string;
@@ -168,7 +172,7 @@ export class AIProcessor {
       const guidance = options.guidance?.trim();
       // A content-only cache leaks a reply from one conversation into another
       // whenever two contacts write the same text. Cache per actual message.
-      const cacheKey = `${messageId}:${content}`;
+      const cacheKey = `${RESPONSE_PROMPT_VERSION}:${messageId}:${content}`;
       if (!guidance && !options.forceRefresh) {
         const cachedResponse = await responseCache.get(cacheKey, userId);
         if (cachedResponse) {
@@ -182,7 +186,8 @@ export class AIProcessor {
 
       const tone = conversationContext.userPreferences?.tone || 'friendly';
       const style = conversationContext.userPreferences?.responseStyle || 'concise';
-      const language = conversationContext.userPreferences?.language || 'en';
+      const preferredLanguage = conversationContext.userPreferences?.language || 'en';
+      const language = `the dominant language in the latest message and recent back-and-forth (use the account preference "${preferredLanguage}" only when the conversation has no clear language signal)`;
 
       const promptContext = {
         messageType,
@@ -206,7 +211,7 @@ export class AIProcessor {
 
       // OpenAI uses JSON mode below; the instruction keeps Bedrock/Kimi output
       // compatible and prevents generic fallback replies when a model drifts.
-      const systemWithJson = `${system}\n\nYou MUST respond with valid JSON only, no markdown or explanation.\n\nReply quality requirements:\n- Return exactly 3 distinct, ready-to-send suggestions in a "suggestions" array.\n- Use the actual latest message and recent conversation details.\n- Make each option concrete: propose or answer the relevant plan, question, place, time, or next step when one is present.\n- Do not return acknowledgement-only filler such as "I understand", "Got it", or "Thanks for letting me know".\n- If the relationship is friend, sound warm, casual, and excited rather than formal.`;
+      const systemWithJson = `${system}\n\nYou MUST respond with valid JSON only, no markdown or explanation.\n\nReply quality requirements:\n- Return exactly 3 distinct, ready-to-send suggestions in a "suggestions" array.\n- Use the actual latest message and recent conversation details.\n- Make each option concrete: propose or answer the relevant plan, question, place, time, or next step when one is present.\n- Do not return acknowledgement-only filler such as "I understand", "Got it", or "Thanks for letting me know".\n- If the relationship is friend, sound warm, casual, and excited rather than formal.\n- Match the reply language to the latest incoming message and the dominant recent exchange. If the conversation is Spanish, write Spanish; preserve natural code-switching only when the conversation itself does it. The account language is a fallback, not an override.\n- Match the conversation's communication style: formality, sentence length, directness, energy, slang/idioms, punctuation, and emoji density. Sound natural for the owner without copying distinctive typos or overdoing slang.`;
 
       const userPrompt = guidance
         ? `${user}\n\nAdditional direction from the user: ${guidance}`
