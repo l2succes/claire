@@ -214,7 +214,8 @@ class ConversationAssistantService {
 
     const now = new Date().toISOString();
     const { error: turnsError } = await supabase.from('conversation_assistant_turns').insert([
-      { thread_id: thread.id, user_id: userId, role: 'user', content: cleanQuestion },
+      // The column is deliberately NOT NULL so every persisted turn has a stable shape.
+      { thread_id: thread.id, user_id: userId, role: 'user', content: cleanQuestion, citations: [] },
       { thread_id: thread.id, user_id: userId, role: 'assistant', content: answer, citations },
     ]);
     if (turnsError) throw turnsError;
