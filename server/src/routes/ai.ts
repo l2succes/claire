@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { aiProcessor } from '../services/ai-processor';
+import { conversationAssistant } from '../services/conversation-assistant';
 import { responseCache } from '../services/response-cache';
 import { validateRequest } from '../middleware/validation';
 import { requireAuth } from '../middleware/auth';
@@ -16,6 +17,8 @@ const generateResponseSchema = z.object({
     content: z.string().min(1, 'Message content is required'),
     chatType: z.enum(['individual', 'group']).optional().default('individual'),
     streaming: z.boolean().optional().default(false),
+    guidance: z.string().trim().max(500, 'Guidance must be 500 characters or less').optional(),
+    forceRefresh: z.boolean().optional().default(false),
   }),
 });
 
@@ -26,6 +29,22 @@ const updateFeedbackSchema = z.object({
     feedback: z.enum(['positive', 'negative']).optional(),
     customResponse: z.string().optional(),
   }),
+});
+
+const explainConversationSchema = z.object({
+  body: z.object({
+    messageId: z.string().min(1, 'Message ID is required'),
+    content: z.string().min(1, 'Message content is required'),
+    chatType: z.enum(['individual', 'group']).optional().default('individual'),
+  }),
+});
+
+const assistantThreadSchema = z.object({
+  body: z.object({ title: z.string().trim().min(1).max(120).optional() }),
+});
+
+const assistantQuestionSchema = z.object({
+  body: z.object({ question: z.string().trim().min(1, 'Question is required').max(2_000) }),
 });
 
 const getAnalyticsSchema = z.object({
@@ -44,7 +63,7 @@ router.post('/responses/generate',
   validateRequest(generateResponseSchema),
   async (req: Request, res: Response) => {
     try {
-      const { messageId, content, chatType, streaming } = req.body;
+      const { messageId, content, chatType, streaming, guidance, forceRefresh } = req.body;
       const userId = req.user?.id;
 
       if (!userId) {
@@ -65,7 +84,8 @@ router.post('/responses/generate',
           messageId,
           content,
           userId,
-          chatType
+          chatType,
+          { guidance, forceRefresh }
         );
         res.write(`data: ${JSON.stringify({ type: 'complete', data: streamResponse })}\n\n`);
         res.end();
@@ -76,7 +96,8 @@ router.post('/responses/generate',
           messageId,
           content,
           userId,
-          chatType
+          chatType,
+          { guidance, forceRefresh }
         );
 
         return res.json({
@@ -93,6 +114,108 @@ router.post('/responses/generate',
     }
   }
 );
+
+/** Explain the latest text and its surrounding conversation without drafting or sending a message. */
+router.post('/conversations/explain',
+  requireAuth,
+  validateRequest(explainConversationSchema),
+  async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) return res.status(401).json({ error: 'User not authenticated' });
+
+      const { messageId, content, chatType } = req.body;
+      const explanation = await aiProcessor.explainConversation(messageId, content, userId, chatType);
+      return res.json({ success: true, data: explanation });
+    } catch (error) {
+      logger.error('Error explaining conversation:', error);
+      return res.status(500).json({ success: false, error: 'Failed to explain conversation' });
+    }
+  }
+);
+
+/** Persisted global Ask Claire threads. All queries are scoped to req.user.id. */
+router.get('/assistant/threads', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: 'User not authenticated' });
+    return res.json({ success: true, data: await conversationAssistant.listThreads(userId) });
+  } catch (error) {
+    logger.error('Error listing assistant threads:', error);
+    return res.status(500).json({ success: false, error: 'Failed to list assistant threads' });
+  }
+});
+
+router.post('/assistant/threads', requireAuth, validateRequest(assistantThreadSchema), async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: 'User not authenticated' });
+    return res.status(201).json({ success: true, data: await conversationAssistant.createThread(userId, req.body.title) });
+  } catch (error) {
+    logger.error('Error creating assistant thread:', error);
+    return res.status(500).json({ success: false, error: 'Failed to create assistant thread' });
+  }
+});
+
+router.get('/assistant/threads/:threadId', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: 'User not authenticated' });
+    return res.json({ success: true, data: await conversationAssistant.getThread(userId, req.params.threadId) });
+  } catch (error) {
+    if ((error as Error).message === 'ASSISTANT_THREAD_NOT_FOUND') return res.status(404).json({ success: false, error: 'Assistant thread not found' });
+    logger.error('Error loading assistant thread:', error);
+    return res.status(500).json({ success: false, error: 'Failed to load assistant thread' });
+  }
+});
+
+router.delete('/assistant/threads/:threadId', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: 'User not authenticated' });
+    await conversationAssistant.deleteThread(userId, req.params.threadId);
+    return res.json({ success: true });
+  } catch (error) {
+    logger.error('Error deleting assistant thread:', error);
+    return res.status(500).json({ success: false, error: 'Failed to delete assistant thread' });
+  }
+});
+
+router.post('/assistant/threads/:threadId/messages', requireAuth, validateRequest(assistantQuestionSchema), async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: 'User not authenticated' });
+    if (!conversationAssistant.isConfigured) return res.status(503).json({ success: false, error: 'AI is not configured' });
+    return res.json({ success: true, data: await conversationAssistant.ask(userId, req.params.threadId, req.body.question) });
+  } catch (error) {
+    if ((error as Error).message === 'ASSISTANT_THREAD_NOT_FOUND') return res.status(404).json({ success: false, error: 'Assistant thread not found' });
+    logger.error('Error answering assistant question:', error);
+    return res.status(500).json({ success: false, error: 'Failed to answer assistant question' });
+  }
+});
+
+router.get('/assistant/index/status', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: 'User not authenticated' });
+    return res.json({ success: true, data: await conversationAssistant.getIndexStatus(userId) });
+  } catch (error) {
+    logger.error('Error checking assistant index status:', error);
+    return res.status(500).json({ success: false, error: 'Failed to get index status' });
+  }
+});
+
+router.post('/assistant/index', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: 'User not authenticated' });
+    if (!conversationAssistant.isConfigured) return res.status(503).json({ success: false, error: 'AI is not configured' });
+    return res.status(202).json({ success: true, data: await conversationAssistant.startBackfill(userId) });
+  } catch (error) {
+    logger.error('Error starting assistant index:', error);
+    return res.status(500).json({ success: false, error: 'Failed to start assistant index' });
+  }
+});
 
 /**
  * Update feedback for AI suggestions

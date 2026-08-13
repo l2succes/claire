@@ -542,6 +542,74 @@ async function mockBackend(page) {
     });
   });
 
+  // Bun server API: explain a conversation without drafting or sending
+  await page.route('**/ai/conversations/explain**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        success: true,
+        data: {
+          summary: 'Alice is confirming the report timeline.',
+          latestMessageIntent: 'She intends to send the report by Friday.',
+          responseStrategy: 'Acknowledge the deadline and offer help if needed.',
+          suggestedNextStep: 'Choose a concise reply option.',
+          contextSignals: ['Friday deadline', 'Professional context'],
+        },
+      }),
+    });
+  });
+
+  // Bun server API: persisted global Ask Claire conversations and retrieval.
+  const assistantThread = {
+    id: 'assistant-thread-1',
+    title: 'New conversation',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+  let assistantThreads = [];
+  let assistantTurns = [];
+  await page.route('**/ai/assistant/**', async (route) => {
+    const url = new URL(route.request().url());
+    const path = url.pathname;
+    const method = route.request().method();
+    if (path.endsWith('/index/status')) {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data: { status: 'ready', indexedCount: 4, totalCount: 4, lastIndexedAt: new Date().toISOString(), lastError: null } }) });
+    } else if (path.endsWith('/index') && method === 'POST') {
+      await route.fulfill({ status: 202, contentType: 'application/json', body: JSON.stringify({ success: true, data: { status: 'indexing', indexedCount: 0, totalCount: 4, lastIndexedAt: null, lastError: null } }) });
+    } else if (path.endsWith('/threads') && method === 'GET') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data: assistantThreads }) });
+    } else if (path.endsWith('/threads') && method === 'POST') {
+      assistantThreads = [assistantThread, ...assistantThreads];
+      await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ success: true, data: assistantThread }) });
+    } else if (path.endsWith(`/threads/${assistantThread.id}`) && method === 'GET') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data: { thread: assistantThread, turns: assistantTurns } }) });
+    } else if (path.endsWith(`/threads/${assistantThread.id}/messages`) && method === 'POST') {
+      assistantTurns = [
+        { id: 'assistant-user-1', role: 'user', content: 'Where did I mention meeting Alice?', citations: [], created_at: new Date().toISOString() },
+        { id: 'assistant-answer-1', role: 'assistant', content: 'You discussed meeting Alice after the report is sent.', citations: [], created_at: new Date().toISOString() },
+      ];
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          data: {
+            answer: 'You discussed meeting Alice after the report is sent.',
+            citations: [{ messageId: 'chatmsg-1', chatId: 'mock-chat-wa-alice', excerpt: "Hi! I'll send you the report by Friday", senderName: 'Alice (WA)', fromMe: false, timestamp: new Date().toISOString(), platform: 'whatsapp', chatName: 'Alice (WA)', isGroup: false }],
+            indexing: { status: 'ready', indexedCount: 4, totalCount: 4, lastIndexedAt: new Date().toISOString(), lastError: null },
+          },
+        }),
+      });
+    } else if (path.endsWith(`/threads/${assistantThread.id}`) && method === 'DELETE') {
+      assistantThreads = [];
+      assistantTurns = [];
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true }) });
+    } else {
+      await route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ error: `Unhandled assistant route ${method} ${path}` }) });
+    }
+  });
+
   // Supabase realtime — stub WebSocket preflight requests
   await page.route('**/realtime/**', async (route) => {
     await route.fulfill({ status: 200, body: '{}' });
@@ -761,10 +829,10 @@ test.describe('Core loop — mock backend', () => {
     );
   });
 
-  // 5e. On-demand "Draft reply" button — tapping fills the composer via /ai/responses/generate (#22)
-  test('draft reply button populates composer via on-demand generate', async ({ page }) => {
-    // Override ai_suggestions to return empty (no pre-stored suggestions) so the
-    // Draft reply button is shown instead of the suggestion strip.
+  // 5e. Reply options prefetch — options appear without a manual draft trigger.
+  test('prefetched reply options populate the composer when selected', async ({ page }) => {
+    // Override ai_suggestions to return empty, so the chat prefetches a fresh
+    // response from the AI endpoint on open.
     await page.route('**/rest/v1/**', async (route) => {
       const url = route.request().url();
       const method = route.request().method();
@@ -804,17 +872,42 @@ test.describe('Core loop — mock backend', () => {
     await expect(page.getByTestId('chat-screen')).toBeVisible({ timeout: 10_000 });
     await expect(page.getByTestId('chat-message-list')).toBeVisible({ timeout: 8_000 });
 
-    // Draft reply button should appear (no stored suggestions)
-    await expect(page.getByTestId('draft-reply-button')).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByTestId('ai-suggestion-scroll')).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByTestId('draft-reply-button')).toHaveCount(0);
 
-    // Tap the button — calls /ai/responses/generate (mocked)
-    await page.getByTestId('draft-reply-button').click();
+    // Selecting a prefetched option fills the composer but never sends it.
+    await page.getByTestId('ai-suggestion-chip-0').click();
 
     // Composer should be filled with the first suggestion from the mock response
     await expect(page.getByTestId('chat-input')).toHaveValue(
       'Sure, I can do that!',
       { timeout: 8_000 }
     );
+  });
+
+  test('Ask Claire explains the conversation without sending a message', async ({ page }) => {
+    await signIn(page);
+    await page.locator('[data-testid^="message-card-"]').first().click();
+    await expect(page.getByTestId('chat-screen')).toBeVisible({ timeout: 10_000 });
+
+    await page.getByTestId('ask-claire-button').click();
+    await expect(page.getByTestId('conversation-explanation')).toContainText('Alice is confirming the report timeline.');
+    await expect(page.getByTestId('chat-input')).toHaveValue('');
+  });
+
+  test('global Ask Claire searches messages and opens a cited source', async ({ page }) => {
+    await signIn(page);
+    await expect(page.getByTestId('open-ask-claire')).toBeVisible({ timeout: 8_000 });
+    await page.getByTestId('open-ask-claire').click();
+
+    await expect(page.getByTestId('assistant-screen')).toBeVisible({ timeout: 8_000 });
+    await page.getByTestId('assistant-input').fill('Where did I mention meeting Alice?');
+    await page.getByTestId('assistant-send').click();
+
+    await expect(page.getByTestId('assistant-turn-list')).toContainText('You discussed meeting Alice after the report is sent.');
+    await expect(page.getByTestId('assistant-sources')).toContainText("Hi! I'll send you the report by Friday");
+    await page.getByTestId('assistant-source-chatmsg-1').click();
+    await expect(page.getByTestId('chat-screen')).toBeVisible({ timeout: 8_000 });
   });
 
   // 6. Promises tab — renders the promises screen

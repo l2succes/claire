@@ -28,6 +28,7 @@ import pushTokenRoutes from './routes/push-tokens';
 import contactRoutes from './routes/contacts';
 import { platformManager } from './adapters';
 import { aiProcessor } from './services/ai-processor';
+import { conversationAssistant } from './services/conversation-assistant';
 import { promiseDetector } from './services/promise-detector';
 import { autoReplyEngine } from './services/auto-reply-engine';
 import { pushNotificationService } from './services/push-notification';
@@ -472,6 +473,19 @@ async function initializePlatforms() {
           const chatType = message.chatType === 'group' ? 'group' : 'individual';
           aiProcessor.generateAndStore(savedMsg.id, message.content, message.userId, chatType)
             .catch((err) => logger.debug('AI suggestion skipped:', (err as Error).message));
+        }
+
+        // Keep the global Ask Claire index current for new text/caption rows.
+        if (savedMsg?.id && message.content?.trim() && conversationAssistant.isConfigured) {
+          void conversationAssistant.indexMessage({
+            id: savedMsg.id,
+            user_id: message.userId,
+            content: message.content,
+            contact_name: message.isFromMe ? null : (message.senderName || null),
+            from_me: message.isFromMe,
+            timestamp: message.timestamp instanceof Date ? message.timestamp.toISOString() : String(message.timestamp),
+            platform: message.platform,
+          }).catch((err) => logger.debug('Conversation assistant index skipped:', (err as Error).message));
         }
 
         // Detect and persist promises (fire-and-forget, both inbound and outbound)

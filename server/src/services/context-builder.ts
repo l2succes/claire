@@ -21,6 +21,7 @@ interface ContextMessage {
 
 interface ContactContext {
   name?: string;
+  /** Explicit user-provided relationship from the conversation profile. */
   relationship?: string;
   notes?: string;
   inferredName?: string;
@@ -50,7 +51,10 @@ export class ContextBuilder {
   async buildContext(
     messageId: string,
     userId: string,
-    maxMessages: number = 20
+    // A reply needs enough history to understand plans and references, while a
+    // bounded window keeps every request fast and avoids sending an entire
+    // years-long private chat to a model.
+    maxMessages: number = 100
   ): Promise<ConversationContext> {
     try {
       // Get the current message to determine the chat
@@ -81,7 +85,7 @@ export class ContextBuilder {
       // Build context components in parallel
       const [messages, contact, userPreferences, metadata, categoryRow] = await Promise.all([
         this.getRecentMessages(currentMessage.chat_id, userId, maxMessages),
-        this.getContactContext(currentMessage.contact_id, userId),
+        this.getContactContext(currentMessage.contact_id, currentMessage.chat_id, userId),
         this.getUserPreferences(userId),
         this.getConversationMetadata(currentMessage.chat_id, userId),
         this.getChatCategory(currentMessage.chat_id, userId),
@@ -148,18 +152,31 @@ export class ContextBuilder {
    */
   private async getContactContext(
     contactId: string | null,
+    chatId: string,
     userId: string
   ): Promise<ContactContext | null> {
-    if (!contactId) return null;
+    // The "Who is …?" card stores a deliberate relationship in
+    // contact_profiles. It must take precedence over a heuristic inferred from
+    // message text, otherwise AI replies ignore the user's configuration.
+    const [profileResult, databaseContactResult] = await Promise.all([
+      supabase
+        .from('contact_profiles')
+        .select('display_name, relationship_context')
+        .eq('chat_id', chatId)
+        .eq('user_id', userId)
+        .maybeSingle(),
+      contactId
+        ? supabase
+          .from('contacts')
+          .select('name, notes, inferred_name, inferred_relationship, inference_confidence')
+          .eq('id', contactId)
+          .eq('user_id', userId)
+          .maybeSingle()
+        : Promise.resolve({ data: null }),
+    ]);
+    const databaseContact = databaseContactResult.data;
 
-    const { data: databaseContact } = await supabase
-      .from('contacts')
-      .select('name, notes, inferred_name, inferred_relationship, inference_confidence')
-      .eq('id', contactId)
-      .eq('user_id', userId)
-      .maybeSingle();
-
-    const { data: legacyContact } = databaseContact
+    const { data: legacyContact } = databaseContact || !contactId
       ? { data: null }
       : await supabase
         .from('contacts')
@@ -168,15 +185,17 @@ export class ContextBuilder {
         .eq('user_id', userId)
         .maybeSingle();
     const contact = databaseContact ?? legacyContact;
+    const profile = profileResult.data;
 
-    if (!contact) return null;
+    if (!contact && !profile) return null;
 
     return {
-      name: contact.name,
-      notes: contact.notes,
-      inferredName: contact.inferred_name,
-      inferredRelationship: contact.inferred_relationship,
-      confidence: contact.inference_confidence,
+      name: profile?.display_name || contact?.name,
+      relationship: profile?.relationship_context || undefined,
+      notes: contact?.notes,
+      inferredName: contact?.inferred_name,
+      inferredRelationship: contact?.inferred_relationship,
+      confidence: contact?.inference_confidence,
     };
   }
 

@@ -1,6 +1,6 @@
-import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
-import { useState, useEffect } from 'react';
-import { Sparkles, Send, RefreshCw, ThumbsUp, ThumbsDown } from 'lucide-react-native';
+import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, TextInput } from 'react-native';
+import { useState, useEffect, useRef } from 'react';
+import { Sparkles, Send, RefreshCw, ThumbsUp, ThumbsDown, SlidersHorizontal, Brain } from 'lucide-react-native';
 import { supabase } from '../services/supabase';
 import { platformsApi } from '../services/platforms';
 
@@ -12,7 +12,6 @@ interface ResponseSuggestionProps {
   refreshKey?: number;
   suggestions?: string[];
   onSelectSuggestion: (suggestion: string) => void;
-  onGenerateNew?: () => void;
   onFeedback?: (suggestionId: string, feedback: 'positive' | 'negative') => void;
 }
 
@@ -36,6 +35,24 @@ interface AISuggestionRow {
   feedback?: 'positive' | 'negative' | null;
 }
 
+interface ConversationExplanation {
+  summary: string;
+  latestMessageIntent: string;
+  responseStrategy: string;
+  suggestedNextStep: string;
+  contextSignals: string[];
+}
+
+const isUsefulSuggestion = (suggestion: string) => {
+  const normalized = suggestion.trim().toLowerCase().replace(/[.!]/g, '');
+  return ![
+    'i understand',
+    'thanks for letting me know',
+    'thanks for sharing that with me',
+    'got it thanks for sharing',
+  ].includes(normalized);
+};
+
 export function ResponseSuggestion({
   messageId,
   messageContent,
@@ -43,7 +60,6 @@ export function ResponseSuggestion({
   refreshKey = 0,
   suggestions: propSuggestions,
   onSelectSuggestion,
-  onGenerateNew,
   onFeedback,
 }: ResponseSuggestionProps) {
   const [suggestions, setSuggestions] = useState<AISuggestion[]>([]);
@@ -51,17 +67,30 @@ export function ResponseSuggestion({
   const [generating, setGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const [showGuidance, setShowGuidance] = useState(false);
+  const [guidance, setGuidance] = useState('');
+  const [loadedMessageId, setLoadedMessageId] = useState<string | null>(null);
+  const [explaining, setExplaining] = useState(false);
+  const [explanation, setExplanation] = useState<ConversationExplanation | null>(null);
+  const [explainError, setExplainError] = useState<string | null>(null);
+  const prefetchedMessageId = useRef<string | null>(null);
 
   useEffect(() => {
+    setLoadedMessageId(null);
+    setSuggestions([]);
+    setSelectedIndex(null);
+    setExplanation(null);
+    setGenerateError(null);
     if (propSuggestions && propSuggestions.length > 0) {
       // Use provided suggestions
       setSuggestions(
-        propSuggestions.map((text, index) => ({
+        propSuggestions.filter(isUsefulSuggestion).map((text, index) => ({
           id: `prop-${index}`,
           suggestion: text,
           confidence: 1,
         }))
       );
+      setLoadedMessageId(messageId);
     } else {
       // Fetch from database
       fetchAISuggestions();
@@ -89,7 +118,7 @@ export function ResponseSuggestion({
               ? [item.response_text]
               : [];
 
-          return texts.map((text, suggestionIndex) => ({
+          return texts.filter(isUsefulSuggestion).map((text, suggestionIndex) => ({
             id: `${item.id}-${suggestionIndex}`,
             sourceId: item.id,
             suggestion: text,
@@ -105,25 +134,74 @@ export function ResponseSuggestion({
       console.error('Error fetching AI suggestions:', error);
     } finally {
       setLoading(false);
+      setLoadedMessageId(messageId);
     }
   };
 
-  const handleDraftReply = async () => {
+  const handleGenerate = async (forceRefresh = false) => {
     if (!messageContent || generating) return;
     setGenerating(true);
     setGenerateError(null);
     try {
-      const draft = await platformsApi.generateDraftReply(
+      const result = await platformsApi.generateDraftReply(
         messageId,
         messageContent,
-        isGroup ? 'group' : 'individual'
+        isGroup ? 'group' : 'individual',
+        {
+          guidance: guidance.trim() || undefined,
+          forceRefresh,
+        }
       );
-      onSelectSuggestion(draft);
+      setSuggestions(
+        result.suggestions.map((suggestion, index) => ({
+          id: `generated-${Date.now()}-${index}`,
+          suggestion,
+          confidence: result.confidence,
+        }))
+      );
+      setSelectedIndex(null);
+      setShowGuidance(false);
     } catch (err) {
       console.error('Draft reply generation failed:', err);
       setGenerateError('Could not generate a draft. Please try again.');
     } finally {
       setGenerating(false);
+    }
+  };
+
+  // Incoming messages normally receive suggestions as a background job. For
+  // older messages (or a stale generic result), prefetch a fresh set as soon
+  // as the chat opens rather than showing a manual "Draft" trigger.
+  useEffect(() => {
+    if (
+      loadedMessageId !== messageId ||
+      !messageContent ||
+      loading ||
+      generating ||
+      suggestions.length > 0 ||
+      prefetchedMessageId.current === messageId
+    ) return;
+
+    prefetchedMessageId.current = messageId;
+    void handleGenerate(true);
+  }, [loadedMessageId, messageId, messageContent, loading, generating, suggestions.length, refreshKey]);
+
+  const handleExplain = async () => {
+    if (!messageContent || explaining) return;
+    setExplaining(true);
+    setExplainError(null);
+    try {
+      const result = await platformsApi.explainConversation(
+        messageId,
+        messageContent,
+        isGroup ? 'group' : 'individual'
+      );
+      setExplanation(result);
+    } catch (error) {
+      console.error('Conversation explanation failed:', error);
+      setExplainError('Claire could not explain this conversation right now.');
+    } finally {
+      setExplaining(false);
     }
   };
 
@@ -175,88 +253,127 @@ export function ResponseSuggestion({
     return 'text-orange-600 dark:text-orange-400';
   };
 
-  if (loading) {
-    return (
-      <View className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 mx-4 mb-2">
-        <View className="flex-row items-center">
-          <ActivityIndicator size="small" color="#3b82f6" />
-          <Text className="ml-2 text-blue-600 dark:text-blue-400 text-sm">
-            Generating AI suggestions...
-          </Text>
-        </View>
-      </View>
-    );
-  }
-
-  // No stored suggestions — show "Draft reply" button if messageContent available
-  if (suggestions.length === 0) {
-    if (!messageContent) return null;
-    return (
-      <View
-        style={{
-          paddingHorizontal: 12,
-          paddingVertical: 6,
-          alignItems: 'flex-start',
-        }}
-        testID="draft-reply-container"
-      >
-        <TouchableOpacity
-          onPress={handleDraftReply}
-          disabled={generating}
-          testID="draft-reply-button"
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            backgroundColor: generating ? '#e5e7eb' : '#eff6ff',
-            borderRadius: 16,
-            paddingHorizontal: 12,
-            paddingVertical: 7,
-            borderWidth: 1,
-            borderColor: generating ? '#d1d5db' : '#bfdbfe',
-          }}
-        >
-          {generating ? (
-            <ActivityIndicator size="small" color="#3b82f6" style={{ marginRight: 6 }} />
-          ) : (
-            <Sparkles size={14} color="#3b82f6" style={{ marginRight: 6 }} />
-          )}
-          <Text style={{ fontSize: 13, color: generating ? '#9ca3af' : '#2563eb', fontWeight: '500' }}>
-            {generating ? 'Drafting…' : 'Draft reply'}
-          </Text>
-        </TouchableOpacity>
-        {generateError && (
-          <Text style={{ fontSize: 12, color: '#dc2626', marginTop: 4 }} testID="draft-reply-error">
-            {generateError}
-          </Text>
-        )}
-      </View>
-    );
-  }
+  if (!messageContent) return null;
 
   return (
-    <View className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 mx-4 mb-2" testID="ai-suggestion-strip">
+    <View
+      style={{
+        backgroundColor: '#eff6ff',
+        borderRadius: 12,
+        padding: 12,
+        marginHorizontal: 16,
+        marginBottom: 8,
+      }}
+      testID="ai-suggestion-strip"
+    >
       {/* Header */}
-      <View className="flex-row items-center justify-between mb-2">
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
         <View className="flex-row items-center">
           <Sparkles size={16} color="#3b82f6" />
           <Text className="ml-1 text-blue-600 dark:text-blue-400 text-sm font-medium">
-            AI Suggestions
+            Reply options
           </Text>
         </View>
-        {onGenerateNew && (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
           <TouchableOpacity
-            onPress={onGenerateNew}
-            className="flex-row items-center px-2 py-1"
+            onPress={handleExplain}
+            disabled={explaining}
+            testID="ask-claire-button"
+            style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, paddingVertical: 4 }}
           >
-            <RefreshCw size={14} color="#3b82f6" />
-            <Text className="ml-1 text-blue-600 dark:text-blue-400 text-xs">
-              Regenerate
-            </Text>
+            {explaining ? <ActivityIndicator size="small" color="#2563eb" /> : <Brain size={14} color="#2563eb" />}
+            <Text style={{ marginLeft: 4, color: '#2563eb', fontSize: 12, fontWeight: '600' }}>Ask Claire</Text>
           </TouchableOpacity>
-        )}
+          <TouchableOpacity
+            onPress={() => setShowGuidance(value => !value)}
+            testID="reply-guidance-toggle"
+            style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, paddingVertical: 4 }}
+          >
+            <SlidersHorizontal size={14} color="#2563eb" />
+            <Text style={{ marginLeft: 4, color: '#2563eb', fontSize: 12, fontWeight: '600' }}>Guide</Text>
+          </TouchableOpacity>
+          {suggestions.length > 0 && (
+            <TouchableOpacity
+              onPress={() => handleGenerate(true)}
+              disabled={generating}
+              testID="regenerate-reply-options"
+              style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, paddingVertical: 4 }}
+            >
+              <RefreshCw size={14} color="#2563eb" />
+              <Text style={{ marginLeft: 4, color: '#2563eb', fontSize: 12, fontWeight: '600' }}>Regenerate</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
+      {showGuidance && (
+        <View style={{ marginBottom: 10 }} testID="reply-guidance-panel">
+          <TextInput
+            value={guidance}
+            onChangeText={setGuidance}
+            placeholder="e.g. warm, concise, and ask about Friday"
+            placeholderTextColor="#64748b"
+            multiline
+            maxLength={500}
+            testID="reply-guidance-input"
+            style={{
+              minHeight: 42,
+              borderWidth: 1,
+              borderColor: '#bfdbfe',
+              borderRadius: 8,
+              backgroundColor: '#fff',
+              color: '#0f172a',
+              paddingHorizontal: 10,
+              paddingVertical: 8,
+              fontSize: 13,
+            }}
+          />
+          <TouchableOpacity
+            onPress={() => handleGenerate(true)}
+            disabled={generating}
+            testID="apply-reply-guidance-button"
+            style={{ alignSelf: 'flex-start', marginTop: 7, backgroundColor: '#2563eb', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7 }}
+          >
+            <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>Draft with guidance</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {explanation && (
+        <View testID="conversation-explanation" style={{ backgroundColor: '#ffffff', borderRadius: 10, borderWidth: 1, borderColor: '#bfdbfe', padding: 10, marginBottom: 10 }}>
+          <Text style={{ fontSize: 13, fontWeight: '700', color: '#1e3a8a', marginBottom: 4 }}>What Claire sees</Text>
+          <Text style={{ fontSize: 13, color: '#1f2937', lineHeight: 18 }}>{explanation.summary}</Text>
+          <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569', marginTop: 8 }}>Latest message</Text>
+          <Text style={{ fontSize: 13, color: '#334155', lineHeight: 18 }}>{explanation.latestMessageIntent}</Text>
+          <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569', marginTop: 8 }}>How to respond</Text>
+          <Text style={{ fontSize: 13, color: '#334155', lineHeight: 18 }}>{explanation.responseStrategy}</Text>
+          <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569', marginTop: 8 }}>Best next step</Text>
+          <Text style={{ fontSize: 13, color: '#334155', lineHeight: 18 }}>{explanation.suggestedNextStep}</Text>
+          {explanation.contextSignals.length > 0 && (
+            <Text style={{ fontSize: 12, color: '#64748b', marginTop: 8 }}>
+              Context: {explanation.contextSignals.join(' · ')}
+            </Text>
+          )}
+        </View>
+      )}
+
+      {suggestions.length === 0 && (
+        generateError ? (
+          <TouchableOpacity onPress={() => handleGenerate(true)} testID="retry-reply-options" style={{ alignSelf: 'flex-start', paddingVertical: 6 }}>
+            <Text style={{ color: '#2563eb', fontSize: 13, fontWeight: '700' }}>Retry reply options</Text>
+          </TouchableOpacity>
+        ) : (
+          <View testID="reply-options-loading" style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 6 }}>
+            <ActivityIndicator size="small" color="#2563eb" />
+            <Text style={{ marginLeft: 8, color: '#2563eb', fontSize: 13, fontWeight: '600' }}>
+              {loading || generating ? 'Claire is preparing reply options…' : 'Preparing reply options…'}
+            </Text>
+          </View>
+        )
+      )}
+
       {/* Suggestions */}
+      {suggestions.length > 0 && (
       <ScrollView horizontal showsHorizontalScrollIndicator={false} testID="ai-suggestion-scroll">
         {suggestions.map((suggestion, index) => (
           <View key={suggestion.id} className="mr-2">
@@ -327,11 +444,22 @@ export function ResponseSuggestion({
           </View>
         ))}
       </ScrollView>
+      )}
 
       {/* Usage Tips */}
-      {selectedIndex === null && (
+      {suggestions.length > 0 && selectedIndex === null && (
         <Text className="text-xs text-gray-500 dark:text-gray-400 mt-2 italic">
           Tap a suggestion to use it, or swipe for more options
+        </Text>
+      )}
+      {generateError && (
+        <Text style={{ fontSize: 12, color: '#dc2626', marginTop: 8 }} testID="draft-reply-error">
+          {generateError}
+        </Text>
+      )}
+      {explainError && (
+        <Text style={{ fontSize: 12, color: '#dc2626', marginTop: 8 }} testID="conversation-explanation-error">
+          {explainError}
         </Text>
       )}
     </View>

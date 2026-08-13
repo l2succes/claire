@@ -22,6 +22,7 @@ const envSchema = z.object({
   // OpenAI
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_MODEL: z.string().default('gpt-4-turbo-preview'),
+  OPENAI_EMBEDDING_MODEL: z.string().default('text-embedding-3-small'),
 
   // AWS Bedrock (primary AI provider)
   AWS_ACCESS_KEY_ID: z.string().optional(),
@@ -137,6 +138,7 @@ export const serverConfig = {
 export const openaiConfig = {
   apiKey: config.OPENAI_API_KEY,
   model: config.OPENAI_MODEL,
+  embeddingModel: config.OPENAI_EMBEDDING_MODEL,
 };
 
 export const aiConfig = {
@@ -147,6 +149,7 @@ export const aiConfig = {
   openai: {
     apiKey: config.OPENAI_API_KEY,
     model: config.OPENAI_MODEL,
+    embeddingModel: config.OPENAI_EMBEDDING_MODEL,
   },
   bedrock: {
     accessKeyId: config.AWS_ACCESS_KEY_ID,

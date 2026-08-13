@@ -246,23 +246,49 @@ export const platformsApi = {
   },
 
   /**
-   * Generate an on-demand AI draft reply for a given message.
-   * Returns the first generated suggestion text.
+   * Generate on-demand reply options for a given message. Guidance is kept
+   * request-local so a user's instruction never changes later default drafts.
    */
   async generateDraftReply(
     messageId: string,
     content: string,
-    chatType: 'individual' | 'group' = 'individual'
-  ): Promise<string> {
+    chatType: 'individual' | 'group' = 'individual',
+    options: { guidance?: string; forceRefresh?: boolean } = {}
+  ): Promise<{ suggestions: string[]; confidence: number }> {
     const response = await api.post<{
       success: boolean;
       data: { suggestions: string[]; confidence: number };
-    }>('/ai/responses/generate', { messageId, content, chatType });
+    }>('/ai/responses/generate', { messageId, content, chatType, ...options });
     const suggestions = response.data?.data?.suggestions;
     if (!suggestions || suggestions.length === 0) {
       throw new Error('No suggestions returned');
     }
-    return suggestions[0];
+    return { suggestions, confidence: response.data.data.confidence };
+  },
+
+  /** Ask Claire to explain the latest message and relevant conversation context. */
+  async explainConversation(
+    messageId: string,
+    content: string,
+    chatType: 'individual' | 'group' = 'individual'
+  ): Promise<{
+    summary: string;
+    latestMessageIntent: string;
+    responseStrategy: string;
+    suggestedNextStep: string;
+    contextSignals: string[];
+  }> {
+    const response = await api.post<{
+      success: boolean;
+      data: {
+        summary: string;
+        latestMessageIntent: string;
+        responseStrategy: string;
+        suggestedNextStep: string;
+        contextSignals: string[];
+      };
+    }>('/ai/conversations/explain', { messageId, content, chatType });
+    return response.data.data;
   },
 };
 

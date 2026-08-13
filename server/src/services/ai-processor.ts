@@ -17,6 +17,21 @@ interface AIResponse {
   cached?: boolean;
 }
 
+export interface ConversationExplanation {
+  summary: string;
+  latestMessageIntent: string;
+  responseStrategy: string;
+  suggestedNextStep: string;
+  contextSignals: string[];
+}
+
+interface GenerateResponseOptions {
+  /** A short user instruction that steers this one set of reply options. */
+  guidance?: string;
+  /** Generate a fresh response instead of returning a content-cache hit. */
+  forceRefresh?: boolean;
+}
+
 interface ResponseAnalytics {
   messageId: string;
   userId: string;
@@ -108,6 +123,7 @@ export class AIProcessor {
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt },
         ],
+        response_format: { type: 'json_object' },
         temperature: 0.7,
         max_tokens: 1024,
       });
@@ -145,13 +161,20 @@ export class AIProcessor {
     messageId: string,
     content: string,
     userId: string,
-    chatType: 'individual' | 'group'
+    chatType: 'individual' | 'group',
+    options: GenerateResponseOptions = {}
   ): Promise<AIResponse> {
     try {
-      const cachedResponse = await responseCache.get(content, userId);
-      if (cachedResponse) {
-        logger.info(`Using cached response for message ${messageId}`);
-        return { ...cachedResponse, messageId, cached: true };
+      const guidance = options.guidance?.trim();
+      // A content-only cache leaks a reply from one conversation into another
+      // whenever two contacts write the same text. Cache per actual message.
+      const cacheKey = `${messageId}:${content}`;
+      if (!guidance && !options.forceRefresh) {
+        const cachedResponse = await responseCache.get(cacheKey, userId);
+        if (cachedResponse) {
+          logger.info(`Using cached response for message ${messageId}`);
+          return { ...cachedResponse, messageId, cached: true };
+        }
       }
 
       const conversationContext = await contextBuilder.buildContext(messageId, userId);
@@ -166,7 +189,8 @@ export class AIProcessor {
         chatType,
         relationship:
           conversationContext.contact?.relationship ||
-          conversationContext.contact?.inferredRelationship,
+          conversationContext.contact?.inferredRelationship ||
+          conversationContext.chatCategory,
         tone,
         style,
         language,
@@ -180,19 +204,64 @@ export class AIProcessor {
         3
       );
 
-      // Ensure JSON output — Anthropic doesn't have response_format but respects the instruction
-      const systemWithJson = `${system}\n\nYou MUST respond with valid JSON only, no markdown or explanation.`;
+      // OpenAI uses JSON mode below; the instruction keeps Bedrock/Kimi output
+      // compatible and prevents generic fallback replies when a model drifts.
+      const systemWithJson = `${system}\n\nYou MUST respond with valid JSON only, no markdown or explanation.\n\nReply quality requirements:\n- Return exactly 3 distinct, ready-to-send suggestions in a "suggestions" array.\n- Use the actual latest message and recent conversation details.\n- Make each option concrete: propose or answer the relevant plan, question, place, time, or next step when one is present.\n- Do not return acknowledgement-only filler such as "I understand", "Got it", or "Thanks for letting me know".\n- If the relationship is friend, sound warm, casual, and excited rather than formal.`;
 
-      const rawContent = await this.callAI(systemWithJson, user);
+      const userPrompt = guidance
+        ? `${user}\n\nAdditional direction from the user: ${guidance}`
+        : user;
+      const rawContent = await this.callAI(systemWithJson, userPrompt);
       const response = this.parseAIResponse(rawContent, messageId, messageType);
 
       const safeResponse = await responseSafety.validateAndFilter(response, conversationContext);
-      await responseCache.setWithConfidenceTTL(content, userId, safeResponse);
+      // Guided replies are intentionally one-off: do not let a personal instruction
+      // become the default cache result for the same incoming message.
+      if (!guidance) {
+        await responseCache.setWithConfidenceTTL(cacheKey, userId, safeResponse);
+      }
       this.trackResponseAnalytics(messageId, userId, safeResponse, conversationContext);
 
       return safeResponse;
     } catch (error) {
       logger.error('Error generating AI response:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Explain the current conversation to the account owner. This is deliberately
+   * separate from reply generation: it helps the user decide how to respond,
+   * but it never sends or queues a message.
+   */
+  async explainConversation(
+    messageId: string,
+    content: string,
+    userId: string,
+    chatType: 'individual' | 'group'
+  ): Promise<ConversationExplanation> {
+    const context = await contextBuilder.buildContext(messageId, userId, 100);
+    const relationship = context.contact?.relationship
+      || context.contact?.inferredRelationship
+      || context.chatCategory
+      || 'not yet specified';
+    const system = `You are Claire, a thoughtful private messaging assistant. Explain the latest message in context for the account owner. Do not invent facts or intentions. Return valid JSON only with exactly these keys: summary, latestMessageIntent, responseStrategy, suggestedNextStep, contextSignals. contextSignals must be an array of 2-4 concise facts grounded in the conversation. This is a ${chatType} chat. The relationship is ${relationship}.`;
+    const user = `Latest message: "${content}"\n\nConversation context:\n${contextBuilder.formatForPrompt(context)}\n\nExplain what the latest message likely means, what matters in the context, and how the owner could respond.`;
+
+    try {
+      const raw = await this.callAI(system, user);
+      const parsed = JSON.parse(raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()) as Record<string, unknown>;
+      return {
+        summary: typeof parsed.summary === 'string' ? parsed.summary : 'Claire could not summarize this conversation yet.',
+        latestMessageIntent: typeof parsed.latestMessageIntent === 'string' ? parsed.latestMessageIntent : 'The latest message needs more context to interpret.',
+        responseStrategy: typeof parsed.responseStrategy === 'string' ? parsed.responseStrategy : 'Reply directly and reference the latest plan or question.',
+        suggestedNextStep: typeof parsed.suggestedNextStep === 'string' ? parsed.suggestedNextStep : 'Choose one of the reply options and adjust it to sound like you.',
+        contextSignals: Array.isArray(parsed.contextSignals)
+          ? parsed.contextSignals.filter((item): item is string => typeof item === 'string').slice(0, 4)
+          : [],
+      };
+    } catch (error) {
+      logger.error('Error explaining conversation:', error);
       throw error;
     }
   }
@@ -236,12 +305,22 @@ export class AIProcessor {
     try {
       // Strip markdown code fences if present
       const clean = content.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
-      const parsed = JSON.parse(clean);
+      const parsed = JSON.parse(clean) as Record<string, unknown>;
+      // Accept common response-key aliases during a model/provider transition,
+      // but always keep only usable sendable strings.
+      const candidateSuggestions = parsed.suggestions ?? parsed.responses ?? parsed.replies ?? parsed.options;
+      const suggestions = Array.isArray(candidateSuggestions)
+        ? candidateSuggestions
+          .filter((suggestion): suggestion is string => typeof suggestion === 'string')
+          .map(suggestion => suggestion.trim())
+          .filter(Boolean)
+          .slice(0, 3)
+        : [];
       return {
         messageId,
-        suggestions: parsed.suggestions || ['I understand.', 'Thanks for letting me know.'],
-        confidence: Math.min(Math.max(parsed.confidence || 0.7, 0), 1),
-        reasoning: parsed.reasoning,
+        suggestions: suggestions.length > 0 ? suggestions : ['I understand.', 'Thanks for letting me know.'],
+        confidence: Math.min(Math.max(typeof parsed.confidence === 'number' ? parsed.confidence : 0.7, 0), 1),
+        reasoning: typeof parsed.reasoning === 'string' ? parsed.reasoning : undefined,
         messageType,
       };
     } catch {

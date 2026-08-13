@@ -126,10 +126,19 @@ describe('AIProcessor', () => {
       expect(promptTemplatesMock.detectMessageType).toHaveBeenCalledWith('Hello');
       expect(responseSafetyMock.validateAndFilter).toHaveBeenCalled();
       expect(responseCacheMock.setWithConfidenceTTL).toHaveBeenCalled();
+      expect(responseCacheMock.get).toHaveBeenCalledWith('test-msg-1:Hello', 'user-1');
 
       // The processor appends a JSON-only instruction to the system prompt.
       const [systemArg] = callAI.mock.calls[0] as [string, string];
       expect(systemArg).toContain('valid JSON only');
+      expect(systemArg).toContain('Do not return acknowledgement-only filler');
+      expect(promptTemplatesMock.buildPrompt).toHaveBeenCalledWith(
+        'Hello',
+        'social',
+        expect.objectContaining({ relationship: 'friend' }),
+        'Context string',
+        3
+      );
     });
 
     it('returns the cached response without calling the model', async () => {
@@ -153,6 +162,25 @@ describe('AIProcessor', () => {
       expect(callAI).not.toHaveBeenCalled();
     });
 
+    it('bypasses the cache and passes user guidance to a regenerated response', async () => {
+      responseCacheMock.get.mockResolvedValue({
+        suggestions: ['Cached response'],
+        confidence: 0.8,
+        messageType: 'social',
+      });
+      callAI.mockResolvedValue(JSON.stringify({ suggestions: ['Playful reply'], confidence: 0.9 }));
+
+      await aiProcessor.generateResponse('test-msg-1', 'Hello', 'user-1', 'individual', {
+        guidance: 'Keep it playful',
+        forceRefresh: true,
+      });
+
+      expect(responseCacheMock.get).not.toHaveBeenCalled();
+      const [, userPrompt] = callAI.mock.calls[0] as [string, string];
+      expect(userPrompt).toContain('Additional direction from the user: Keep it playful');
+      expect(responseCacheMock.setWithConfidenceTTL).not.toHaveBeenCalled();
+    });
+
     it('falls back to safe defaults when the model returns invalid JSON', async () => {
       callAI.mockResolvedValue('not json at all');
 
@@ -162,6 +190,22 @@ describe('AIProcessor', () => {
       expect(result.suggestions.length).toBeGreaterThan(0);
       expect(result.confidence).toBeGreaterThanOrEqual(0);
       expect(result.confidence).toBeLessThanOrEqual(1);
+    });
+
+    it('explains the latest message using the conversation context without sending a reply', async () => {
+      callAI.mockResolvedValue(JSON.stringify({
+        summary: 'They want to make plans before Friday.',
+        latestMessageIntent: 'They are checking whether you can meet before they leave.',
+        responseStrategy: 'Confirm interest and suggest a specific time tomorrow.',
+        suggestedNextStep: 'Offer a time and place.',
+        contextSignals: ['They mentioned leaving Friday', 'The chat is casual'],
+      }));
+
+      const result = await aiProcessor.explainConversation('test-msg-1', 'I leave Friday', 'user-1', 'individual');
+
+      expect(contextBuilderMock.buildContext).toHaveBeenCalledWith('test-msg-1', 'user-1', 100);
+      expect(result.suggestedNextStep).toBe('Offer a time and place.');
+      expect(result.contextSignals).toEqual(['They mentioned leaving Friday', 'The chat is casual']);
     });
   });
 

@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { memo, useState, useEffect, useCallback, useMemo } from 'react';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { Search, MessageCircle } from 'lucide-react-native';
+import { Brain, Search, MessageCircle } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { MessageCard } from '../../components/MessageCard';
 import { PlatformBadge } from '../../components/PlatformIcon';
@@ -287,6 +287,14 @@ export default function DashboardScreen() {
     <View className="flex-1 bg-gray-50 dark:bg-gray-900" testID="messages-screen">
       {/* Sticky filter bar — lives outside FlatList to avoid key conflicts */}
       <View className="bg-white dark:bg-gray-800 px-4 pt-3 pb-2 border-b border-gray-100 dark:border-gray-700">
+        <TouchableOpacity
+          onPress={() => router.push('/assistant')}
+          testID="open-ask-claire"
+          style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', backgroundColor: '#eef2ff', borderRadius: 18, paddingHorizontal: 11, paddingVertical: 7, marginBottom: 10 }}
+        >
+          <Brain size={15} color="#4f46e5" />
+          <Text style={{ color: '#4338ca', fontSize: 13, fontWeight: '700', marginLeft: 6 }}>Ask Claire</Text>
+        </TouchableOpacity>
         <View className="flex-row items-center bg-gray-100 dark:bg-gray-700 rounded-xl px-3 py-2 mb-3">
           <Search size={18} color="#6b7280" />
           <TextInput
