@@ -54,6 +54,11 @@ ALTER TABLE public.conversation_assistant_index_state ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.conversation_assistant_threads ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.conversation_assistant_turns ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can manage own conversation embeddings" ON public.conversation_message_embeddings;
+DROP POLICY IF EXISTS "Users can manage own assistant index state" ON public.conversation_assistant_index_state;
+DROP POLICY IF EXISTS "Users can manage own assistant threads" ON public.conversation_assistant_threads;
+DROP POLICY IF EXISTS "Users can manage own assistant turns" ON public.conversation_assistant_turns;
+
 CREATE POLICY "Users can manage own conversation embeddings"
   ON public.conversation_message_embeddings FOR ALL
   USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
@@ -79,7 +84,7 @@ RETURNS TABLE (
   content TEXT,
   sender_name TEXT,
   from_me BOOLEAN,
-  timestamp TIMESTAMPTZ,
+  "timestamp" TIMESTAMPTZ,
   platform TEXT,
   chat_name TEXT,
   is_group BOOLEAN,
@@ -114,7 +119,7 @@ RETURNS TABLE (
   content TEXT,
   sender_name TEXT,
   from_me BOOLEAN,
-  timestamp TIMESTAMPTZ,
+  "timestamp" TIMESTAMPTZ,
   platform TEXT,
   chat_name TEXT,
   is_group BOOLEAN,
@@ -150,7 +155,7 @@ RETURNS TABLE (
   content TEXT,
   contact_name TEXT,
   from_me BOOLEAN,
-  timestamp TIMESTAMPTZ,
+  "timestamp" TIMESTAMPTZ,
   platform TEXT
 )
 LANGUAGE sql STABLE SET search_path = public
