@@ -1,5 +1,12 @@
-# mautrix-meta (Instagram) Configuration for Claire
+# mautrix Instagram Configuration for Claire
 # Documentation: https://docs.mau.fi/bridges/go/meta/config.html
+
+# `network` replaced the legacy `meta` block. The current bridge exits while
+# attempting to migrate the old block, which made the provisioning API time
+# out before a user could authenticate.
+network:
+    mode: instagram
+    displayname_template: '{{or .DisplayName .Username "Unknown user"}}'
 
 homeserver:
     address: http://synapse:8008
@@ -18,12 +25,9 @@ appservice:
         displayname: Instagram Bridge Bot
     as_token: __AS_TOKEN__
     hs_token: __HS_TOKEN__
-
-meta:
-    mode: instagram
+    username_template: "meta_{{.}}"
 
 bridge:
-    username_template: "meta_{{.}}"
     displayname_template: "{{.Name}} (IG)"
     command_prefix: "!ig"
 
@@ -34,13 +38,12 @@ bridge:
 
     private_chat_portal_meta: true
 
-    # Double puppeting: allows the bridge to act as the real Matrix user
-    # so outgoing messages from the user's Instagram account appear as their
-    # actual Matrix account instead of a ghost user (meta_<id>:claire.local).
-    # Docs: https://docs.mau.fi/bridges/general/double-puppeting.html
-    double_puppet:
-        secrets:
-            claire.local: "as_token:__DOUBLE_PUPPET_AS__"
+
+# Double puppeting: allows the bridge to act as the real Matrix user so
+# outgoing messages appear as their actual Matrix account rather than a ghost.
+double_puppet:
+    secrets:
+        claire.local: "as_token:__DOUBLE_PUPPET_AS__"
 
 provisioning:
     shared_secret: __PROVISIONING_SECRET__
