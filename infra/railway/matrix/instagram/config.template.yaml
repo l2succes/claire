@@ -10,7 +10,10 @@ network:
 
 homeserver:
     address: http://synapse:8008
-    domain: claire.local
+    # Railway assigns the Matrix server name at deploy time. Keep the bridge's
+    # bot/ghost IDs aligned with Synapse's appservice registration instead of
+    # hard-coding the local development domain.
+    domain: __MATRIX_SERVER_NAME__
 
 appservice:
     address: http://mautrix-instagram:29319
