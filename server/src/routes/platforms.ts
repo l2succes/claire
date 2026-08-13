@@ -231,6 +231,7 @@ router.get('/:platform/status', async (req: Request, res: Response) => {
  * Creates a session and returns the bridge login_id + step_id for the client.
  */
 router.post('/instagram/login/start', async (req: Request, res: Response) => {
+  let sessionId: string | undefined;
   try {
     const userId = req.user?.id;
     const client = req.body?.client === 'web' ? 'web' : 'native';
@@ -243,15 +244,22 @@ router.post('/instagram/login/start', async (req: Request, res: Response) => {
       return res.status(404).json({ success: false, error: 'Instagram not available' });
     }
 
-    const sessionId = `instagram-${userId}-${Date.now()}`;
-    await adapter.createSession(userId, sessionId, { platform: Platform.INSTAGRAM } as never);
-
-    // Get login flows and start one
+    // Prove that provisioning is available before persisting an auth session.
+    // Previously a bridge timeout created a durable `awaiting_auth` session,
+    // which made a failed attempt look like an authentication flow still in
+    // progress on every subsequent visit to Settings.
     const flows = await instagramBridgeClient.getLoginFlows();
     const flowId = flows[0]?.id;
     if (!flowId) {
       return res.status(502).json({ success: false, error: 'No login flows available from bridge' });
     }
+
+    sessionId = `instagram-${userId}-${Date.now()}`;
+    await adapter.createSession(userId, sessionId, {
+      platform: Platform.INSTAGRAM,
+      // Instagram uses the provisioning API below, not a Matrix bot command.
+      skipBridgeAuth: true,
+    } as never);
 
     const step = await instagramBridgeClient.startLogin(flowId);
 
@@ -267,6 +275,10 @@ router.post('/instagram/login/start', async (req: Request, res: Response) => {
     });
   } catch (error) {
     logger.error('Error starting Instagram login:', error);
+    if (sessionId) {
+      const matrixAdapter = platformManager.getAdapter(Platform.INSTAGRAM) as MatrixBridgeAdapter | undefined;
+      await matrixAdapter?.markSessionFailed(sessionId, (error as Error).message || 'Failed to start Instagram login');
+    }
     return res.status(500).json({
       success: false,
       error: (error as Error).message || 'Failed to start Instagram login',
