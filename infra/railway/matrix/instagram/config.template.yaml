@@ -39,12 +39,12 @@ bridge:
     displayname_template: "{{.Name}} (IG)"
     command_prefix: "!ig"
 
-# Bridge v2 reads permissions at the root level. Nesting this under `bridge`
-# silently leaves every user relay-only, which prevents provisioning logins.
-permissions:
-    "*": relay
-    "claire.local": user
-    "@claire_bot:claire.local": admin
+    # mautrix-meta v26 requires this section inside `bridge`. The placeholders
+    # are replaced by the Railway entrypoint with Synapse's real server name.
+    permissions:
+        "*": relay
+        "__MATRIX_SERVER_NAME__": user
+        "@claire_bot:__MATRIX_SERVER_NAME__": admin
 
 # Double puppeting: allows the bridge to act as the real Matrix user so
 # outgoing messages appear as their actual Matrix account rather than a ghost.

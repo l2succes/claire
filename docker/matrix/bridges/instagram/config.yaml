@@ -29,10 +29,10 @@ bridge:
     displayname_template: "{{.Name}} (IG)"
     command_prefix: "!ig"
 
-permissions:
-    "*": relay
-    "claire.local": user
-    "@claire_bot:claire.local": admin
+    permissions:
+        "*": relay
+        "claire.local": user
+        "@claire_bot:claire.local": admin
 
 double_puppet:
     secrets:
