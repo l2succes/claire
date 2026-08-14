@@ -39,10 +39,12 @@ bridge:
     displayname_template: "{{.Name}} (IG)"
     command_prefix: "!ig"
 
-    permissions:
-        "*": relay
-        "claire.local": user
-        "@claire_bot:claire.local": admin
+# Bridge v2 reads permissions at the root level. Nesting this under `bridge`
+# silently leaves every user relay-only, which prevents provisioning logins.
+permissions:
+    "*": relay
+    "claire.local": user
+    "@claire_bot:claire.local": admin
 
 # Double puppeting: allows the bridge to act as the real Matrix user so
 # outgoing messages appear as their actual Matrix account rather than a ghost.
