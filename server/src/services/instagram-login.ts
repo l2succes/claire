@@ -20,6 +20,71 @@ interface PendingLogin {
 const pendingLogins = new Map<string, PendingLogin>();
 const LOGIN_TTL_MS = 5 * 60 * 1000;
 const SUCCESS_URL_PATTERN = /^https:\/\/www\.instagram\.com\/(?:direct\/(?:inbox\/|t\/[0-9]+\/)?)?(?:\?.*)?$/;
+const USERNAME_SELECTOR = [
+  'input[name="username"]',
+  'input[autocomplete="username"]',
+  'input[aria-label="Phone number, username, or email"]',
+].join(', ');
+const PASSWORD_SELECTOR = [
+  'input[name="password"]',
+  'input[autocomplete="current-password"]',
+  'input[type="password"]',
+].join(', ');
+
+/**
+ * Instagram changes its login markup frequently and may show an interstitial
+ * to data-centre browsers. Keep the detail in server logs while returning a
+ * safe, actionable explanation to the client.
+ */
+export function describeInstagramLoginPage(page: {
+  url: string;
+  title: string;
+  text: string;
+}): string {
+  const text = page.text.toLowerCase();
+  if (text.includes('challenge') || text.includes('verify your identity') || text.includes('suspicious')) {
+    return 'Instagram requires additional verification in your regular browser or app. Complete that verification, then use the browser-cookie connection option.';
+  }
+  if (text.includes('wait a few minutes') || text.includes('try again later') || text.includes('temporarily blocked')) {
+    return 'Instagram temporarily blocked this cloud sign-in attempt. Use the browser-cookie connection option instead of retrying immediately.';
+  }
+  if (text.includes('cookies') && (text.includes('allow') || text.includes('accept'))) {
+    return 'Instagram showed a cookie-consent page instead of its sign-in form. Use the browser-cookie connection option.';
+  }
+  return 'Instagram did not return a usable sign-in form to the server. Use the browser-cookie connection option instead.';
+}
+
+async function inspectLoginPage(page: Page): Promise<{ url: string; title: string; text: string }> {
+  // Use a string so the server's Node-only TypeScript compilation does not
+  // require DOM globals for code that runs inside Chromium.
+  return page.evaluate(`(() => ({
+    url: window.location.href,
+    title: document.title,
+    text: document.body?.innerText?.slice(0, 2000) || '',
+  }))()`) as Promise<{ url: string; title: string; text: string }>;
+}
+
+async function waitForCredentialFields(page: Page): Promise<void> {
+  try {
+    await page.waitForFunction(
+      `(() => Boolean(
+        document.querySelector(${JSON.stringify(USERNAME_SELECTOR)}) &&
+        document.querySelector(${JSON.stringify(PASSWORD_SELECTOR)})
+      ))()`,
+      { timeout: 20_000 },
+    );
+  } catch {
+    const summary = await inspectLoginPage(page);
+    const message = describeInstagramLoginPage(summary);
+    logger.warn('Instagram credential form unavailable', {
+      url: summary.url,
+      title: summary.title,
+      // Log only a compact classification, never credentials or cookies.
+      reason: message,
+    });
+    throw new Error(message);
+  }
+}
 
 function generateLoginId(): string {
   return crypto.randomBytes(16).toString('hex');
@@ -174,13 +239,17 @@ export async function loginWithCredentials(
     );
 
     await page.goto('https://www.instagram.com/accounts/login/', {
-      waitUntil: 'networkidle2'
+      // Instagram keeps background requests open, so networkidle2 can turn a
+      // perfectly usable page into a false timeout. The explicit field wait
+      // below is the readiness signal we actually need.
+      waitUntil: 'domcontentloaded',
+      timeout: 30_000,
     });
 
-    await page.waitForSelector('input[name="username"]', { timeout: 10000 });
+    await waitForCredentialFields(page);
 
-    await page.type('input[name="username"]', username, { delay: 100 });
-    await page.type('input[name="password"]', password, { delay: 100 });
+    await page.type(USERNAME_SELECTOR, username, { delay: 100 });
+    await page.type(PASSWORD_SELECTOR, password, { delay: 100 });
 
     await Promise.all([
       page.click('button[type="submit"]'),

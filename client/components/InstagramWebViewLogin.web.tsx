@@ -35,6 +35,8 @@ export function InstagramWebViewLogin({
   const [errorMessage, setErrorMessage] = useState('');
   const [twoFactorLoginId, setTwoFactorLoginId] = useState('');
   const [twoFactorMessage, setTwoFactorMessage] = useState('');
+  const [useCookieFallback, setUseCookieFallback] = useState(false);
+  const [cookieHeader, setCookieHeader] = useState('');
 
   const handleSignIn = async () => {
     if (!username.trim() || !password.trim()) return;
@@ -137,7 +139,55 @@ export function InstagramWebViewLogin({
     setPassword('');
     setVerificationCode('');
     setTwoFactorLoginId('');
+    setUseCookieFallback(false);
+    setCookieHeader('');
   };
+
+  const handleCookieConnect = () => {
+    const normalized = cookieHeader.trim();
+    if (!normalized) return;
+    onSuccess({ cookieHeader: normalized });
+  };
+
+  const renderCookieFallback = () => (
+    <>
+      <View style={styles.iconContainer}>
+        <View style={styles.shieldIconWrapper}>
+          <Shield size={48} color="#E1306C" />
+        </View>
+      </View>
+      <Text style={styles.subtitle}>
+        Connect with an Instagram browser session
+      </Text>
+      <Text style={styles.cookieInstructions}>
+        In a regular browser, sign in to instagram.com. Copy the Cookie request header from a logged-in Instagram request and paste it below. Claire does not retain the pasted header in its application database; the configured bridge uses it to establish your connection.
+      </Text>
+      <TextInput
+        style={styles.cookieInput}
+        value={cookieHeader}
+        onChangeText={setCookieHeader}
+        placeholder="sessionid=…; csrftoken=…; ds_user_id=…"
+        placeholderTextColor="#9ca3af"
+        autoCapitalize="none"
+        autoCorrect={false}
+        multiline
+        textAlignVertical="top"
+        testID="instagram-cookie-header-input"
+      />
+      <Button
+        variant="primary"
+        onPress={handleCookieConnect}
+        disabled={!cookieHeader.trim()}
+        style={styles.signInButton}
+        testID="instagram-cookie-connect-button"
+      >
+        Connect Instagram
+      </Button>
+      <TouchableOpacity onPress={() => setUseCookieFallback(false)} style={styles.backButton}>
+        <Text style={styles.backButtonText}>Try username and password again</Text>
+      </TouchableOpacity>
+    </>
+  );
 
   const renderIdleState = () => (
     <>
@@ -206,6 +256,13 @@ export function InstagramWebViewLogin({
         >
           Sign In
         </Button>
+        <TouchableOpacity
+          onPress={() => setUseCookieFallback(true)}
+          style={styles.cookieFallbackButton}
+          testID="instagram-use-cookie-fallback"
+        >
+          <Text style={styles.cookieFallbackText}>Use browser cookies instead</Text>
+        </TouchableOpacity>
       </View>
 
       <Text style={styles.privacyNote}>
@@ -307,7 +364,7 @@ export function InstagramWebViewLogin({
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
       >
-        {loginState === 'idle' && renderIdleState()}
+        {loginState === 'idle' && (useCookieFallback ? renderCookieFallback() : renderIdleState())}
         {loginState === 'loading' && renderLoadingState()}
         {loginState === 'two_factor' && renderTwoFactorState()}
         {loginState === 'challenge' && renderChallengeState()}
@@ -471,6 +528,30 @@ const styles = StyleSheet.create({
     color: '#E1306C',
     fontWeight: '600',
     textAlign: 'center',
+  },
+  cookieFallbackButton: {
+    alignSelf: 'center',
+    paddingVertical: 10,
+  },
+  cookieFallbackText: {
+    color: '#2563eb',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  cookieInstructions: {
+    color: '#4b5563',
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: 'center',
+  },
+  cookieInput: {
+    minHeight: 120,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 12,
+    padding: 12,
+    color: '#111827',
+    fontSize: 14,
   },
   challengeTitle: {
     fontSize: 18,
