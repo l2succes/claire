@@ -1,0 +1,1099 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Claire — Mobile app concept</title>
+    <meta
+      name="description"
+      content="Complete high-fidelity mobile screen system for Claire unified messenger."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./tokens.css" />
+    <link rel="stylesheet" href="./app-mockups.css" />
+    <script src="./app-mockups.js" defer></script>
+  </head>
+  <body>
+    <header class="gallery-header">
+      <a class="gallery-brand" href="./index.html"><i>C</i>claire <span>/ mobile app</span></a>
+      <nav class="gallery-links">
+        <a href="./index.html">Landing</a><a href="./style-guide.html">Style guide</a
+        ><a class="active" href="./app-mockups.html">Mobile</a
+        ><a href="./desktop-mockups.html">Desktop</a>
+      </nav>
+    </header>
+    <main>
+      <section class="gallery-hero">
+        <div>
+          <div class="gallery-kicker">MOBILE PRODUCT SYSTEM / CONCEPT 01</div>
+          <h1>One place<br />to be <span>present.</span></h1>
+          <p>
+            A complete mobile direction for Claire: the utility of a unified inbox, the warmth of a
+            trusted assistant, and AI that stays close to the conversation instead of taking over
+            the product.
+          </p>
+        </div>
+        <aside class="route-card">
+          <small>PRIMARY INFORMATION ARCHITECTURE</small>
+          <h3>Four tabs. One profile entry. AI appears in context.</h3>
+          <div class="route-flow">
+            <span class="primary">Home</span><span class="primary">Inbox</span
+            ><span class="primary">Promises</span><span class="primary">Search</span
+            ><span>Chat</span><span>Contact memory</span><span>Compose</span><span>Settings</span
+            ><span>Accounts</span>
+          </div>
+        </aside>
+      </section>
+      <section class="screen-map">
+        <div class="gallery-kicker">THE COMPLETE MVP MAP</div>
+        <h2>Every screen the first version needs.</h2>
+        <div class="map-grid">
+          <article class="map-card">
+            <span>01 / START</span>
+            <h3>Welcome & sign in</h3>
+            <p>Value proposition, authentication, privacy promise.</p>
+          </article>
+          <article class="map-card">
+            <span>02 / CONNECT</span>
+            <h3>Platform connection</h3>
+            <p>WhatsApp QR, Telegram login, Instagram setup.</p>
+          </article>
+          <article class="map-card">
+            <span>03 / ORIENT</span>
+            <h3>Daily brief</h3>
+            <p>Priority messages, promises, suggested next actions.</p>
+          </article>
+          <article class="map-card">
+            <span>04 / COMMUNICATE</span>
+            <h3>Inbox & chat</h3>
+            <p>Unified filters, platform identity, AI assist ribbon.</p>
+          </article>
+          <article class="map-card">
+            <span>05 / FIND</span>
+            <h3>Global search</h3>
+            <p>Semantic answer, messages, people, promises, media.</p>
+          </article>
+          <article class="map-card">
+            <span>06 / FOLLOW THROUGH</span>
+            <h3>Promises</h3>
+            <p>Open, overdue, completed, and message source.</p>
+          </article>
+          <article class="map-card">
+            <span>07 / REMEMBER</span>
+            <h3>Contacts & memory</h3>
+            <p>Cross-platform identity, relationship, tone prompt.</p>
+          </article>
+          <article class="map-card">
+            <span>08 / CONTROL</span>
+            <h3>Settings & privacy</h3>
+            <p>Accounts, AI behavior, notifications, data controls.</p>
+          </article>
+        </div>
+      </section>
+      <nav class="gallery-toolbar" aria-label="Filter screen gallery">
+        <button class="active" data-gallery-filter="all">All screens</button
+        ><button data-gallery-filter="core">Core loop</button
+        ><button data-gallery-filter="ai">AI & memory</button
+        ><button data-gallery-filter="setup">Setup & settings</button>
+      </nav>
+      <section class="gallery-section" id="core" data-gallery-section="core">
+        <div class="gallery-section-title">
+          <div class="gallery-kicker">CORE LOOP</div>
+          <h2>Scan. Understand. Reply.</h2>
+          <p>
+            The high-frequency screens keep information density high and visual noise low. Platform
+            identity is always visible, but never louder than the person.
+          </p>
+        </div>
+        <div class="phone-grid">
+          <article class="screen-case" data-kind="core">
+            <div class="screen-meta"><b>01 / DAILY BRIEF</b><span>HOME TAB</span></div>
+            <div class="device">
+              <div class="island"></div>
+              <div class="status"><span>9:41</span><span>● ◒</span></div>
+              <div class="screen">
+                <div class="brief-date">THURSDAY, AUG 13</div>
+                <h2 class="brief-title">Good morning,<br />Luc.</h2>
+                <p class="brief-sub">You’re clear after three quick actions.</p>
+                <div class="hero-card">
+                  <span>↗</span>
+                  <div><small>NEEDS A REPLY</small><b>3 conversations are waiting</b></div>
+                  <em>View</em>
+                </div>
+                <div class="section-label"><span>YOUR DAY</span><span>4 ITEMS</span></div>
+                <div class="daily-row">
+                  <i class="wa">W</i>
+                  <div>
+                    <b>Maya needs the Q3 deck</b>
+                    <p>WhatsApp · waiting 2m</p>
+                  </div>
+                  <time>Now</time>
+                </div>
+                <div class="daily-row">
+                  <i>✓</i>
+                  <div>
+                    <b>Confirm dinner with Dad</b>
+                    <p>Promise · due at 5:00</p>
+                  </div>
+                  <time>8h</time>
+                </div>
+                <div class="daily-row">
+                  <i style="background: var(--claire-blush)">!</i>
+                  <div>
+                    <b>Sofia asked a direct question</b>
+                    <p>Instagram · yesterday</p>
+                  </div>
+                  <time>1d</time>
+                </div>
+                <div class="take-card">
+                  <span>✦</span>
+                  <div><small>CLAIRE’S TAKE</small><b>Your morning is quiet after these.</b></div>
+                </div>
+                <div class="tab-bar">
+                  <span class="active">⌂<small>Home</small></span
+                  ><span>✉<small>Inbox</small></span
+                  ><span>✓<small>Promises</small></span
+                  ><span>⌕<small>Search</small></span>
+                </div>
+              </div>
+            </div>
+            <p class="screen-note">
+              Orientation screen: prioritizes people and commitments, not message volume.
+            </p>
+          </article>
+          <article class="screen-case" data-kind="core">
+            <div class="screen-meta"><b>02 / UNIFIED INBOX</b><span>INBOX TAB</span></div>
+            <div class="device">
+              <div class="island"></div>
+              <div class="status"><span>9:41</span><span>● ◒</span></div>
+              <div class="screen">
+                <div class="app-title">
+                  <h2>Inbox</h2>
+                  <div class="app-title-actions">
+                    <button class="round-button">⌕</button><button class="round-button">＋</button>
+                  </div>
+                </div>
+                <div class="search-field">
+                  <span>⌕</span
+                  ><input value="Search conversations" aria-label="Search conversations" />
+                </div>
+                <div class="filter-chips">
+                  <button class="active">All</button><button>Unread 12</button
+                  ><button>Needs reply</button><button>WhatsApp</button>
+                </div>
+                <div class="section-label"><span>PINNED</span><span>EDIT</span></div>
+                <div class="conversation-row urgent">
+                  <div class="avatar-wrap">
+                    <div class="avatar">MK</div>
+                    <i class="platform-dot wa">W</i>
+                  </div>
+                  <div>
+                    <h4>Maya Kim</h4>
+                    <p>Can you send that deck?</p>
+                  </div>
+                  <div><time>2m</time><span class="unread">1</span></div>
+                </div>
+                <div class="section-label"><span>RECENT</span><span>24 CONVERSATIONS</span></div>
+                <div class="conversation-row">
+                  <div class="avatar-wrap">
+                    <div class="avatar blue">NO</div>
+                    <i class="platform-dot tg">T</i>
+                  </div>
+                  <div>
+                    <h4>Noah Oliver</h4>
+                    <p>Voice message · 0:24</p>
+                  </div>
+                  <time>18m</time>
+                </div>
+                <div class="conversation-row">
+                  <div class="avatar-wrap">
+                    <div class="avatar mint">ST</div>
+                    <i class="platform-dot wa">W</i>
+                  </div>
+                  <div>
+                    <h4>Studio team</h4>
+                    <p>Lea: latest screens are in</p>
+                  </div>
+                  <time>1h</time>
+                </div>
+                <div class="conversation-row">
+                  <div class="avatar-wrap">
+                    <div class="avatar purple">SO</div>
+                    <i class="platform-dot ig">I</i>
+                  </div>
+                  <div>
+                    <h4>Sofia</h4>
+                    <p>That place looks perfect ✨</p>
+                  </div>
+                  <time>3h</time>
+                </div>
+                <button class="floating-compose">＋</button>
+                <div class="tab-bar">
+                  <span>⌂<small>Home</small></span
+                  ><span class="active">✉<small>Inbox</small></span
+                  ><span>✓<small>Promises</small></span
+                  ><span>⌕<small>Search</small></span>
+                </div>
+              </div>
+            </div>
+            <p class="screen-note">
+              Standard inbox: one person-first list with explicit platform badges and utility
+              filters.
+            </p>
+          </article>
+          <article class="screen-case" data-kind="core">
+            <div class="screen-meta"><b>03 / CHAT</b><span>DETAIL STACK</span></div>
+            <div class="device">
+              <div class="island"></div>
+              <div class="status"><span>9:41</span><span>● ◒</span></div>
+              <div class="screen chat-screen">
+                <header class="chat-head">
+                  <button class="back">‹</button>
+                  <div class="chat-head-person">
+                    <div class="avatar-wrap">
+                      <div class="avatar">MK</div>
+                      <i class="platform-dot wa">W</i>
+                    </div>
+                    <div>
+                      <h3>Maya Kim</h3>
+                      <p>WhatsApp · active now</p>
+                    </div>
+                  </div>
+                  <button>•••</button>
+                </header>
+                <div class="ai-ribbon">
+                  <span>✦</span>
+                  <div>
+                    <small>QUICK CONTEXT</small>
+                    <p>Product review tomorrow · deck still open</p>
+                  </div>
+                  <button>Ask Claire</button>
+                </div>
+                <div class="message-stream">
+                  <div class="day-chip">Today</div>
+                  <div class="bubble in">
+                    Hey! Are we still good for the product review tomorrow?<span class="bubble-time"
+                      >9:12</span
+                    >
+                  </div>
+                  <div class="bubble out">
+                    Absolutely. I’ll send the updated deck before 10.<span class="bubble-time"
+                      >9:14 · ✓✓</span
+                    >
+                  </div>
+                  <div class="promise-inline">
+                    <span>✦</span>
+                    <div><small>PROMISE FOUND</small><b>Send the deck tomorrow before 10</b></div>
+                    <button>Track</button>
+                  </div>
+                  <div class="bubble in">
+                    Perfect. I’ll add comments tonight. Thank you!<span class="bubble-time"
+                      >9:15</span
+                    >
+                  </div>
+                </div>
+                <div class="composer">
+                  <button>＋</button><span>Write a message…</span><button>✦</button
+                  ><button class="send">↑</button>
+                </div>
+              </div>
+            </div>
+            <p class="screen-note">
+              AI stays at the top as context and inline as a promise. The conversation remains
+              primary.
+            </p>
+          </article>
+          <article class="screen-case" data-kind="core">
+            <div class="screen-meta"><b>04 / NEW MESSAGE</b><span>MODAL STACK</span></div>
+            <div class="device">
+              <div class="island"></div>
+              <div class="status"><span>9:41</span><span>● ◒</span></div>
+              <div class="screen no-tab">
+                <div class="app-title">
+                  <button class="round-button">×</button>
+                  <h3>New message</h3>
+                  <button class="round-button">＋</button>
+                </div>
+                <div class="compose-to">
+                  <span>To:</span
+                  ><input placeholder="Name or handle" aria-label="Message recipient" />
+                </div>
+                <div class="section-label"><span>SUGGESTED</span><span></span></div>
+                <div class="suggested-contact">
+                  <div class="avatar">MK</div>
+                  <div>
+                    <b>Maya Kim</b>
+                    <p>WhatsApp · 2 minutes ago</p>
+                  </div>
+                  <span>›</span>
+                </div>
+                <div class="suggested-contact">
+                  <div class="avatar blue">NO</div>
+                  <div>
+                    <b>Noah Oliver</b>
+                    <p>Telegram · 18 minutes ago</p>
+                  </div>
+                  <span>›</span>
+                </div>
+                <div class="suggested-contact">
+                  <div class="avatar purple">SO</div>
+                  <div>
+                    <b>Sofia Ramirez</b>
+                    <p>Instagram · 3 hours ago</p>
+                  </div>
+                  <span>›</span>
+                </div>
+                <div class="section-label"><span>GROUPS</span><span></span></div>
+                <div class="suggested-contact">
+                  <div class="avatar mint">ST</div>
+                  <div>
+                    <b>Studio team</b>
+                    <p>WhatsApp · 8 people</p>
+                  </div>
+                  <span>›</span>
+                </div>
+              </div>
+            </div>
+            <p class="screen-note">
+              A cross-platform recipient picker avoids making users choose a service before a
+              person.
+            </p>
+          </article>
+          <article class="screen-case" data-kind="core">
+            <div class="screen-meta"><b>05 / PROMISES</b><span>PROMISES TAB</span></div>
+            <div class="device">
+              <div class="island"></div>
+              <div class="status"><span>9:41</span><span>● ◒</span></div>
+              <div class="screen">
+                <div class="app-title">
+                  <h2>Promises</h2>
+                  <button class="round-button">＋</button>
+                </div>
+                <div class="promise-summary">
+                  <div class="metric lime"><strong>4</strong><span>OPEN PROMISES</span></div>
+                  <div class="metric blue"><strong>2</strong><span>DUE TODAY</span></div>
+                </div>
+                <div class="filter-chips">
+                  <button class="active">Open</button><button>Completed</button
+                  ><button>I’m waiting</button>
+                </div>
+                <div class="section-label"><span>TODAY</span><span>2</span></div>
+                <div class="promise-item overdue">
+                  <div class="promise-check">!</div>
+                  <div>
+                    <b>Send Maya the Q3 deck</b>
+                    <p>From your WhatsApp conversation</p>
+                  </div>
+                  <span class="due">10:00</span>
+                </div>
+                <div class="promise-item">
+                  <div class="promise-check">○</div>
+                  <div>
+                    <b>Confirm dinner with Dad</b>
+                    <p>From your family group</p>
+                  </div>
+                  <span class="due">17:00</span>
+                </div>
+                <div class="section-label"><span>LATER</span><span>2</span></div>
+                <div class="promise-item">
+                  <div class="promise-check">○</div>
+                  <div>
+                    <b>Review Noah’s introduction</b>
+                    <p>Telegram · due Friday</p>
+                  </div>
+                  <span class="due">FRI</span>
+                </div>
+                <div class="promise-item">
+                  <div class="promise-check">○</div>
+                  <div>
+                    <b>Book dentist appointment</b>
+                    <p>Added manually</p>
+                  </div>
+                  <span class="due">MON</span>
+                </div>
+                <div class="tab-bar">
+                  <span>⌂<small>Home</small></span
+                  ><span>✉<small>Inbox</small></span
+                  ><span class="active">✓<small>Promises</small></span
+                  ><span>⌕<small>Search</small></span>
+                </div>
+              </div>
+            </div>
+            <p class="screen-note">
+              Commitments link back to their source message so they always retain human context.
+            </p>
+          </article>
+          <article class="screen-case" data-kind="core">
+            <div class="screen-meta"><b>06 / CONTACTS</b><span>INBOX SUBVIEW</span></div>
+            <div class="device">
+              <div class="island"></div>
+              <div class="status"><span>9:41</span><span>● ◒</span></div>
+              <div class="screen">
+                <div class="app-title">
+                  <h2>People</h2>
+                  <button class="round-button">＋</button>
+                </div>
+                <div class="search-field">
+                  <span>⌕</span><input value="Search people" aria-label="Search people" />
+                </div>
+                <div class="section-label"><span>NEEDS CONTEXT</span><span>1</span></div>
+                <div class="contact-feature">
+                  <div class="avatar blue">NO</div>
+                  <div>
+                    <b>Noah Oliver</b>
+                    <p>Who is Noah to you?</p>
+                  </div>
+                  <button>Add context</button>
+                </div>
+                <div class="section-label"><span>RECENT</span><span>A–Z</span></div>
+                <div class="contact-row">
+                  <div class="avatar">MK</div>
+                  <div>
+                    <b>Maya Kim</b>
+                    <p>Business · WhatsApp</p>
+                  </div>
+                  <span>›</span>
+                </div>
+                <div class="contact-row">
+                  <div class="avatar mint">DP</div>
+                  <div>
+                    <b>Dad & family</b>
+                    <p>Family · WhatsApp</p>
+                  </div>
+                  <span>›</span>
+                </div>
+                <div class="contact-row">
+                  <div class="avatar purple">SO</div>
+                  <div>
+                    <b>Sofia Ramirez</b>
+                    <p>Dating · Instagram</p>
+                  </div>
+                  <span>›</span>
+                </div>
+                <div class="contact-row">
+                  <div class="avatar blue">NO</div>
+                  <div>
+                    <b>Noah Oliver</b>
+                    <p>Uncategorized · Telegram</p>
+                  </div>
+                  <span>›</span>
+                </div>
+                <div class="tab-bar">
+                  <span>⌂<small>Home</small></span
+                  ><span class="active">✉<small>Inbox</small></span
+                  ><span>✓<small>Promises</small></span
+                  ><span>⌕<small>Search</small></span>
+                </div>
+              </div>
+            </div>
+            <p class="screen-note">
+              Contacts can live as an Inbox subview rather than competing for a fifth primary tab.
+            </p>
+          </article>
+        </div>
+      </section>
+      <section class="gallery-section alt" id="intelligence" data-gallery-section="ai">
+        <div class="gallery-section-title">
+          <div class="gallery-kicker">AI & MEMORY</div>
+          <h2>Helpful in context.<br />Personal by permission.</h2>
+          <p>
+            Claire’s intelligence is visible when it can save effort: drafting, summarizing,
+            searching, and remembering how a relationship should feel.
+          </p>
+        </div>
+        <div class="phone-grid">
+          <article class="screen-case" data-kind="ai">
+            <div class="screen-meta"><b>07 / AI COPILOT</b><span>FORM SHEET</span></div>
+            <div class="device">
+              <div class="island"></div>
+              <div class="status" style="background: var(--claire-sky)">
+                <span>9:41</span><span>● ◒</span>
+              </div>
+              <div class="screen no-tab copilot-screen">
+                <div class="sheet-handle"></div>
+                <div class="copilot-head">
+                  <h2>Ask Claire</h2>
+                  <button>×</button>
+                </div>
+                <p class="copilot-context">Using your conversation with Maya</p>
+                <article class="suggestion-card">
+                  <small>SUGGESTED REPLY · WARM + DIRECT</small>
+                  <p>
+                    “Yes—we’re all set for tomorrow. I’ll send the updated deck by 10, and we can
+                    use the first few minutes to cover your comments.”
+                  </p>
+                  <div class="suggestion-actions">
+                    <button>Use reply</button><button>Make shorter</button
+                    ><button>Try again</button>
+                  </div>
+                </article>
+                <div class="tiny-label">MORE WAYS I CAN HELP</div>
+                <div class="copilot-tool-grid">
+                  <div class="copilot-tool">
+                    <span>≡</span><b>Catch me up</b>
+                    <p>Summarize the conversation.</p>
+                  </div>
+                  <div class="copilot-tool">
+                    <span>↗</span><b>Find open loops</b>
+                    <p>Promises and questions.</p>
+                  </div>
+                  <div class="copilot-tool">
+                    <span>☺</span><b>Check the tone</b>
+                    <p>Warm, direct, or playful.</p>
+                  </div>
+                  <div class="copilot-tool">
+                    <span>⌕</span><b>Find something</b>
+                    <p>Search just this chat.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <p class="screen-note">
+              A native form sheet keeps AI reversible and subordinate to the active chat.
+            </p>
+          </article>
+          <article class="screen-case" data-kind="ai">
+            <div class="screen-meta"><b>08 / GLOBAL SEARCH</b><span>SEARCH TAB</span></div>
+            <div class="device">
+              <div class="island"></div>
+              <div class="status"><span>9:41</span><span>● ◒</span></div>
+              <div class="screen search-screen">
+                <div class="search-hero"><h2>Search everything</h2></div>
+                <label class="global-search"
+                  ><span>⌕</span
+                  ><input
+                    placeholder="Messages, people, promises…"
+                    aria-label="Global search"
+                  /><kbd>⌘K</kbd></label
+                >
+                <div class="search-scope">
+                  <button class="active">Everything</button><button>Messages</button
+                  ><button>People</button><button>Files</button>
+                </div>
+                <div class="section-label"><span>RECENT SEARCHES</span><span>CLEAR</span></div>
+                <div class="recent-search">
+                  <span><i>↻</i> deck Maya sent last month</span><span>×</span>
+                </div>
+                <div class="recent-search">
+                  <span><i>↻</i> dinner recommendations from Sofia</span><span>×</span>
+                </div>
+                <div class="recent-search">
+                  <span><i>↻</i> open promises to Noah</span><span>×</span>
+                </div>
+                <div class="search-tip">
+                  <span>✦</span>
+                  <h3>Ask naturally.</h3>
+                  <p>
+                    Try “Who recommended the Oaxaca hotel?” or “What did Maya say about launch
+                    timing?”
+                  </p>
+                </div>
+                <div class="tab-bar">
+                  <span>⌂<small>Home</small></span
+                  ><span>✉<small>Inbox</small></span
+                  ><span>✓<small>Promises</small></span
+                  ><span class="active">⌕<small>Search</small></span>
+                </div>
+              </div>
+            </div>
+            <p class="screen-note">
+              Global search covers message text, people, attachments, commitments, and semantic
+              questions.
+            </p>
+          </article>
+          <article class="screen-case" data-kind="ai">
+            <div class="screen-meta"><b>09 / SEARCH RESULTS</b><span>SEARCH STACK</span></div>
+            <div class="device">
+              <div class="island"></div>
+              <div class="status"><span>9:41</span><span>● ◒</span></div>
+              <div class="screen no-tab">
+                <div class="app-title">
+                  <button class="round-button">‹</button>
+                  <h3>Search</h3>
+                  <button class="round-button">•••</button>
+                </div>
+                <h2 class="result-query">“What did Maya say<br />about launch timing?”</h2>
+                <p class="result-count">12 results across 3 conversations</p>
+                <div class="answer-card">
+                  <small>✦ CLAIRE’S ANSWER</small>
+                  <p>
+                    Maya suggested moving the public launch to September 18 so the support team has
+                    one extra week.
+                  </p>
+                  <span class="source-pill">3 source messages</span>
+                </div>
+                <div class="result-group">
+                  <small>BEST MATCHES</small>
+                  <div class="result-item">
+                    <div class="avatar">MK</div>
+                    <div>
+                      <b>Maya Kim · WhatsApp</b>
+                      <p>Could we move the <mark>launch to September 18</mark>?</p>
+                    </div>
+                    <time>Jul 24</time>
+                  </div>
+                  <div class="result-item">
+                    <div class="avatar mint">ST</div>
+                    <div>
+                      <b>Studio team · WhatsApp</b>
+                      <p>Maya’s <mark>launch timing</mark> note makes sense.</p>
+                    </div>
+                    <time>Jul 25</time>
+                  </div>
+                </div>
+                <div class="result-group">
+                  <small>RELATED PROMISE</small>
+                  <div class="result-item">
+                    <div class="promise-check">○</div>
+                    <div>
+                      <b>Update launch calendar</b>
+                      <p>Due next Monday</p>
+                    </div>
+                    <time>Open</time>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <p class="screen-note">
+              Answers are concise and cite visible source messages—never a source-less AI oracle.
+            </p>
+          </article>
+          <article class="screen-case" data-kind="ai">
+            <div class="screen-meta">
+              <b>10 / RELATIONSHIP MEMORY</b><span>CONTACT SETTINGS</span>
+            </div>
+            <div class="device">
+              <div class="island"></div>
+              <div class="status"><span>9:41</span><span>● ◒</span></div>
+              <div class="screen no-tab form-screen">
+                <div class="app-title">
+                  <button class="round-button">‹</button>
+                  <h3>Relationship memory</h3>
+                  <button class="round-button">•••</button>
+                </div>
+                <div class="person-hero">
+                  <div class="avatar">MK</div>
+                  <h2>Maya Kim</h2>
+                  <p>WhatsApp · maya@north.studio</p>
+                </div>
+                <label class="field-label">WHAT KIND OF RELATIONSHIP IS THIS?</label>
+                <div class="relationship-grid">
+                  <button class="relationship-chip active">Business</button
+                  ><button class="relationship-chip">Family</button
+                  ><button class="relationship-chip">Close friend</button
+                  ><button class="relationship-chip">Dating</button
+                  ><button class="relationship-chip">Partner</button
+                  ><button class="relationship-chip">Client</button
+                  ><button class="relationship-chip">Mentor</button
+                  ><button class="relationship-chip">Other</button>
+                </div>
+                <label class="field-label" for="maya-prompt">WHAT SHOULD CLAIRE REMEMBER?</label
+                ><textarea class="prompt-field" id="maya-prompt">
+Maya is my product lead. Be concise and warm. Avoid over-explaining, and always surface open launch decisions.</textarea
+                ><label class="field-label">DEFAULT TONE FOR SUGGESTIONS</label>
+                <div class="tone-grid">
+                  <button class="tone-card active">
+                    <b>Warm + direct</b>
+                    <p>Clear, human, confident</p></button
+                  ><button class="tone-card">
+                    <b>Professional</b>
+                    <p>Polished and concise</p></button
+                  ><button class="tone-card">
+                    <b>Casual</b>
+                    <p>Relaxed and natural</p></button
+                  ><button class="tone-card">
+                    <b>Playful</b>
+                    <p>Light and expressive</p>
+                  </button>
+                </div>
+                <button class="save-bar">Save relationship memory</button>
+              </div>
+            </div>
+            <p class="screen-note">
+              User-owned prompt plus relationship category; relationship changes tone, never access
+              or permissions.
+            </p>
+          </article>
+        </div>
+      </section>
+      <section class="gallery-section" id="setup" data-gallery-section="setup">
+        <div class="gallery-section-title">
+          <div class="gallery-kicker">SETUP & CONTROL</div>
+          <h2>Clear choices.<br />No hidden intelligence.</h2>
+          <p>
+            The supporting screens explain what is connected, what Claire remembers, and exactly
+            where personal data and notifications can be controlled.
+          </p>
+        </div>
+        <div class="phone-grid">
+          <article class="screen-case" data-kind="setup">
+            <div class="screen-meta"><b>11 / WELCOME</b><span>ONBOARDING</span></div>
+            <div class="device">
+              <div class="island"></div>
+              <div class="status"><span>9:41</span><span>● ◒</span></div>
+              <div
+                class="screen no-tab"
+                style="
+                  background: var(--claire-sky);
+                  padding: 45px 22px 22px;
+                  display: flex;
+                  flex-direction: column;
+                "
+              >
+                <div
+                  style="
+                    width: 48px;
+                    height: 48px;
+                    border: 1px solid var(--claire-ink);
+                    background: var(--claire-lime);
+                    border-radius: 14px;
+                    display: grid;
+                    place-items: center;
+                    font-size: 22px;
+                    font-weight: 700;
+                  "
+                >
+                  C
+                </div>
+                <div style="margin: auto 0">
+                  <div class="tiny-label">WELCOME TO CLAIRE</div>
+                  <h2
+                    style="
+                      font-size: 43px;
+                      line-height: 0.96;
+                      letter-spacing: -0.06em;
+                      margin: 12px 0 18px;
+                    "
+                  >
+                    Every conversation.<br />One calm place.
+                  </h2>
+                  <p style="font-size: 12px; max-width: 290px; color: var(--neutral-600)">
+                    Bring the people you care about together—and let Claire remember what deserves
+                    your attention.
+                  </p>
+                </div>
+                <button
+                  style="
+                    border: 0;
+                    border-radius: 16px;
+                    background: var(--claire-ink);
+                    color: white;
+                    height: 50px;
+                    font-size: 11px;
+                    font-weight: 600;
+                  "
+                >
+                  Continue with Google</button
+                ><button
+                  style="
+                    border: 1px solid var(--claire-ink);
+                    border-radius: 16px;
+                    background: transparent;
+                    height: 50px;
+                    font-size: 11px;
+                    font-weight: 600;
+                    margin-top: 8px;
+                  "
+                >
+                  Use email instead
+                </button>
+                <p style="text-align: center; font-size: 7px; color: var(--neutral-600)">
+                  Your messages are never used to train shared models.
+                </p>
+              </div>
+            </div>
+            <p class="screen-note">
+              Value, authentication, and privacy are communicated together before permissions.
+            </p>
+          </article>
+          <article class="screen-case" data-kind="setup">
+            <div class="screen-meta">
+              <b>12 / CONNECT ACCOUNTS</b><span>ONBOARDING + SETTINGS</span>
+            </div>
+            <div class="device">
+              <div class="island"></div>
+              <div class="status"><span>9:41</span><span>● ◒</span></div>
+              <div class="screen no-tab">
+                <div class="app-title">
+                  <button class="round-button">‹</button>
+                  <h3>Connected accounts</h3>
+                  <button class="round-button">?</button>
+                </div>
+                <div
+                  style="
+                    background: var(--claire-lime);
+                    border-radius: 17px;
+                    padding: 15px;
+                    margin-bottom: 18px;
+                  "
+                >
+                  <span class="tiny-label">STEP 2 OF 3</span>
+                  <h2 style="font-size: 22px; line-height: 1.05; margin: 7px 0">
+                    Bring your conversations together.
+                  </h2>
+                  <p style="font-size: 9px; margin: 0; color: var(--neutral-600)">
+                    Connect one now. You can always add or remove accounts later.
+                  </p>
+                </div>
+                <div class="account-card">
+                  <div class="account-icon wa">W</div>
+                  <div>
+                    <b>WhatsApp</b>
+                    <p>Scan a QR code from Linked Devices</p>
+                  </div>
+                  <button>Connect</button>
+                </div>
+                <div class="account-card">
+                  <div class="account-icon tg">T</div>
+                  <div>
+                    <b>Telegram</b>
+                    <p>Verify with your phone number</p>
+                  </div>
+                  <button>Connect</button>
+                </div>
+                <div class="account-card">
+                  <div class="account-icon ig">I</div>
+                  <div>
+                    <b>Instagram</b>
+                    <p>Sign in securely with Meta</p>
+                  </div>
+                  <button>Connect</button>
+                </div>
+                <div class="security-note">
+                  <span>⌁</span>
+                  <p>
+                    <b>Your account stays yours.</b><br />Claire connects through dedicated Matrix
+                    bridges. Disconnect at any time.
+                  </p>
+                </div>
+                <button class="save-bar">Continue</button>
+              </div>
+            </div>
+            <p class="screen-note">
+              The same connection UI works during onboarding and later from Settings.
+            </p>
+          </article>
+          <article class="screen-case" data-kind="setup">
+            <div class="screen-meta"><b>13 / SETTINGS</b><span>PROFILE ENTRY</span></div>
+            <div class="device">
+              <div class="island"></div>
+              <div class="status"><span>9:41</span><span>● ◒</span></div>
+              <div class="screen no-tab">
+                <div class="app-title">
+                  <button class="round-button">‹</button>
+                  <h2>Settings</h2>
+                  <span style="width: 38px"></span>
+                </div>
+                <div class="settings-profile">
+                  <div class="avatar purple">LM</div>
+                  <div>
+                    <b>Luc Medina</b>
+                    <p>luc@example.com · Personal plan</p>
+                  </div>
+                  <span>›</span>
+                </div>
+                <div class="settings-group">
+                  <small>CLAIRE</small>
+                  <div class="settings-list">
+                    <div class="setting-row">
+                      <i>✦</i>
+                      <div>
+                        <b>AI behavior</b>
+                        <p>Suggestions, summaries, and memory</p>
+                      </div>
+                      <span>›</span>
+                    </div>
+                    <div class="setting-row">
+                      <i style="background: var(--claire-blush)">☺</i>
+                      <div>
+                        <b>Relationships</b>
+                        <p>People, categories, and prompts</p>
+                      </div>
+                      <span>›</span>
+                    </div>
+                    <div class="setting-row">
+                      <i style="background: var(--claire-mint)">✓</i>
+                      <div>
+                        <b>Promise detection</b>
+                        <p>Automatically suggest tracking</p>
+                      </div>
+                      <div class="toggle on"></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="settings-group">
+                  <small>APP</small>
+                  <div class="settings-list">
+                    <div class="setting-row">
+                      <i>◉</i>
+                      <div>
+                        <b>Connected accounts</b>
+                        <p>3 platforms active</p>
+                      </div>
+                      <span>›</span>
+                    </div>
+                    <div class="setting-row">
+                      <i style="background: var(--claire-sky)">♧</i>
+                      <div>
+                        <b>Notifications</b>
+                        <p>Priority people and quiet hours</p>
+                      </div>
+                      <span>›</span>
+                    </div>
+                    <div class="setting-row">
+                      <i style="background: var(--neutral-100)">⌁</i>
+                      <div>
+                        <b>Privacy & data</b>
+                        <p>Export, retention, and delete</p>
+                      </div>
+                      <span>›</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <p class="screen-note">
+              Settings separates Claire’s behavior from app plumbing and puts privacy at the top
+              level.
+            </p>
+          </article>
+          <article class="screen-case" data-kind="setup">
+            <div class="screen-meta"><b>14 / AI & PRIVACY</b><span>SETTINGS STACK</span></div>
+            <div class="device">
+              <div class="island"></div>
+              <div class="status"><span>9:41</span><span>● ◒</span></div>
+              <div class="screen no-tab">
+                <div class="app-title">
+                  <button class="round-button">‹</button>
+                  <h3>AI behavior</h3>
+                  <span style="width: 38px"></span>
+                </div>
+                <div
+                  style="
+                    background: var(--claire-lavender);
+                    border-radius: 17px;
+                    padding: 15px;
+                    margin-bottom: 16px;
+                  "
+                >
+                  <span>✦</span>
+                  <h2 style="font-size: 20px; margin: 8px 0 4px">You’re in control.</h2>
+                  <p style="font-size: 9px; color: var(--neutral-600); margin: 0">
+                    Claire only uses conversation context to help you in Claire. Change any behavior
+                    below.
+                  </p>
+                </div>
+                <div class="settings-list">
+                  <div class="setting-row">
+                    <div>
+                      <b>Reply suggestions</b>
+                      <p>Offer contextual drafts in chats</p>
+                    </div>
+                    <div class="toggle on"></div>
+                  </div>
+                  <div class="setting-row">
+                    <div>
+                      <b>Conversation summaries</b>
+                      <p>Generate “catch me up” briefs</p>
+                    </div>
+                    <div class="toggle on"></div>
+                  </div>
+                  <div class="setting-row">
+                    <div>
+                      <b>Promise detection</b>
+                      <p>Notice commitments as you chat</p>
+                    </div>
+                    <div class="toggle on"></div>
+                  </div>
+                  <div class="setting-row">
+                    <div>
+                      <b>Relationship memory</b>
+                      <p>Use prompts you add to contacts</p>
+                    </div>
+                    <div class="toggle on"></div>
+                  </div>
+                </div>
+                <div class="settings-group">
+                  <small>DATA</small>
+                  <div class="settings-list">
+                    <div class="setting-row">
+                      <i>⇩</i>
+                      <div>
+                        <b>Export Claire data</b>
+                        <p>Messages remain on your connected services</p>
+                      </div>
+                      <span>›</span>
+                    </div>
+                    <div class="setting-row">
+                      <i style="background: var(--claire-blush)">×</i>
+                      <div>
+                        <b>Clear AI memory</b>
+                        <p>Remove summaries and relationship prompts</p>
+                      </div>
+                      <span>›</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <p class="screen-note">
+              Every AI behavior is independently reversible; destructive data actions are explicit.
+            </p>
+          </article>
+        </div>
+      </section>
+      <section class="decision-section">
+        <div class="gallery-kicker">PRODUCT DECISIONS TO CARRY INTO BUILD</div>
+        <h2
+          style="
+            font-size: clamp(2.7rem, 5vw, 5rem);
+            line-height: 1;
+            letter-spacing: -0.055em;
+            margin: 15px 0;
+          "
+        >
+          The design rules behind the screens.
+        </h2>
+        <div class="decision-grid">
+          <article class="decision-card accent">
+            <h3>Four primary tabs</h3>
+            <p>
+              Home, Inbox, Promises, and Search cover the daily loop. Contacts stays inside Inbox;
+              Settings opens from profile. This avoids a crowded five-tab shell.
+            </p>
+          </article>
+          <article class="decision-card">
+            <h3>AI is a layer, not a destination</h3>
+            <p>
+              There is no permanent “AI chat” tab. Claire appears in the active conversation, a
+              native sheet, search answers, and the daily brief.
+            </p>
+          </article>
+          <article class="decision-card">
+            <h3>Relationship categories</h3>
+            <ul>
+              <li>Business, client, colleague, mentor</li>
+              <li>Family, close friend, acquaintance</li>
+              <li>Dating, partner, former partner</li>
+              <li>Community, service provider, other</li>
+            </ul>
+          </article>
+          <article class="decision-card">
+            <h3>Required states beyond mockups</h3>
+            <ul>
+              <li>Empty, loading, offline, and sync-conflict states</li>
+              <li>Permission denied and platform disconnected</li>
+              <li>Message failed, retrying, and partially synced</li>
+              <li>AI unavailable, low-confidence, and source missing</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
