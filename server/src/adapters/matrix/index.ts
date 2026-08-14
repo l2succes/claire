@@ -36,6 +36,11 @@ import { MatrixRoomMapper } from './room-mapper';
 import { MatrixUserMapper } from './user-mapper';
 import { MatrixEventConverter } from './event-converter';
 import { BridgeAuthManager, BridgeAuthConfig } from './bridge-auth';
+import {
+  fromPersistedMatrixSession,
+  PersistedMatrixSessionRow,
+  toPersistedMatrixSession,
+} from './session-persistence';
 
 export interface MatrixSessionConfig {
   platform: Platform;
@@ -90,6 +95,31 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
   private readonly doublePuppetEnabled: boolean = process.env.ENABLE_DOUBLE_PUPPETING === 'true';
   // Event IDs that this server sent (to avoid double-counting bot's own sends as incoming)
   private localSentEventIds: Set<string> = new Set();
+  private durableSessionStorageAvailable = true;
+
+  /**
+   * Redis keeps short-lived login state, but connected Matrix identities must
+   * survive its TTL and an app restart. Persist identity metadata separately;
+   * never store authData here because it can contain one-time auth material.
+   */
+  protected override async saveSessionToRedis(session: PlatformSession): Promise<void> {
+    await super.saveSessionToRedis(session);
+    await this.saveSessionDurably(session);
+  }
+
+  private async saveSessionDurably(session: PlatformSession): Promise<void> {
+    if (!this.durableSessionStorageAvailable) return;
+
+    const { error } = await supabase
+      .from('platform_sessions')
+      .upsert(toPersistedMatrixSession(session), { onConflict: 'session_id,platform' });
+    if (error) {
+      // Local/test stacks created before platform_sessions should not lose the
+      // active Redis flow. Avoid repeating the same warning on every event.
+      this.durableSessionStorageAvailable = false;
+      this.log('warn', 'Could not persist Matrix session metadata', { error: error.message });
+    }
+  }
 
   private getSelfGhostIds(sessionId: string, session: PlatformSession, platform: Platform): string[] {
     const known = this.sessionSelfGhostIds.get(sessionId);
@@ -1223,31 +1253,26 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
       for (const key of keys) {
         const sessionId = key.replace(this.sessionPrefix, '');
         const session = await this.loadSessionFromRedis(sessionId);
+        if (session?.status === PlatformStatus.CONNECTED) await this.restoreConnectedSession(session);
+      }
 
-        if (session && session.status === PlatformStatus.CONNECTED) {
-          this.sessions.set(sessionId, session);
-          const platform = (session as PlatformSession & { platform?: Platform }).platform;
-          if (platform) {
-            this.sessionPlatforms.set(sessionId, platform);
-            await this.resolveAndPersistSelfGhostIds(sessionId, session, platform);
+      // Connected sessions must outlive Redis' TTL. Redis remains the source
+      // for active one-time login flows, while this table restores durable
+      // bridge identity mappings after a redeploy or a day of inactivity.
+      if (this.durableSessionStorageAvailable) {
+        const { data, error } = await supabase
+          .from('platform_sessions')
+          .select('session_id,user_id,platform,status,platform_user_id,platform_username,phone_number,session_data,created_at,last_connected_at')
+          .eq('status', PlatformStatus.CONNECTED);
+        if (error) {
+          this.durableSessionStorageAvailable = false;
+          this.log('warn', 'Could not restore durable Matrix sessions', { error: error.message });
+        } else {
+          for (const row of (data || []) as PersistedMatrixSessionRow[]) {
+            if (this.sessions.has(row.session_id)) continue;
+            const session = fromPersistedMatrixSession(row, this.capabilities);
+            if (session) await this.restoreConnectedSession(session);
           }
-          // Restore self ghost ID from persisted session data
-          const selfGhostId = session.selfGhostId;
-          if (selfGhostId) {
-            this.sessionSelfGhostIds.set(sessionId, selfGhostId);
-            this.log('info', `Restored selfGhostId for session ${sessionId}: ${selfGhostId}`);
-          } else {
-            this.log('warn', `Session ${sessionId} missing selfGhostId - sender detection may fail`);
-          }
-          // Restore real Matrix user ID for double-puppeting
-          if (this.doublePuppetEnabled) {
-            const matrixUserId = session.matrixUserId || this.matrixClient?.getUserId();
-            if (matrixUserId) {
-              this.sessionMatrixUserIds.set(sessionId, matrixUserId);
-              this.log('info', `Restored matrixUserId for session ${sessionId}: ${matrixUserId}`);
-            }
-          }
-          this.log('info', `Restored Matrix session: ${sessionId} (selfGhost: ${selfGhostId || 'unknown'})`);
         }
       }
 
@@ -1255,6 +1280,29 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     } catch (error) {
       this.log('error', 'Failed to restore Matrix sessions', { error });
     }
+  }
+
+  private async restoreConnectedSession(session: PlatformSession): Promise<void> {
+    const { id: sessionId, platform, selfGhostId } = session;
+    this.sessions.set(sessionId, session);
+    this.sessionPlatforms.set(sessionId, platform);
+    await this.resolveAndPersistSelfGhostIds(sessionId, session, platform);
+
+    if (selfGhostId) {
+      this.sessionSelfGhostIds.set(sessionId, selfGhostId);
+      this.log('info', `Restored selfGhostId for session ${sessionId}: ${selfGhostId}`);
+    } else {
+      this.log('warn', `Session ${sessionId} missing selfGhostId - sender detection may fail`);
+    }
+
+    if (this.doublePuppetEnabled) {
+      const matrixUserId = session.matrixUserId || this.matrixClient?.getUserId();
+      if (matrixUserId) {
+        this.sessionMatrixUserIds.set(sessionId, matrixUserId);
+        this.log('info', `Restored matrixUserId for session ${sessionId}: ${matrixUserId}`);
+      }
+    }
+    this.log('info', `Restored Matrix session: ${sessionId} (selfGhost: ${selfGhostId || 'unknown'})`);
   }
 
   private async repairOrphanedSessions(): Promise<void> {
