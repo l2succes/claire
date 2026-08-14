@@ -150,7 +150,7 @@ export const PLATFORM_DISPLAY: Record<Platform, {
     name: 'iMessage',
     color: '#007AFF',
     bgColor: '#dbeafe',
-    description: 'Connect via Apple ID',
+    description: 'Requires a companion Mac',
   },
 };
 
