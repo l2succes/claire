@@ -43,6 +43,10 @@ export interface MatrixSessionConfig {
 }
 
 export class MatrixBridgeAdapter extends BasePlatformAdapter {
+  // A provisioning login is only resumable while the client holds its
+  // login/step identifiers. Keep a short grace window so abandoned Instagram
+  // attempts cannot remain "Awaiting authentication" forever in Settings.
+  private static readonly INSTAGRAM_AUTH_EXPIRY_MS = 20 * 60 * 1000;
   // Default platform - overridden per session
   readonly platform = Platform.WHATSAPP;
   readonly authMethod = AuthMethod.QR_CODE;
@@ -699,7 +703,28 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
       }
     }
 
-    return [...sessions.values()];
+    const userSessions = [...sessions.values()];
+
+    // Old versions persisted a session before confirming Instagram
+    // provisioning was reachable. Retire those stale attempts as well as
+    // abandoned current attempts; a new connection can always start fresh.
+    await Promise.all(userSessions.map(async (session) => {
+      const platform = (session as PlatformSession & { platform?: Platform }).platform;
+      const isPending = session.status === PlatformStatus.INITIALIZING
+        || session.status === PlatformStatus.AWAITING_AUTH
+        || session.status === PlatformStatus.AUTHENTICATING
+        || session.status === PlatformStatus.RECONNECTING;
+      const ageMs = Date.now() - new Date(session.createdAt).getTime();
+
+      if (platform === Platform.INSTAGRAM && isPending && ageMs > MatrixBridgeAdapter.INSTAGRAM_AUTH_EXPIRY_MS) {
+        await this.markSessionFailed(
+          session.id,
+          'Instagram sign-in expired. Start a new connection to try again.'
+        );
+      }
+    }));
+
+    return userSessions;
   }
 
   /**

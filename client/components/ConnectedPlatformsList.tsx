@@ -30,6 +30,11 @@ export function ConnectedPlatformsList({ className }: ConnectedPlatformsListProp
     disconnectPlatform,
     reconnectPlatform,
   } = usePlatformStore();
+  // Settings is a summary of active connections. Authentication attempts are
+  // handled by their own modal and should never masquerade as connected apps.
+  const activeSessions = connectedSessions.filter(
+    (session) => session.status === PlatformStatus.CONNECTED
+  );
 
   const handleDisconnect = (platform: Platform, sessionId: string, platformName: string) => {
     Alert.alert(
@@ -50,7 +55,7 @@ export function ConnectedPlatformsList({ className }: ConnectedPlatformsListProp
     await reconnectPlatform(platform, sessionId);
   };
 
-  if (connectedSessions.length === 0) {
+  if (activeSessions.length === 0) {
     return (
       <View className={cn('p-4', className)} testID="connected-platforms-empty">
         <View className="items-center py-8">
@@ -68,7 +73,7 @@ export function ConnectedPlatformsList({ className }: ConnectedPlatformsListProp
 
   return (
     <View className={className} testID="connected-platforms-list">
-      {connectedSessions.map((session) => (
+      {activeSessions.map((session) => (
         <PlatformSessionCard
           key={session.id}
           session={session}

@@ -1,10 +1,10 @@
 import {
-  View, Text, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl,
+  View, Text, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl, Image,
 } from 'react-native';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { router } from 'expo-router';
-import { CheckCircle, Clock, AlertCircle, BellOff, MessageCircle } from 'lucide-react-native';
+import { CheckCircle, Clock, AlertCircle, MessageCircle, User, Users } from 'lucide-react-native';
 import { supabase } from '../../services/supabase';
 import { useAuthStore } from '../../stores/authStore';
 
@@ -30,7 +30,26 @@ interface DbPromise {
   due_date?: string;
   contact_name?: string;
   platform?: string;
+  contact?: {
+    name?: string | null;
+    inferred_name?: string | null;
+    avatar_url?: string | null;
+  } | null;
+  chat?: {
+    name?: string | null;
+    is_group?: boolean | null;
+    platform?: string | null;
+    contact?: {
+      name?: string | null;
+      inferred_name?: string | null;
+      avatar_url?: string | null;
+    } | null;
+  } | null;
 }
+
+type SourceMessage = Pick<DbPromise, 'chat_id' | 'contact_name' | 'platform' | 'contact' | 'chat'> & {
+  id: string;
+};
 
 type TabKey = 'open' | 'done' | 'overdue';
 
@@ -76,13 +95,25 @@ const TAB_LABELS: Record<TabKey, string> = {
   overdue: 'Overdue',
 };
 
+function displayConversation(promise: DbPromise) {
+  const contact = promise.contact ?? promise.chat?.contact;
+  return promise.chat?.name
+    || contact?.name
+    || contact?.inferred_name
+    || promise.contact_name
+    || 'Conversation';
+}
+
+function conversationAvatar(promise: DbPromise) {
+  return promise.contact?.avatar_url ?? promise.chat?.contact?.avatar_url ?? null;
+}
+
 // ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
 
 export default function PromisesScreen() {
   const user = useAuthStore((s) => s.user);
-  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<TabKey>('open');
   const [refreshing, setRefreshing] = useState(false);
 
@@ -92,40 +123,62 @@ export default function PromisesScreen() {
       if (!user?.id) return [];
       const { data, error } = await supabase
         .from('promises')
-        .select('*')
+        .select(`
+          *,
+          contact:contacts!promises_contact_id_fkey(name, inferred_name, avatar_url),
+          chat:chats!promises_chat_id_fkey(
+            name, is_group, platform,
+            contact:contacts!chats_contact_id_fkey(name, inferred_name, avatar_url)
+          )
+        `)
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
       if (error) throw error;
-      return data ?? [];
+
+      const promiseRows = (data ?? []) as DbPromise[];
+      const messageIds = [...new Set(
+        promiseRows
+          .map((promise) => promise.message_id)
+          .filter((messageId): messageId is string => Boolean(messageId))
+      )];
+      if (messageIds.length === 0) return promiseRows;
+
+      // Legacy promise rows predate the source-conversation linkage. Resolve
+      // their source message on read so the UI has a useful person/chat name
+      // immediately, even before the server-side backfill has run.
+      const { data: sourceRows, error: sourceError } = await supabase
+        .from('messages')
+        .select(`
+          id, chat_id, contact_name, platform,
+          contact:contacts!messages_contact_id_fkey(name, inferred_name, avatar_url),
+          chat:chats!messages_chat_id_fkey(
+            name, is_group, platform,
+            contact:contacts!chats_contact_id_fkey(name, inferred_name, avatar_url)
+          )
+        `)
+        .eq('user_id', user.id)
+        .in('id', messageIds);
+      if (sourceError) throw sourceError;
+
+      const sourcesByMessageId = new Map(
+        ((sourceRows ?? []) as SourceMessage[]).map((source) => [source.id, source])
+      );
+      return promiseRows.map((promise) => {
+        const source = promise.message_id ? sourcesByMessageId.get(promise.message_id) : undefined;
+        if (!source) return promise;
+        return {
+          ...promise,
+          chat_id: promise.chat_id ?? source.chat_id,
+          contact_name: promise.contact_name ?? source.contact_name,
+          platform: source.platform ?? promise.platform,
+          // The source is more reliable for legacy rows whose relationships
+          // are missing or point at an old contact record.
+          contact: source.contact ?? source.chat?.contact ?? promise.contact ?? promise.chat?.contact ?? null,
+          chat: source.chat ?? promise.chat ?? null,
+        };
+      });
     },
     enabled: !!user?.id,
-  });
-
-  const completeMutation = useMutation({
-    mutationFn: async (promiseId: string) => {
-      const { error } = await supabase
-        .from('promises')
-        .update({ status: 'completed', completed_at: new Date().toISOString() })
-        .eq('id', promiseId);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['promises', user?.id] });
-    },
-  });
-
-  const snoozeMutation = useMutation({
-    mutationFn: async (promiseId: string) => {
-      const snoozedUntil = new Date(Date.now() + 86_400_000).toISOString();
-      const { error } = await supabase
-        .from('promises')
-        .update({ deadline: snoozedUntil })
-        .eq('id', promiseId);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['promises', user?.id] });
-    },
   });
 
   const onRefresh = async () => {
@@ -145,10 +198,32 @@ export default function PromisesScreen() {
     const isDone = item.status === 'completed';
     const isItemOverdue = statusTab(item) === 'overdue';
     const priorityColor = PRIORITY_COLOR[item.priority] ?? '#6b7280';
+    const conversationName = displayConversation(item);
+    const avatarUrl = conversationAvatar(item);
+    const isGroup = item.chat?.is_group ?? false;
+
+    const openConversation = () => {
+      if (!item.chat_id) return;
+      router.push({
+        pathname: '/chat/[chatId]',
+        params: {
+          chatId: item.chat_id,
+          contact_name: isGroup ? '' : conversationName,
+          chat_name: conversationName,
+          platform: item.platform ?? item.chat?.platform ?? '',
+          is_group: isGroup ? '1' : '0',
+        },
+      });
+    };
 
     return (
-      <View
+      <TouchableOpacity
         testID={`promise-item-${item.id}`}
+        onPress={openConversation}
+        disabled={!item.chat_id}
+        activeOpacity={item.chat_id ? 0.72 : 1}
+        accessibilityRole={item.chat_id ? 'button' : undefined}
+        accessibilityLabel={item.chat_id ? `Reply to ${conversationName} about ${text}` : undefined}
         style={{
           backgroundColor: '#ffffff',
           borderRadius: 12,
@@ -157,14 +232,43 @@ export default function PromisesScreen() {
           padding: 14,
           borderLeftWidth: 3,
           borderLeftColor: isDone ? '#d1d5db' : isItemOverdue ? '#ef4444' : priorityColor,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 1 },
-          shadowOpacity: 0.05,
-          shadowRadius: 2,
-          elevation: 1,
+          boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
           opacity: isDone ? 0.6 : 1,
         }}
       >
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+          {avatarUrl ? (
+            <Image
+              testID={`promise-contact-avatar-${item.id}`}
+              source={{ uri: avatarUrl }}
+              style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#e5e7eb' }}
+              accessibilityLabel={`${conversationName} profile photo`}
+            />
+          ) : (
+            <View
+              testID={`promise-contact-avatar-${item.id}`}
+              style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#eef2ff', alignItems: 'center', justifyContent: 'center' }}
+              accessibilityLabel={`${conversationName} profile placeholder`}
+            >
+              {isGroup ? <Users size={18} color="#6366f1" /> : <User size={18} color="#6366f1" />}
+            </View>
+          )}
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text selectable style={{ fontSize: 14, fontWeight: '700', color: '#111827' }} numberOfLines={1} testID={`promise-contact-name-${item.id}`}>
+              {conversationName}
+            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 }}>
+              {item.platform ? (
+                <Text selectable style={{ fontSize: 11, color: '#8b5cf6', textTransform: 'capitalize' }}>
+                  {item.platform}
+                </Text>
+              ) : null}
+              {item.chat_id ? <MessageCircle size={12} color="#9ca3af" /> : null}
+            </View>
+          </View>
+          {item.chat_id ? <Text style={{ fontSize: 12, fontWeight: '600', color: '#4f46e5' }}>Reply</Text> : null}
+        </View>
+
         <Text
           style={{
             fontSize: 15,
@@ -188,79 +292,8 @@ export default function PromisesScreen() {
               </Text>
             </View>
           )}
-          {item.contact_name ? (
-            <Text style={{ fontSize: 12, color: '#9ca3af' }}>· {item.contact_name}</Text>
-          ) : null}
-          {item.platform ? (
-            <Text style={{ fontSize: 11, color: '#c4b5fd', textTransform: 'capitalize' }}>
-              {item.platform}
-            </Text>
-          ) : null}
         </View>
-
-        {!isDone && (
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <TouchableOpacity
-              testID={`promise-complete-${item.id}`}
-              onPress={() => completeMutation.mutate(item.id)}
-              disabled={completeMutation.isPending}
-              style={{
-                flex: 1,
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 5,
-                paddingVertical: 7,
-                borderRadius: 8,
-                backgroundColor: '#10b981',
-              }}
-            >
-              <CheckCircle size={14} color="#ffffff" />
-              <Text style={{ color: '#ffffff', fontSize: 13, fontWeight: '600' }}>Done</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              testID={`promise-snooze-${item.id}`}
-              onPress={() => snoozeMutation.mutate(item.id)}
-              disabled={snoozeMutation.isPending}
-              style={{
-                paddingVertical: 7,
-                paddingHorizontal: 12,
-                borderRadius: 8,
-                backgroundColor: '#f3f4f6',
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 5,
-              }}
-            >
-              <BellOff size={14} color="#6b7280" />
-              <Text style={{ color: '#6b7280', fontSize: 13 }}>Snooze</Text>
-            </TouchableOpacity>
-
-            {item.chat_id ? (
-              <TouchableOpacity
-                testID={`promise-source-${item.id}`}
-                onPress={() =>
-                  router.push({
-                    pathname: '/chat/[chatId]',
-                    params: { chatId: item.chat_id!, platform: item.platform ?? '' },
-                  })
-                }
-                style={{
-                  paddingVertical: 7,
-                  paddingHorizontal: 10,
-                  borderRadius: 8,
-                  backgroundColor: '#f3f4f6',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <MessageCircle size={14} color="#6b7280" />
-              </TouchableOpacity>
-            ) : null}
-          </View>
-        )}
-      </View>
+      </TouchableOpacity>
     );
   };
 

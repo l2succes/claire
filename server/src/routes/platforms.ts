@@ -47,16 +47,22 @@ if (isRailwayProduction && isLocalInstagramBridgeUrl) {
   logger.warn('Ignoring localhost INSTAGRAM_BRIDGE_URL in production');
 }
 
+// Provisioning must be issued as a Matrix account on the same homeserver as
+// the bridge. Use the configured Matrix bot before any local-development
+// fallback; a hard-coded claire.local user is rejected by Railway's Synapse.
+const bridgeProvisioningUserId = process.env.MATRIX_BOT_USER_ID
+  || `@claire_bot:${process.env.MATRIX_SERVER_NAME || 'claire.local'}`;
+
 const instagramBridgeClient = new BridgeHttpClient(
   instagramBridgeUrl,
   process.env.INSTAGRAM_BRIDGE_SECRET || process.env.IG_PROVISIONING_SECRET || '',
-  process.env.INSTAGRAM_BRIDGE_USER_ID || '@claire_bot:claire.local'
+  process.env.INSTAGRAM_BRIDGE_USER_ID || bridgeProvisioningUserId
 );
 
 const whatsappBridgeClient = new BridgeHttpClient(
   process.env.WHATSAPP_BRIDGE_URL || 'http://mautrixwhatsapp.railway.internal:29318',
   process.env.WHATSAPP_BRIDGE_SECRET || '',
-  process.env.WHATSAPP_BRIDGE_USER_ID || '@claire_bot:claire.local'
+  process.env.WHATSAPP_BRIDGE_USER_ID || bridgeProvisioningUserId
 );
 
 const router = Router();
@@ -243,6 +249,24 @@ router.post('/instagram/login/start', async (req: Request, res: Response) => {
     if (!adapter) {
       return res.status(404).json({ success: false, error: 'Instagram not available' });
     }
+
+    // The provisioning API's login and step IDs live only in the active
+    // client flow. Starting again cannot safely resume an older attempt, so
+    // explicitly retire it instead of accumulating duplicate sessions.
+    const matrixAdapter = adapter as MatrixBridgeAdapter;
+    const pendingSessions = (await adapter.getUserSessions(userId)).filter((session) => (
+      session.platform === Platform.INSTAGRAM
+      && (session.status === PlatformStatus.INITIALIZING
+        || session.status === PlatformStatus.AWAITING_AUTH
+        || session.status === PlatformStatus.AUTHENTICATING
+        || session.status === PlatformStatus.RECONNECTING)
+    ));
+    await Promise.all(pendingSessions.map((session) => (
+      matrixAdapter.markSessionFailed(
+        session.id,
+        'Superseded by a new Instagram sign-in attempt.'
+      )
+    )));
 
     // Prove that provisioning is available before persisting an auth session.
     // Previously a bridge timeout created a durable `awaiting_auth` session,

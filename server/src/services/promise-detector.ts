@@ -290,9 +290,32 @@ class PromiseDetector {
     fromMe: boolean
   ): Promise<void> {
     try {
+      // Promises are actionable only when they retain their source
+      // conversation. The source message has already been persisted by the
+      // ingestion pipeline before detection runs, so capture that linkage at
+      // insert time rather than trying to infer a person from promise text.
+      const { data: sourceMessage, error: sourceMessageError } = await supabase
+        .from('messages')
+        .select('chat_id, contact_id, platform')
+        .eq('id', messageId)
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (sourceMessageError) {
+        logger.warn(`Could not resolve source conversation for promise message ${messageId}:`, sourceMessageError);
+      }
+
+      const sourceContext = sourceMessage
+        ? {
+            chat_id: sourceMessage.chat_id,
+            contact_id: sourceMessage.contact_id,
+            platform: sourceMessage.platform,
+          }
+        : {};
       const records = promises.map((p) => ({
         message_id: messageId,
         user_id: userId,
+        ...sourceContext,
         type: p.type,
         content: p.text,
         deadline: p.deadline ?? null,

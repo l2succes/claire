@@ -7,6 +7,13 @@
 
 import { describe, it, expect, beforeEach, afterAll, mock, spyOn } from 'bun:test';
 
+let storedPromiseRecords: Array<Record<string, unknown>> = [];
+let sourceMessage: Record<string, unknown> | null = {
+  chat_id: 'chat-source-1',
+  contact_id: 'contact-source-1',
+  platform: 'whatsapp',
+};
+
 // ---------------------------------------------------------------------------
 // Mock heavy dependencies before importing the module under test
 // ---------------------------------------------------------------------------
@@ -19,9 +26,21 @@ mock.module('../../src/utils/logger', () => ({
 // Mock supabase (storePromises calls supabase.from)
 mock.module('../../src/services/supabase', () => ({
   supabase: {
-    from: () => ({
-      insert: () => Promise.resolve({ data: null, error: null }),
-    }),
+    from: (table: string) => {
+      if (table === 'messages') {
+        const sourceQuery = {
+          eq: () => sourceQuery,
+          maybeSingle: () => Promise.resolve({ data: sourceMessage, error: null }),
+        };
+        return { select: () => sourceQuery };
+      }
+      return {
+        insert: (records: Array<Record<string, unknown>>) => {
+          storedPromiseRecords = records;
+          return Promise.resolve({ data: null, error: null });
+        },
+      };
+    },
   },
 }));
 
@@ -76,6 +95,12 @@ function llmReturnsRaw(raw: string) {
 describe('PromiseDetector — LLM path (positive cases)', () => {
   beforeEach(() => {
     mockIsConfigured = true;
+    storedPromiseRecords = [];
+    sourceMessage = {
+      chat_id: 'chat-source-1',
+      contact_id: 'contact-source-1',
+      platform: 'whatsapp',
+    };
     // Reset in-process cache between tests by injecting a different content
   });
 
@@ -189,6 +214,22 @@ describe('PromiseDetector — LLM fallback path', () => {
     expect(result.length).toBeGreaterThanOrEqual(1);
     expect(result[0].fromFallback).toBe(true);
     mockIsConfigured = true;
+  });
+
+  it('stores the source conversation on every detected promise', async () => {
+    llmReturns([
+      { type: 'commitment', text: 'I will send the notes', confidence: 0.9, priority: 'medium' },
+    ]);
+
+    await promiseDetector.detectPromises('message-with-source', 'I will send the notes tonight', uid, true);
+
+    expect(storedPromiseRecords).toHaveLength(1);
+    expect(storedPromiseRecords[0]).toMatchObject({
+      message_id: 'message-with-source',
+      chat_id: 'chat-source-1',
+      contact_id: 'contact-source-1',
+      platform: 'whatsapp',
+    });
   });
 });
 

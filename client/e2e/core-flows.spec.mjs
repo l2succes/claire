@@ -186,8 +186,27 @@ const MOCK_PROMISES = [
     due_date: new Date(Date.now() + 86400_000 * 3).toISOString(),
     status: 'open',
     platform: 'whatsapp',
-    contact_name: 'Alice (WA)',
     created_at: new Date(Date.now() - 3700_000).toISOString(),
+  },
+];
+
+// Represents the source-message fallback used for legacy promise rows that
+// were stored before chat/contact IDs were captured by the detector.
+const MOCK_PROMISE_SOURCE_MESSAGES = [
+  {
+    id: 'chatmsg-1',
+    chat_id: 'mock-chat-wa-alice',
+    contact_name: 'Alice (WA)',
+    platform: 'whatsapp',
+    contact: {
+      name: 'Alice (WA)',
+      avatar_url: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==',
+    },
+    chat: {
+      name: 'Alice (WA)',
+      is_group: false,
+      platform: 'whatsapp',
+    },
   },
 ];
 
@@ -317,6 +336,12 @@ async function mockBackend(page) {
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify(MOCK_CHAT_MESSAGES),
+        });
+      } else if (url.includes('id=in.')) {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(MOCK_PROMISE_SOURCE_MESSAGES),
         });
       } else {
         await route.fulfill({
@@ -988,8 +1013,8 @@ test.describe('Core loop — mock backend', () => {
     await expect(page.getByTestId('promises-list')).toBeVisible({ timeout: 5_000 });
   });
 
-  // 6d. Promises screen — mark complete interaction
-  test('Promises screen mark complete button is present on open promise', async ({ page }) => {
+  // 6d. Promises are conversation-first: tapping a card opens its chat to reply.
+  test('Promises screen opens the linked conversation from a promise card', async ({ page }) => {
     await signIn(page);
 
     await page.click('text=Promises');
@@ -1000,10 +1025,11 @@ test.describe('Core loop — mock backend', () => {
       page.locator('[data-testid^="promise-item-"]').first()
     ).toBeVisible({ timeout: 8_000 });
 
-    // The "Done" button should be visible on open promises
-    await expect(
-      page.locator('[data-testid^="promise-complete-"]').first()
-    ).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId('promise-contact-name-promise-1')).toHaveText('Alice (WA)');
+    await expect(page.getByTestId('promise-contact-avatar-promise-1')).toBeVisible();
+    await page.getByTestId('promise-item-promise-1').click();
+    await expect(page.getByTestId('chat-screen')).toBeVisible({ timeout: 8_000 });
+    await expect(page).toHaveURL(/chat\/mock-chat-wa-alice/);
   });
 
   // 7. Platform connection screen — all required selectors present
