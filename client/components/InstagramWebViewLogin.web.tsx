@@ -7,6 +7,7 @@ import {
   TextInput,
   ActivityIndicator,
   ScrollView,
+  Linking,
 } from 'react-native';
 import { X, Eye, EyeOff, Instagram, Shield, AlertCircle } from 'lucide-react-native';
 import { Button } from './ui/Button';
@@ -35,7 +36,10 @@ export function InstagramWebViewLogin({
   const [errorMessage, setErrorMessage] = useState('');
   const [twoFactorLoginId, setTwoFactorLoginId] = useState('');
   const [twoFactorMessage, setTwoFactorMessage] = useState('');
-  const [useCookieFallback, setUseCookieFallback] = useState(false);
+  // mautrix-meta's supported Instagram login is a browser cookie/cURL handoff.
+  // Start there instead of asking a Railway-hosted automated browser to mimic
+  // an Instagram sign-in, which Meta commonly rejects.
+  const [useCookieFallback, setUseCookieFallback] = useState(true);
   const [cookieHeader, setCookieHeader] = useState('');
 
   const handleSignIn = async () => {
@@ -146,7 +150,14 @@ export function InstagramWebViewLogin({
   const handleCookieConnect = () => {
     const normalized = cookieHeader.trim();
     if (!normalized) return;
-    onSuccess({ cookieHeader: normalized });
+    // The official bridge instructions recommend Chrome/Firefox's “Copy as
+    // cURL”. The server also accepts a plain Cookie header for users who have
+    // already extracted one.
+    onSuccess(
+      /^curl\s/i.test(normalized) || /(?:^|\s)--?H\s/i.test(normalized)
+        ? { curlCommand: normalized }
+        : { cookieHeader: normalized }
+    );
   };
 
   const renderCookieFallback = () => (
@@ -160,13 +171,21 @@ export function InstagramWebViewLogin({
         Connect with an Instagram browser session
       </Text>
       <Text style={styles.cookieInstructions}>
-        In a regular browser, sign in to instagram.com. Copy the Cookie request header from a logged-in Instagram request and paste it below. Claire does not retain the pasted header in its application database; the configured bridge uses it to establish your connection.
+        1. Open Instagram in your regular browser and sign in. 2. Open DevTools → Network, find an Instagram graphql request, then choose Copy as cURL. 3. Paste it below. Claire does not retain the pasted value in its application database; the configured bridge uses it to establish your connection.
       </Text>
+      <Button
+        variant="secondary"
+        onPress={() => void Linking.openURL('https://www.instagram.com/accounts/login/')}
+        style={styles.openInstagramButton}
+        testID="instagram-open-browser"
+      >
+        Open Instagram
+      </Button>
       <TextInput
         style={styles.cookieInput}
         value={cookieHeader}
         onChangeText={setCookieHeader}
-        placeholder="sessionid=…; csrftoken=…; ds_user_id=…"
+        placeholder="Paste Copy as cURL or Cookie header"
         placeholderTextColor="#9ca3af"
         autoCapitalize="none"
         autoCorrect={false}
@@ -184,7 +203,7 @@ export function InstagramWebViewLogin({
         Connect Instagram
       </Button>
       <TouchableOpacity onPress={() => setUseCookieFallback(false)} style={styles.backButton}>
-        <Text style={styles.backButtonText}>Try username and password again</Text>
+        <Text style={styles.backButtonText}>Try direct sign-in instead</Text>
       </TouchableOpacity>
     </>
   );
@@ -345,7 +364,7 @@ export function InstagramWebViewLogin({
         <AlertCircle size={20} color="#ef4444" />
         <Text style={styles.errorText}>{errorMessage}</Text>
       </View>
-      {renderIdleState()}
+      {useCookieFallback ? renderCookieFallback() : renderIdleState()}
     </>
   );
 
@@ -552,6 +571,9 @@ const styles = StyleSheet.create({
     padding: 12,
     color: '#111827',
     fontSize: 14,
+  },
+  openInstagramButton: {
+    alignSelf: 'center',
   },
   challengeTitle: {
     fontSize: 18,
