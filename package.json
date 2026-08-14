@@ -6,6 +6,7 @@
     "dev": "concurrently \"bun run dev:server\" \"bun run dev:client\"",
     "dev:server": "cd server && bun run dev",
     "dev:client": "cd client && bun run dev",
+    "landing": "bunx serve landing",
     "dev:prod": "concurrently \"bun run dev:server\" \"bun run client:prod\"",
     "client:prod": "cd client && bun run start:prod",
     "client:prod:local": "cd client && bun run start:prod:local",

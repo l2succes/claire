@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="theme-color" content="#dfff64" />
+    <meta
+      name="description"
+      content="Claire brings WhatsApp, Telegram, and Instagram into one calm, AI-assisted inbox."
+    />
+    <title>Claire — One inbox. Every conversation.</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./tokens.css" />
+    <link rel="stylesheet" href="./styles.css" />
+    <script src="./script.js" defer></script>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="#top" aria-label="Claire home"
+        ><span class="brand-mark">C</span><span>claire</span></a
+      >
+      <nav aria-label="Primary navigation">
+        <a href="#product">Product</a><a href="#install">Install</a><a href="#stories">Stories</a
+        ><a href="./app-mockups.html">Mobile</a><a href="./desktop-mockups.html">Desktop</a>
+      </nav>
+      <a class="button button-dark button-small" href="#install"
+        >Get Claire <span aria-hidden="true">↗</span></a
+      >
+    </header>
+    <main id="top">
+      <section class="hero shell">
+        <div class="eyebrow">
+          <span class="status-dot"></span>Your conversations, finally together
+        </div>
+        <h1>One inbox.<br /><span>Every</span> conversation.</h1>
+        <p class="hero-copy">
+          Claire brings WhatsApp, Telegram, and Instagram into one calm workspace—with an AI copilot
+          that catches the things you promised.
+        </p>
+        <div class="hero-actions">
+          <a class="button button-dark" href="#install">Install Claire <span>↓</span></a
+          ><a class="text-link" href="#product">See how it works <span>→</span></a>
+        </div>
+        <div class="hero-art" aria-label="Claire application preview">
+          <div class="orbit orbit-one"></div>
+          <div class="orbit orbit-two"></div>
+          <div class="float-note note-one">
+            <span class="platform whatsapp">W</span
+            ><span><strong>Maya</strong><small>Can you send that deck?</small></span>
+          </div>
+          <div class="float-note note-two">
+            <span class="platform telegram">T</span
+            ><span><strong>Promise found</strong><small>“I'll send it tomorrow.”</small></span>
+          </div>
+          <article class="app-window">
+            <aside class="app-sidebar">
+              <div class="mini-brand">C</div>
+              <button class="nav-icon active" aria-label="Inbox">⌂</button
+              ><button class="nav-icon" aria-label="Messages">✉</button
+              ><button class="nav-icon" aria-label="Promises">✓</button>
+              <div class="sidebar-spacer"></div>
+              <div class="avatar">LM</div>
+            </aside>
+            <section class="conversation-list">
+              <div class="app-heading">
+                <span>Inbox</span><button aria-label="New message">＋</button>
+              </div>
+              <label class="search"
+                ><span>⌕</span
+                ><input aria-label="Search conversations" placeholder="Search everything"
+              /></label>
+              <div class="filter-row">
+                <button class="selected">All</button><button>Unread</button
+                ><button>Promises</button>
+              </div>
+              <div class="conversation selected">
+                <div class="avatar avatar-maya">MK</div>
+                <div>
+                  <b>Maya Kim</b>
+                  <p>Can you send that deck?</p>
+                </div>
+                <time>2m</time>
+              </div>
+              <div class="conversation">
+                <div class="avatar avatar-noah">NO</div>
+                <div>
+                  <b>Noah Oliver</b>
+                  <p>Voice message · 0:24</p>
+                </div>
+                <time>18m</time>
+              </div>
+              <div class="conversation">
+                <div class="avatar avatar-studio">ST</div>
+                <div>
+                  <b>Studio team</b>
+                  <p>Lea: latest screens are in</p>
+                </div>
+                <time>1h</time>
+              </div>
+            </section>
+            <section class="message-panel">
+              <div class="message-header">
+                <div class="avatar avatar-maya">MK</div>
+                <div>
+                  <b>Maya Kim</b><small><span class="online"></span>WhatsApp · active now</small>
+                </div>
+                <button>•••</button>
+              </div>
+              <div class="messages">
+                <div class="date-chip">Today</div>
+                <div class="bubble incoming">
+                  Hey! Are we still good for the product review tomorrow?
+                </div>
+                <div class="bubble outgoing">Absolutely. I’ll send the updated deck before 10.</div>
+                <div class="promise-card">
+                  <span>✦</span>
+                  <div>
+                    <small>CLAIRE CAUGHT A PROMISE</small><b>Send Maya the updated deck</b>
+                    <p>Tomorrow · before 10:00 AM</p>
+                  </div>
+                  <button>Track</button>
+                </div>
+                <div class="composer">
+                  <button>＋</button><span>Write a message…</span><button class="send">↑</button>
+                </div>
+              </div>
+            </section>
+            <aside class="context-panel">
+              <small>CONVERSATION NOTES</small>
+              <h3>Stay one step ahead.</h3>
+              <div class="brief">
+                <span class="spark">✦</span>
+                <p>
+                  <b>Quick brief</b><br />Maya is waiting on the Q3 deck. Your review is tomorrow at
+                  11.
+                </p>
+              </div>
+              <div class="context-label">OPEN PROMISE</div>
+              <div class="task">
+                <span>○</span>
+                <p><b>Send updated deck</b><br /><small>Due tomorrow, 10:00</small></p>
+              </div>
+              <button class="outline-button">View contact memory</button>
+            </aside>
+          </article>
+        </div>
+      </section>
+      <section class="trust-strip" aria-label="Supported platforms">
+        <span>One quiet place for</span><b><i class="platform whatsapp">W</i>WhatsApp</b
+        ><b><i class="platform telegram">T</i>Telegram</b
+        ><b><i class="platform instagram">I</i>Instagram</b><span>and the people who matter.</span>
+      </section>
+      <section class="features shell" id="product">
+        <div class="section-heading">
+          <div>
+            <div class="kicker">THE CLAIRE DIFFERENCE</div>
+            <h2>Messaging without<br />the mental tabs.</h2>
+          </div>
+          <p>
+            Less switching. Less searching. More presence. Claire turns scattered conversations into
+            one thoughtful daily rhythm.
+          </p>
+        </div>
+        <div class="feature-grid">
+          <article class="feature-card card-lime">
+            <span class="card-number">01</span>
+            <div class="inbox-stack">
+              <div></div>
+              <div></div>
+              <div></div>
+              <span>12</span>
+            </div>
+            <div>
+              <h3>Every inbox, one view.</h3>
+              <p>Read and reply across your connected platforms without losing the thread.</p>
+            </div>
+          </article>
+          <article class="feature-card card-sky">
+            <span class="card-number">02</span>
+            <div class="ai-demo">
+              <span>✦</span>
+              <p>“Tell Maya the deck is ready and ask if 11 still works.”</p>
+              <button>Use reply</button>
+            </div>
+            <div>
+              <h3>Replies that sound like you.</h3>
+              <p>Get contextual suggestions based on the conversation—not canned AI filler.</p>
+            </div>
+          </article>
+          <article class="feature-card card-blush">
+            <span class="card-number">03</span>
+            <div class="promise-demo">
+              <span>✓</span>
+              <div>
+                <small>UP NEXT</small><b>Send Q3 deck</b>
+                <p>Maya · tomorrow, 10:00</p>
+              </div>
+            </div>
+            <div>
+              <h3>Promises don’t slip.</h3>
+              <p>
+                Claire notices commitments in your chats and turns them into gentle follow-through.
+              </p>
+            </div>
+          </article>
+        </div>
+      </section>
+      <section class="preview-section shell">
+        <div class="preview-copy">
+          <div class="kicker">YOUR DAILY COMMAND CENTER</div>
+          <h2>Know what needs you.<br />Ignore what doesn’t.</h2>
+          <p>
+            Your morning brief surfaces urgent messages, open promises, and conversations worth
+            returning to. No inbox archaeology required.
+          </p>
+          <ul>
+            <li><span>✓</span>Unified priority feed</li>
+            <li><span>✓</span>Relationship-aware context</li>
+            <li><span>✓</span>Private, self-hostable infrastructure</li>
+          </ul>
+        </div>
+        <div class="phone-wrap">
+          <div class="phone">
+            <div class="phone-top"><span>9:41</span><i></i><span>● ◒</span></div>
+            <div class="phone-greeting">
+              <small>THURSDAY, AUG 13</small>
+              <h3>Good morning, Luc.</h3>
+              <p>Here’s what needs your attention.</p>
+            </div>
+            <div class="phone-card urgent">
+              <span>↗</span>
+              <div><small>NEEDS A REPLY</small><b>3 conversations are waiting</b></div>
+              <em>View</em>
+            </div>
+            <div class="phone-section"><span>Today</span><small>4 ITEMS</small></div>
+            <div class="phone-item">
+              <i class="platform whatsapp">W</i>
+              <p><b>Maya Kim</b><br /><small>Can you send that deck?</small></p>
+              <time>2m</time>
+            </div>
+            <div class="phone-item">
+              <i class="check">✓</i>
+              <p><b>Send Q3 deck</b><br /><small>Promise · due at 10:00</small></p>
+              <time>1h</time>
+            </div>
+            <div class="phone-card recap">
+              <span>✦</span>
+              <div><small>CLAIRE'S TAKE</small><b>You’re clear after two quick replies.</b></div>
+            </div>
+            <div class="phone-tabs">
+              <span>⌂<small>Home</small></span
+              ><span>✉<small>Messages</small></span
+              ><span>✓<small>Promises</small></span
+              ><span>⚙<small>Settings</small></span>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="stories" id="stories">
+        <div class="shell">
+          <div class="kicker">PEOPLE HAVE ENOUGH TO JUGGLE</div>
+          <h2>Claire keeps the human things close.</h2>
+          <div class="quotes">
+            <blockquote>
+              <p>
+                “I stopped opening three apps just to remember who I owed a reply. Claire gives me
+                the shape of my day in about ten seconds.”
+              </p>
+              <footer>
+                <span class="avatar">AK</span
+                ><span><b>Amina K.</b><small>Creative director, Mexico City</small></span>
+              </footer>
+            </blockquote>
+            <blockquote>
+              <p>
+                “The promise tracking is the first AI feature that feels genuinely considerate. It
+                helps me be the person I said I would be.”
+              </p>
+              <footer>
+                <span class="avatar avatar-noah">JR</span
+                ><span><b>Jon R.</b><small>Founder, London</small></span>
+              </footer>
+            </blockquote>
+          </div>
+        </div>
+      </section>
+      <section class="install shell" id="install">
+        <div class="install-heading">
+          <div>
+            <div class="kicker">RUN CLAIRE YOUR WAY</div>
+            <h2>From clone to calm.</h2>
+          </div>
+          <p>
+            Claire is open to builders. Start the mobile app locally, point it at your
+            infrastructure, and connect your first platform.
+          </p>
+        </div>
+        <div class="installer">
+          <div class="install-tabs" role="tablist" aria-label="Installation platform">
+            <button role="tab" aria-selected="true" data-tab="mac">macOS</button
+            ><button role="tab" aria-selected="false" data-tab="windows">Windows</button
+            ><button role="tab" aria-selected="false" data-tab="linux">Linux</button
+            ><button role="tab" aria-selected="false" data-tab="bun">Bun / manual</button>
+          </div>
+          <div class="install-layout">
+            <aside class="checklist">
+              <h3>Before you begin</h3>
+              <label
+                ><input type="checkbox" /><span
+                  ><b>Bun 1.0+</b><small>JavaScript runtime and package manager</small></span
+                ></label
+              ><label
+                ><input type="checkbox" /><span
+                  ><b>Docker Desktop</b><small>Runs Supabase, Matrix, and Redis</small></span
+                ></label
+              ><label
+                ><input type="checkbox" /><span
+                  ><b>Xcode</b><small>Required for the iOS simulator</small></span
+                ></label
+              >
+              <div class="ready-state">
+                <span>✓</span>
+                <p>
+                  <b>About 10 minutes</b><br /><small
+                    >Your data stays on infrastructure you control.</small
+                  >
+                </p>
+              </div>
+            </aside>
+            <div class="commands">
+              <div class="command-intro">
+                <span class="step">1</span>
+                <div>
+                  <h3>Install and start Claire</h3>
+                  <p>Clone the repository, install dependencies, and start the local stack.</p>
+                </div>
+              </div>
+              <div class="code-block">
+                <div class="code-title">
+                  <span><i></i><i></i><i></i></span><small>TERMINAL</small
+                  ><button class="copy-button" data-copy-target="install-command">Copy</button>
+                </div>
+                <pre><code id="install-command">git clone https://github.com/l2succes/claire.git
+cd claire
+bun run install:server &amp;&amp; bun run install:client
+bun run docker:up
+bun run dev</code></pre>
+              </div>
+              <div class="command-intro second">
+                <span class="step">2</span>
+                <div>
+                  <h3>Configure your environment</h3>
+                  <p>Copy both templates, then add your Supabase and Matrix credentials.</p>
+                </div>
+              </div>
+              <div class="code-block compact">
+                <pre><code id="env-command">cp server/.env.example server/.env
+cp client/.env.example client/.env</code></pre>
+                <button class="copy-button" data-copy-target="env-command">Copy</button>
+              </div>
+              <p class="success-note">
+                <span>●</span>When Expo shows a QR code, scan it with Expo Go—or press
+                <code>i</code> for the iOS simulator.
+              </p>
+            </div>
+          </div>
+          <div class="faq">
+            <h3>Quick fixes</h3>
+            <details>
+              <summary>Docker services won’t start <span>＋</span></summary>
+              <p>
+                Check that Docker Desktop is running and ports 3001, 6379, and 8008 are available.
+                Then run <code>bun run docker:down</code> before trying again.
+              </p>
+            </details>
+            <details>
+              <summary>The app can’t reach the server <span>＋</span></summary>
+              <p>
+                For a physical device, use your computer’s LAN IP in
+                <code>EXPO_PUBLIC_SERVER_URL</code>. Localhost only works in the simulator.
+              </p>
+            </details>
+            <details>
+              <summary>WhatsApp isn’t connecting <span>＋</span></summary>
+              <p>
+                Open WhatsApp → Settings → Linked Devices, then scan the QR code Claire displays.
+                Check <code>docker logs claire-mautrix-whatsapp</code> if pairing stalls.
+              </p>
+            </details>
+          </div>
+        </div>
+      </section>
+      <section class="final-cta shell">
+        <div>
+          <span class="asterisk">✦</span>
+          <h2>Give every conversation<br />one good home.</h2>
+          <p>Open source. Thoughtfully designed. Ready for the messages that matter.</p>
+          <a class="button button-dark" href="https://github.com/l2succes/claire"
+            >View on GitHub <span>↗</span></a
+          >
+        </div>
+      </section>
+    </main>
+    <footer class="footer shell">
+      <a class="brand" href="#top"><span class="brand-mark">C</span><span>claire</span></a>
+      <p>One inbox for your whole life.</p>
+      <div>
+        <a href="https://github.com/l2succes/claire">GitHub</a
+        ><a href="https://github.com/l2succes/claire#readme">Docs</a
+        ><a href="./style-guide.html">Style guide</a><a href="./app-mockups.html">Mobile</a
+        ><a href="./desktop-mockups.html">Desktop</a><span>© 2026 Claire</span>
+      </div>
+    </footer>
+  </body>
+</html>

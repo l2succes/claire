@@ -205,6 +205,9 @@ EAS environment variables are stored in the cloud — no `.env` file needed on C
 - [Matrix Bridge Reference](docs/MATRIX_BRIDGE_REFERENCE.md) — mautrix bridge API quick reference
 - [Matrix Bridge Integration Plan](docs/plans/matrix-bridge-integration.md) — Architecture design
 - [Unified Messenger Client Plan](docs/plans/unified-ai-messenger-client.md) — Client implementation
+- [Desktop App Implementation Spec](docs/DESKTOP_APP_IMPLEMENTATION_SPEC.md) — React Native macOS architecture, local bridge hosting, phases, and acceptance criteria
+- [Design System Migration Guide](docs/DESIGN_SYSTEM_MIGRATION_GUIDE.md) — Incremental migration of the Expo app and shared desktop primitives
+- [Interactive Product Mockups](landing/README.md) — Landing page, mobile screens, desktop screens, and visual style guide
 - [Official mautrix docs](https://docs.mau.fi/) — Upstream bridge documentation
 
 ## License
