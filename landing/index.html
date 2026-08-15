@@ -30,23 +30,37 @@
         ><span>claire</span></a
       >
       <nav class="site-nav" aria-label="Primary navigation">
-        <a href="#product">Product</a><a href="#connections">Connections</a><a href="#pricing">Pricing</a>
+        <a href="#product">Product</a><a href="#connections">Connections</a
+        ><a href="#security">Security</a><a href="#pricing">Pricing</a>
         <details class="site-nav-more">
           <summary>Explore <i data-heroicon="chevron-down"></i></summary>
           <div class="site-nav-popover">
-            <a href="#start"><b>Cloud or local</b><span>Choose how Claire fits your setup.</span></a>
-            <a href="#stories"><b>Stories</b><span>See the product in everyday conversation.</span></a>
-            <a href="./app-mockups.html"><b>Mobile preview</b><span>Explore the app concept.</span></a>
-            <a href="./desktop-mockups.html"><b>Desktop preview</b><span>Explore the desktop concept.</span></a>
+            <a href="#start"
+              ><b>Cloud or local</b><span>Choose how Claire fits your setup.</span></a
+            >
+            <a href="#stories"
+              ><b>Stories</b><span>See the product in everyday conversation.</span></a
+            >
+            <a href="./security.html"
+              ><b>Security details</b><span>See the current data boundaries.</span></a
+            >
+            <a href="./app-mockups.html"
+              ><b>Mobile preview</b><span>Explore the app concept.</span></a
+            >
+            <a href="./desktop-mockups.html"
+              ><b>Desktop preview</b><span>Explore the desktop concept.</span></a
+            >
           </div>
         </details>
       </nav>
       <details class="mobile-nav">
         <summary>Menu <i data-heroicon="bars-3"></i></summary>
         <nav aria-label="Mobile navigation">
-          <a href="#product">Product</a><a href="#connections">Connections</a><a href="#pricing">Pricing</a
+          <a href="#product">Product</a><a href="#connections">Connections</a
+          ><a href="#security">Security</a><a href="#pricing">Pricing</a
           ><a href="#start">Cloud or local</a><a href="#stories">Stories</a
-          ><a href="./app-mockups.html">Mobile preview</a><a href="./desktop-mockups.html">Desktop preview</a>
+          ><a href="./app-mockups.html">Mobile preview</a
+          ><a href="./desktop-mockups.html">Desktop preview</a>
         </nav>
       </details>
       <a class="button button-dark button-small" href="#pricing"
@@ -718,7 +732,7 @@
               What happens when our Claire AI credits run out? <i data-heroicon="plus"></i>
             </summary>
             <p>
-              Messaging, search, and connections continue to work. AI actions pause until an you add
+              Messaging, search, and connections continue to work. AI actions pause until you add
               prepaid credits, switch to your provider key, or wait for the next monthly allowance
               period.
             </p>
@@ -728,9 +742,10 @@
               Can we use our own OpenAI or Anthropic account? <i data-heroicon="plus"></i>
             </summary>
             <p>
-              Yes. Your encrypted provider credential is used only for your account’s AI requests.
-              You pay that provider directly, and Claire Cloud does not deduct managed credits for
-              those requests.
+              When bring-your-own-key support launches, its provider credential will be held behind
+              an encrypted secret boundary and used only for your account’s AI requests. You pay
+              that provider directly, and Claire Cloud will not deduct managed credits for those
+              requests.
             </p>
           </details>
           <details>
@@ -740,6 +755,48 @@
               Business product may come later; it is not part of this launch.
             </p>
           </details>
+        </div>
+      </section>
+      <section class="security-teaser shell" id="security" aria-labelledby="security-title">
+        <div class="security-teaser-copy">
+          <div class="kicker">SECURITY WITH CLEAR BOUNDARIES</div>
+          <h2 id="security-title">Privacy starts with<br /><span>telling you the truth.</span></h2>
+          <p>
+            Claire brings messages into one searchable place. That means it is not a zero-knowledge,
+            end-to-end-encrypted messenger today—and we will not pretend otherwise.
+          </p>
+          <a class="button button-dark" href="./security.html"
+            >Read our security details <i data-heroicon="arrow-right"></i
+          ></a>
+        </div>
+        <div class="security-visual" aria-label="Claire security boundaries">
+          <div class="security-visual-head">
+            <span class="security-visual-icon"><i data-heroicon="info"></i></span
+            ><span>CURRENT DATA BOUNDARY</span>
+          </div>
+          <div class="security-flow">
+            <article>
+              <i data-heroicon="phone"></i><small>YOUR APPS</small
+              ><b>Messages arrive from connected networks.</b>
+            </article>
+            <span class="security-flow-line" aria-hidden="true"></span>
+            <article class="security-flow-center">
+              <i data-heroicon="server"></i><small>CLAIRE CLOUD</small
+              ><b>Sync, inbox, search, and selected AI context.</b>
+            </article>
+            <span class="security-flow-line" aria-hidden="true"></span>
+            <article>
+              <i data-heroicon="sparkles"></i><small>AI, WHEN USED</small
+              ><b>Only selected context goes to the active AI mode.</b>
+            </article>
+          </div>
+          <div class="security-visual-note">
+            <i data-heroicon="check-circle"></i>
+            <p>
+              <b>What is live now:</b> authenticated APIs, production origin controls, security
+              headers, and separate login and AI rate limits.
+            </p>
+          </div>
         </div>
       </section>
       <section class="final-cta shell">
@@ -763,9 +820,9 @@
       <div>
         <a href="https://github.com/l2succes/claire">GitHub</a
         ><a href="https://github.com/l2succes/claire#readme">Docs</a
-        ><a href="./style-guide.html">Style guide</a><a href="./logo-explorations.html">Logo lab</a
-        ><a href="./app-mockups.html">Mobile</a><a href="./desktop-mockups.html">Desktop</a
-        ><span>© 2026 Claire</span>
+        ><a href="./security.html">Security</a><a href="./style-guide.html">Style guide</a
+        ><a href="./logo-explorations.html">Logo lab</a><a href="./app-mockups.html">Mobile</a
+        ><a href="./desktop-mockups.html">Desktop</a><span>© 2026 Claire</span>
       </div>
     </footer>
   </body>
