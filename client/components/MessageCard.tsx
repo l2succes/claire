@@ -1,6 +1,6 @@
 import { Pressable, Text, View } from 'react-native';
 import { Image } from 'expo-image';
-import { Check, CheckCheck, Clock, Sparkles, UserRound, UsersRound } from 'lucide-react-native';
+import { Check, CheckCheck, Clock, Pin, Sparkles, UserRound, UsersRound } from 'lucide-react-native';
 import { colors, mobileType, space } from '@claire/design-system';
 import { useState } from 'react';
 import { PlatformBadge } from './PlatformIcon';
@@ -22,6 +22,7 @@ interface MessageCardProps {
     has_ai_response?: boolean;
     has_open_promise?: boolean;
     platform?: Platform;
+    is_pinned?: boolean;
   };
   onPress: () => void;
   onLongPress?: () => void;
@@ -71,6 +72,7 @@ export function MessageCard({ message, onPress, onLongPress }: MessageCardProps)
 
       <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}>
+          {message.is_pinned ? <Pin size={13} color={colors.neutral[600]} fill={colors.neutral[600]} /> : null}
           <Text selectable numberOfLines={1} style={{ ...mobileType.body, flex: 1, fontWeight: message.unread_count ? '700' : '600', color: colors.ink }}>{name}</Text>
           <Text selectable testID="message-card-timestamp" style={{ ...mobileType.monoLabel, color: colors.neutral[400] }}>{formatInboxTimestamp(message.timestamp)}</Text>
         </View>

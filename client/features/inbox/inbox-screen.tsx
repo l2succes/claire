@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Modal, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
-import { Plus, Search, UsersRound, X } from 'lucide-react-native';
+import { Pin, Plus, Search, UsersRound, X } from 'lucide-react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { colors, mobileType, radius, space } from '@claire/design-system';
@@ -91,6 +91,24 @@ export function InboxScreen() {
     }
   };
 
+  const togglePin = async () => {
+    const target = snoozeTarget;
+    if (!target) return;
+    setSnoozeTarget(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const response = await fetch(`${API_BASE_URL}/messages/chats/${target.chat_id}/pin`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}) },
+        body: JSON.stringify({ pinned: !target.is_pinned }),
+      });
+      if (!response.ok) throw new Error('Could not update pin');
+      await inbox.fetchMessages();
+    } catch (error) {
+      console.warn('[Inbox] pin failed', error);
+    }
+  };
+
   const filters: Array<{ value: InboxFilter; label: string; count?: number }> = [
     { value: 'all', label: 'All' },
     { value: 'unread', label: 'Unread', count: inbox.messages.filter(message => !!message.unread_count).length },
@@ -144,7 +162,9 @@ export function InboxScreen() {
       <Modal visible={!!snoozeTarget} transparent animationType="fade" onRequestClose={() => setSnoozeTarget(null)} testID="snooze-modal">
         <Pressable testID="snooze-modal-overlay" onPress={() => setSnoozeTarget(null)} style={{ flex: 1, backgroundColor: 'rgba(16,18,15,0.35)', justifyContent: 'flex-end' }}>
           <Pressable style={{ backgroundColor: colors.paper, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: space[5], paddingBottom: 36, gap: space[2] }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}><Text selectable style={{ ...mobileType.sectionTitle, flex: 1, color: colors.ink }}>Snooze conversation</Text><MobileIconButton label="Close" onPress={() => setSnoozeTarget(null)}><X size={19} color={colors.ink} /></MobileIconButton></View>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}><Text selectable style={{ ...mobileType.sectionTitle, flex: 1, color: colors.ink }}>Conversation actions</Text><MobileIconButton label="Close" onPress={() => setSnoozeTarget(null)}><X size={19} color={colors.ink} /></MobileIconButton></View>
+            <Pressable testID="inbox-toggle-pin" onPress={() => void togglePin()} style={({ pressed }) => ({ minHeight: 48, paddingHorizontal: space[4], flexDirection: 'row', alignItems: 'center', gap: space[3], borderRadius: radius.control, backgroundColor: pressed ? colors.sky : colors.cream })}><Pin size={17} color={colors.ink} /><Text style={{ ...mobileType.body, color: colors.ink }}>{snoozeTarget?.is_pinned ? 'Unpin from top' : 'Pin to top'}</Text></Pressable>
+            <Text style={{ ...mobileType.monoLabel, color: colors.neutral[400], paddingHorizontal: space[2], paddingTop: space[2] }}>SNOOZE</Text>
             {[{ label: 'Later today', minutes: 180, id: 'snooze-option-3h' }, { label: 'Tomorrow morning', minutes: 24 * 60, id: 'snooze-option-tomorrow' }, { label: 'Next week', minutes: 7 * 24 * 60, id: 'snooze-option-week' }].map(option => (
               <Pressable key={option.id} testID={option.id} onPress={() => void snooze(option.minutes)} style={({ pressed }) => ({ minHeight: 48, paddingHorizontal: space[4], justifyContent: 'center', borderRadius: radius.control, backgroundColor: pressed ? colors.neutral[100] : colors.cream })}><Text style={{ ...mobileType.body, color: colors.ink }}>{option.label}</Text></Pressable>
             ))}

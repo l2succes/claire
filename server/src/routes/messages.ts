@@ -473,6 +473,25 @@ router.post(
   }
 );
 
+/** Pinning is Claire-local inbox state and never mutates the source platform. */
+router.patch('/chats/:chatId/pin', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.id as string;
+    const pinned = req.body?.pinned;
+    if (typeof pinned !== 'boolean') return res.status(400).json({ error: 'pinned must be a boolean' });
+    const { data, error } = await supabase.from('chats')
+      .update({ is_pinned: pinned, pinned_at: pinned ? new Date().toISOString() : null })
+      .eq('id', req.params.chatId).eq('user_id', userId)
+      .select('id,is_pinned,pinned_at').maybeSingle();
+    if (error) throw error;
+    if (!data) return res.status(404).json({ error: 'Chat not found' });
+    return res.json({ success: true, chat: data });
+  } catch (error) {
+    logger.error('Failed to update chat pin:', error);
+    return res.status(500).json({ error: 'Failed to update chat pin' });
+  }
+});
+
 /**
  * POST /messages/typing
  * Send typing indicator
