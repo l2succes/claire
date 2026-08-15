@@ -452,46 +452,50 @@ export default function ChatScreen() {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#ffffff' }} edges={['top']} testID="chat-screen">
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.cream }} edges={['top']} testID="chat-screen">
       {/* Header */}
       <View style={{
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 12,
-        paddingVertical: 10,
+        paddingHorizontal: space[3],
+        paddingVertical: space[2],
+        minHeight: 64,
+        gap: space[2],
         borderBottomWidth: 1,
-        borderBottomColor: '#e5e7eb',
+        borderBottomColor: colors.neutral[200],
+        backgroundColor: colors.paper,
       }}>
-        <TouchableOpacity onPress={() => router.back()} style={{ marginRight: 8, padding: 4 }}>
-          <ChevronLeft size={24} color="#111827" />
-        </TouchableOpacity>
+        <MobileIconButton label="Back" onPress={() => router.back()}><ChevronLeft size={22} color={colors.ink} /></MobileIconButton>
+        <MobileAvatar name={displayName} size={40} isGroup={is_group === '1'} />
         <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827' }} numberOfLines={1}>
+          <Text style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }} numberOfLines={1}>
             {displayName}
           </Text>
+          <Text style={{ ...mobileType.label, color: colors.neutral[600], textTransform: 'capitalize' }}>{platform || 'Conversation'}</Text>
         </View>
-        {platform ? <PlatformBadge platform={platform as Platform} size={14} /> : null}
-        <TouchableOpacity
+        <MobileIconButton
+          label={`Ask Claire about ${displayName}`}
+          onPress={() => router.push({ pathname: '/chat/assistant/[chatId]', params: { chatId: chatId!, name: displayName } })}
+        ><Sparkles size={19} color={colors.ink} /></MobileIconButton>
+        <MobileIconButton
+          label="Conversation settings"
           onPress={() => router.push({
             pathname: '/chat/settings/[chatId]',
             params: { chatId: chatId!, platform, contact_name, chat_name, is_group },
           })}
-          style={{ marginLeft: 8, padding: 4 }}
-        >
-          <Settings size={20} color="#6b7280" />
-        </TouchableOpacity>
+        ><Settings size={19} color={colors.ink} /></MobileIconButton>
       </View>
 
       {/* Connection status banner */}
       {platform && !connectedSessions.some(s => s.platform === platform && s.status === 'connected') && (
         <View style={{
-          backgroundColor: '#fef3c7',
+          backgroundColor: colors.warningSurface,
           paddingVertical: 10,
           paddingHorizontal: 12,
           borderBottomWidth: 1,
-          borderBottomColor: '#fcd34d',
+          borderBottomColor: colors.warning,
         }}>
-          <Text style={{ color: '#92400e', fontSize: 13, textAlign: 'center' }}>
+          <Text style={{ ...mobileType.bodySmall, color: colors.warning, textAlign: 'center' }}>
             Not connected to {platform}. Reconnect in Settings to send messages.
           </Text>
         </View>
@@ -509,7 +513,7 @@ export default function ChatScreen() {
 
         {loading ? (
           <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }} testID="chat-loading">
-            <ActivityIndicator size="large" color="#10b981" />
+            <ActivityIndicator size="large" color={colors.ink} />
           </View>
         ) : (
           <FlatList
@@ -518,7 +522,7 @@ export default function ChatScreen() {
             renderItem={renderMessage}
             keyExtractor={(item) => item.id}
             testID="chat-message-list"
-            contentContainerStyle={{ paddingVertical: 8 }}
+            contentContainerStyle={{ paddingVertical: space[3] }}
             onContentSizeChange={() => { if (!highlightMessageId) listRef.current?.scrollToEnd({ animated: false }); }}
             onLayout={() => { if (!highlightMessageId) listRef.current?.scrollToEnd({ animated: false }); }}
             onScrollToIndexFailed={({ index, averageItemLength }) => {
@@ -528,7 +532,7 @@ export default function ChatScreen() {
             keyboardShouldPersistTaps="handled"
             ListEmptyComponent={
               <View style={{ flex: 1, alignItems: 'center', paddingTop: 60 }} testID="chat-empty">
-                <Text style={{ color: '#9ca3af', fontSize: 15 }}>No messages yet</Text>
+                <Text style={{ ...mobileType.body, color: colors.neutral[400] }}>No messages yet</Text>
               </View>
             }
           />
@@ -578,12 +582,12 @@ export default function ChatScreen() {
           <View style={{
             paddingHorizontal: 12,
             paddingVertical: 8,
-            backgroundColor: '#fee2e2',
-            borderRadius: 8,
+            backgroundColor: colors.blush,
+            borderRadius: radius.control,
             marginHorizontal: 12,
             marginBottom: 8,
           }}>
-            <Text style={{ color: '#dc2626', fontSize: 13 }}>
+            <Text style={{ ...mobileType.bodySmall, color: colors.danger }}>
               {sendError}
             </Text>
           </View>
@@ -597,24 +601,27 @@ export default function ChatScreen() {
           paddingVertical: 8,
           paddingBottom: Math.max(insets.bottom, 8),
           borderTopWidth: 1,
-          borderTopColor: '#e5e7eb',
-          backgroundColor: '#ffffff',
+          borderTopColor: colors.neutral[200],
+          backgroundColor: colors.paper,
         }}>
+          <TouchableOpacity accessibilityLabel="Add attachment" style={{ width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.neutral[100], marginRight: space[2] }}>
+            <Plus size={19} color={colors.ink} />
+          </TouchableOpacity>
           <TextInput
             style={{
               flex: 1,
               minHeight: 40,
               maxHeight: 120,
-              backgroundColor: '#f3f4f6',
-              borderRadius: 20,
+              backgroundColor: colors.neutral[100],
+              borderRadius: radius.control,
               paddingHorizontal: 16,
               paddingVertical: 10,
-              fontSize: 15,
-              color: '#111827',
+              ...mobileType.body,
+              color: colors.ink,
               marginRight: 8,
             }}
             placeholder="Message..."
-            placeholderTextColor="#9ca3af"
+            placeholderTextColor={colors.neutral[400]}
             value={inputText}
             onChangeText={setInputText}
             multiline
@@ -629,13 +636,13 @@ export default function ChatScreen() {
             style={{
               width: 40,
               height: 40,
-              borderRadius: 20,
-              backgroundColor: inputText.trim() && !sending ? '#10b981' : '#e5e7eb',
+              borderRadius: 14,
+              backgroundColor: inputText.trim() && !sending ? colors.ink : colors.neutral[200],
               justifyContent: 'center',
               alignItems: 'center',
             }}
           >
-            <SendHorizonal size={18} color={inputText.trim() && !sending ? '#ffffff' : '#9ca3af'} />
+            <SendHorizonal size={18} color={inputText.trim() && !sending ? colors.lime : colors.neutral[400]} />
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>

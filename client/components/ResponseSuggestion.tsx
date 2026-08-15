@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Sparkles, Send, RefreshCw, ThumbsUp, ThumbsDown, SlidersHorizontal, Brain, Expand } from 'lucide-react-native';
 import { supabase } from '../services/supabase';
 import { platformsApi } from '../services/platforms';
+import { colors, mobileType, radius, space } from '@claire/design-system';
 
 interface ResponseSuggestionProps {
   messageId: string;
@@ -252,101 +253,99 @@ export function ResponseSuggestion({
   return (
     <View
       style={{
-        backgroundColor: '#eff6ff',
-        borderRadius: 12,
-        padding: 12,
-        marginHorizontal: 16,
-        marginBottom: 8,
+        backgroundColor: colors.sky,
+        padding: space[3],
+        borderTopWidth: 1,
+        borderBottomWidth: 1,
+        borderColor: colors.infoBorder,
       }}
       testID="ai-suggestion-strip"
     >
       {/* Header */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-        <View className="flex-row items-center">
-          <Sparkles size={16} color="#3b82f6" />
-          <Text className="ml-1 text-blue-600 dark:text-blue-400 text-sm font-medium">
-            Reply options
-          </Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: space[2], gap: space[2] }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+          <Sparkles size={16} color={colors.ink} />
+          <Text style={{ ...mobileType.label, color: colors.ink }}>Reply options</Text>
         </View>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
           <TouchableOpacity
             onPress={handleExplain}
             disabled={explaining}
+            accessibilityLabel="Explain this conversation"
             testID="ask-claire-button"
-            style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, paddingVertical: 4 }}
+            style={{ width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}
           >
-            {explaining ? <ActivityIndicator size="small" color="#2563eb" /> : <Brain size={14} color="#2563eb" />}
-            <Text style={{ marginLeft: 4, color: '#2563eb', fontSize: 12, fontWeight: '600' }}>Ask Claire</Text>
+            {explaining ? <ActivityIndicator size="small" color={colors.ink} /> : <Brain size={17} color={colors.ink} />}
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => setShowGuidance(value => !value)}
+            accessibilityLabel="Adjust reply options"
             testID="reply-guidance-toggle"
-            style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, paddingVertical: 4 }}
+            style={{ width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}
           >
-            <SlidersHorizontal size={14} color="#2563eb" />
-            <Text style={{ marginLeft: 4, color: '#2563eb', fontSize: 12, fontWeight: '600' }}>Adjust</Text>
+            <SlidersHorizontal size={17} color={colors.ink} />
           </TouchableOpacity>
           {suggestions.length > 0 && (
             <TouchableOpacity
               onPress={() => handleGenerate(true, 'Make each option a little longer and more detailed, while keeping the same language and conversational style.')}
               disabled={generating}
+              accessibilityLabel="Make replies longer"
               testID="make-reply-options-longer"
-              style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, paddingVertical: 4 }}
+              style={{ width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}
             >
-              <Expand size={14} color="#2563eb" />
-              <Text style={{ marginLeft: 4, color: '#2563eb', fontSize: 12, fontWeight: '600' }}>Make longer</Text>
+              <Expand size={17} color={colors.ink} />
             </TouchableOpacity>
           )}
           {suggestions.length > 0 && (
             <TouchableOpacity
               onPress={() => handleGenerate(true)}
               disabled={generating}
+              accessibilityLabel="Regenerate reply options"
               testID="regenerate-reply-options"
-              style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, paddingVertical: 4 }}
+              style={{ width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}
             >
-              <RefreshCw size={14} color="#2563eb" />
-              <Text style={{ marginLeft: 4, color: '#2563eb', fontSize: 12, fontWeight: '600' }}>Regenerate</Text>
+              <RefreshCw size={17} color={colors.ink} />
             </TouchableOpacity>
           )}
         </View>
       </View>
 
       <Modal visible={showGuidance} transparent animationType="slide" onRequestClose={() => setShowGuidance(false)}>
-        <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(15,23,42,0.35)' }}>
-          <View testID="reply-guidance-panel" style={{ backgroundColor: '#fff', borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 20, gap: 10 }}>
-          <Text style={{ color: '#0f172a', fontSize: 17, fontWeight: '700' }}>Adjust these replies</Text>
-          <Text style={{ color: '#64748b', fontSize: 13 }}>Tell Claire what you want. Your direction applies only to this set.</Text>
+        <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(16,18,15,0.35)' }}>
+          <View testID="reply-guidance-panel" style={{ backgroundColor: colors.paper, borderTopLeftRadius: radius.panel, borderTopRightRadius: radius.panel, padding: space[5], gap: space[3] }}>
+          <Text style={{ ...mobileType.sectionTitle, color: colors.ink }}>Adjust these replies</Text>
+          <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>Tell Claire what you want. Your direction applies only to this set.</Text>
           <TextInput
             value={guidance}
             onChangeText={setGuidance}
             placeholder="e.g. less formal, more like me, say I'm down but busy"
-            placeholderTextColor="#64748b"
+            placeholderTextColor={colors.neutral[400]}
             multiline
             maxLength={500}
             testID="reply-guidance-input"
             style={{
               minHeight: 42,
               borderWidth: 1,
-              borderColor: '#bfdbfe',
-              borderRadius: 8,
-              backgroundColor: '#fff',
-              color: '#0f172a',
+              borderColor: colors.neutral[200],
+              borderRadius: radius.control,
+              backgroundColor: colors.cream,
+              color: colors.ink,
               paddingHorizontal: 10,
               paddingVertical: 8,
-              fontSize: 13,
+              ...mobileType.body,
             }}
           />
           <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 12 }}>
           <TouchableOpacity onPress={() => setShowGuidance(false)} style={{ paddingHorizontal: 12, paddingVertical: 9 }}>
-            <Text style={{ color: '#64748b', fontSize: 13, fontWeight: '700' }}>Cancel</Text>
+            <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600], fontWeight: '700' }}>Cancel</Text>
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => handleGenerate(true)}
             disabled={generating}
             testID="apply-reply-guidance-button"
-            style={{ alignSelf: 'flex-start', marginTop: 7, backgroundColor: '#2563eb', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7 }}
+            style={{ alignSelf: 'flex-start', marginTop: 7, backgroundColor: colors.ink, borderRadius: radius.control, paddingHorizontal: 14, paddingVertical: 10 }}
           >
-            <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>Regenerate</Text>
+            <Text style={{ ...mobileType.label, color: colors.lime }}>Regenerate</Text>
           </TouchableOpacity>
           </View>
         </View>
@@ -354,9 +353,9 @@ export function ResponseSuggestion({
       </Modal>
 
       {explanation && (
-        <View testID="conversation-explanation" style={{ backgroundColor: '#ffffff', borderRadius: 10, borderWidth: 1, borderColor: '#bfdbfe', padding: 10, marginBottom: 10 }}>
-          <Text style={{ fontSize: 13, fontWeight: '700', color: '#1e3a8a', marginBottom: 4 }}>What Claire sees</Text>
-          <Text style={{ fontSize: 13, color: '#1f2937', lineHeight: 18 }}>{explanation.summary}</Text>
+        <View testID="conversation-explanation" style={{ backgroundColor: colors.paper, borderRadius: radius.control, borderWidth: 1, borderColor: colors.infoBorder, padding: space[3], marginBottom: space[2] }}>
+          <Text style={{ ...mobileType.label, color: colors.ink, marginBottom: 4 }}>What Claire sees</Text>
+          <Text style={{ ...mobileType.bodySmall, color: colors.neutral[800] }}>{explanation.summary}</Text>
           <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569', marginTop: 8 }}>Latest message</Text>
           <Text style={{ fontSize: 13, color: '#334155', lineHeight: 18 }}>{explanation.latestMessageIntent}</Text>
           <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569', marginTop: 8 }}>How to respond</Text>
@@ -374,12 +373,12 @@ export function ResponseSuggestion({
       {suggestions.length === 0 && (
         generateError ? (
           <TouchableOpacity onPress={() => handleGenerate(true)} testID="retry-reply-options" style={{ alignSelf: 'flex-start', paddingVertical: 6 }}>
-            <Text style={{ color: '#2563eb', fontSize: 13, fontWeight: '700' }}>Retry reply options</Text>
+            <Text style={{ ...mobileType.label, color: colors.ink }}>Retry reply options</Text>
           </TouchableOpacity>
         ) : (
           <View testID="reply-options-loading" style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 6 }}>
-            <ActivityIndicator size="small" color="#2563eb" />
-            <Text style={{ marginLeft: 8, color: '#2563eb', fontSize: 13, fontWeight: '600' }}>
+            <ActivityIndicator size="small" color={colors.ink} />
+            <Text style={{ ...mobileType.bodySmall, marginLeft: 8, color: colors.ink, fontWeight: '600' }}>
               {loading || generating ? 'Claire is preparing reply options…' : 'Preparing reply options…'}
             </Text>
           </View>
@@ -388,18 +387,16 @@ export function ResponseSuggestion({
 
       {/* Suggestions */}
       {suggestions.length > 0 && (
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} testID="ai-suggestion-scroll">
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space[2] }} testID="ai-suggestion-scroll">
         {suggestions.map((suggestion, index) => (
-          <View key={suggestion.id} className="mr-2">
+          <View key={suggestion.id}>
             <TouchableOpacity
               onPress={() => handleSelectSuggestion(suggestion, index)}
               testID={`ai-suggestion-chip-${index}`}
-              className={`bg-white dark:bg-gray-800 rounded-lg p-2.5 min-w-[200] max-w-[280] ${
-                selectedIndex === index ? 'border-2 border-blue-500' : 'border border-gray-200 dark:border-gray-700'
-              }`}
+              style={{ width: 232, minHeight: 112, backgroundColor: colors.paper, borderRadius: radius.control, padding: space[3], borderWidth: selectedIndex === index ? 2 : 1, borderColor: selectedIndex === index ? colors.ink : colors.neutral[200] }}
             >
               {/* Suggestion Text */}
-              <Text className="text-sm text-gray-800 dark:text-gray-200 mb-2" numberOfLines={3}>
+              <Text style={{ ...mobileType.body, color: colors.ink, marginBottom: space[2], flex: 1 }} numberOfLines={3}>
                 {suggestion.suggestion}
               </Text>
 
@@ -429,13 +426,13 @@ export function ResponseSuggestion({
                     />
                   </TouchableOpacity>
                 </View>
-                <TouchableOpacity
+                <TouchableOpacity accessibilityLabel="Use this reply"
                   onPress={() => handleSelectSuggestion(suggestion, index)}
                   testID={`ai-suggestion-use-${index}`}
-                  className="flex-row items-center bg-blue-500 rounded px-2 py-1"
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.ink, borderRadius: 9, paddingHorizontal: 9, paddingVertical: 6 }}
                 >
-                  <Send size={12} color="#ffffff" />
-                  <Text className="ml-1 text-white text-xs font-medium">Use</Text>
+                  <Send size={12} color={colors.lime} />
+                  <Text style={{ ...mobileType.label, color: colors.paper }}>Use</Text>
                 </TouchableOpacity>
               </View>
             </TouchableOpacity>
@@ -453,7 +450,7 @@ export function ResponseSuggestion({
 
       {/* Usage Tips */}
       {suggestions.length > 0 && selectedIndex === null && (
-        <Text className="text-xs text-gray-500 dark:text-gray-400 mt-2 italic">
+        <Text style={{ ...mobileType.label, color: colors.neutral[600], marginTop: space[2] }}>
           Tap a suggestion to use it, or swipe for more options
         </Text>
       )}

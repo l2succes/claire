@@ -23,6 +23,20 @@ import {
 
 export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001';
 
+export interface PlatformDefinition {
+  id: string;
+  name: string;
+  mark: string;
+  accent: string;
+  iconUrl: string;
+  supportStatus: 'available' | 'beta' | 'planned' | 'unavailable';
+  setupSurface: 'phone' | 'desktop' | 'mac';
+  setupLabel: string;
+  runtimeLabel: string;
+  authSummary: string;
+  detail: string;
+}
+
 // Create axios instance with default config
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -58,6 +72,19 @@ api.interceptors.response.use(
  * Platform API methods
  */
 export const platformsApi = {
+  async getPlatformDefinitions(): Promise<PlatformDefinition[]> {
+    const response = await api.get<{ success: boolean; platforms: PlatformDefinition[] }>('/platforms/definitions');
+    return response.data.platforms;
+  },
+
+  async getPlatformInterests(): Promise<string[]> {
+    const response = await api.get<{ success: boolean; platformIds: string[] }>('/platforms/interests');
+    return response.data.platformIds;
+  },
+
+  async requestPlatformInterest(platformId: string): Promise<void> {
+    await api.post(`/platforms/${encodeURIComponent(platformId)}/interest`, { source: 'mobile' });
+  },
   /**
    * Get all available platforms and their status
    */

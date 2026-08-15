@@ -111,7 +111,7 @@ export function InboxScreen() {
         title="Inbox"
         subtitle="Every conversation, one calm list."
         actions={<View style={{ flexDirection: 'row', gap: space[2] }}>
-          <MobileIconButton label="People" testID="inbox-open-people" onPress={() => router.push('/(tabs)/contacts')}><UsersRound size={20} color={colors.ink} /></MobileIconButton>
+          <MobileIconButton label="People" testID="inbox-open-people" onPress={() => router.push('/people' as never)}><UsersRound size={20} color={colors.ink} /></MobileIconButton>
           <MobileIconButton label="New message" testID="inbox-compose" onPress={() => router.push('/compose' as never)}><Plus size={21} color={colors.ink} /></MobileIconButton>
         </View>}
       />
