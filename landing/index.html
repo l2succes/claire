@@ -17,7 +17,7 @@
     />
     <link rel="stylesheet" href="./tokens.css" />
     <link rel="stylesheet" href="./styles.css" />
-    <link rel="icon" href="./assets/brand/claire-open-c.svg" type="image/svg+xml" />
+    <link rel="icon" href="./assets/brand/claire-app-icon.svg" type="image/svg+xml" />
     <script src="./heroicons.js" defer></script>
     <script src="./platform-catalog.js" defer></script>
     <script src="./script.js" defer></script>
@@ -26,15 +26,29 @@
     <header class="site-header">
       <a class="brand" href="#top" aria-label="Claire home"
         ><span class="brand-mark is-logo"
-          ><img src="./assets/brand/claire-open-c.svg" alt="" /></span
+          ><img src="./assets/brand/claire-kept-thread-flipped.svg" alt="" /></span
         ><span>claire</span></a
       >
-      <nav aria-label="Primary navigation">
-        <a href="#product">Product</a><a href="#connections">Connections</a
-        ><a href="#start">Cloud or local</a><a href="#pricing">Pricing</a
-        ><a href="#stories">Stories</a><a href="./app-mockups.html">Mobile</a
-        ><a href="./desktop-mockups.html">Desktop</a>
+      <nav class="site-nav" aria-label="Primary navigation">
+        <a href="#product">Product</a><a href="#connections">Connections</a><a href="#pricing">Pricing</a>
+        <details class="site-nav-more">
+          <summary>Explore <i data-heroicon="chevron-down"></i></summary>
+          <div class="site-nav-popover">
+            <a href="#start"><b>Cloud or local</b><span>Choose how Claire fits your setup.</span></a>
+            <a href="#stories"><b>Stories</b><span>See the product in everyday conversation.</span></a>
+            <a href="./app-mockups.html"><b>Mobile preview</b><span>Explore the app concept.</span></a>
+            <a href="./desktop-mockups.html"><b>Desktop preview</b><span>Explore the desktop concept.</span></a>
+          </div>
+        </details>
       </nav>
+      <details class="mobile-nav">
+        <summary>Menu <i data-heroicon="bars-3"></i></summary>
+        <nav aria-label="Mobile navigation">
+          <a href="#product">Product</a><a href="#connections">Connections</a><a href="#pricing">Pricing</a
+          ><a href="#start">Cloud or local</a><a href="#stories">Stories</a
+          ><a href="./app-mockups.html">Mobile preview</a><a href="./desktop-mockups.html">Desktop preview</a>
+        </nav>
+      </details>
       <a class="button button-dark button-small" href="#pricing"
         >See pricing <i data-heroicon="arrow-right"></i
       ></a>
@@ -69,7 +83,7 @@
           <article class="app-window">
             <aside class="app-sidebar">
               <div class="mini-brand is-logo">
-                <img src="./assets/brand/claire-open-c.svg" alt="" />
+                <img src="./assets/brand/claire-kept-thread-flipped.svg" alt="" />
               </div>
               <button class="nav-icon active" aria-label="Home"><i data-heroicon="home"></i></button
               ><button class="nav-icon" aria-label="Inbox"><i data-heroicon="inbox"></i></button
@@ -742,7 +756,7 @@
     <footer class="footer shell">
       <a class="brand" href="#top"
         ><span class="brand-mark is-logo"
-          ><img src="./assets/brand/claire-open-c.svg" alt="" /></span
+          ><img src="./assets/brand/claire-kept-thread-flipped.svg" alt="" /></span
         ><span>claire</span></a
       >
       <p>All your chats. One AI.</p>

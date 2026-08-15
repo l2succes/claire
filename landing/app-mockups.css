@@ -51,6 +51,11 @@ textarea {
   border: 1px solid var(--claire-ink);
   border-radius: 9px;
 }
+.gallery-brand-mark {
+  width: 32px;
+  height: 32px;
+  display: block;
+}
 .gallery-brand span {
   color: var(--neutral-400);
   font-weight: 500;

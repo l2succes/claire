@@ -51,6 +51,11 @@ textarea {
   place-items: center;
   font-style: normal;
 }
+.docs-brand-mark {
+  width: 32px;
+  height: 32px;
+  display: block;
+}
 .docs-brand span {
   color: var(--neutral-400);
   font-weight: 500;

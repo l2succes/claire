@@ -76,6 +76,65 @@ button {
   height: 100%;
   display: block;
 }
+.site-nav {
+  align-items: center;
+}
+.site-nav-more {
+  position: relative;
+}
+.site-nav-more summary {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  list-style: none;
+}
+.site-nav-more summary::-webkit-details-marker {
+  display: none;
+}
+.site-nav-more summary .hero-icon {
+  width: 14px;
+  height: 14px;
+  transition: transform var(--transition);
+}
+.site-nav-more[open] summary .hero-icon {
+  transform: rotate(180deg);
+}
+.site-nav-popover {
+  position: absolute;
+  top: calc(100% + 18px);
+  right: -28px;
+  width: 290px;
+  padding: 8px;
+  display: grid;
+  gap: 2px;
+  border: 1px solid var(--neutral-200);
+  border-radius: 18px;
+  background: var(--claire-paper);
+  box-shadow: var(--shadow-lg);
+}
+.site-header .site-nav-popover a {
+  padding: 11px 12px;
+  display: grid;
+  gap: 2px;
+  border-radius: 12px;
+  font-size: 12px;
+}
+.site-nav-popover a:hover {
+  background: var(--neutral-100);
+  opacity: 1;
+}
+.site-nav-popover b {
+  font-size: 12px;
+}
+.site-nav-popover span {
+  color: var(--neutral-600);
+  font-size: 11px;
+  font-weight: 400;
+}
+.mobile-nav {
+  display: none;
+}
 .site-header nav {
   display: flex;
   gap: 34px;
@@ -2375,6 +2434,57 @@ code {
   }
   .site-header nav {
     display: none;
+  }
+  .mobile-nav {
+    display: block;
+    position: relative;
+    margin-left: auto;
+    margin-right: 10px;
+  }
+  .mobile-nav summary {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 9px 11px;
+    border: 1px solid var(--neutral-200);
+    border-radius: var(--radius-pill);
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    list-style: none;
+  }
+  .mobile-nav summary::-webkit-details-marker {
+    display: none;
+  }
+  .mobile-nav summary .hero-icon {
+    width: 16px;
+    height: 16px;
+  }
+  .mobile-nav[open] summary {
+    background: var(--claire-ink);
+    border-color: var(--claire-ink);
+    color: white;
+  }
+  .mobile-nav nav {
+    position: absolute;
+    top: calc(100% + 10px);
+    right: 0;
+    width: min(290px, calc(100vw - 24px));
+    padding: 8px;
+    display: grid;
+    gap: 2px;
+    border: 1px solid var(--neutral-200);
+    border-radius: 18px;
+    background: var(--claire-paper);
+    box-shadow: var(--shadow-lg);
+  }
+  .mobile-nav nav a {
+    padding: 11px 12px;
+    border-radius: 10px;
+    font-size: 13px;
+  }
+  .mobile-nav nav a:hover {
+    background: var(--neutral-100);
   }
   .trust-strip {
     flex-wrap: wrap;

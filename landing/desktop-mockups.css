@@ -51,6 +51,12 @@ textarea {
   display: grid;
   place-items: center;
 }
+.desktop-doc-brand-mark,
+.companion-brand img {
+  width: 32px;
+  height: 32px;
+  display: block;
+}
 .desktop-doc-brand span {
   color: var(--neutral-400);
   font-weight: 500;

@@ -41,6 +41,11 @@ body {
   place-items: center;
   font-style: normal;
 }
+.plugin-brand-mark {
+  width: 31px;
+  height: 31px;
+  display: block;
+}
 .brand span,
 .doc-header nav a {
   font: 500 10px 'DM Mono';
