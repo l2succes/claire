@@ -1,306 +1,44 @@
-/**
- * Settings Screen
- *
- * Allows users to manage their account, connected platforms,
- * and application preferences.
- */
-
-import { View, Text, ScrollView, TouchableOpacity, Alert } from 'react-native';
-import { useState, useEffect } from 'react';
+import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
+import { Bell, Bot, ChevronLeft, ChevronRight, Link2, LogOut, ShieldCheck, Sparkles } from 'lucide-react-native';
 import { router } from 'expo-router';
-import {
-  ChevronRight,
-  Bell,
-  User,
-  Sparkles,
-  LogOut,
-  Plus,
-  RefreshCw,
-  Zap,
-} from 'lucide-react-native';
+import { colors, mobileType, radius, space } from '@claire/design-system';
+import { MobileAvatar, MobileHeader, MobileIconButton, SectionLabel } from '../../components/mobile/claire-mobile';
 import { useAuthStore } from '../../stores/authStore';
 import { usePlatformStore } from '../../stores/platformStore';
-import { ConnectedPlatformsList } from '../../components/ConnectedPlatformsList';
-import { PlatformSelector } from '../../components/PlatformSelector';
-import { PlatformAuthModal } from '../../components/PlatformAuthModal';
-import { Platform, PlatformStatus } from '../../types/platform';
+import { PlatformStatus } from '../../types/platform';
+
+const rows = [
+  { title: 'Connections', detail: 'Messaging accounts and companion setup', icon: Link2, href: '/connections' },
+  { title: 'Notifications', detail: 'Alerts, badges, and quiet hours', icon: Bell, href: '/settings/notifications' },
+  { title: 'AI Settings', detail: 'Your voice, language, and reply style', icon: Sparkles, href: '/settings/ai' },
+  { title: 'Auto-reply rules', detail: 'Review automation and safety limits', icon: Bot, href: '/settings/auto-reply' },
+] as const;
 
 export default function SettingsScreen() {
-  const [showPlatformSelector, setShowPlatformSelector] = useState(false);
-  const [selectedPlatform, setSelectedPlatform] = useState<Platform | null>(null);
-  const [showAuthModal, setShowAuthModal] = useState(false);
+  const user = useAuthStore(state => state.user);
+  const logout = useAuthStore(state => state.logout);
+  const resetPlatforms = usePlatformStore(state => state.reset);
+  const connected = usePlatformStore(state => state.connectedSessions).filter(session => session.status === PlatformStatus.CONNECTED).length;
 
-  const user = useAuthStore((state) => state.user);
-  const logout = useAuthStore((state) => state.logout);
-
-  const {
-    connectedSessions,
-    initialize,
-    isInitialized,
-    fetchConnectedSessions,
-    reset: resetPlatformStore,
-  } = usePlatformStore();
-
-  // Initialize platform store on mount
-  useEffect(() => {
-    if (!isInitialized) {
-      initialize();
-    }
-  }, [initialize, isInitialized]);
-
-  const handleLogout = async () => {
-    Alert.alert(
-      'Logout',
-      'Are you sure you want to logout? You will need to reconnect your messaging platforms.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Logout',
-          style: 'destructive',
-          onPress: async () => {
-            resetPlatformStore();
-            await logout();
-            router.replace('/(auth)/signin');
-          },
-        },
-      ]
-    );
-  };
-
-  const handleRefreshPlatforms = async () => {
-    await fetchConnectedSessions();
-  };
-
-  const handleAddPlatform = () => {
-    setShowPlatformSelector(true);
-  };
-
-  const handlePlatformSelect = (platform: Platform) => {
-    // A connected card opens its status view, never another authentication
-    // flow. The modal also remains safe if this state changes while open.
-    setSelectedPlatform(platform);
-    setShowPlatformSelector(false);
-    setShowAuthModal(true);
-  };
-
-  const handleAuthSuccess = () => {
-    setShowAuthModal(false);
-    setSelectedPlatform(null);
-    fetchConnectedSessions();
-  };
-
-  const handleAuthClose = () => {
-    setShowAuthModal(false);
-    setSelectedPlatform(null);
-  };
-
-  const connectedCount = connectedSessions.filter(
-    (s) => s.status === PlatformStatus.CONNECTED
-  ).length;
-
-  const SettingsSection = ({
-    icon: Icon,
-    title,
-    description,
-    onPress,
-    danger = false,
-    testID,
-  }: {
-    icon: typeof User;
-    title: string;
-    description: string;
-    onPress?: () => void;
-    danger?: boolean;
-    testID?: string;
-  }) => (
-    <TouchableOpacity
-      onPress={onPress}
-      disabled={!onPress}
-      className="bg-white dark:bg-gray-800 rounded-lg px-4 py-3 mb-3 flex-row items-center"
-      activeOpacity={onPress ? 0.7 : 1}
-      testID={testID}
-    >
-      <View
-        className={`w-10 h-10 rounded-full items-center justify-center mr-3 ${
-          danger ? 'bg-red-100 dark:bg-red-900/30' : 'bg-gray-100 dark:bg-gray-700'
-        }`}
-      >
-        <Icon size={20} color={danger ? '#ef4444' : '#6b7280'} />
-      </View>
-      <View className="flex-1">
-        <Text
-          className={`font-semibold ${
-            danger ? 'text-red-600' : 'text-gray-900 dark:text-white'
-          }`}
-        >
-          {title}
-        </Text>
-        <Text className="text-sm text-gray-500 dark:text-gray-400">
-          {description}
-        </Text>
-      </View>
-      {onPress && <ChevronRight size={20} color="#9ca3af" />}
-    </TouchableOpacity>
-  );
+  const signOut = () => Alert.alert('Sign out?', 'Your synced messages stay in Claire. You can sign in again at any time.', [
+    { text: 'Cancel', style: 'cancel' },
+    { text: 'Sign out', style: 'destructive', onPress: async () => { resetPlatforms(); await logout(); router.replace('/(auth)/signin'); } },
+  ]);
 
   return (
-    <ScrollView className="flex-1 bg-gray-50 dark:bg-gray-900" testID="settings-screen">
-      <View className="p-4">
-        {/* Header */}
-        <Text className="text-2xl font-bold text-gray-900 dark:text-white mb-6">
-          Settings
-        </Text>
-
-        {/* User Info */}
-        {user && (
-          <View className="bg-white dark:bg-gray-800 rounded-lg p-4 mb-6">
-            <View className="flex-row items-center">
-              <View className="w-14 h-14 rounded-full bg-green-100 dark:bg-green-900/30 items-center justify-center">
-                <User size={28} color="#10b981" />
-              </View>
-              <View className="ml-3 flex-1">
-                <Text className="text-lg font-semibold text-gray-900 dark:text-white">
-                  {user.name || 'User'}
-                </Text>
-                <Text className="text-gray-500 dark:text-gray-400">
-                  {user.email}
-                </Text>
-              </View>
-            </View>
-          </View>
-        )}
-
-        {/* Connected Platforms Section */}
-        <View className="mb-6">
-          <View className="flex-row items-center justify-between mb-3">
-            <Text className="text-lg font-semibold text-gray-900 dark:text-white">
-              Connected Platforms
-            </Text>
-            <View className="flex-row">
-              <TouchableOpacity
-                onPress={handleRefreshPlatforms}
-                className="p-2 mr-1"
-                testID="settings-refresh-platforms"
-              >
-                <RefreshCw size={18} color="#6b7280" />
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={handleAddPlatform}
-                className="bg-green-500 rounded-full p-2"
-                testID="settings-add-platform"
-              >
-                <Plus size={18} color="white" />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {connectedCount > 0 ? (
-            <View className="bg-white dark:bg-gray-800 rounded-lg overflow-hidden">
-              <ConnectedPlatformsList />
-            </View>
-          ) : (
-            <View className="bg-white dark:bg-gray-800 rounded-lg p-6 items-center" testID="settings-no-platforms">
-              <Text className="text-gray-500 dark:text-gray-400 text-center mb-3">
-                No platforms connected
-              </Text>
-              <TouchableOpacity
-                onPress={handleAddPlatform}
-                className="bg-green-500 px-4 py-2 rounded-full"
-                testID="settings-connect-platform"
-              >
-                <Text className="text-white font-semibold">Connect Platform</Text>
-              </TouchableOpacity>
-            </View>
-          )}
+    <ScrollView testID="settings-screen" style={{ flex: 1, backgroundColor: colors.cream }} contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ paddingBottom: 64 }}>
+      <MobileHeader title="Settings" subtitle="Claire should feel personal, private, and predictable." actions={<MobileIconButton label="Back" onPress={() => router.back()}><ChevronLeft size={20} color={colors.ink} /></MobileIconButton>} />
+      <View style={{ paddingHorizontal: space[4], gap: space[5] }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[3], padding: space[4], borderRadius: radius.card, backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.neutral[200] }}>
+          <MobileAvatar name={user?.name || user?.email || 'Claire user'} uri={user?.avatar_url} size={56} />
+          <View style={{ flex: 1, minWidth: 0 }}><Text numberOfLines={1} style={{ ...mobileType.sectionTitle, color: colors.ink }}>{user?.name || 'Your account'}</Text><Text numberOfLines={1} style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{user?.email}</Text><View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 5 }}><ShieldCheck size={14} color={colors.success} /><Text style={{ ...mobileType.label, color: colors.success }}>{connected} connected {connected === 1 ? 'platform' : 'platforms'}</Text></View></View>
         </View>
 
-        {/* Platform Selector Modal */}
-        {showPlatformSelector && (
-          <View className="mb-6">
-            <View className="flex-row items-center justify-between mb-3">
-              <Text className="text-lg font-semibold text-gray-900 dark:text-white">
-                Select Platform
-              </Text>
-              <TouchableOpacity onPress={() => setShowPlatformSelector(false)}>
-                <Text className="text-green-500 font-medium">Cancel</Text>
-              </TouchableOpacity>
-            </View>
-            <View className="bg-white dark:bg-gray-800 rounded-lg p-4">
-              <PlatformSelector
-                onPlatformSelect={handlePlatformSelect}
-                showDescriptions={false}
-                columns={4}
-              />
-            </View>
-          </View>
-        )}
+        <View style={{ gap: space[2] }}><SectionLabel title="Claire" />{rows.map(row => <Pressable key={row.title} testID={`settings-${row.title.toLowerCase().replace(/[^a-z]+/g, '-')}`} onPress={() => router.push(row.href as never)} style={({ pressed }) => ({ minHeight: 68, flexDirection: 'row', alignItems: 'center', gap: space[3], padding: space[3], borderRadius: radius.control, backgroundColor: pressed ? colors.sky : colors.paper, borderWidth: 1, borderColor: colors.neutral[200] })}><View style={{ width: 40, height: 40, borderRadius: 13, backgroundColor: row.title === 'AI Settings' ? colors.lavender : colors.neutral[100], alignItems: 'center', justifyContent: 'center' }}><row.icon size={19} color={colors.ink} /></View><View style={{ flex: 1 }}><Text style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>{row.title}</Text><Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{row.detail}</Text></View><ChevronRight size={18} color={colors.neutral[400]} /></Pressable>)}</View>
 
-        {/* Settings Sections */}
-        <Text className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
-          Preferences
-        </Text>
-
-        <SettingsSection
-          icon={User}
-          title="Account"
-          description="Manage your account settings"
-          testID="settings-account"
-        />
-
-        <SettingsSection
-          icon={Bell}
-          title="Notifications"
-          description="Configure notification preferences"
-          onPress={() => router.push('/settings/notifications')}
-          testID="settings-notifications"
-        />
-
-        <SettingsSection
-          icon={Sparkles}
-          title="AI Settings"
-          description="Customize AI response behavior"
-          onPress={() => router.push('/settings/ai')}
-          testID="settings-ai"
-        />
-
-        <SettingsSection
-          icon={Zap}
-          title="Auto-Reply Rules"
-          description="Set up automatic replies for specific triggers"
-          onPress={() => router.push('/settings/auto-reply')}
-          testID="settings-auto-reply"
-        />
-
-        {/* Logout */}
-        <View className="mt-6">
-          <SettingsSection
-            icon={LogOut}
-            title="Logout"
-            description="Sign out of your account"
-            onPress={handleLogout}
-            danger
-            testID="settings-logout"
-          />
-        </View>
-
-        {/* Version Info */}
-        <Text className="text-center text-gray-400 dark:text-gray-500 text-sm mt-8">
-          Claire v1.0.0
-        </Text>
+        <Pressable testID="settings-logout" onPress={signOut} style={({ pressed }) => ({ minHeight: 50, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space[2], borderRadius: radius.control, backgroundColor: pressed ? colors.blush : colors.paper, borderWidth: 1, borderColor: colors.neutral[200] })}><LogOut size={18} color={colors.danger} /><Text style={{ ...mobileType.body, fontWeight: '700', color: colors.danger }}>Sign out</Text></Pressable>
+        <Text style={{ ...mobileType.label, color: colors.neutral[400], textAlign: 'center' }}>CLAIRE · PRIVATE BY DESIGN</Text>
       </View>
-
-      {/* Auth Modal */}
-      <PlatformAuthModal
-        platform={selectedPlatform}
-        visible={showAuthModal}
-        onClose={handleAuthClose}
-        onSuccess={handleAuthSuccess}
-        existingSession={selectedPlatform
-          ? connectedSessions.find((session) => (
-              session.platform === selectedPlatform && session.status === PlatformStatus.CONNECTED
-            ))
-          : null}
-      />
     </ScrollView>
   );
 }
