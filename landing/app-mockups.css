@@ -462,6 +462,11 @@ textarea {
   gap: 2px;
   color: var(--neutral-400);
 }
+.tab-bar .hero-icon {
+  width: 22px;
+  height: 22px;
+  stroke-width: 1.7;
+}
 .tab-bar small {
   font-size: 7px;
 }
@@ -1424,6 +1429,11 @@ mark {
   height: 42px;
   font-size: 18px;
 }
+.round-button .hero-icon,
+.floating-compose .hero-icon {
+  width: 22px;
+  height: 22px;
+}
 .platform-dot {
   width: 20px;
   height: 20px;
@@ -1463,6 +1473,10 @@ mark {
 .tab-bar span {
   gap: 3px;
   font-size: 20px;
+}
+.tab-bar .hero-icon {
+  width: 24px;
+  height: 24px;
 }
 .tab-bar small {
   font-size: 8px;
