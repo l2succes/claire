@@ -14,6 +14,12 @@ import { logger } from '../utils/logger';
 
 const router = Router();
 
+/** Deployment diagnostic for desktop setup. Returns no account/device data. */
+router.get('/readiness', async (_req: Request, res: Response) => {
+  const { error } = await supabase.from('companion_devices').select('id').limit(1);
+  return res.status(error ? 503 : 200).json({ ready: !error });
+});
+
 const deviceIdSchema = z.object({ params: z.object({ id: z.string().uuid() }) });
 const enrolSchema = z.object({
   body: z.object({
