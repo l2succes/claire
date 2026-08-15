@@ -20,6 +20,8 @@ export type DesktopMessage = {
   media_url?: string | null;
   media_mime_type?: string | null;
   content_type?: string | null;
+  /** Desktop-only state for a message displayed before bridge sync confirms it. */
+  delivery_state?: 'sending' | 'failed';
 };
 
 export type AssistantCitation = {
@@ -98,7 +100,21 @@ export type DesktopPreferences = {
   response_style: 'concise' | 'detailed' | 'balanced';
   language: string;
   notification_enabled: boolean;
+  preferences?: {
+    quiet_hours_enabled?: boolean;
+    quiet_hours_start?: string;
+    quiet_hours_end?: string;
+    notify_messages?: boolean;
+    notify_promises?: boolean;
+    notify_ai_suggestions?: boolean;
+    desktop_appearance?: { theme?: 'system' | 'light' | 'dark'; density?: 'comfortable' | 'compact'; scale?: number };
+    desktop_shortcuts?: Record<string, string>;
+    desktop_inbox_inspector?: 'contact' | 'assistant';
+    [key: string]: unknown;
+  };
 };
+
+export type DesktopAccountProfile = { email: string; name: string | null; avatar_url: string | null };
 
 export type DesktopPlatformSession = {
   id: string;
@@ -161,8 +177,38 @@ export class ClaireApi {
     return response.json() as Promise<T>;
   }
 
-  getChats(): Promise<DesktopChat[]> {
-    return this.request<DesktopChat[]>('/messages/chats');
+  async getChats(): Promise<DesktopChat[]> {
+    const chats = await this.request<DesktopChat[]>('/messages/chats');
+
+    // Older deployed servers returned only chat rows. Keep desktop rows useful
+    // while those servers roll forward by fetching one preview only for rows
+    // that lack the additive latest_message field. New servers stay batched.
+    const needsPreview = chats.filter((chat) => !chat.latest_message);
+    if (!needsPreview.length) return chats;
+
+    const previews = await Promise.all(needsPreview.map(async (chat) => {
+      try {
+        const messages = await this.getMessages(chat.id, 1);
+        return [chat.id, messages[0] || null] as const;
+      } catch {
+        return [chat.id, null] as const;
+      }
+    }));
+    const previewByChat = new Map(previews);
+    return chats.map((chat) => {
+      const preview = previewByChat.get(chat.id);
+      return preview ? {
+        ...chat,
+        last_message_at: chat.last_message_at || preview.timestamp,
+        latest_message: {
+          content: preview.content,
+          content_type: preview.content_type,
+          media_mime_type: preview.media_mime_type,
+          timestamp: preview.timestamp,
+          from_me: preview.from_me,
+        },
+      } : chat;
+    });
   }
 
   async getMessages(chatId: string, limit = 100, offset = 0): Promise<DesktopMessage[]> {
@@ -212,6 +258,20 @@ export class ClaireApi {
     return response.data;
   }
 
+  async listAssistantThreads(): Promise<AssistantThread[]> {
+    const response = await this.request<{ data: AssistantThread[] }>('/ai/assistant/threads');
+    return response.data;
+  }
+
+  async getAssistantThread(threadId: string): Promise<ConversationAssistantThread> {
+    const response = await this.request<{ data: ConversationAssistantThread }>(`/ai/assistant/threads/${encodeURIComponent(threadId)}`);
+    return response.data;
+  }
+
+  async deleteAssistantThread(threadId: string): Promise<void> {
+    await this.request(`/ai/assistant/threads/${encodeURIComponent(threadId)}`, { method: 'DELETE' });
+  }
+
   async askAssistant(threadId: string, question: string, chatIds: string[] = []): Promise<AssistantAnswer> {
     const response = await this.request<{ data: AssistantAnswer }>(`/ai/assistant/threads/${encodeURIComponent(threadId)}/messages`, {
       method: 'POST',
@@ -259,6 +319,14 @@ export class ClaireApi {
     return response.data;
   }
 
+  async updateConversationCategory(chatId: string, category: 'personal' | 'friend' | 'business' | 'trip' | 'romantic'): Promise<{ category: string }> {
+    const response = await this.request<{ success: boolean; data: { category: string } }>(`/conversations/${encodeURIComponent(chatId)}/category`, {
+      method: 'PUT',
+      body: JSON.stringify({ category }),
+    });
+    return response.data;
+  }
+
   async getPreferences(): Promise<DesktopPreferences> {
     const response = await this.request<{ data: DesktopPreferences }>('/preferences');
     return response.data;
@@ -269,6 +337,16 @@ export class ClaireApi {
       method: 'PUT',
       body: JSON.stringify(updates),
     });
+    return response.data;
+  }
+
+  async getAccountProfile(): Promise<DesktopAccountProfile> {
+    const response = await this.request<{ data: DesktopAccountProfile }>('/preferences/account');
+    return response.data;
+  }
+
+  async updateAccountProfile(updates: Partial<Pick<DesktopAccountProfile, 'name' | 'avatar_url'>>): Promise<DesktopAccountProfile> {
+    const response = await this.request<{ data: DesktopAccountProfile }>('/preferences/account', { method: 'PUT', body: JSON.stringify(updates) });
     return response.data;
   }
 

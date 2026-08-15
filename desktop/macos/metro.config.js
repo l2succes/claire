@@ -16,8 +16,14 @@ config.resolver.nodeModulesPaths = [
   path.resolve(projectRoot, 'node_modules'),
   path.resolve(workspaceRoot, 'node_modules'),
 ];
+config.resolver.disableHierarchicalLookup = true;
 config.resolver.extraNodeModules = {
   '@claire/design-system': path.resolve(workspaceRoot, 'packages/design-system'),
+  // Workspace packages must use the same renderer React instance as the macOS
+  // app. Without these aliases Metro can resolve a second React from the
+  // design system's local node_modules, which causes invalid-hook-call errors.
+  react: path.resolve(projectRoot, 'node_modules/react'),
+  'react-native': path.resolve(projectRoot, 'node_modules/react-native'),
 };
 
 module.exports = config;

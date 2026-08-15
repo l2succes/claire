@@ -570,11 +570,13 @@ RCT_REMAP_METHOD(enrolMacCompanion,
                  resolver:(RCTPromiseResolveBlock)resolve
                  rejecter:(RCTPromiseRejectBlock)reject)
 {
+  NSLog(@"[ClaireCompanion] Starting companion enrollment for user %@", userId);
   NSError *existingCredentialError = nil;
   NSString *existingDeviceId = [ClaireCompanion keychainValueForAccount:@"companion.device.id" error:&existingCredentialError];
   NSString *existingCredential = [ClaireCompanion keychainValueForAccount:@"companion.device.credential" error:&existingCredentialError];
   NSString *existingUserId = [ClaireCompanion keychainValueForAccount:@"companion.device.user_id" error:&existingCredentialError];
   if (existingDeviceId.length > 0 && existingCredential.length > 0 && [existingUserId isEqualToString:userId]) {
+    NSLog(@"[ClaireCompanion] Reusing enrolled companion device %@", existingDeviceId);
     resolve(@{ @"deviceId": existingDeviceId });
     return;
   }
@@ -592,7 +594,11 @@ RCT_REMAP_METHOD(enrolMacCompanion,
     @"capabilities": @[ @"desktop_client", @"imessage_host", @"instagram_auth_host" ],
   };
   [ClaireCompanion requestJSON:[ClaireCompanion apiURL:apiURL path:@"/devices"] method:@"POST" headers:headers body:body completion:^(NSDictionary *payload, NSInteger statusCode, NSError *requestError) {
-    if (requestError != nil) { reject(@"device_enrolment_failed", requestError.localizedDescription, requestError); return; }
+    if (requestError != nil) {
+      NSLog(@"[ClaireCompanion] Enrollment request failed (HTTP %ld): %@", (long)statusCode, requestError.localizedDescription);
+      reject(@"device_enrolment_failed", requestError.localizedDescription, requestError);
+      return;
+    }
     NSDictionary *device = [payload[@"device"] isKindOfClass:NSDictionary.class] ? payload[@"device"] : nil;
     NSString *deviceId = [device[@"id"] isKindOfClass:NSString.class] ? device[@"id"] : nil;
     NSString *credential = [payload[@"credential"] isKindOfClass:NSString.class] ? payload[@"credential"] : nil;
@@ -604,7 +610,12 @@ RCT_REMAP_METHOD(enrolMacCompanion,
     BOOL stored = [ClaireCompanion storeKeychainValue:deviceId account:@"companion.device.id" error:&storeError]
       && [ClaireCompanion storeKeychainValue:credential account:@"companion.device.credential" error:&storeError]
       && [ClaireCompanion storeKeychainValue:userId account:@"companion.device.user_id" error:&storeError];
-    if (!stored) { reject(@"device_credential_store_failed", @"Unable to store the companion credential in Keychain.", storeError); return; }
+    if (!stored) {
+      NSLog(@"[ClaireCompanion] Enrollment succeeded but Keychain storage failed: %@", storeError.localizedDescription);
+      reject(@"device_credential_store_failed", @"Unable to store the companion credential in Keychain.", storeError);
+      return;
+    }
+    NSLog(@"[ClaireCompanion] Companion enrollment completed for device %@", deviceId);
     resolve(@{ @"deviceId": deviceId });
   }];
 }

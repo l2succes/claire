@@ -9,6 +9,7 @@
 @property (nonatomic, strong) id compactChatObserver;
 - (NSDictionary *)runtimeConfig;
 - (void)handleURLEvent:(NSAppleEventDescriptor *)event withReplyEvent:(NSAppleEventDescriptor *)replyEvent;
+- (void)positionTrafficLights:(NSNotification *)notification;
 @end
 
 @implementation AppDelegate
@@ -35,6 +36,13 @@
   self.window.titlebarAppearsTransparent = YES;
   self.window.styleMask |= NSWindowStyleMaskFullSizeContentView;
   self.window.movableByWindowBackground = NO;
+  [[NSNotificationCenter defaultCenter] addObserver:self
+                                           selector:@selector(positionTrafficLights:)
+                                               name:NSWindowDidResizeNotification
+                                             object:self.window];
+  dispatch_async(dispatch_get_main_queue(), ^{
+    [self positionTrafficLights:nil];
+  });
   [self installDesktopCommandMenu];
   __weak __typeof__(self) weakSelf = self;
   self.compactChatObserver = [[NSNotificationCenter defaultCenter] addObserverForName:@"ClaireOpenCompactChat" object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *notification) {
@@ -82,6 +90,31 @@
 - (void)dealloc
 {
   if (_compactChatObserver != nil) [[NSNotificationCenter defaultCenter] removeObserver:_compactChatObserver];
+  [[NSNotificationCenter defaultCenter] removeObserver:self name:NSWindowDidResizeNotification object:self.window];
+}
+
+- (void)positionTrafficLights:(NSNotification *)notification
+{
+  // Standard window controls belong to AppKit, not the React view hierarchy.
+  // Position them inside the transparent title-bar's native control container
+  // so they remain fully visible regardless of the compact rail width.
+  NSButton *closeButton = [self.window standardWindowButton:NSWindowCloseButton];
+  NSButton *minimizeButton = [self.window standardWindowButton:NSWindowMiniaturizeButton];
+  NSButton *zoomButton = [self.window standardWindowButton:NSWindowZoomButton];
+  NSView *container = closeButton.superview;
+  if (container == nil || minimizeButton == nil || zoomButton == nil) return;
+
+  const CGFloat leading = 20.0;
+  const CGFloat gap = 12.0;
+  const CGFloat topInset = 12.0;
+  const CGFloat y = NSHeight(container.bounds) - NSHeight(closeButton.frame) - topInset;
+  CGFloat x = leading;
+  for (NSButton *button in @[closeButton, minimizeButton, zoomButton]) {
+    NSRect frame = button.frame;
+    frame.origin = NSMakePoint(x, y);
+    button.frame = frame;
+    x += NSWidth(frame) + gap;
+  }
 }
 
 - (void)handleURLEvent:(NSAppleEventDescriptor *)event withReplyEvent:(NSAppleEventDescriptor *)replyEvent

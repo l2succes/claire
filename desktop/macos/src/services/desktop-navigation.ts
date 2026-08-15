@@ -1,6 +1,6 @@
 export type DesktopCommand = 'home' | 'inbox' | 'promises' | 'people' | 'search' | 'settings' | 'compose' | 'compact';
 
-export type DesktopDestination = 'Home' | 'Inbox' | 'Promises' | 'People' | 'Search' | 'Connections' | 'Settings';
+export type DesktopDestination = 'Home' | 'Inbox' | 'Promises' | 'People' | 'Search' | 'Settings';
 
 const destinationByCommand: Record<DesktopCommand, DesktopDestination> = {
   home: 'Home',

@@ -14,6 +14,7 @@ import { reminderScheduler } from './services/reminder-scheduler';
 import { verifySchemaCached } from './services/schema-verification';
 import { resolvePlatformMode } from './config/platform-mode';
 import authRoutes from './routes/auth';
+import { buildOAuthCallbackUrl, resolveOAuthClient } from './utils/oauth-callback';
 import messageRoutes from './routes/messages';
 import { BridgeHttpClient } from './adapters/matrix/bridge-http-client';
 import aiRoutes from './routes/ai';
@@ -121,16 +122,20 @@ app.get('/', (req, res, next) => {
     : null;
 
   if (code || error) {
-    const callback = new URL('clairedesktop://auth/callback');
-    if (code) callback.searchParams.set('code', code);
-    if (error) callback.searchParams.set('error', error);
-    if (errorDescription) callback.searchParams.set('error_description', errorDescription);
-    logger.info('Forwarding Supabase OAuth callback to Claire Desktop', {
+    const client = resolveOAuthClient(req.query.client, req.get('user-agent') || '');
+    const callback = buildOAuthCallbackUrl({
+      client,
+      code,
+      error,
+      errorDescription,
+    });
+    logger.info('Forwarding Supabase OAuth callback to Claire client', {
+      client,
       hasCode: Boolean(code),
       hasError: Boolean(error),
     });
     res.setHeader('Cache-Control', 'no-store');
-    return res.redirect(302, callback.toString());
+    return res.redirect(302, callback);
   }
 
   // Supabase email confirmations use fragment parameters, which are not sent
