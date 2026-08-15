@@ -30,6 +30,7 @@ import notificationDeviceRoutes from './routes/notification-devices';
 import contactRoutes from './routes/contacts';
 import deviceRoutes from './routes/devices';
 import searchRoutes from './routes/search';
+import { ensureCompanionSchema } from './services/companion-schema';
 import { platformManager } from './adapters';
 import { aiProcessor } from './services/ai-processor';
 import { conversationAssistant } from './services/conversation-assistant';
@@ -569,8 +570,9 @@ async function initializePlatforms() {
   logger.info('Platform adapters initialized');
 }
 
-// Start server
-const server = app.listen(PORT, async () => {
+// Start server only after the self-hosted companion table is available. This
+// prevents the desktop client from seeing a live route backed by a stale schema.
+const serverReady = ensureCompanionSchema().then(() => app.listen(PORT, async () => {
   logger.info(`Server running on port ${PORT} in ${config.NODE_ENV} mode`);
 
   // Start session monitor
@@ -581,7 +583,7 @@ const server = app.listen(PORT, async () => {
 
   // Initialize platforms
   await initializePlatforms();
-});
+}));
 
 // Graceful shutdown
 process.on('SIGTERM', async () => {
@@ -591,6 +593,7 @@ process.on('SIGTERM', async () => {
   await reminderScheduler.stop();
   await platformManager.shutdown();
 
+  const server = await serverReady;
   server.close(() => {
     logger.info('Server closed');
     process.exit(0);
