@@ -4,6 +4,7 @@
     "": {
       "name": "@claire/client",
       "dependencies": {
+        "@claire/design-system": "file:../packages/design-system",
         "@expo/vector-icons": "^15.0.2",
         "@gluestack-ui/nativewind-utils": "^1.0.0",
         "@gluestack-ui/overlay": "^0.1.0",
@@ -26,6 +27,7 @@
         "expo-dev-client": "^55.0.19",
         "expo-device": "~55.0.10",
         "expo-font": "~55.0.4",
+        "expo-image": "~55.0.6",
         "expo-linking": "~55.0.9",
         "expo-notifications": "~55.0.14",
         "expo-router": "~55.0.8",
@@ -351,6 +353,8 @@
     "@babel/types": ["@babel/types@7.28.2", "", { "dependencies": { "@babel/helper-string-parser": "^7.27.1", "@babel/helper-validator-identifier": "^7.27.1" } }, "sha512-ruv7Ae4J5dUYULmeXw1gmb7rYRz57OWCPM57pHojnLq/3Z1CK2lNSLTCVjxVk1F/TZHwOZZrOWi0ur95BbLxNQ=="],
 
     "@bcoe/v8-coverage": ["@bcoe/v8-coverage@0.2.3", "", {}, "sha512-0hYQ8SB4Db5zvZB4axdMHGwEaQjkZzFjQiN9LVYvIFB2nSUHW9tYpxWriPrWDASIxiaXax83REcLxuSdnGPZtw=="],
+
+    "@claire/design-system": ["@claire/design-system@file:../packages/design-system", { "peerDependencies": { "react": ">=19.1.0 <20", "react-native": ">=0.81.0 <1" } }],
 
     "@egjs/hammerjs": ["@egjs/hammerjs@2.0.17", "", { "dependencies": { "@types/hammerjs": "^2.0.36" } }, "sha512-XQsZgjm2EcVUiZQf11UBJQfmZeEmOW8DpI1gsFeln6w0ae0ii4dMQEQ0kjl6DspdWX1aGY1/loyXnP0JS06e/A=="],
 

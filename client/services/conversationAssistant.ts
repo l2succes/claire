@@ -17,6 +17,7 @@ export interface AssistantCitation {
 export interface AssistantThread {
   id: string;
   title: string;
+  chat_id?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -74,4 +75,17 @@ export const conversationAssistantApi = {
   mentionCandidates: (query: string) => request<AssistantMentionCandidate[]>(`/ai/assistant/mention-candidates?q=${encodeURIComponent(query)}`),
   getIndexStatus: () => request<AssistantIndexStatus>('/ai/assistant/index/status'),
   startIndex: () => request<AssistantIndexStatus>('/ai/assistant/index', { method: 'POST' }),
+  getConversation: async (chatId: string) => {
+    try {
+      return await request<{ thread: AssistantThread; turns: AssistantTurn[] }>(`/ai/assistant/conversations/${encodeURIComponent(chatId)}`);
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('no saved thread')) return null;
+      throw error;
+    }
+  },
+  askConversation: (chatId: string, question: string) => request<{ thread: AssistantThread; turns: AssistantTurn[]; answer: string; citations: AssistantCitation[]; indexing: AssistantIndexStatus }>(
+    `/ai/assistant/conversations/${encodeURIComponent(chatId)}/messages`,
+    { method: 'POST', body: JSON.stringify({ question }) },
+  ),
+  clearConversation: (chatId: string) => request<void>(`/ai/assistant/conversations/${encodeURIComponent(chatId)}`, { method: 'DELETE' }),
 };
