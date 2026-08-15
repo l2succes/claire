@@ -1568,7 +1568,7 @@ async function mockConnectFlow(page, platformOverrides = {}) {
           loginId: 'ig-login-1',
           stepId: 'step-1',
           stepType: 'cookies',
-          instructions: 'Log in to Instagram and paste your cookies',
+          instructions: 'Complete this connection in Claire Desktop.',
         }),
       });
       return;
@@ -1693,82 +1693,51 @@ test.describe('Platform connect flows — mock backend', () => {
     await expect(page.getByTestId('platform-auth-success')).toBeVisible({ timeout: 8_000 });
   });
 
-  // IG-1. Instagram connect: trigger button renders
-  test('Instagram connect flow — login trigger renders', async ({ page }) => {
+  // IG-1. Instagram connect: desktop companion guidance renders
+  test('Instagram connect flow — desktop companion guidance renders', async ({ page }) => {
     await page.goto('/login');
     await expect(page.getByTestId('platform-login-screen')).toBeVisible();
 
     await page.getByTestId('platform-selector-instagram').click();
     await expect(page.getByTestId('platform-auth-modal')).toBeVisible({ timeout: 5_000 });
 
-    // Instagram login trigger button should be visible
-    await expect(page.getByTestId('instagram-login-trigger')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId('instagram-companion-required')).toBeVisible({ timeout: 5_000 });
+    await expect(
+      page.getByTestId('instagram-companion-required').getByText('Connect with Claire Desktop')
+    ).toBeVisible();
+    await expect(page.getByText(/never ask you to paste a browser cookie/i)).toBeVisible();
   });
 
-  // IG-2. Instagram connect: error state shows on failed start
-  test('Instagram connect flow — shows error on failed login start', async ({ page }) => {
-    // Override instagram/login/start to return an error
-    await page.route('**/instagram/login/start**', async (route) => {
-      await route.fulfill({
-        status: 500,
-        contentType: 'application/json',
-        body: JSON.stringify({ error: 'Instagram bridge unavailable' }),
-      });
-    });
-
+  // IG-2. Instagram connect: companion instructions replace bridge credential UI
+  test('Instagram connect flow — does not expose the legacy credential path', async ({ page }) => {
     await page.goto('/login');
     await page.getByTestId('platform-selector-instagram').click();
     await expect(page.getByTestId('platform-auth-modal')).toBeVisible({ timeout: 5_000 });
 
-    // Tap the login trigger button
-    await page.getByTestId('instagram-login-trigger').click();
-
-    // Error state should appear
-    await expect(page.getByTestId('instagram-error-state')).toBeVisible({ timeout: 8_000 });
-
-    // Retry button should be present
-    await expect(page.getByTestId('instagram-retry-button')).toBeVisible();
+    await expect(page.getByTestId('instagram-login-trigger')).toHaveCount(0);
+    await expect(page.getByTestId('instagram-cookie-input')).toHaveCount(0);
+    await expect(page.getByTestId('instagram-credentials-form')).toHaveCount(0);
+    await expect(page.getByTestId('instagram-companion-refresh-button')).toBeVisible();
   });
 
-  // IG-3. Instagram connect: connecting state renders while polling
-  test('Instagram connect flow — connecting state shows after submit', async ({ page }) => {
-    // Slow down status polling so we can observe the connecting state
-    await page.route('**/instagram/status**', async (route) => {
-      // Remain in an in-progress state while the web login UI is open.
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ sessions: [{ ...MOCK_IG_SESSION_CONNECTED, status: 'awaiting_auth' }] }),
-      });
-    });
-
-    // Mock instagramLoginStart to return immediately
-    await page.route('**/instagram/login/start**', async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          success: true,
-          sessionId: 'ig-session-1',
-          loginId: 'ig-login-1',
-          stepId: 'step-1',
-          stepType: 'cookies',
-        }),
-      });
-    });
-
+  // IG-3. Instagram connect: users can return to the refreshed platform state
+  test('Instagram connect flow — refresh action returns to platform state', async ({ page }) => {
     await page.goto('/login');
     await page.getByTestId('platform-selector-instagram').click();
     await expect(page.getByTestId('platform-auth-modal')).toBeVisible({ timeout: 5_000 });
-    await expect(page.getByTestId('instagram-login-trigger')).toBeVisible({ timeout: 5_000 });
+    await page.getByTestId('instagram-companion-refresh-button').click();
+    await expect(page.getByTestId('platform-auth-modal')).toHaveCount(0);
+  });
 
-    // In the web flow, clicking login trigger invokes instagramLoginStart.
-    // The WebView component is a stub on web — we verify that the trigger was clickable
-    // and the modal stays open (not the native WebView path).
-    await page.getByTestId('instagram-login-trigger').click();
+  test('iMessage connect flow — requires the Mac companion instead of a generic QR code', async ({ page }) => {
+    await page.goto('/login');
+    await page.getByTestId('platform-selector-imessage').click();
+    await expect(page.getByTestId('platform-auth-modal')).toBeVisible({ timeout: 5_000 });
 
-    // Modal should still be visible (login flow in progress or WebView opened)
-    await expect(page.getByTestId('platform-auth-modal')).toBeVisible({ timeout: 3_000 });
+    await expect(page.getByTestId('imessage-companion-required')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByText(/Claire Desktop on your Mac/i)).toBeVisible();
+    await expect(page.getByTestId('qr-code-display')).toHaveCount(0);
+    await expect(page.getByTestId('imessage-companion-refresh-button')).toBeVisible();
   });
 
   // ---------------------------------------------------------------------------

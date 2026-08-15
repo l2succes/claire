@@ -3,6 +3,17 @@ const { getDefaultConfig } = require('expo/metro-config');
 const { withNativeWind } = require('nativewind/metro');
 
 const config = getDefaultConfig(__dirname);
+const workspaceRoot = path.resolve(__dirname, '..');
+
+config.watchFolders = [...(config.watchFolders || []), path.resolve(workspaceRoot, 'packages/design-system')];
+config.resolver.nodeModulesPaths = [
+  path.resolve(__dirname, 'node_modules'),
+  path.resolve(workspaceRoot, 'node_modules'),
+];
+config.resolver.extraNodeModules = {
+  ...(config.resolver.extraNodeModules || {}),
+  '@claire/design-system': path.resolve(workspaceRoot, 'packages/design-system'),
+};
 
 // Redirect zustand ESM (.mjs) to CJS on web — ESM uses import.meta.env
 // which isn't valid in Metro's classic-script bundle.

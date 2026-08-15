@@ -1,15 +1,15 @@
 import { Tabs, Redirect } from 'expo-router';
 import {
+  Home,
   MessageCircle,
-  CheckSquare,
-  Settings,
-  Users,
+  CheckCircle2,
+  Search,
 } from 'lucide-react-native';
-import { useColorScheme } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useEffect, useState } from 'react';
 import { useAuthStore } from '../../stores/authStore';
 import { supabase } from '../../services/supabase';
+import { colors } from '@claire/design-system';
 
 function useOpenPromiseCount() {
   const user = useAuthStore((s) => s.user);
@@ -45,9 +45,7 @@ function useOpenPromiseCount() {
 }
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  const isDark = colorScheme === 'dark';
   const { bottom } = useSafeAreaInsets();
   const openPromiseCount = useOpenPromiseCount();
 
@@ -55,54 +53,55 @@ export default function TabLayout() {
     return <Redirect href="/(auth)/login" />;
   }
 
-  const activeColor = isDark ? '#818cf8' : '#6366f1';
-  const inactiveColor = isDark ? '#6b7280' : '#9ca3af';
-
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: activeColor,
-        tabBarInactiveTintColor: inactiveColor,
+        tabBarActiveTintColor: colors.ink,
+        tabBarInactiveTintColor: colors.neutral[400],
         tabBarStyle: {
-          backgroundColor: isDark ? '#111827' : '#ffffff',
-          borderTopColor: isDark ? '#1f2937' : '#e5e7eb',
+          position: 'absolute',
+          left: 10,
+          right: 10,
+          bottom: Math.max(bottom, 8),
+          backgroundColor: colors.paper,
+          borderTopColor: colors.neutral[200],
+          borderColor: colors.neutral[200],
           borderTopWidth: 1,
-          paddingBottom: bottom + 5,
-          paddingTop: 5,
-          height: 60 + bottom,
+          borderWidth: 1,
+          borderRadius: 22,
+          paddingBottom: 4,
+          paddingTop: 6,
+          height: 64,
+          boxShadow: '0 8px 25px rgba(16,18,15,0.10)',
         },
-        headerStyle: {
-          backgroundColor: isDark ? '#111827' : '#ffffff',
-        },
-        headerTintColor: isDark ? '#f3f4f6' : '#111827',
-        headerShadowVisible: false,
-        headerTitleStyle: {
-          fontWeight: '600',
-        },
+        tabBarItemStyle: { borderRadius: 16 },
+        tabBarLabelStyle: { fontSize: 10, fontWeight: '600' },
+        headerShown: false,
+        sceneStyle: { backgroundColor: colors.cream },
       }}
     >
       <Tabs.Screen
         name="dashboard"
         options={{
-          title: 'Messages',
+          title: 'Home',
           tabBarIcon: ({ color, size }) => (
-            <MessageCircle size={size} color={color} />
+            <Home size={size} color={color} />
           ),
         }}
       />
       <Tabs.Screen
         name="messages"
         options={{
-          href: null,
+          title: 'Inbox',
+          tabBarIcon: ({ color, size }) => (
+            <MessageCircle size={size} color={color} />
+          ),
         }}
       />
       <Tabs.Screen
         name="contacts"
         options={{
-          title: 'Contacts',
-          tabBarIcon: ({ color, size }) => (
-            <Users size={size} color={color} />
-          ),
+          href: null,
         }}
       />
       <Tabs.Screen
@@ -110,21 +109,22 @@ export default function TabLayout() {
         options={{
           title: 'Promises',
           tabBarIcon: ({ color, size }) => (
-            <CheckSquare size={size} color={color} />
+            <CheckCircle2 size={size} color={color} />
           ),
           tabBarBadge: openPromiseCount && openPromiseCount > 0 ? openPromiseCount : undefined,
           tabBarBadgeStyle: { fontSize: 10 },
         }}
       />
       <Tabs.Screen
-        name="settings"
+        name="search"
         options={{
-          title: 'Settings',
+          title: 'Search',
           tabBarIcon: ({ color, size }) => (
-            <Settings size={size} color={color} />
+            <Search size={size} color={color} />
           ),
         }}
       />
+      <Tabs.Screen name="settings" options={{ href: null }} />
     </Tabs>
   );
 }

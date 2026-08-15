@@ -6,9 +6,9 @@
     <meta name="theme-color" content="#dfff64" />
     <meta
       name="description"
-      content="Claire brings WhatsApp, Telegram, and Instagram into one calm, AI-assisted inbox."
+      content="Claire is the AI-native multi-chat client for WhatsApp, Telegram, Instagram, and more—search, reply, and follow through from one place."
     />
-    <title>Claire — One inbox. Every conversation.</title>
+    <title>Claire — All your chats. One AI.</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -17,15 +17,20 @@
     />
     <link rel="stylesheet" href="./tokens.css" />
     <link rel="stylesheet" href="./styles.css" />
+    <link rel="icon" href="./assets/brand/claire-open-c.svg" type="image/svg+xml" />
+    <script src="./platform-catalog.js" defer></script>
     <script src="./script.js" defer></script>
   </head>
   <body>
     <header class="site-header">
       <a class="brand" href="#top" aria-label="Claire home"
-        ><span class="brand-mark">C</span><span>claire</span></a
+        ><span class="brand-mark is-logo"
+          ><img src="./assets/brand/claire-open-c.svg" alt="" /></span
+        ><span>claire</span></a
       >
       <nav aria-label="Primary navigation">
-        <a href="#product">Product</a><a href="#install">Install</a><a href="#stories">Stories</a
+        <a href="#product">Product</a><a href="#connections">Connections</a
+        ><a href="#install">Install</a><a href="#stories">Stories</a
         ><a href="./app-mockups.html">Mobile</a><a href="./desktop-mockups.html">Desktop</a>
       </nav>
       <a class="button button-dark button-small" href="#install"
@@ -34,32 +39,33 @@
     </header>
     <main id="top">
       <section class="hero shell">
-        <div class="eyebrow">
-          <span class="status-dot"></span>Your conversations, finally together
-        </div>
-        <h1>One inbox.<br /><span>Every</span> conversation.</h1>
+        <div class="eyebrow"><span class="status-dot"></span>The AI-native multi-chat client</div>
+        <h1>All your chats.<br /><span>One AI.</span></h1>
         <p class="hero-copy">
-          Claire brings WhatsApp, Telegram, and Instagram into one calm workspace—with an AI copilot
-          that catches the things you promised.
+          Bring WhatsApp, Telegram, Instagram, and more into one intelligent client. Search every
+          conversation, get relationship-aware help, and never lose track of what you promised.
         </p>
         <div class="hero-actions">
           <a class="button button-dark" href="#install">Install Claire <span>↓</span></a
-          ><a class="text-link" href="#product">See how it works <span>→</span></a>
+          ><a class="text-link" href="#product">See the AI in action <span>→</span></a>
         </div>
         <div class="hero-art" aria-label="Claire application preview">
           <div class="orbit orbit-one"></div>
           <div class="orbit orbit-two"></div>
           <div class="float-note note-one">
-            <span class="platform whatsapp">W</span
+            <span class="platform whatsapp"
+              ><img src="https://cdn.simpleicons.org/whatsapp/ffffff" alt="" /></span
             ><span><strong>Maya</strong><small>Can you send that deck?</small></span>
           </div>
           <div class="float-note note-two">
-            <span class="platform telegram">T</span
-            ><span><strong>Promise found</strong><small>“I'll send it tomorrow.”</small></span>
+            <span class="platform claire-ai">✦</span
+            ><span><strong>AI found a promise</strong><small>“I'll send it tomorrow.”</small></span>
           </div>
           <article class="app-window">
             <aside class="app-sidebar">
-              <div class="mini-brand">C</div>
+              <div class="mini-brand is-logo">
+                <img src="./assets/brand/claire-open-c.svg" alt="" />
+              </div>
               <button class="nav-icon active" aria-label="Inbox">⌂</button
               ><button class="nav-icon" aria-label="Messages">✉</button
               ><button class="nav-icon" aria-label="Promises">✓</button>
@@ -131,13 +137,13 @@
               </div>
             </section>
             <aside class="context-panel">
-              <small>CONVERSATION NOTES</small>
-              <h3>Stay one step ahead.</h3>
+              <small>CLAIRE AI · CROSS-CHAT CONTEXT</small>
+              <h3>Ask across every conversation.</h3>
               <div class="brief">
                 <span class="spark">✦</span>
                 <p>
-                  <b>Quick brief</b><br />Maya is waiting on the Q3 deck. Your review is tomorrow at
-                  11.
+                  <b>AI brief</b><br />Maya is waiting on the Q3 deck. Your review is tomorrow at
+                  11, and you promised to send it by 10.
                 </p>
               </div>
               <div class="context-label">OPEN PROMISE</div>
@@ -150,20 +156,226 @@
           </article>
         </div>
       </section>
-      <section class="trust-strip" aria-label="Supported platforms">
-        <span>One quiet place for</span><b><i class="platform whatsapp">W</i>WhatsApp</b
-        ><b><i class="platform telegram">T</i>Telegram</b
-        ><b><i class="platform instagram">I</i>Instagram</b><span>and the people who matter.</span>
+      <section class="platform-rail-section" aria-labelledby="platform-rail-title">
+        <div class="platform-rail-heading shell">
+          <span class="kicker" id="platform-rail-title">AVAILABLE NOW + ROADMAP</span>
+          <span>16 networks. One client. One AI layer.</span>
+        </div>
+        <div class="platform-rail-window">
+          <div
+            class="platform-rail"
+            id="platform-rail"
+            aria-label="Claire connection catalog"
+          ></div>
+        </div>
+      </section>
+      <section class="connections shell" id="connections">
+        <div class="connections-heading">
+          <div>
+            <div class="kicker">EVERYONE IS SOMEWHERE DIFFERENT</div>
+            <h2>Your people aren’t all in one app.<br /><span>Claire can be.</span></h2>
+          </div>
+          <div class="connections-intro">
+            <p>
+              Start today with WhatsApp, Telegram, and Instagram. See exactly what needs a desktop,
+              what keeps running in the cloud, and what is still on our roadmap.
+            </p>
+            <div class="status-key" aria-label="Platform availability legend">
+              <span><i class="status-dot status-dot-available"></i>Available</span>
+              <span><i class="status-dot status-dot-planned"></i>Planned</span>
+            </div>
+          </div>
+        </div>
+        <div class="catalog-toolbar">
+          <div class="catalog-filters" role="group" aria-label="Filter platform catalog">
+            <button class="active" type="button" data-platform-filter="all" aria-pressed="true">
+              All
+            </button>
+            <button type="button" data-platform-filter="available" aria-pressed="false">
+              Available
+            </button>
+            <button type="button" data-platform-filter="desktop" aria-pressed="false">
+              Desktop setup
+            </button>
+            <button type="button" data-platform-filter="device" aria-pressed="false">
+              Device required
+            </button>
+            <button type="button" data-platform-filter="planned" aria-pressed="false">
+              Planned
+            </button>
+          </div>
+          <p class="catalog-count" id="catalog-count" aria-live="polite">Showing 16 networks</p>
+        </div>
+        <div class="platform-grid" id="platform-grid"></div>
+        <p class="icon-source-note">
+          Network marks come from
+          <a href="https://simpleicons.org/" target="_blank" rel="noreferrer">Simple Icons</a> and
+          <a href="https://iconify.design/" target="_blank" rel="noreferrer">Iconify</a>. IRC uses a
+          generic protocol symbol because it has no single vendor mark. Trademarks belong to their
+          respective owners; usage must be verified before release.
+        </p>
+        <noscript>
+          <p class="catalog-noscript">
+            Enable JavaScript to filter and explore the full platform catalog.
+          </p>
+        </noscript>
+
+        <div class="connection-guide" aria-labelledby="connection-guide-title">
+          <div class="guide-heading">
+            <div class="kicker">THREE WAYS TO CONNECT</div>
+            <h2 id="connection-guide-title">
+              A clear setup path,<br />before you hand over access.
+            </h2>
+            <p>
+              Claire Desktop authorizes a connection when a network needs a browser or a local
+              device. The Matrix bridge—not the interface—does the ongoing syncing.
+            </p>
+          </div>
+          <div class="connection-flow-grid">
+            <article class="connection-flow flow-phone">
+              <div class="flow-topline"><span>01</span><b>No desktop required</b></div>
+              <div class="flow-icon" aria-hidden="true">⌁</div>
+              <h3>Pair from your phone.</h3>
+              <p>
+                Scan a code or approve a linked device. Claire keeps the selected bridge online
+                afterward.
+              </p>
+              <ol>
+                <li><span>1</span>Choose your network in Claire.</li>
+                <li><span>2</span>Scan or approve from its mobile app.</li>
+                <li><span>3</span>Watch recent conversations arrive.</li>
+              </ol>
+              <div class="flow-platforms">
+                <span>WhatsApp</span><span>Telegram</span><span>Signal</span><span>Discord</span>
+              </div>
+            </article>
+            <article class="connection-flow flow-desktop">
+              <div class="flow-topline"><span>02</span><b>Desktop setup once</b></div>
+              <div class="flow-icon" aria-hidden="true">▱</div>
+              <h3>Sign in with Claire Desktop.</h3>
+              <p>
+                Use a contained sign-in window. Session material goes directly to your selected
+                bridge host.
+              </p>
+              <ol>
+                <li><span>1</span>Open the network inside Claire Desktop.</li>
+                <li><span>2</span>Complete sign-in and any verification.</li>
+                <li><span>3</span>Close the desktop after cloud handoff.</li>
+              </ol>
+              <div class="flow-platforms">
+                <span>Instagram</span><span>Messenger</span><span>Slack</span><span>Google</span
+                ><span>LinkedIn</span><span>X</span>
+              </div>
+            </article>
+            <article class="connection-flow flow-device">
+              <div class="flow-topline"><span>03</span><b>Device stays available</b></div>
+              <div class="flow-icon" aria-hidden="true">⌂</div>
+              <h3>Keep the source device connected.</h3>
+              <p>
+                Some networks depend on hardware you own. Claire makes its health and last sync
+                visible.
+              </p>
+              <ol>
+                <li><span>1</span>Grant only the requested local permissions.</li>
+                <li><span>2</span>Let the companion run in the background.</li>
+                <li><span>3</span>Get a clear warning when it goes offline.</li>
+              </ol>
+              <div class="flow-platforms">
+                <span>iMessage · Mac</span><span>Google Messages · Android</span>
+              </div>
+            </article>
+          </div>
+        </div>
+
+        <div class="hosting-modes" aria-labelledby="hosting-title">
+          <div class="hosting-heading">
+            <div>
+              <div class="kicker">CHOOSE WHERE CLAIRE RUNS</div>
+              <h2 id="hosting-title">Always available—or under your roof.</h2>
+            </div>
+            <p>
+              Hosting location and device requirements are separate. A desktop may only authorize a
+              cloud connection, or it may be the machine that keeps a local bridge alive.
+            </p>
+          </div>
+          <div class="hosting-grid">
+            <article class="hosting-card hosting-cloud">
+              <div class="hosting-card-top">
+                <span class="hosting-symbol">☁</span
+                ><span class="status-pill available">AVAILABLE WHERE SUPPORTED</span>
+              </div>
+              <h3>Claire Cloud</h3>
+              <p>
+                Managed bridges, storage, search, and optional AI stay online when your computer
+                closes.
+              </p>
+              <ul>
+                <li>Fastest setup</li>
+                <li>Automatic bridge updates</li>
+                <li>Computer can close after setup*</li>
+              </ul>
+            </article>
+            <article class="hosting-card hosting-self">
+              <div class="hosting-card-top">
+                <span class="hosting-symbol">⌂</span
+                ><span class="status-pill builder">FOR BUILDERS</span>
+              </div>
+              <h3>Self-hosted</h3>
+              <p>
+                Run Claire’s Bun server, Matrix bridges, Supabase, and Redis on infrastructure you
+                control.
+              </p>
+              <ul>
+                <li>Existing Docker workflow</li>
+                <li>Your host controls availability</li>
+                <li>Your AI provider remains your choice</li>
+              </ul>
+            </article>
+            <article class="hosting-card hosting-local">
+              <div class="hosting-card-top">
+                <span class="hosting-symbol">◉</span
+                ><span class="status-pill planned">IN DEVELOPMENT</span>
+              </div>
+              <h3>Private desktop-only</h3>
+              <p>
+                A future verified mode for local storage, search, and AI with external processing
+                disabled.
+              </p>
+              <ul>
+                <li>No guarantee is claimed yet</li>
+                <li>Offline recovery must pass</li>
+                <li>Egress will be independently verified</li>
+              </ul>
+            </article>
+          </div>
+          <div class="data-disclosure">
+            <span class="disclosure-icon" aria-hidden="true">i</span>
+            <div>
+              <h3>What “local” means today</h3>
+              <p>
+                Self-hosting keeps Claire’s message store on infrastructure you control. The
+                original messaging networks still process their messages, and configured external AI
+                providers may receive selected conversation content. We will not claim “never stored
+                in the cloud” until desktop-only mode has passed its security and network-egress
+                review.
+              </p>
+            </div>
+          </div>
+          <p class="hosting-footnote">
+            * iMessage needs its Mac host available. Google Messages depends on the paired Android
+            phone.
+          </p>
+        </div>
       </section>
       <section class="features shell" id="product">
         <div class="section-heading">
           <div>
-            <div class="kicker">THE CLAIRE DIFFERENCE</div>
-            <h2>Messaging without<br />the mental tabs.</h2>
+            <div class="kicker">ONE CLIENT. A USEFUL AI.</div>
+            <h2>Your chats become one<br />intelligent system.</h2>
           </div>
           <p>
-            Less switching. Less searching. More presence. Claire turns scattered conversations into
-            one thoughtful daily rhythm.
+            Claire connects your chat networks, then gives its AI the context to help you find,
+            understand, reply, and follow through—without losing the human thread.
           </p>
         </div>
         <div class="feature-grid">
@@ -176,8 +388,8 @@
               <span>12</span>
             </div>
             <div>
-              <h3>Every inbox, one view.</h3>
-              <p>Read and reply across your connected platforms without losing the thread.</p>
+              <h3>Every network, one client.</h3>
+              <p>Read and reply across connected platforms from one consistent inbox.</p>
             </div>
           </article>
           <article class="feature-card card-sky">
@@ -188,8 +400,8 @@
               <button>Use reply</button>
             </div>
             <div>
-              <h3>Replies that sound like you.</h3>
-              <p>Get contextual suggestions based on the conversation—not canned AI filler.</p>
+              <h3>An AI that knows the thread.</h3>
+              <p>Search across chats and get contextual replies shaped by the conversation.</p>
             </div>
           </article>
           <article class="feature-card card-blush">
@@ -202,7 +414,7 @@
               </div>
             </div>
             <div>
-              <h3>Promises don’t slip.</h3>
+              <h3>Conversation becomes follow-through.</h3>
               <p>
                 Claire notices commitments in your chats and turns them into gentle follow-through.
               </p>
@@ -212,45 +424,51 @@
       </section>
       <section class="preview-section shell">
         <div class="preview-copy">
-          <div class="kicker">YOUR DAILY COMMAND CENTER</div>
-          <h2>Know what needs you.<br />Ignore what doesn’t.</h2>
+          <div class="kicker">AI ACROSS EVERY CHAT</div>
+          <h2>Ask once. Search every conversation.</h2>
           <p>
-            Your morning brief surfaces urgent messages, open promises, and conversations worth
-            returning to. No inbox archaeology required.
+            Claire searches connected networks as one conversation history, then answers with the
+            people, messages, and context behind the result.
           </p>
           <ul>
-            <li><span>✓</span>Unified priority feed</li>
-            <li><span>✓</span>Relationship-aware context</li>
-            <li><span>✓</span>Private, self-hostable infrastructure</li>
+            <li><span>✓</span>Cross-network AI search</li>
+            <li><span>✓</span>Replies shaped by each relationship</li>
+            <li><span>✓</span>Promises and follow-ups surfaced automatically</li>
           </ul>
         </div>
         <div class="phone-wrap">
           <div class="phone">
             <div class="phone-top"><span>9:41</span><i></i><span>● ◒</span></div>
             <div class="phone-greeting">
-              <small>THURSDAY, AUG 13</small>
-              <h3>Good morning, Luc.</h3>
-              <p>Here’s what needs your attention.</p>
+              <small>CLAIRE AI · ALL CHATS</small>
+              <h3>What did I promise Maya?</h3>
+              <p>Searching WhatsApp, Telegram, and Instagram…</p>
             </div>
             <div class="phone-card urgent">
-              <span>↗</span>
-              <div><small>NEEDS A REPLY</small><b>3 conversations are waiting</b></div>
-              <em>View</em>
+              <span>✦</span>
+              <div>
+                <small>ANSWER WITH SOURCES</small><b>Send the Q3 deck before 10 tomorrow.</b>
+              </div>
+              <em>Open</em>
             </div>
-            <div class="phone-section"><span>Today</span><small>4 ITEMS</small></div>
+            <div class="phone-section">
+              <span>Found in your chats</span><small>2 SOURCES</small>
+            </div>
             <div class="phone-item">
-              <i class="platform whatsapp">W</i>
-              <p><b>Maya Kim</b><br /><small>Can you send that deck?</small></p>
+              <i class="platform whatsapp"
+                ><img src="https://cdn.simpleicons.org/whatsapp/ffffff" alt=""
+              /></i>
+              <p><b>WhatsApp · Maya Kim</b><br /><small>Can you send that deck?</small></p>
               <time>2m</time>
             </div>
             <div class="phone-item">
               <i class="check">✓</i>
-              <p><b>Send Q3 deck</b><br /><small>Promise · due at 10:00</small></p>
-              <time>1h</time>
+              <p><b>Your reply</b><br /><small>“I’ll send it before 10 tomorrow.”</small></p>
+              <time>now</time>
             </div>
             <div class="phone-card recap">
               <span>✦</span>
-              <div><small>CLAIRE'S TAKE</small><b>You’re clear after two quick replies.</b></div>
+              <div><small>NEXT STEP</small><b>Track this promise and draft the reply?</b></div>
             </div>
             <div class="phone-tabs">
               <span>⌂<small>Home</small></span
@@ -398,8 +616,8 @@ cp client/.env.example client/.env</code></pre>
       <section class="final-cta shell">
         <div>
           <span class="asterisk">✦</span>
-          <h2>Give every conversation<br />one good home.</h2>
-          <p>Open source. Thoughtfully designed. Ready for the messages that matter.</p>
+          <h2>Give every chat<br />one intelligent home.</h2>
+          <p>A multi-chat client with an AI that helps you remember, reply, and follow through.</p>
           <a class="button button-dark" href="https://github.com/l2succes/claire"
             >View on GitHub <span>↗</span></a
           >
@@ -407,13 +625,18 @@ cp client/.env.example client/.env</code></pre>
       </section>
     </main>
     <footer class="footer shell">
-      <a class="brand" href="#top"><span class="brand-mark">C</span><span>claire</span></a>
-      <p>One inbox for your whole life.</p>
+      <a class="brand" href="#top"
+        ><span class="brand-mark is-logo"
+          ><img src="./assets/brand/claire-open-c.svg" alt="" /></span
+        ><span>claire</span></a
+      >
+      <p>All your chats. One AI.</p>
       <div>
         <a href="https://github.com/l2succes/claire">GitHub</a
         ><a href="https://github.com/l2succes/claire#readme">Docs</a
-        ><a href="./style-guide.html">Style guide</a><a href="./app-mockups.html">Mobile</a
-        ><a href="./desktop-mockups.html">Desktop</a><span>© 2026 Claire</span>
+        ><a href="./style-guide.html">Style guide</a><a href="./logo-explorations.html">Logo lab</a
+        ><a href="./app-mockups.html">Mobile</a><a href="./desktop-mockups.html">Desktop</a
+        ><span>© 2026 Claire</span>
       </div>
     </footer>
   </body>
