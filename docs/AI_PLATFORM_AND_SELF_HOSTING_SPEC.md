@@ -234,10 +234,11 @@ The user-facing plan may call the allowance “AI credits,” but the UI must al
 such as “$8 of managed AI included” or a feature-level estimate. Exact plan prices and markup remain
 a go-to-market decision.
 
-Recommended packaging:
+Launch packaging:
 
 - **Community:** free self-hosted software; BYOK or local models; no managed allowance.
-- **Claire Cloud:** managed infrastructure subscription with an included monthly AI allowance.
+- **Claire Cloud:** a $10,000 USD annual managed-workspace contract with a contracted managed-AI
+  credit allowance.
 - **Cloud + BYOK:** same infrastructure subscription; provider usage bypasses the Claire allowance.
 - **Top-ups or overage:** opt-in only, with a user-set hard cap. Never silently run an unlimited
   bill.

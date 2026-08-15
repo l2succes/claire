@@ -213,6 +213,7 @@ EAS environment variables are stored in the cloud — no `.env` file needed on C
 - [Design System Migration Guide](docs/DESIGN_SYSTEM_MIGRATION_GUIDE.md) — Incremental migration of the Expo app and shared desktop primitives
 - [Platform Connector Roadmap](docs/PLATFORM_CONNECTOR_ROADMAP.md) — 16-network catalog, desktop setup classes, rollout waves, and privacy gates
 - [AI Platform & Self-Hosting Spec](docs/AI_PLATFORM_AND_SELF_HOSTING_SPEC.md) — Community/Cloud packaging, BYOK and local models, billing, privacy, and provider-neutral architecture
+- [Payments & AI Credits Spec](docs/PAYMENTS_AND_AI_CREDITS_SPEC.md) — Claire Cloud annual workspace contract, prepaid managed-AI credits, BYOK, ledger, entitlements, and payment controls
 - [Claire Plugin System Spec](docs/CLAIRE_PLUGIN_SYSTEM_SPEC.md) — Plugin manifests, permissions, conversation triggers, approvals, execution, audit, and rollout
 - [Interactive Product Mockups](landing/README.md) — Landing page, mobile screens, desktop screens, and visual style guide
 - [Official mautrix docs](https://docs.mau.fi/) — Upstream bridge documentation
