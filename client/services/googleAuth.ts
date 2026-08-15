@@ -9,7 +9,7 @@ const redirectUri = AuthSession.makeRedirectUri({
   path: 'confirm',
 });
 
-function extractSessionFromUrl(url: string) {
+function extractAuthResponse(url: string) {
   const parsedUrl = new URL(url);
   const hashParams = new URLSearchParams(parsedUrl.hash.substring(1));
   const searchParams = parsedUrl.searchParams;
@@ -17,7 +17,14 @@ function extractSessionFromUrl(url: string) {
   const accessToken = hashParams.get('access_token') || searchParams.get('access_token');
   const refreshToken = hashParams.get('refresh_token') || searchParams.get('refresh_token');
 
-  return { accessToken, refreshToken };
+  return {
+    accessToken,
+    refreshToken,
+    code: searchParams.get('code'),
+    error: searchParams.get('error') || hashParams.get('error'),
+    errorDescription:
+      searchParams.get('error_description') || hashParams.get('error_description'),
+  };
 }
 
 export const googleAuth = {
@@ -38,15 +45,27 @@ export const googleAuth = {
       });
 
       if (result.type === 'success') {
-        const { accessToken, refreshToken } = extractSessionFromUrl(result.url);
+        const response = extractAuthResponse(result.url);
 
-        if (!accessToken || !refreshToken) {
-          throw new Error('No auth tokens in OAuth response');
+        if (response.error) {
+          throw new Error(response.errorDescription || response.error);
+        }
+
+        if (response.code) {
+          const { data: session, error: sessionError } =
+            await supabase.auth.exchangeCodeForSession(response.code);
+
+          if (sessionError) throw sessionError;
+          return { session, error: null };
+        }
+
+        if (!response.accessToken || !response.refreshToken) {
+          throw new Error('No authorization code or auth tokens in OAuth response');
         }
 
         const { data: session, error: sessionError } = await supabase.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken,
+          access_token: response.accessToken,
+          refresh_token: response.refreshToken,
         });
 
         if (sessionError) throw sessionError;

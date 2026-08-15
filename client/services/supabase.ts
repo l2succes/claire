@@ -11,6 +11,6 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: platformCapabilities.isWeb,
-    flowType: 'implicit',
+    flowType: platformCapabilities.isWeb ? 'implicit' : 'pkce',
   },
 });

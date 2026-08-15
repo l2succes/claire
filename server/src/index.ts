@@ -14,6 +14,7 @@ import { reminderScheduler } from './services/reminder-scheduler';
 import { verifySchemaCached } from './services/schema-verification';
 import { resolvePlatformMode } from './config/platform-mode';
 import authRoutes from './routes/auth';
+import { buildOAuthCallbackUrl, resolveOAuthClient } from './utils/oauth-callback';
 import messageRoutes from './routes/messages';
 import { BridgeHttpClient } from './adapters/matrix/bridge-http-client';
 import aiRoutes from './routes/ai';
@@ -125,10 +126,36 @@ app.use('/push-tokens', pushTokenRoutes);
 app.use('/contacts', contactRoutes);
 app.use('/auto-reply', autoReplyRoutes);
 
-// Handle Supabase email confirmation redirects
-app.get('/', (_req, res) => {
-  // If there's a hash fragment with tokens, serve the confirmation page
-  res.sendFile(__dirname + '/routes/email-confirm.html');
+// GoTrue falls back to its site URL when a custom application scheme is not
+// allow-listed. Route OAuth codes back to the correct Claire client while
+// retaining the email-confirmation page for requests without OAuth fields.
+app.get('/', (req, res, next) => {
+  const code = typeof req.query.code === 'string' ? req.query.code : null;
+  const error = typeof req.query.error === 'string' ? req.query.error : null;
+  const errorDescription = typeof req.query.error_description === 'string'
+    ? req.query.error_description
+    : null;
+
+  if (code || error) {
+    const client = resolveOAuthClient(req.query.client, req.get('user-agent') || '');
+    const callback = buildOAuthCallbackUrl({
+      client,
+      code,
+      error,
+      errorDescription,
+    });
+    logger.info('Forwarding Supabase OAuth callback to Claire client', {
+      client,
+      hasCode: Boolean(code),
+      hasError: Boolean(error),
+    });
+    res.setHeader('Cache-Control', 'no-store');
+    return res.redirect(302, callback);
+  }
+
+  return res.sendFile(__dirname + '/routes/email-confirm.html', (sendError) => {
+    if (sendError) next(sendError);
+  });
 });
 
 // Matrix media proxy — serves mxc:// content via the admin token
