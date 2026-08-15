@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, type ReactNode } from 'react';
 import { Image, Pressable, StyleSheet, Text, TextInput, View, type ImageSourcePropType, type StyleProp, type TextInputProps, type TextProps, type TextStyle, type ViewStyle } from 'react-native';
-import { colors, mobileType, radius, space, type ClaireTextVariant, type as desktopType } from './tokens';
+import { colors, fonts, mobileType, radius, space, type ClaireTextVariant, type as desktopType } from './tokens';
 
 const ClaireSurfaceContext = createContext<'desktop' | 'mobile'>('desktop');
 
@@ -118,10 +118,13 @@ const styles = StyleSheet.create({
   mobileButton: { minHeight: 44 },
   iconButton: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: radius.control, borderWidth: 1, borderColor: colors.neutral[200], backgroundColor: colors.paper },
   mobileIconButton: { width: 44, height: 44 },
-  focusRing: { borderWidth: 3, borderColor: colors.focus }, pressed: { opacity: 0.84 }, disabled: { opacity: 0.45 }, buttonText: { fontWeight: '700' }, primaryButtonText: { color: colors.paper }, secondaryButtonText: { color: colors.ink },
-  avatar: { alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0 }, pill: { alignSelf: 'flex-start', borderRadius: radius.pill, paddingHorizontal: space[2], paddingVertical: 3 },
-  fieldGroup: { rowGap: space[1] }, field: { minHeight: 44, borderWidth: 1, borderColor: colors.neutral[200], borderRadius: radius.control, backgroundColor: colors.paper, color: colors.ink, fontSize: 14, paddingHorizontal: space[3] }, fieldError: { borderColor: colors.danger }, hintText: { color: colors.neutral[600] }, errorText: { color: colors.danger }, divider: { height: 1, backgroundColor: colors.neutral[200] },
-  platformBadge: { alignSelf: 'flex-start', backgroundColor: colors.neutral[100], borderRadius: radius.pill, paddingHorizontal: space[2], paddingVertical: 3 }, platformBadgeText: { color: colors.neutral[600] },
+  focusRing: { borderWidth: 3, borderColor: colors.focus }, pressed: { opacity: 0.84 }, disabled: { opacity: 0.45 }, buttonText: { fontWeight: '700', lineHeight: 20, textAlignVertical: 'center' }, primaryButtonText: { color: colors.paper }, secondaryButtonText: { color: colors.ink },
+  avatar: { alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0 }, pill: { alignSelf: 'flex-start', minHeight: 28, justifyContent: 'center', borderRadius: radius.pill, paddingHorizontal: space[2], paddingVertical: 0 },
+  // React Native macOS does not vertically centre TextInput text reliably via
+  // textAlignVertical. Keep the line box and its insets explicit instead.
+  // Multiline callers override these insets with their editor-specific style.
+  fieldGroup: { rowGap: space[1] }, field: { minHeight: 44, borderWidth: 1, borderColor: colors.neutral[200], borderRadius: radius.control, backgroundColor: colors.paper, color: colors.ink, fontFamily: fonts.sans, fontSize: 14, lineHeight: 20, paddingHorizontal: space[3], paddingTop: 10, paddingBottom: 10 }, fieldError: { borderColor: colors.danger }, hintText: { color: colors.neutral[600] }, errorText: { color: colors.danger }, divider: { height: 1, backgroundColor: colors.neutral[200] },
+  platformBadge: { alignSelf: 'flex-start', minHeight: 24, justifyContent: 'center', backgroundColor: colors.neutral[100], borderRadius: radius.pill, paddingHorizontal: space[2], paddingVertical: 0 }, platformBadgeText: { color: colors.neutral[600], lineHeight: 16, textAlignVertical: 'center' },
   messageBubble: { borderRadius: radius.card, paddingHorizontal: space[3], paddingVertical: space[2], maxWidth: '78%' }, messageBubbleMine: { alignSelf: 'flex-end', backgroundColor: colors.mint }, messageBubbleTheirs: { alignSelf: 'flex-start', backgroundColor: colors.neutral[100] },
   conversationRow: { borderRadius: radius.card, padding: space[3], flexDirection: 'row', columnGap: space[3], marginBottom: space[1], minHeight: 72 }, conversationRowSelected: { backgroundColor: colors.sky }, conversationContent: { flex: 1, minWidth: 0 }, conversationTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', columnGap: space[2] }, conversationName: { fontWeight: '700', flexShrink: 1 }, conversationTimestamp: { color: colors.neutral[600] }, conversationPreview: { color: colors.neutral[600], flex: 1, marginTop: 2 }, unread: { minWidth: 18, height: 18, borderRadius: 9, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' }, unreadText: { color: colors.lime },
 });
