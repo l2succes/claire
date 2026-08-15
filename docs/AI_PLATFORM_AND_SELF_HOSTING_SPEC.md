@@ -237,8 +237,8 @@ a go-to-market decision.
 Launch packaging:
 
 - **Community:** free self-hosted software; BYOK or local models; no managed allowance.
-- **Claire Cloud:** a $10,000 USD annual managed-workspace contract with a contracted managed-AI
-  credit allowance.
+- **Claire Plus:** a $10 USD monthly personal subscription with a monthly managed-AI credit
+  allowance.
 - **Cloud + BYOK:** same infrastructure subscription; provider usage bypasses the Claire allowance.
 - **Top-ups or overage:** opt-in only, with a user-set hard cap. Never silently run an unlimited
   bill.
