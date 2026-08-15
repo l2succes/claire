@@ -3,7 +3,7 @@ import {
   FlatList, TextInput, KeyboardAvoidingView, Platform as RNPlatform,
   Image,
 } from 'react-native';
-import { ImageIcon, Volume2, Video, FileText, AlertCircle } from 'lucide-react-native';
+import { ImageIcon, Volume2, Video, FileText, AlertCircle, Plus, Sparkles } from 'lucide-react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -12,7 +12,6 @@ import { supabase } from '../../services/supabase';
 import { platformsApi, API_BASE_URL } from '../../services/platforms';
 import { useAuthStore } from '../../stores/authStore';
 import { usePlatformStore } from '../../stores/platformStore';
-import { PlatformBadge } from '../../components/PlatformIcon';
 import { ChatSmartCardTray } from '../../components/ChatSmartCardTray';
 import { ResponseSuggestion } from '../../components/ResponseSuggestion';
 import { ContactClarificationCard } from '../../components/ContactClarificationCard';
@@ -21,6 +20,8 @@ import { GroupChatSummary } from '../../components/GroupChatSummary';
 import { Platform } from '../../types/platform';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { setActiveNotificationChat, syncNotificationBadge, updateNotificationPresence } from '../../services/notifications';
+import { colors, mobileType, radius, space } from '@claire/design-system';
+import { MobileAvatar, MobileIconButton } from '../../components/mobile/claire-mobile';
 
 interface ChatMessage {
   id: string;
@@ -49,17 +50,17 @@ function MediaImage({ uri, messageId }: { uri: string; messageId: string }) {
   if (failed) {
     return (
       <View testID={`media-image-fallback-${messageId}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 12 }}>
-        <AlertCircle size={16} color="#9ca3af" />
-        <Text style={{ fontSize: 14, color: '#9ca3af' }}>Media unavailable</Text>
+        <AlertCircle size={16} color={colors.neutral[400]} />
+        <Text style={{ ...mobileType.bodySmall, color: colors.neutral[400] }}>Media unavailable</Text>
       </View>
     );
   }
   return (
     <View testID={`media-image-${messageId}`}>
-      {loading && <ActivityIndicator testID={`media-image-loading-${messageId}`} size="small" color="#9ca3af" />}
+      {loading && <ActivityIndicator testID={`media-image-loading-${messageId}`} size="small" color={colors.neutral[400]} />}
       <Image
         source={{ uri }}
-        style={{ width: 220, height: 160, borderRadius: 10, marginBottom: 4, opacity: loading ? 0 : 1 }}
+        style={{ width: 220, height: 160, borderRadius: radius.control, marginBottom: 4, opacity: loading ? 0 : 1 }}
         resizeMode="cover"
         onLoad={() => setLoading(false)}
         onError={() => { setLoading(false); setFailed(true); }}
@@ -80,7 +81,7 @@ function MediaVideo({ uri, messageId }: { uri: string; messageId: string }) {
       nativeControls
       contentFit="contain"
       playsInline
-      style={{ width: 250, height: 180, borderRadius: 10, marginBottom: 4, backgroundColor: '#111827' }}
+      style={{ width: 250, height: 180, borderRadius: radius.control, marginBottom: 4, backgroundColor: colors.ink }}
     />
   );
 }
@@ -322,15 +323,15 @@ export default function ChatScreen() {
     content.startsWith('Failed to bridge media');
 
   const renderMessageBody = (item: ChatMessage, isMe: boolean) => {
-    const textColor = isMe ? '#ffffff' : '#111827';
-    const iconColor = isMe ? 'rgba(255,255,255,0.8)' : '#6b7280';
+    const textColor = colors.ink;
+    const iconColor = colors.neutral[600];
 
     // Bridge decryption failure — show a muted placeholder instead of the raw error
     if (isBridgeFailure(item.content)) {
       return (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
           <AlertCircle size={15} color={iconColor} />
-          <Text style={{ fontSize: 14, color: isMe ? 'rgba(255,255,255,0.7)' : '#9ca3af', fontStyle: 'italic' }}>
+          <Text style={{ ...mobileType.bodySmall, color: colors.neutral[400], fontStyle: 'italic' }}>
             Media unavailable
           </Text>
         </View>
@@ -346,7 +347,7 @@ export default function ChatScreen() {
         <View>
           <MediaImage uri={imageUri} messageId={item.id} />
           {item.content ? (
-            <Text style={{ fontSize: 14, color: textColor, marginTop: 2 }}>{item.content}</Text>
+            <Text style={{ ...mobileType.body, color: textColor, marginTop: 2 }}>{item.content}</Text>
           ) : null}
         </View>
       );
@@ -408,7 +409,7 @@ export default function ChatScreen() {
 
     // Default: text
     return (
-      <Text style={{ fontSize: 15, color: textColor, lineHeight: 20 }}>
+      <Text style={{ ...mobileType.body, color: textColor }}>
         {item.content}
       </Text>
     );
@@ -417,32 +418,32 @@ export default function ChatScreen() {
   const renderMessage = ({ item }: { item: ChatMessage }) => {
     const isMe = item.from_me;
     const isHighlighted = item.id === highlightMessageId;
-    const subtextColor = isMe ? 'rgba(255,255,255,0.65)' : '#9ca3af';
+    const subtextColor = colors.neutral[600];
     return (
       <View style={{
         flexDirection: 'row',
         justifyContent: isMe ? 'flex-end' : 'flex-start',
-        paddingHorizontal: 12,
+        paddingHorizontal: space[3],
         paddingVertical: 3,
       }} testID={`message-row-${item.id}-${isMe ? 'outgoing' : 'incoming'}`}>
         <View style={{
           maxWidth: '78%',
-          backgroundColor: isMe ? '#10b981' : '#f3f4f6',
-          borderWidth: isHighlighted ? 2 : 0,
-          borderColor: isHighlighted ? '#4f46e5' : 'transparent',
-          borderRadius: 18,
-          borderBottomRightRadius: isMe ? 4 : 18,
-          borderBottomLeftRadius: isMe ? 18 : 4,
-          paddingHorizontal: 14,
-          paddingVertical: 8,
+          backgroundColor: isMe ? colors.mint : colors.paper,
+          borderWidth: isHighlighted ? 2 : 1,
+          borderColor: isHighlighted ? colors.focus : colors.neutral[200],
+          borderRadius: radius.card,
+          borderBottomRightRadius: isMe ? 6 : radius.card,
+          borderBottomLeftRadius: isMe ? radius.card : 6,
+          paddingHorizontal: space[3],
+          paddingVertical: space[2],
         }} testID={`message-bubble-${item.id}-${isMe ? 'outgoing' : 'incoming'}`} accessibilityState={{ selected: isHighlighted }}>
           {!isMe && is_group === '1' && item.contact_name && (
-            <Text style={{ fontSize: 12, fontWeight: '600', color: '#6b7280', marginBottom: 2 }}>
+            <Text style={{ ...mobileType.label, color: colors.neutral[600], marginBottom: 2 }}>
               {item.contact_name}
             </Text>
           )}
           {renderMessageBody(item, isMe)}
-          <Text style={{ fontSize: 11, color: subtextColor, marginTop: 3, textAlign: isMe ? 'right' : 'left' }}>
+          <Text style={{ ...mobileType.label, fontSize: 10, color: subtextColor, marginTop: 3, textAlign: isMe ? 'right' : 'left' }}>
             {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </Text>
         </View>
