@@ -372,14 +372,14 @@ export class MessageIngestionService extends EventEmitter {
   /**
    * Get messages for a specific chat.
    */
-  async getChatMessages(userId: string, chatId: string, limit: number = 50) {
+  async getChatMessages(userId: string, chatId: string, limit: number = 50, offset: number = 0) {
     const { data, error } = await supabase
       .from('messages')
       .select(MESSAGE_SELECT)
       .eq('user_id', userId)
       .eq('chat_id', chatId)
       .order('timestamp', { ascending: false })
-      .limit(limit);
+      .range(offset, offset + limit - 1);
 
     if (error) throw error;
     return data ?? [];

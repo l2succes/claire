@@ -27,6 +27,7 @@ import seedRoutes from './routes/seed';
 import promiseRoutes from './routes/promises';
 import pushTokenRoutes from './routes/push-tokens';
 import contactRoutes from './routes/contacts';
+import deviceRoutes from './routes/devices';
 import { platformManager } from './adapters';
 import { aiProcessor } from './services/ai-processor';
 import { conversationAssistant } from './services/conversation-assistant';
@@ -124,6 +125,7 @@ app.use('/seed', seedRoutes);
 app.use('/promises', promiseRoutes);
 app.use('/push-tokens', pushTokenRoutes);
 app.use('/contacts', contactRoutes);
+app.use('/devices', deviceRoutes);
 app.use('/auto-reply', autoReplyRoutes);
 
 // GoTrue falls back to its site URL when a custom application scheme is not
