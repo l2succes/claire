@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">Claire Orbit C logo</title>
+  <desc id="desc">A dark circular conversation core with a lime letter C and speech tail.</desc>
+  <circle cx="32" cy="31" r="27" fill="#10120F"/>
+  <path d="M45 18.5c-3.2-3-7.1-4.5-11.5-4.5C23.7 14 16 21.5 16 31s7.7 17 17.5 17c4.4 0 8.3-1.5 11.5-4.5" fill="none" stroke="#DFFF64" stroke-width="7" stroke-linecap="round"/>
+  <path d="M39 50.5 49.5 59l-2.2-14.2" fill="#10120F" stroke="#10120F" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="50" cy="14" r="6" fill="#FF745F" stroke="#FFFDF8" stroke-width="2"/>
+</svg>

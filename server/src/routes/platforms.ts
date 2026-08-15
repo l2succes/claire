@@ -16,6 +16,7 @@ import { logger } from '../utils/logger';
 import { requireAuth } from '../middleware/auth';
 import { BridgeHttpClient } from '../adapters/matrix/bridge-http-client';
 import { loginWithCredentials, submitTwoFactorCode } from '../services/instagram-login';
+import { platformCatalog, platformCatalogVersion } from '../platform-catalog';
 
 // Railway services cannot reach each other through localhost. Railway does not
 // inject NODE_ENV by default, so its public-domain marker is also used to
@@ -68,6 +69,21 @@ const whatsappBridgeClient = new BridgeHttpClient(
 const router = Router();
 const INSTAGRAM_LOGIN_URL = 'https://www.instagram.com/accounts/login/';
 const REQUIRED_INSTAGRAM_COOKIES = ['sessionid', 'csrftoken', 'mid', 'ig_did', 'ds_user_id'];
+
+/**
+ * GET /platforms/definitions
+ * Public product catalog. Availability here is intentionally independent from
+ * the adapters enabled in a particular Claire deployment.
+ */
+router.get('/definitions', (_req: Request, res: Response) => {
+  res.setHeader('Cache-Control', 'public, max-age=300');
+  return res.json({
+    success: true,
+    version: platformCatalogVersion,
+    source: 'https://github.com/mautrix/docs/blob/master/bridges/SUMMARY.md',
+    platforms: platformCatalog,
+  });
+});
 
 function parseCookieString(cookieSource: string): Record<string, string> {
   const normalized = cookieSource
