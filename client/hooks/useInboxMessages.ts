@@ -151,7 +151,7 @@ export function useInboxMessages(userId?: string) {
       const now = new Date().toISOString();
       const userTraceId = userId.slice(0, 8);
       inboxTrace('fetch:start', { page: pageParam, pageSize, user: userTraceId });
-      const { data, error, count } = await supabase
+      let messageResult = await supabase
         .from('messages')
         .select(`id, content, timestamp, from_me, is_group, status, platform,
           chat_id, contact_phone, contact_name, snoozed_until,
@@ -160,6 +160,22 @@ export function useInboxMessages(userId?: string) {
         .or(`snoozed_until.is.null,snoozed_until.lte.${now}`)
         .order('timestamp', { ascending: false })
         .range(from, from + pageSize - 1);
+      // A rolling deploy can briefly leave a mobile client ahead of the
+      // database migration that adds chat pinning. Do not let that optional
+      // feature blank the entire inbox; retry the identical feed without it.
+      if (messageResult.error?.code === '42703') {
+        inboxTrace('fetch:pinning-unavailable', { page: pageParam, user: userTraceId });
+        messageResult = await supabase
+          .from('messages')
+          .select(`id, content, timestamp, from_me, is_group, status, platform,
+            chat_id, contact_phone, contact_name, snoozed_until,
+            chats!messages_chat_id_fkey (name, platform_chat_id, unread_count), ai_suggestions (id, confidence)`, { count: 'exact' })
+          .eq('user_id', userId)
+          .or(`snoozed_until.is.null,snoozed_until.lte.${now}`)
+          .order('timestamp', { ascending: false })
+          .range(from, from + pageSize - 1) as typeof messageResult;
+      }
+      const { data, error, count } = messageResult;
       if (error) {
         inboxError('fetch:messages-failed', error, { page: pageParam, user: userTraceId });
         throw error;

@@ -1,15 +1,8 @@
-import { Tabs, Redirect } from 'expo-router';
-import {
-  Home,
-  MessageCircle,
-  CheckCircle2,
-  Search,
-} from 'lucide-react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Redirect } from 'expo-router';
+import { NativeTabs } from 'expo-router/unstable-native-tabs';
 import { useEffect, useState } from 'react';
 import { useAuthStore } from '../../stores/authStore';
 import { supabase } from '../../services/supabase';
-import { colors } from '@claire/design-system';
 
 function useOpenPromiseCount() {
   const user = useAuthStore((s) => s.user);
@@ -46,7 +39,6 @@ function useOpenPromiseCount() {
 
 export default function TabLayout() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  const { bottom } = useSafeAreaInsets();
   const openPromiseCount = useOpenPromiseCount();
 
   if (!isAuthenticated) {
@@ -54,77 +46,28 @@ export default function TabLayout() {
   }
 
   return (
-    <Tabs
-      screenOptions={{
-        tabBarActiveTintColor: colors.ink,
-        tabBarInactiveTintColor: colors.neutral[400],
-        tabBarStyle: {
-          position: 'absolute',
-          left: 10,
-          right: 10,
-          bottom: Math.max(bottom, 8),
-          backgroundColor: colors.paper,
-          borderTopColor: colors.neutral[200],
-          borderColor: colors.neutral[200],
-          borderTopWidth: 1,
-          borderWidth: 1,
-          borderRadius: 22,
-          paddingBottom: 4,
-          paddingTop: 6,
-          height: 64,
-          boxShadow: '0 8px 25px rgba(16,18,15,0.10)',
-        },
-        tabBarItemStyle: { borderRadius: 16 },
-        tabBarLabelStyle: { fontSize: 10, fontWeight: '600' },
-        headerShown: false,
-        sceneStyle: { backgroundColor: colors.cream },
-      }}
-    >
-      <Tabs.Screen
-        name="dashboard"
-        options={{
-          title: 'Home',
-          tabBarIcon: ({ color, size }) => (
-            <Home size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="messages"
-        options={{
-          title: 'Inbox',
-          tabBarIcon: ({ color, size }) => (
-            <MessageCircle size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="contacts"
-        options={{
-          href: null,
-        }}
-      />
-      <Tabs.Screen
-        name="promises"
-        options={{
-          title: 'Promises',
-          tabBarIcon: ({ color, size }) => (
-            <CheckCircle2 size={size} color={color} />
-          ),
-          tabBarBadge: openPromiseCount && openPromiseCount > 0 ? openPromiseCount : undefined,
-          tabBarBadgeStyle: { fontSize: 10 },
-        }}
-      />
-      <Tabs.Screen
-        name="search"
-        options={{
-          title: 'Search',
-          tabBarIcon: ({ color, size }) => (
-            <Search size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen name="settings" options={{ href: null }} />
-    </Tabs>
+    <NativeTabs tintColor="#10120F" minimizeBehavior="onScrollDown">
+      <NativeTabs.Trigger name="dashboard" disableTransparentOnScrollEdge>
+        <NativeTabs.Trigger.Icon sf={{ default: 'house', selected: 'house.fill' }} md="home" />
+        <NativeTabs.Trigger.Label hidden>Home</NativeTabs.Trigger.Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="messages" disableTransparentOnScrollEdge>
+        <NativeTabs.Trigger.Icon sf={{ default: 'message', selected: 'message.fill' }} md="chat" />
+        <NativeTabs.Trigger.Label hidden>Inbox</NativeTabs.Trigger.Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="ask-claire" disableTransparentOnScrollEdge>
+        <NativeTabs.Trigger.Icon sf={{ default: 'sparkles', selected: 'sparkles' }} md="auto_awesome" />
+        <NativeTabs.Trigger.Label hidden>Ask Claire</NativeTabs.Trigger.Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="promises" disableTransparentOnScrollEdge>
+        <NativeTabs.Trigger.Icon sf={{ default: 'checkmark.seal', selected: 'checkmark.seal.fill' }} md="verified" />
+        <NativeTabs.Trigger.Label hidden>Promises</NativeTabs.Trigger.Label>
+        {openPromiseCount && openPromiseCount > 0 ? <NativeTabs.Trigger.Badge>{openPromiseCount > 99 ? '99+' : String(openPromiseCount)}</NativeTabs.Trigger.Badge> : null}
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="more" role="more" disableTransparentOnScrollEdge>
+        <NativeTabs.Trigger.Icon sf="ellipsis" md="more_horiz" />
+        <NativeTabs.Trigger.Label hidden>More</NativeTabs.Trigger.Label>
+      </NativeTabs.Trigger>
+    </NativeTabs>
   );
 }

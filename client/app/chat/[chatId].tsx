@@ -1,24 +1,21 @@
 import {
-  View, Text, TouchableOpacity, ActivityIndicator,
+  View, Text, ActivityIndicator, Pressable,
   FlatList, TextInput, KeyboardAvoidingView, Platform as RNPlatform,
   Image,
 } from 'react-native';
-import { ImageIcon, Volume2, Video, FileText, AlertCircle, Plus, Sparkles } from 'lucide-react-native';
+import { ImageIcon, Volume2, Video, FileText, AlertCircle, Link2, MoreHorizontal, Plus, Sparkles, X } from 'lucide-react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { ChevronLeft, SendHorizonal, Settings } from 'lucide-react-native';
+import { ChevronLeft, SendHorizonal } from 'lucide-react-native';
 import { supabase } from '../../services/supabase';
 import { platformsApi, API_BASE_URL } from '../../services/platforms';
 import { useAuthStore } from '../../stores/authStore';
 import { usePlatformStore } from '../../stores/platformStore';
-import { ChatSmartCardTray } from '../../components/ChatSmartCardTray';
 import { ResponseSuggestion } from '../../components/ResponseSuggestion';
-import { ContactClarificationCard } from '../../components/ContactClarificationCard';
 import { useConversationSettingsStore } from '../../stores/conversationSettingsStore';
 import { GroupChatSummary } from '../../components/GroupChatSummary';
 import { Platform } from '../../types/platform';
-import { VideoView, useVideoPlayer } from 'expo-video';
 import { setActiveNotificationChat, syncNotificationBadge, updateNotificationPresence } from '../../services/notifications';
 import { colors, mobileType, radius, space } from '@claire/design-system';
 import { MobileAvatar, MobileIconButton } from '../../components/mobile/claire-mobile';
@@ -33,6 +30,17 @@ interface ChatMessage {
   content_type?: string;
   media_url?: string;
   media_mime_type?: string;
+}
+
+// An installed development client can lag behind the JavaScript bundle after a
+// new Expo native module is added. Keep the chat route loadable in that window:
+// current builds play video; older builds retain a clear attachment fallback.
+let expoVideoModule: typeof import('expo-video') | null = null;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  expoVideoModule = require('expo-video') as typeof import('expo-video');
+} catch {
+  expoVideoModule = null;
 }
 
 function normalizeMediaUrl(value?: string | null): string | null {
@@ -71,9 +79,20 @@ function MediaImage({ uri, messageId }: { uri: string; messageId: string }) {
 }
 
 function MediaVideo({ uri, messageId }: { uri: string; messageId: string }) {
-  const player = useVideoPlayer(uri, (instance) => {
+  const video = expoVideoModule;
+  if (!video) {
+    return (
+      <View testID={`media-video-fallback-${messageId}`} style={{ width: 250, minHeight: 96, borderRadius: radius.control, marginBottom: 4, padding: space[3], gap: 6, backgroundColor: colors.neutral[100], alignItems: 'center', justifyContent: 'center' }}>
+        <Video size={22} color={colors.neutral[600]} />
+        <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>Video attachment</Text>
+        <Text numberOfLines={1} style={{ ...mobileType.label, color: colors.focus }}>Update Claire to play this video</Text>
+      </View>
+    );
+  }
+  const player = video.useVideoPlayer(uri, (instance) => {
     instance.loop = false;
   });
+  const VideoView = video.VideoView;
   return (
     <VideoView
       testID={`media-video-player-${messageId}`}
@@ -87,13 +106,14 @@ function MediaVideo({ uri, messageId }: { uri: string; messageId: string }) {
 }
 
 export default function ChatScreen() {
-  const { chatId, contact_name, chat_name, platform, is_group, highlightMessageId } = useLocalSearchParams<{
+  const { chatId, contact_name, chat_name, platform, is_group, highlightMessageId, draft } = useLocalSearchParams<{
     chatId: string;
     contact_name: string;
     chat_name: string;
     platform: string;
     is_group: string;
     highlightMessageId?: string;
+    draft?: string;
   }>();
 
   const user = useAuthStore((state) => state.user);
@@ -103,16 +123,11 @@ export default function ChatScreen() {
     settings: convSettings,
     fetchSettings: fetchConvSettings,
     dismissCard,
-    markCardActed,
-    updateProfile,
-    dismissClarificationCard,
   } = useConversationSettingsStore();
   const insets = useSafeAreaInsets();
   const smartCards = convSettings[chatId!]?.smartCards ?? [];
   const contactProfile = convSettings[chatId!]?.profile ?? null;
-  const clarificationDismissed = convSettings[chatId!]?.clarificationDismissed ?? false;
-  // Show clarification card for 1-on-1 chats that don't yet have a relationship set
-  const showClarificationCard = is_group !== '1' && !clarificationDismissed && !contactProfile?.relationship_context;
+  const fetchConnectedSessions = usePlatformStore((state) => state.fetchConnectedSessions);
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -120,13 +135,24 @@ export default function ChatScreen() {
   const [sendError, setSendError] = useState<string | null>(null);
   const [inputText, setInputText] = useState('');
   const [suggestionRefreshKey, setSuggestionRefreshKey] = useState(0);
+  const [connectionRefreshing, setConnectionRefreshing] = useState(false);
   const platformChatIdRef = useRef<string | null>(null);
   const listRef = useRef<FlatList>(null);
   const hasScrolledToHighlight = useRef(false);
 
+  useEffect(() => {
+    if (draft) setInputText(draft);
+  }, [draft]);
+
   const displayName = is_group === '1'
     ? (chat_name || contact_name || 'Group')
     : (contact_name || chat_name || 'Unknown');
+  const activeSession = connectedSessions.find(session => session.platform === (platform as Platform) && session.status === 'connected');
+  const isConnected = !!activeSession;
+  const contextCard = smartCards[0];
+  const quickContext = contextCard?.subtitle || contextCard?.title || contactProfile?.ai_instruction || contactProfile?.relationship_context || null;
+  const needsRelationshipContext = is_group !== '1' && !contactProfile?.relationship_context;
+  const showQuickContext = Boolean(quickContext || needsRelationshipContext);
 
   const fetchMessages = useCallback(async () => {
     if (!user?.id || !chatId) {
@@ -166,16 +192,32 @@ export default function ChatScreen() {
   }, [user?.id, chatId, highlightMessageId]);
 
   const fetchChatInfo = useCallback(async () => {
-    if (!chatId) return;
-    const { data } = await supabase
+    if (!chatId) return false;
+    const { data, error } = await supabase
       .from('chats')
       .select('platform_chat_id')
       .eq('id', chatId)
       .single();
+    if (error) {
+      console.warn('[Chat] chat configuration fetch failed', error);
+      return false;
+    }
     if (data?.platform_chat_id) {
       platformChatIdRef.current = data.platform_chat_id;
+      return true;
     }
+    return false;
   }, [chatId]);
+
+  const refreshConnection = useCallback(async () => {
+    setConnectionRefreshing(true);
+    try {
+      await fetchConnectedSessions();
+      await fetchChatInfo();
+    } finally {
+      setConnectionRefreshing(false);
+    }
+  }, [fetchChatInfo, fetchConnectedSessions]);
 
   const markConversationRead = useCallback(async () => {
     if (!chatId) return;
@@ -202,7 +244,7 @@ export default function ChatScreen() {
 
   useEffect(() => {
     fetchMessages().then(markConversationRead);
-    fetchChatInfo();
+    void refreshConnection();
     if (chatId) fetchConvSettings(chatId);
 
     const subscription = supabase
@@ -238,7 +280,7 @@ export default function ChatScreen() {
       });
 
     return () => { supabase.removeChannel(subscription); };
-  }, [chatId, user?.id, fetchMessages, fetchChatInfo, markConversationRead]);
+  }, [chatId, user?.id, fetchMessages, markConversationRead, refreshConnection]);
 
   useEffect(() => {
     hasScrolledToHighlight.current = false;
@@ -269,7 +311,7 @@ export default function ChatScreen() {
       return;
     }
 
-    const platformChatId = platformChatIdRef.current;
+    const platformChatId = platformChatIdRef.current || (await fetchChatInfo() ? platformChatIdRef.current : null);
     if (!platformChatId) {
       setSendError('Chat configuration error - please reopen this chat');
       return;
@@ -279,7 +321,7 @@ export default function ChatScreen() {
       (s) => s.platform === (platform as Platform) && s.status === 'connected'
     );
     if (!session) {
-      setSendError(`Not connected to ${platform}. Please reconnect in Settings.`);
+      setSendError(`Not connected to ${platform}. Reconnect it from Connections.`);
       return;
     }
 
@@ -316,13 +358,13 @@ export default function ChatScreen() {
     } finally {
       setSending(false);
     }
-  }, [inputText, platform, connectedSessions]);
+  }, [fetchChatInfo, inputText, platform, connectedSessions]);
 
   const isBridgeFailure = (content: string) =>
     content.startsWith('* Failed to bridge media') ||
     content.startsWith('Failed to bridge media');
 
-  const renderMessageBody = (item: ChatMessage, isMe: boolean) => {
+  const renderMessageBody = (item: ChatMessage) => {
     const textColor = colors.ink;
     const iconColor = colors.neutral[600];
 
@@ -428,7 +470,7 @@ export default function ChatScreen() {
       }} testID={`message-row-${item.id}-${isMe ? 'outgoing' : 'incoming'}`}>
         <View style={{
           maxWidth: '78%',
-          backgroundColor: isMe ? colors.mint : colors.paper,
+          backgroundColor: isMe ? colors.lime : colors.paper,
           borderWidth: isHighlighted ? 2 : 1,
           borderColor: isHighlighted ? colors.focus : colors.neutral[200],
           borderRadius: radius.card,
@@ -442,7 +484,7 @@ export default function ChatScreen() {
               {item.contact_name}
             </Text>
           )}
-          {renderMessageBody(item, isMe)}
+          {renderMessageBody(item)}
           <Text style={{ ...mobileType.label, fontSize: 10, color: subtextColor, marginTop: 3, textAlign: isMe ? 'right' : 'left' }}>
             {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </Text>
@@ -474,32 +516,20 @@ export default function ChatScreen() {
           <Text style={{ ...mobileType.label, color: colors.neutral[600], textTransform: 'capitalize' }}>{platform || 'Conversation'}</Text>
         </View>
         <MobileIconButton
-          label={`Ask Claire about ${displayName}`}
-          onPress={() => router.push({ pathname: '/chat/assistant/[chatId]', params: { chatId: chatId!, name: displayName } })}
-        ><Sparkles size={19} color={colors.ink} /></MobileIconButton>
-        <MobileIconButton
           label="Conversation settings"
           onPress={() => router.push({
             pathname: '/chat/settings/[chatId]',
             params: { chatId: chatId!, platform, contact_name, chat_name, is_group },
           })}
-        ><Settings size={19} color={colors.ink} /></MobileIconButton>
+        ><MoreHorizontal size={21} color={colors.ink} /></MobileIconButton>
       </View>
 
-      {/* Connection status banner */}
-      {platform && !connectedSessions.some(s => s.platform === platform && s.status === 'connected') && (
-        <View style={{
-          backgroundColor: colors.warningSurface,
-          paddingVertical: 10,
-          paddingHorizontal: 12,
-          borderBottomWidth: 1,
-          borderBottomColor: colors.warning,
-        }}>
-          <Text style={{ ...mobileType.bodySmall, color: colors.warning, textAlign: 'center' }}>
-            Not connected to {platform}. Reconnect in Settings to send messages.
-          </Text>
-        </View>
-      )}
+      {showQuickContext ? <View style={{ marginHorizontal: space[3], marginTop: space[2], padding: space[3], flexDirection: 'row', alignItems: 'center', gap: space[2], borderRadius: radius.control, borderWidth: 1, borderColor: colors.ink, backgroundColor: colors.sky }} testID="chat-quick-context">
+        <View style={{ width: 28, height: 28, borderRadius: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.lime }}><Sparkles size={15} color={colors.ink} /></View>
+        <View style={{ flex: 1, minWidth: 0 }}><Text maxFontSizeMultiplier={1} style={{ ...mobileType.monoLabel, color: colors.ink }}>QUICK CONTEXT</Text><Text maxFontSizeMultiplier={1} numberOfLines={1} style={{ ...mobileType.bodySmall, color: colors.ink }}>{quickContext || 'Add relationship context for more personal replies.'}</Text></View>
+        {contextCard ? <Pressable accessibilityRole="button" accessibilityLabel="Dismiss quick context" onPress={() => void dismissCard(chatId!, contextCard.id)} hitSlop={8} style={{ width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }}><X size={17} color={colors.neutral[600]} /></Pressable> : null}
+        <Pressable onPress={() => needsRelationshipContext && !quickContext ? router.push({ pathname: '/chat/settings/[chatId]', params: { chatId: chatId!, platform, contact_name, chat_name, is_group } }) : router.push({ pathname: '/chat/assistant/[chatId]', params: { chatId: chatId!, name: displayName } })} style={({ pressed }) => ({ minHeight: 32, justifyContent: 'center', paddingHorizontal: space[2], borderRadius: radius.pill, borderWidth: 1, borderColor: colors.ink, backgroundColor: pressed ? colors.paper : 'transparent' })}><Text maxFontSizeMultiplier={1} style={{ ...mobileType.label, color: colors.ink }}>{needsRelationshipContext && !quickContext ? 'Set up' : 'Ask Claire'}</Text></Pressable>
+      </View> : <View style={{ height: space[2] }} />}
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
@@ -544,7 +574,6 @@ export default function ChatScreen() {
           return (
             <ResponseSuggestion
               key={`${lastInbound?.id ?? ''}-${suggestionRefreshKey}`}
-              chatId={chatId!}
               messageId={lastInbound?.id ?? ''}
               messageContent={lastInbound?.content}
               isGroup={is_group === '1'}
@@ -553,29 +582,6 @@ export default function ChatScreen() {
             />
           );
         })()}
-
-        {/* Contact Clarification Card */}
-        {showClarificationCard && (
-          <ContactClarificationCard
-            contactName={displayName}
-            onSelect={(relationship) => {
-              if (chatId && user?.id) {
-                updateProfile(chatId, user.id, { relationship_context: relationship });
-              }
-            }}
-            onDismiss={() => chatId && dismissClarificationCard(chatId)}
-          />
-        )}
-
-        {/* Smart Card Tray */}
-        {smartCards.length > 0 && (
-          <ChatSmartCardTray
-            cards={smartCards}
-            onDismiss={(cardId) => dismissCard(chatId!, cardId)}
-            onDraftMessage={(text) => setInputText(text)}
-            onActed={(cardId) => markCardActed(chatId!, cardId)}
-          />
-        )}
 
         {/* Error display */}
         {sendError && (
@@ -593,57 +599,12 @@ export default function ChatScreen() {
           </View>
         )}
 
-        {/* Input bar */}
-        <View style={{
-          flexDirection: 'row',
-          alignItems: 'flex-end',
-          paddingHorizontal: 12,
-          paddingVertical: 8,
-          paddingBottom: Math.max(insets.bottom, 8),
-          borderTopWidth: 1,
-          borderTopColor: colors.neutral[200],
-          backgroundColor: colors.paper,
-        }}>
-          <TouchableOpacity accessibilityLabel="Add attachment" style={{ width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.neutral[100], marginRight: space[2] }}>
-            <Plus size={19} color={colors.ink} />
-          </TouchableOpacity>
-          <TextInput
-            style={{
-              flex: 1,
-              minHeight: 40,
-              maxHeight: 120,
-              backgroundColor: colors.neutral[100],
-              borderRadius: radius.control,
-              paddingHorizontal: 16,
-              paddingVertical: 10,
-              ...mobileType.body,
-              color: colors.ink,
-              marginRight: 8,
-            }}
-            placeholder="Message..."
-            placeholderTextColor={colors.neutral[400]}
-            value={inputText}
-            onChangeText={setInputText}
-            multiline
-            returnKeyType="default"
-            onSubmitEditing={handleSend}
-            testID="chat-input"
-          />
-          <TouchableOpacity
-            onPress={handleSend}
-            disabled={!inputText.trim() || sending || (!!platform && !connectedSessions.some(s => s.platform === platform && s.status === 'connected'))}
-            testID="chat-send-button"
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: 14,
-              backgroundColor: inputText.trim() && !sending ? colors.ink : colors.neutral[200],
-              justifyContent: 'center',
-              alignItems: 'center',
-            }}
-          >
-            <SendHorizonal size={18} color={inputText.trim() && !sending ? colors.lime : colors.neutral[400]} />
-          </TouchableOpacity>
+        <View style={{ paddingHorizontal: space[3], paddingTop: space[2], paddingBottom: Math.max(insets.bottom, space[2]), borderTopWidth: 1, borderTopColor: colors.neutral[200], backgroundColor: colors.cream }}>
+          {!isConnected && platform ? <Pressable testID="chat-reconnect" accessibilityRole="button" onPress={() => router.push('/connections')} style={({ pressed }) => ({ minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space[2], borderRadius: 16, borderWidth: 1, borderColor: colors.warning, backgroundColor: pressed ? colors.warningSurface : colors.paper, opacity: connectionRefreshing ? 0.65 : 1 })}><Link2 size={18} color={colors.warning} /><Text maxFontSizeMultiplier={1} style={{ ...mobileType.bodySmall, fontWeight: '700', color: colors.warning }}>{connectionRefreshing ? 'Checking connection…' : `Reconnect ${platform}`}</Text></Pressable> : <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: space[2], padding: 7, borderWidth: 1, borderColor: colors.neutral[200], borderRadius: 18, backgroundColor: colors.paper, boxShadow: '0 5px 15px rgba(16,18,15,0.08)' }}>
+            <Pressable disabled accessibilityRole="button" accessibilityLabel="Attachments coming soon" style={{ width: 38, height: 38, alignItems: 'center', justifyContent: 'center', borderRadius: 12, backgroundColor: colors.neutral[100], opacity: 0.6 }}><Plus size={19} color={colors.neutral[400]} /></Pressable>
+            <TextInput maxFontSizeMultiplier={1} style={{ flex: 1, minHeight: 40, maxHeight: 110, paddingHorizontal: space[2], paddingVertical: 9, ...mobileType.body, color: colors.ink }} placeholder="Write a message…" placeholderTextColor={colors.neutral[400]} value={inputText} onChangeText={setInputText} multiline blurOnSubmit={false} testID="chat-input" />
+            <Pressable onPress={() => void handleSend()} disabled={!inputText.trim() || sending} testID="chat-send-button" accessibilityRole="button" accessibilityLabel="Send message" style={({ pressed }) => ({ width: 40, height: 40, borderRadius: 13, justifyContent: 'center', alignItems: 'center', backgroundColor: inputText.trim() && !sending ? colors.ink : colors.neutral[200], opacity: pressed ? 0.72 : 1 })}>{sending ? <ActivityIndicator size="small" color={colors.lime} /> : <SendHorizonal size={18} color={inputText.trim() ? colors.lime : colors.neutral[400]} />}</Pressable>
+          </View>}
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>

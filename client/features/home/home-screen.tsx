@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { ArrowUpRight, CheckCircle2, Clock3, MessageCircle, Settings, Sparkles } from 'lucide-react-native';
 import { router } from 'expo-router';
@@ -56,6 +56,7 @@ function greeting() {
 
 export function HomeScreen() {
   const user = useAuthStore(state => state.user);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const inbox = useInboxMessages(user?.id);
   const brief = useQuery({
     queryKey: ['mobile-home-brief', user?.id],
@@ -92,21 +93,28 @@ export function HomeScreen() {
     })),
   ], [openPromises, urgent]);
 
-  const refreshing = brief.isRefetching || promises.isRefetching || inbox.isRefetching;
-  const refresh = () => void Promise.all([brief.refetch(), promises.refetch(), inbox.fetchMessages()]);
+  const refresh = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      await Promise.all([brief.refetch(), promises.refetch(), inbox.fetchMessages()]);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [brief, inbox, promises]);
 
   return (
     <ScrollView
       testID="home-screen"
       style={{ flex: 1, backgroundColor: colors.cream }}
-      contentInsetAdjustmentBehavior="automatic"
+      contentInsetAdjustmentBehavior="never"
       contentContainerStyle={{ paddingBottom: 112 }}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.ink} />}
+      refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => void refresh()} tintColor={colors.ink} />}
     >
       <MobileHeader
         eyebrow={new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
         title={`${greeting()},\n${firstName}.`}
         subtitle={urgent.length + openPromises.length === 0 ? "You're clear right now." : "You're clear after a few quick actions."}
+        safeArea
         profile={
           <Pressable accessibilityRole="button" accessibilityLabel="Open settings" onPress={() => router.push('/(tabs)/settings')}>
             <MobileAvatar name={user?.name || user?.email || 'You'} uri={user?.avatar_url} size={44} badge={<View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: colors.lime, borderWidth: 2, borderColor: colors.cream }} />} />
@@ -119,14 +127,16 @@ export function HomeScreen() {
           testID="home-needs-reply"
           accessibilityRole="button"
           onPress={() => router.push({ pathname: '/(tabs)/messages', params: { filter: 'needs_reply' } })}
-          style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: space[3], padding: space[4], borderRadius: 20, borderCurve: 'continuous', borderWidth: 1, borderColor: colors.ink, backgroundColor: colors.lime, opacity: pressed ? 0.78 : 1 })}
+          style={({ pressed }) => ({ width: '100%', opacity: pressed ? 0.78 : 1 })}
         >
-          <View style={{ width: 42, height: 42, borderRadius: 13, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' }}><ArrowUpRight size={22} color={colors.paper} /></View>
-          <View style={{ flex: 1 }}>
-            <Text selectable style={{ ...mobileType.monoLabel, color: colors.ink }}>NEEDS A REPLY</Text>
-            <Text selectable style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>{urgent.length} conversation{urgent.length === 1 ? '' : 's'} waiting</Text>
+          <View style={{ width: '100%', minHeight: 82, flexDirection: 'row', alignItems: 'center', gap: space[3], paddingHorizontal: space[4], paddingVertical: space[3], borderRadius: radius.card, borderCurve: 'continuous', borderWidth: 1, borderColor: colors.ink, backgroundColor: colors.lime }}>
+            <View style={{ width: 42, height: 42, borderRadius: 13, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' }}><ArrowUpRight size={22} color={colors.paper} /></View>
+            <View style={{ flex: 1, justifyContent: 'center', gap: 2 }}>
+              <Text selectable style={{ ...mobileType.monoLabel, color: colors.ink }}>NEEDS A REPLY</Text>
+              <Text selectable style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>{urgent.length} conversation{urgent.length === 1 ? '' : 's'} waiting</Text>
+            </View>
+            <Text style={{ ...mobileType.label, color: colors.ink }}>View</Text>
           </View>
-          <Text style={{ ...mobileType.label, color: colors.ink }}>View</Text>
         </Pressable>
 
         <SectionLabel title="Your day" detail={`${dayItems.length} items`} />

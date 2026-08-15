@@ -5,7 +5,7 @@ import { Brain, CheckCircle2, Clock3, FileText, MessageCircle, Search, Sparkles,
 import { router } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { colors, mobileType, radius, space } from '@claire/design-system';
-import { MobileAvatar, MobileChip, MobileHeader, MobileSearchField, MobileState, SectionLabel } from '../../components/mobile/claire-mobile';
+import { MobileChip, MobileHeader, MobileSearchField, MobileState, SectionLabel } from '../../components/mobile/claire-mobile';
 import { useAuthStore } from '../../stores/authStore';
 import { searchApi, type SearchScope } from '../../services/search';
 

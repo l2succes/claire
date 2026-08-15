@@ -1,21 +1,103 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Modal, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
-import { Pin, Plus, Search, UsersRound, X } from 'lucide-react-native';
+import { PenSquare, Pin, Search, Sparkles, X } from 'lucide-react-native';
+import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { colors, mobileType, radius, space } from '@claire/design-system';
-import { MessageCard } from '../../components/MessageCard';
-import { MobileChip, MobileHeader, MobileIconButton, MobileSearchField, MobileState } from '../../components/mobile/claire-mobile';
-import { UnifiedUpdatesRail, type UnifiedUpdateContact } from '../../components/UnifiedUpdatesRail';
+import { MobileChip, MobileHeader, MobileIconButton, MobileSearchField, MobileState, SectionLabel } from '../../components/mobile/claire-mobile';
 import { useInboxMessages, type InboxMessage } from '../../hooks/useInboxMessages';
 import { useAuthStore } from '../../stores/authStore';
 import { usePlatformStore } from '../../stores/platformStore';
 import { supabase } from '../../services/supabase';
 import { API_BASE_URL } from '../../services/platforms';
 import { Platform } from '../../types/platform';
+import { PlatformBadge } from '../../components/PlatformIcon';
+import { formatInboxTimestamp } from '../../utils/messageTimestamp';
 
 type InboxFilter = 'all' | 'unread' | 'needs_reply' | 'groups';
 type PlatformFilter = 'all' | Platform;
+
+const avatarTones = [colors.sky, colors.mint, colors.lavender, colors.blush] as const;
+
+function InboxConversationRow({ message, pinned, onPress, onLongPress }: { message: InboxMessage; pinned?: boolean; onPress: () => void; onLongPress: () => void }) {
+  const [imageFailed, setImageFailed] = useState(false);
+  const name = message.chat_name || message.contact_name || 'Unknown conversation';
+  const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase() || '?';
+  const tone = avatarTones[[...name].reduce((total, character) => total + character.charCodeAt(0), 0) % avatarTones.length];
+  const rowHeight = pinned ? 92 : 76;
+  const inset = pinned ? space[3] : space[4];
+
+  return (
+    <Pressable
+      testID={`message-card-${message.id}`}
+      accessibilityRole="button"
+      accessibilityLabel={`${name}${message.unread_count ? `, ${message.unread_count} unread` : ''}`}
+      onPress={onPress}
+      onLongPress={onLongPress}
+      style={{
+        height: rowHeight,
+        marginHorizontal: pinned ? space[4] : 0,
+        marginTop: pinned ? space[2] : 0,
+        borderRadius: pinned ? 18 : 0,
+        borderCurve: 'continuous',
+        borderWidth: pinned ? 1 : 0,
+        borderColor: pinned ? '#E5D69A' : 'transparent',
+        borderBottomWidth: pinned ? 1 : 1,
+        borderBottomColor: pinned ? '#E5D69A' : colors.neutral[200],
+        backgroundColor: pinned ? '#FFF8DC' : colors.cream,
+        overflow: 'hidden',
+      }}
+    >
+      <View style={{ position: 'absolute', left: inset, top: Math.round((rowHeight - 44) / 2), width: 44, height: 44 }}>
+        <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: tone, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }}>
+          {message.contact_avatar && !imageFailed
+            ? <Image source={{ uri: message.contact_avatar }} style={{ width: 44, height: 44 }} contentFit="cover" transition={120} onError={() => setImageFailed(true)} />
+            : <Text maxFontSizeMultiplier={1} style={{ ...mobileType.label, color: colors.ink }}>{initials}</Text>}
+        </View>
+        {message.platform ? <View style={{ position: 'absolute', right: -3, bottom: -3, padding: 1, borderRadius: 11, borderWidth: 2, borderColor: pinned ? '#FFF8DC' : colors.cream, backgroundColor: colors.paper }}><PlatformBadge platform={message.platform} size={16} /></View> : null}
+      </View>
+
+      <View style={{ position: 'absolute', top: pinned ? 20 : 14, left: inset + 58, right: inset, gap: 3 }}>
+        <Text maxFontSizeMultiplier={1} selectable numberOfLines={1} style={{ paddingRight: 64, fontFamily: mobileType.body.fontFamily, fontSize: 17, lineHeight: 21, fontWeight: message.unread_count ? '700' : '600', color: colors.ink }}>{name}</Text>
+        <Text maxFontSizeMultiplier={1} selectable numberOfLines={1} style={{ paddingRight: message.unread_count ? 36 : 0, fontFamily: mobileType.body.fontFamily, fontSize: 14, lineHeight: 19, color: colors.neutral[600], fontWeight: message.unread_count ? '500' : '400' }}>{message.content || 'Media'}</Text>
+      </View>
+      <Text maxFontSizeMultiplier={1} selectable style={{ position: 'absolute', right: inset, top: pinned ? 21 : 16, fontFamily: mobileType.monoLabel.fontFamily, fontSize: 11, lineHeight: 14, letterSpacing: 0.4, color: colors.neutral[400] }}>{formatInboxTimestamp(message.timestamp)}</Text>
+      {message.unread_count ? <View style={{ position: 'absolute', right: inset, bottom: pinned ? 16 : 14, minWidth: 22, height: 22, paddingHorizontal: 5, borderRadius: 11, backgroundColor: colors.lime, alignItems: 'center', justifyContent: 'center' }}><Text maxFontSizeMultiplier={1} style={{ ...mobileType.label, color: colors.ink, fontVariant: ['tabular-nums'] }}>{message.unread_count}</Text></View> : null}
+    </Pressable>
+  );
+}
+
+function HighlightCard({ message, onPress }: { message: InboxMessage; onPress: () => void }) {
+  const name = message.chat_name || message.contact_name || 'Unknown conversation';
+  const reason = message.has_open_promise
+    ? 'Open commitment'
+    : message.has_ai_response
+      ? 'Reply ready'
+      : message.unread_count
+        ? `${message.unread_count} unread`
+        : 'Needs a reply';
+
+  return (
+    <Pressable testID={`inbox-highlight-${message.id}`} accessibilityRole="button" accessibilityLabel={`${name}. ${reason}`} onPress={onPress} style={{ width: 272 }}>
+      <View style={{ minHeight: 138, padding: space[3], gap: space[2], borderRadius: radius.card, borderCurve: 'continuous', borderWidth: 1, borderColor: colors.ink, backgroundColor: colors.sky }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Sparkles size={15} color={colors.ink} />
+          <Text maxFontSizeMultiplier={1} style={{ ...mobileType.monoLabel, flex: 1, color: colors.ink }}>CLAIRE'S PICK</Text>
+          {message.platform ? <PlatformBadge platform={message.platform} size={16} /> : null}
+        </View>
+        <View style={{ gap: 2 }}>
+          <Text maxFontSizeMultiplier={1} numberOfLines={1} style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>{name}</Text>
+          <Text maxFontSizeMultiplier={1} numberOfLines={2} style={{ ...mobileType.bodySmall, color: colors.neutral[800] }}>{message.content || 'Media'}</Text>
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 'auto' }}>
+          <Text maxFontSizeMultiplier={1} style={{ ...mobileType.label, color: colors.ink }}>{reason}</Text>
+          <Text maxFontSizeMultiplier={1} style={{ ...mobileType.monoLabel, color: colors.neutral[600] }}>{formatInboxTimestamp(message.timestamp)}</Text>
+        </View>
+      </View>
+    </Pressable>
+  );
+}
 
 export function InboxScreen() {
   const params = useLocalSearchParams<{ filter?: string }>();
@@ -25,6 +107,7 @@ export function InboxScreen() {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<InboxFilter>(params.filter === 'needs_reply' ? 'needs_reply' : 'all');
   const [platform, setPlatform] = useState<PlatformFilter>('all');
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [snoozeTarget, setSnoozeTarget] = useState<InboxMessage | null>(null);
   const [locallySnoozed, setLocallySnoozed] = useState<Set<string>>(new Set());
 
@@ -40,19 +123,6 @@ export function InboxScreen() {
       const { data, error } = await supabase.from('promises').select('chat_id').eq('user_id', user!.id).in('status', ['pending', 'open']).not('chat_id', 'is', null);
       if (error) throw error;
       return new Set((data || []).map(row => row.chat_id as string));
-    },
-  });
-
-  const updates = useQuery({
-    queryKey: ['inbox-update-contacts', user?.id],
-    enabled: !!user?.id,
-    staleTime: 5 * 60_000,
-    queryFn: async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      const response = await fetch(`${API_BASE_URL}/contacts`, { headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {} });
-      if (!response.ok) return [];
-      const body = await response.json() as { success?: boolean; contacts?: UnifiedUpdateContact[] };
-      return body.success && Array.isArray(body.contacts) ? body.contacts.slice(0, 18) : [];
     },
   });
 
@@ -112,14 +182,38 @@ export function InboxScreen() {
   const filters: Array<{ value: InboxFilter; label: string; count?: number }> = [
     { value: 'all', label: 'All' },
     { value: 'unread', label: 'Unread', count: inbox.messages.filter(message => !!message.unread_count).length },
-    { value: 'needs_reply', label: 'Needs reply', count: inbox.messages.filter(message => !message.from_me).length },
-    { value: 'groups', label: 'Groups' },
+    { value: 'needs_reply', label: 'Needs reply' },
   ];
   const platformFilterOptions: Array<{ value: PlatformFilter; label: string }> = [
-    { value: 'all' as const, label: 'Everywhere' },
-    ...connectedSessions.filter(session => session.status === 'connected').map(session => ({ value: session.platform as PlatformFilter, label: session.platform[0].toUpperCase() + session.platform.slice(1) })),
+    ...connectedSessions.filter(session => session.status === 'connected').map(session => ({
+      value: session.platform as PlatformFilter,
+      label: session.platform === 'whatsapp' ? 'WhatsApp' : session.platform[0].toUpperCase() + session.platform.slice(1),
+    })),
   ];
   const platformFilters = platformFilterOptions.filter((entry, index, rows) => rows.findIndex(candidate => candidate.value === entry.value) === index);
+  const inboxRows = useMemo(
+    () => visibleMessages.map(message => ({ ...message, has_open_promise: promiseChats.data?.has(message.chat_id) || message.has_open_promise })),
+    [promiseChats.data, visibleMessages],
+  );
+  const highlights = useMemo(() => [...inboxRows]
+    .map(message => ({
+      message,
+      score: (message.has_open_promise ? 8 : 0) + (message.has_ai_response ? 5 : 0) + (message.unread_count ? Math.min(message.unread_count, 4) : 0) + (!message.from_me ? 1 : 0),
+    }))
+    .filter(candidate => candidate.score > 0)
+    .sort((a, b) => b.score - a.score || new Date(b.message.timestamp).getTime() - new Date(a.message.timestamp).getTime())
+    .slice(0, 3)
+    .map(candidate => candidate.message), [inboxRows]);
+  const highlightKeys = useMemo(() => new Set(highlights.map(message => message.conversation_key)), [highlights]);
+  const displayedMessages = useMemo(() => inboxRows.filter(message => !highlightKeys.has(message.conversation_key)), [highlightKeys, inboxRows]);
+  const refresh = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      await Promise.all([inbox.fetchMessages(), promiseChats.refetch()]);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [inbox, promiseChats]);
 
   if (inbox.loading) return <View testID="messages-loading" style={{ flex: 1, backgroundColor: colors.cream, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator size="large" color={colors.ink} /></View>;
 
@@ -127,37 +221,69 @@ export function InboxScreen() {
     <View testID="messages-screen" style={{ flex: 1, backgroundColor: colors.cream }}>
       <MobileHeader
         title="Inbox"
-        subtitle="Every conversation, one calm list."
+        safeArea
         actions={<View style={{ flexDirection: 'row', gap: space[2] }}>
-          <MobileIconButton label="People" testID="inbox-open-people" onPress={() => router.push('/people' as never)}><UsersRound size={20} color={colors.ink} /></MobileIconButton>
-          <MobileIconButton label="New message" testID="inbox-compose" onPress={() => router.push('/compose' as never)}><Plus size={21} color={colors.ink} /></MobileIconButton>
+          <MobileIconButton label="Search everything" testID="inbox-open-search" onPress={() => router.push('/(tabs)/search' as never)}><Search size={20} color={colors.ink} /></MobileIconButton>
+          <MobileIconButton label="New message" testID="inbox-compose" onPress={() => router.push('/compose' as never)}><PenSquare size={20} color={colors.ink} /></MobileIconButton>
         </View>}
       />
       <View style={{ paddingHorizontal: space[4], gap: space[3], paddingBottom: space[3], borderBottomWidth: 1, borderBottomColor: colors.neutral[200] }}>
-        <MobileSearchField icon={<Search size={18} color={colors.neutral[600]} />} value={query} onChangeText={setQuery} placeholder="Search conversations" returnKeyType="search" testID="messages-search-input" />
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space[2] }}>
+        <MobileSearchField style={{ minHeight: 46, borderRadius: 13, paddingHorizontal: space[4], backgroundColor: colors.neutral[100] }} inputStyle={{ fontSize: 15, lineHeight: 20 }} icon={<Search size={24} strokeWidth={1.7} color={colors.neutral[600]} />} value={query} onChangeText={setQuery} placeholder="Search conversations" returnKeyType="search" testID="messages-search-input" />
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingRight: space[4] }}>
           {filters.map(item => <MobileChip key={item.value} label={item.label} count={item.count} active={filter === item.value} onPress={() => setFilter(item.value)} testID={`inbox-filter-${item.value}`} />)}
+          {platformFilters.map(item => <MobileChip key={item.value} label={item.label} active={platform === item.value} onPress={() => setPlatform(platform === item.value ? 'all' : item.value)} testID={`inbox-platform-${item.value}`} />)}
         </ScrollView>
-        {platformFilters.length > 1 ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space[2] }}>
-          {platformFilters.map(item => <MobileChip key={item.value} label={item.label} active={platform === item.value} onPress={() => setPlatform(item.value)} />)}
-        </ScrollView> : null}
       </View>
 
       <FlatList
         testID="messages-list"
-        data={visibleMessages}
+        data={displayedMessages}
         keyExtractor={item => item.conversation_key}
-        renderItem={({ item }) => <MessageCard message={{ ...item, has_open_promise: promiseChats.data?.has(item.chat_id) }} onPress={() => openChat(item)} onLongPress={() => setSnoozeTarget(item)} />}
+        renderItem={({ item }) => <InboxConversationRow message={item} onPress={() => openChat(item)} onLongPress={() => setSnoozeTarget(item)} />}
         contentInsetAdjustmentBehavior="automatic"
-        contentContainerStyle={{ paddingBottom: 104 }}
+        contentContainerStyle={{ paddingBottom: 156 }}
         maintainVisibleContentPosition={{ minIndexForVisible: 0, autoscrollToTopThreshold: 1 }}
         onEndReached={() => { if (inbox.hasMore && !inbox.loadingMore) void inbox.fetchNextMessages(); }}
         onEndReachedThreshold={0.5}
-        refreshControl={<RefreshControl refreshing={inbox.isRefetching} onRefresh={() => void Promise.all([inbox.fetchMessages(), updates.refetch(), promiseChats.refetch()])} tintColor={colors.ink} />}
-        ListHeaderComponent={updates.data?.length ? <UnifiedUpdatesRail contacts={updates.data} ownAvatarUrl={user?.avatar_url} /> : null}
+        refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => void refresh()} tintColor={colors.ink} />}
+        ListHeaderComponent={<>
+          {highlights.length ? <>
+            <View style={{ paddingHorizontal: space[4], paddingTop: space[3], paddingBottom: space[2] }}><SectionLabel title="Highlights" detail="Claire's picks" /></View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: space[4], gap: space[3], paddingBottom: space[1] }}>
+              {highlights.map(message => <HighlightCard key={message.conversation_key} message={message} onPress={() => openChat(message)} />)}
+            </ScrollView>
+          </> : null}
+          <View style={{ paddingHorizontal: space[4], paddingTop: highlights.length ? space[4] : space[3], paddingBottom: space[1] }}><SectionLabel title="Recent" detail={`${displayedMessages.length} conversations`} /></View>
+        </>}
         ListFooterComponent={inbox.loadingMore ? <View style={{ padding: space[4] }}><ActivityIndicator color={colors.ink} /></View> : null}
         ListEmptyComponent={<MobileState error={!!inbox.error} title={inbox.error ? "Couldn't load the inbox" : 'No conversations here'} message={inbox.error ? 'Pull to retry. Your cached conversations will remain available while Claire reconnects.' : 'Try another filter or connect a messaging account.'} />}
       />
+
+      <Pressable
+        testID="inbox-floating-compose"
+        accessibilityRole="button"
+        accessibilityLabel="New message"
+        onPress={() => router.push('/compose' as never)}
+        style={({ pressed }) => ({
+          position: 'absolute',
+          right: space[5],
+          bottom: 92,
+          width: 54,
+          height: 54,
+          borderRadius: 18,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: colors.ink,
+          opacity: pressed ? 0.72 : 1,
+          shadowColor: colors.ink,
+          shadowOpacity: 0.18,
+          shadowRadius: 14,
+          shadowOffset: { width: 0, height: 6 },
+          elevation: 5,
+        })}
+      >
+        <PenSquare size={24} color={colors.paper} />
+      </Pressable>
 
       <Modal visible={!!snoozeTarget} transparent animationType="fade" onRequestClose={() => setSnoozeTarget(null)} testID="snooze-modal">
         <Pressable testID="snooze-modal-overlay" onPress={() => setSnoozeTarget(null)} style={{ flex: 1, backgroundColor: 'rgba(16,18,15,0.35)', justifyContent: 'flex-end' }}>

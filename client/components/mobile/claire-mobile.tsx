@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View, type StyleProp, type TextInputProps, type TextStyle, type ViewStyle } from 'react-native';
 import { Image } from 'expo-image';
 import { AlertCircle, Inbox, UserRound } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, mobileType, radius, space } from '@claire/design-system';
 
 export const mobileColors = colors;
@@ -22,14 +23,18 @@ export function MobileScreen({ children, scroll = false, testID }: { children: R
   return <View testID={testID} style={{ flex: 1, backgroundColor: colors.cream }}>{children}</View>;
 }
 
-export function MobileHeader({ title, eyebrow, subtitle, actions, profile }: { title: string; eyebrow?: string; subtitle?: string; actions?: ReactNode; profile?: ReactNode }) {
+export function MobileHeader({ title, eyebrow, subtitle, actions, profile, safeArea = false }: { title: string; eyebrow?: string; subtitle?: string; actions?: ReactNode; profile?: ReactNode; safeArea?: boolean }) {
+  const { top } = useSafeAreaInsets();
+  // ScrollView/FlatList with automatic inset adjustment already owns this
+  // space. View-rooted tab screens need to add it explicitly.
+  const safeTop = safeArea ? Math.max(top, process.env.EXPO_OS === 'ios' ? 48 : 0) : 0;
   return (
-    <View style={{ paddingHorizontal: space[4], paddingTop: space[3], paddingBottom: space[4], gap: space[1] }}>
-      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: space[3] }}>
+    <View style={{ paddingHorizontal: space[4], paddingTop: Math.max(space[2], safeTop + space[2]), paddingBottom: space[3], gap: 2 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[3] }}>
         <View style={{ flex: 1, minWidth: 0 }}>
-          {eyebrow ? <Text selectable style={{ ...mobileType.monoLabel, color: colors.neutral[600], textTransform: 'uppercase' }}>{eyebrow}</Text> : null}
-          <Text selectable style={{ ...mobileType.screenTitle, color: colors.ink }}>{title}</Text>
-          {subtitle ? <Text selectable style={{ ...mobileType.bodySmall, color: colors.neutral[600], paddingTop: 2 }}>{subtitle}</Text> : null}
+          {eyebrow ? <Text selectable maxFontSizeMultiplier={1} style={{ ...mobileType.monoLabel, color: colors.neutral[600], textTransform: 'uppercase' }}>{eyebrow}</Text> : null}
+          <Text selectable maxFontSizeMultiplier={1} style={{ ...mobileType.screenTitle, color: colors.ink }}>{title}</Text>
+          {subtitle ? <Text selectable maxFontSizeMultiplier={1} numberOfLines={1} style={{ ...mobileType.bodySmall, color: colors.neutral[600], paddingTop: 1 }}>{subtitle}</Text> : null}
         </View>
         {actions}
         {profile}
@@ -46,18 +51,17 @@ export function MobileIconButton({ children, label, onPress, selected = false, t
       accessibilityLabel={label}
       accessibilityState={{ selected }}
       onPress={onPress}
-      style={({ pressed }) => ({
-        width: 44,
-        height: 44,
+      style={{
+        width: 40,
+        height: 40,
         alignItems: 'center',
         justifyContent: 'center',
-        borderRadius: 14,
+        borderRadius: 13,
         borderCurve: 'continuous',
         borderWidth: 1,
         borderColor: selected ? colors.ink : colors.neutral[200],
         backgroundColor: selected ? colors.lime : colors.paper,
-        opacity: pressed ? 0.72 : 1,
-      })}
+      }}
     >
       {children}
     </Pressable>
@@ -66,12 +70,14 @@ export function MobileIconButton({ children, label, onPress, selected = false, t
 
 export function MobileSearchField({ icon, style, inputStyle, ...props }: Omit<TextInputProps, 'style'> & { icon?: ReactNode; style?: StyleProp<ViewStyle>; inputStyle?: StyleProp<TextStyle> }) {
   return (
-    <View style={[{ minHeight: 46, flexDirection: 'row', alignItems: 'center', gap: space[2], paddingHorizontal: space[3], backgroundColor: colors.neutral[100], borderRadius: 14, borderCurve: 'continuous' }, style]}>
+    <View style={[{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: space[2], paddingHorizontal: space[3], backgroundColor: colors.neutral[100], borderRadius: 13, borderCurve: 'continuous', borderWidth: 1, borderColor: 'transparent' }, style]}>
       {icon}
       <TextInput
         {...props}
+        maxFontSizeMultiplier={1}
         placeholderTextColor={props.placeholderTextColor || colors.neutral[400]}
-        style={[{ flex: 1, minHeight: 44, paddingVertical: 0, ...mobileType.body, color: colors.ink }, inputStyle]}
+        textAlignVertical="center"
+        style={[{ flex: 1, minHeight: 42, paddingTop: 0, paddingBottom: 0, ...mobileType.body, color: colors.ink }, inputStyle]}
       />
     </View>
   );
@@ -84,19 +90,18 @@ export function MobileChip({ label, active, count, onPress, testID }: { label: s
       accessibilityRole="button"
       accessibilityState={{ selected: active }}
       onPress={onPress}
-      style={({ pressed }) => ({
-        minHeight: 36,
-        paddingHorizontal: 13,
+      style={{
+        minHeight: 32,
+        paddingHorizontal: 11,
         borderRadius: radius.pill,
         borderWidth: 1,
         borderColor: active ? colors.ink : colors.neutral[200],
         backgroundColor: active ? colors.ink : colors.paper,
         alignItems: 'center',
         justifyContent: 'center',
-        opacity: pressed ? 0.72 : 1,
-      })}
+      }}
     >
-      <Text style={{ ...mobileType.label, color: active ? colors.paper : colors.neutral[800] }}>{label}{typeof count === 'number' && count > 0 ? ` ${count}` : ''}</Text>
+      <Text maxFontSizeMultiplier={1} style={{ ...mobileType.label, color: active ? colors.paper : colors.neutral[800] }}>{label}{typeof count === 'number' && count > 0 ? ` ${count}` : ''}</Text>
     </Pressable>
   );
 }
@@ -104,8 +109,8 @@ export function MobileChip({ label, active, count, onPress, testID }: { label: s
 export function SectionLabel({ title, detail }: { title: string; detail?: string }) {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: space[2], paddingHorizontal: 2 }}>
-      <Text selectable style={{ ...mobileType.monoLabel, color: colors.neutral[800], textTransform: 'uppercase' }}>{title}</Text>
-      {detail ? <Text selectable style={{ ...mobileType.monoLabel, color: colors.neutral[400], textTransform: 'uppercase' }}>{detail}</Text> : null}
+      <Text selectable maxFontSizeMultiplier={1} style={{ ...mobileType.monoLabel, color: colors.neutral[800], textTransform: 'uppercase' }}>{title}</Text>
+      {detail ? <Text selectable maxFontSizeMultiplier={1} style={{ ...mobileType.monoLabel, color: colors.neutral[400], textTransform: 'uppercase' }}>{detail}</Text> : null}
     </View>
   );
 }

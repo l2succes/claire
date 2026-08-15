@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import { Stack, router } from 'expo-router';
 import * as Notifications from 'expo-notifications';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -9,6 +9,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { ClaireThemeProvider } from '@claire/design-system';
 import * as Sentry from '@sentry/react-native';
 import { useAuthStore } from '../stores/authStore';
+import { usePlatformStore } from '../stores/platformStore';
 import {
   addPushTokenRotationListener,
   getActiveNotificationChat,
@@ -39,6 +40,8 @@ const queryClient = new QueryClient({
 export default function RootLayout() {
   const initialize = useAuthStore((state) => state.initialize);
   const token = useAuthStore((state) => state.token);
+  const initializePlatforms = usePlatformStore((state) => state.initialize);
+  const fetchConnectedSessions = usePlatformStore((state) => state.fetchConnectedSessions);
 
   useEffect(() => {
     async function init() {
@@ -52,6 +55,15 @@ export default function RootLayout() {
     }
     init();
   }, []);
+
+  useEffect(() => {
+    if (!token) return;
+    void initializePlatforms();
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void fetchConnectedSessions();
+    });
+    return () => subscription.remove();
+  }, [fetchConnectedSessions, initializePlatforms, token]);
 
   useEffect(() => {
     if (!token) return;
@@ -84,6 +96,7 @@ export default function RootLayout() {
   }, [token]);
 
   useEffect(() => {
+    if (Platform.OS === 'web') return;
     const openNotification = (notification: Notifications.Notification) => {
       const data = notification.request.content.data as { chatId?: unknown; messageId?: unknown };
       if (typeof data.chatId !== 'string') return;

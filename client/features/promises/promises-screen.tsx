@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ActivityIndicator, FlatList, Modal, Pressable, RefreshControl, Text, TextInput, View } from 'react-native';
 import { Image } from 'expo-image';
-import { AlertCircle, Check, CheckCircle2, Clock3, MessageCircle, Plus, UserRound, UsersRound, X } from 'lucide-react-native';
+import { AlertCircle, Check, Clock3, MessageCircle, Plus, UserRound, UsersRound, X } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { colors, mobileType, radius, space } from '@claire/design-system';
@@ -101,7 +101,7 @@ export function PromisesScreen() {
 
   return (
     <View testID="promises-screen" style={{ flex: 1, backgroundColor: colors.cream }}>
-      <MobileHeader title="Promises" subtitle="Follow through without losing the conversation." actions={<MobileIconButton label="Add promise" testID="promises-add" onPress={() => setShowCreate(true)}><Plus size={21} color={colors.ink} /></MobileIconButton>} />
+      <MobileHeader title="Promises" subtitle="Follow through without losing the conversation." safeArea actions={<MobileIconButton label="Add promise" testID="promises-add" onPress={() => setShowCreate(true)}><Plus size={21} color={colors.ink} /></MobileIconButton>} />
       <View style={{ paddingHorizontal: space[4], gap: space[3], paddingBottom: space[3] }}>
         <View style={{ flexDirection: 'row', gap: space[2] }}>
           <View style={{ flex: 1, padding: space[4], borderRadius: radius.card, backgroundColor: colors.lime }}><Text style={{ ...mobileType.screenTitle, color: colors.ink, fontVariant: ['tabular-nums'] }}>{open.length}</Text><Text style={{ ...mobileType.monoLabel, color: colors.ink }}>OPEN PROMISES</Text></View>

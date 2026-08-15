@@ -68,7 +68,7 @@ function IndexStatusBanner({ status }: { status: AssistantIndexStatus | null }) 
   );
 }
 
-export default function AssistantScreen() {
+export function AssistantScreen({ inTab = false }: { inTab?: boolean }) {
   const [threads, setThreads] = useState<AssistantThread[]>([]);
   const [activeThread, setActiveThread] = useState<AssistantThread | null>(null);
   const [turns, setTurns] = useState<AssistantTurn[]>([]);
@@ -231,7 +231,7 @@ export default function AssistantScreen() {
             {asking && <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}><ActivityIndicator size="small" color="#4f46e5" /><Text style={{ color: '#4f46e5', fontSize: 13 }}>Claire is searching your conversations…</Text></View>}
           </ScrollView>
           {error && <Text testID="assistant-error" style={{ color: '#dc2626', fontSize: 12, paddingHorizontal: 16, paddingBottom: 6 }}>{error}</Text>}
-          <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8, padding: 12, borderTopWidth: 1, borderColor: '#e5e7eb' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8, paddingHorizontal: 12, paddingTop: 12, paddingBottom: inTab ? 88 : 12, borderTopWidth: 1, borderColor: '#e5e7eb' }}>
             <View style={{ flex: 1 }}>
               {mentions.length > 0 && <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingBottom: 5 }}>
                 {mentions.map(mention => <TouchableOpacity key={mention.id} onPress={() => setMentions(current => current.filter(item => item.id !== mention.id))} testID={`assistant-mention-${mention.id}`} style={{ backgroundColor: '#e0e7ff', borderRadius: 14, paddingHorizontal: 9, paddingVertical: 5 }}><Text style={{ color: '#4338ca', fontSize: 12, fontWeight: '700' }}>@{mention.name} ×</Text></TouchableOpacity>)}
@@ -248,3 +248,5 @@ export default function AssistantScreen() {
     </SafeAreaView>
   );
 }
+
+export default AssistantScreen;

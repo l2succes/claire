@@ -2,12 +2,11 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true,
+    "preserveSymlinks": true,
     "paths": {
       "@/*": [
         "./*"
-      ],
-      "react": ["./node_modules/@types/react/index.d.ts"],
-      "react-native": ["./node_modules/react-native/types/index.d.ts"]
+      ]
     }
   },
   "include": [

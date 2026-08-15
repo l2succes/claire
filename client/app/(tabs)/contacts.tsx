@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, ScrollView, Text, View } from 'react-native';
-import { ChevronLeft, Search, Sparkles, UsersRound } from 'lucide-react-native';
+import { ChevronLeft, Search, Sparkles } from 'lucide-react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { colors, mobileType, radius, space } from '@claire/design-system';
+import { colors, mobileType, space } from '@claire/design-system';
 import { supabase } from '../../services/supabase';
 import { useAuthStore } from '../../stores/authStore';
 import { MobileAvatar, MobileChip, MobileIconButton, MobileSearchField, MobileState } from '../../components/mobile/claire-mobile';
