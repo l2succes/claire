@@ -8,12 +8,13 @@
 import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { useState, useEffect } from 'react';
 import { router } from 'expo-router';
-import { ArrowRight, MessageCircle } from 'lucide-react-native';
+import { ArrowRight, Link2, Settings } from 'lucide-react-native';
 import { PlatformSelector } from '../../components/PlatformSelector';
 import { PlatformAuthModal } from '../../components/PlatformAuthModal';
 import { Button } from '../../components/ui/Button';
 import { Platform, PlatformStatus } from '../../types/platform';
 import { usePlatformStore, useHasAnyConnection } from '../../stores/platformStore';
+import { colors, mobileType, radius, space } from '@claire/design-system';
 
 export default function LoginScreen() {
   const [selectedPlatform, setSelectedPlatform] = useState<Platform | null>(null);
@@ -57,51 +58,47 @@ export default function LoginScreen() {
   ).length;
 
   return (
-    <View className="flex-1 bg-white dark:bg-gray-900" testID="platform-login-screen">
+    <View style={{ flex: 1, backgroundColor: colors.cream }} testID="platform-login-screen">
       <ScrollView
-        className="flex-1"
-        contentContainerStyle={{ flexGrow: 1, padding: 24 }}
+        style={{ flex: 1 }}
+        contentContainerStyle={{ flexGrow: 1, padding: space[5], gap: space[5] }}
       >
         {/* Header */}
-        <View className="items-center mb-8 pt-8">
-          <View className="w-16 h-16 bg-green-100 rounded-full items-center justify-center mb-4">
-            <MessageCircle size={32} color="#10b981" />
+        <View style={{ paddingTop: space[8], gap: space[3] }}>
+          <View style={{ width: 54, height: 54, borderRadius: 18, backgroundColor: colors.lime, alignItems: 'center', justifyContent: 'center' }}>
+            <Link2 size={25} color={colors.ink} />
           </View>
-          <Text className="text-3xl font-bold text-gray-900 dark:text-white">
-            Claire
-          </Text>
-          <Text className="text-gray-600 dark:text-gray-400 text-center mt-2">
-            Connect your messaging platforms
-          </Text>
+          <Text style={{ ...mobileType.display, color: colors.ink }}>Bring your chats together.</Text>
+          <Text style={{ ...mobileType.body, color: colors.neutral[600] }}>Connect one account now. You can add more from Settings whenever you like.</Text>
         </View>
 
         {/* Platform Selector */}
-        <View className="mb-8">
-          <Text className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-            Select a platform to connect
-          </Text>
+        <View style={{ gap: space[3] }}>
+          <Text style={{ ...mobileType.monoLabel, color: colors.neutral[800] }}>CHOOSE A PLATFORM</Text>
+          <View style={{ padding: space[3], borderRadius: radius.card, borderWidth: 1, borderColor: colors.neutral[200], backgroundColor: colors.paper }}>
           <PlatformSelector
             onPlatformSelect={handlePlatformSelect}
             selectedPlatform={selectedPlatform}
             showDescriptions={true}
             columns={2}
           />
+          </View>
         </View>
 
         {/* Connection Status */}
         {connectedCount > 0 && (
-          <View className="bg-green-50 dark:bg-green-900/20 rounded-xl p-4 mb-6">
-            <Text className="text-green-800 dark:text-green-300 font-medium text-center">
+          <View style={{ backgroundColor: colors.successSurface, borderRadius: radius.card, padding: space[4] }}>
+            <Text style={{ ...mobileType.body, color: colors.success, fontWeight: '700', textAlign: 'center' }}>
               {connectedCount} platform{connectedCount !== 1 ? 's' : ''} connected
             </Text>
-            <Text className="text-green-600 dark:text-green-400 text-sm text-center mt-1">
+            <Text style={{ ...mobileType.bodySmall, color: colors.success, textAlign: 'center', marginTop: 4 }}>
               You can connect more platforms or continue to your inbox
             </Text>
           </View>
         )}
 
         {/* Continue Button */}
-        <View className="mt-auto pb-4">
+        <View style={{ marginTop: 'auto', paddingBottom: space[4], gap: space[3] }}>
           {hasConnection ? (
             <Button
               variant="primary"
@@ -110,15 +107,16 @@ export default function LoginScreen() {
               testID="platform-login-continue"
             >
               <View className="flex-row items-center justify-center">
-                <Text className="text-white font-semibold text-lg mr-2">
-                  Continue to Inbox
+                <Text style={{ ...mobileType.body, color: colors.paper, fontWeight: '700', marginRight: space[2] }}>
+                  Continue to Claire
                 </Text>
-                <ArrowRight size={20} color="white" />
+                <ArrowRight size={20} color={colors.lime} />
               </View>
             </Button>
           ) : (
-            <View className="items-center">
-              <Text className="text-gray-500 dark:text-gray-400 text-sm text-center">
+            <View style={{ alignItems: 'center', gap: space[2] }}>
+              <Settings size={18} color={colors.neutral[400]} />
+              <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600], textAlign: 'center' }}>
                 Connect at least one platform to continue
               </Text>
             </View>

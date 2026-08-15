@@ -1,0 +1,571 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Claire — Plugin system concept</title>
+    <meta
+      name="description"
+      content="Product and interface concepts for Claire plugins, conversation triggers, approvals, and activity."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./tokens.css" />
+    <link rel="stylesheet" href="./plugin-mockups.css" />
+    <link rel="icon" href="./assets/brand/claire-app-icon.svg" type="image/svg+xml" />
+    <script src="./heroicons.js" defer></script>
+    <script src="./plugin-mockups.js" defer></script>
+  </head>
+  <body>
+    <header class="doc-header">
+      <a class="brand" href="./index.html"><img class="plugin-brand-mark" src="./assets/brand/claire-app-icon-lime.svg" alt="" />claire <span>/ plugins</span></a>
+      <nav>
+        <a href="./app-mockups.html">Mobile</a><a href="./desktop-mockups.html">Desktop</a
+        ><a href="./style-guide.html">Components</a
+        ><a class="active" href="./plugin-mockups.html">Plugins</a>
+      </nav>
+    </header>
+    <main>
+      <section class="hero">
+        <div>
+          <div class="kicker">PLUGIN PRODUCT SYSTEM / CONCEPT 01</div>
+          <h1>Conversation in.<br /><span>Useful action out.</span></h1>
+          <p>
+            Claire plugins connect the meaning inside a conversation to the tools where life and
+            work happen. They can suggest, prepare, or complete an action—but only within
+            permissions the user understands and controls.
+          </p>
+          <div class="hero-actions">
+            <a href="#library">Explore the library <i data-heroicon="arrow-right"></i></a
+            ><a class="quiet" href="../docs/CLAIRE_PLUGIN_SYSTEM_SPEC.md"
+              >Read the implementation spec</a
+            >
+          </div>
+        </div>
+        <aside class="principle">
+          <div class="kicker">THE SAFETY CONTRACT</div>
+          <h3>Detection is not permission.</h3>
+          <div class="principle-row"><b>01</b><span>Claire identifies a useful moment.</span></div>
+          <div class="principle-row"><b>02</b><span>The plugin drafts a typed action.</span></div>
+          <div class="principle-row"><b>03</b><span>The user reviews sensitive writes.</span></div>
+          <div class="principle-row">
+            <b>04</b><span>Every result stays visible and reversible.</span>
+          </div>
+        </aside>
+      </section>
+
+      <section class="architecture">
+        <div class="kicker">PRODUCT MODEL</div>
+        <h2>More than a marketplace.</h2>
+        <div class="architecture-grid">
+          <article>
+            <span>DISCOVER</span>
+            <h3>Plugin library</h3>
+            <p>Curated integrations grouped by what they help accomplish, not by API vocabulary.</p>
+          </article>
+          <article>
+            <span>CONNECT</span>
+            <h3>Scoped access</h3>
+            <p>Account authorization is separate from access to Claire conversations.</p>
+          </article>
+          <article>
+            <span>CONFIGURE</span>
+            <h3>Conversation rules</h3>
+            <p>Choose the people, chats, signals, and approval level for each automation.</p>
+          </article>
+          <article>
+            <span>CONTROL</span>
+            <h3>Approval inbox</h3>
+            <p>Review action, source messages, destination, and exact data before execution.</p>
+          </article>
+          <article>
+            <span>AUDIT</span>
+            <h3>Activity & receipts</h3>
+            <p>See what ran, why it ran, what changed, and how to undo or disconnect it.</p>
+          </article>
+        </div>
+      </section>
+
+      <nav class="filters" aria-label="Filter plugin mockups">
+        <button class="active" data-plugin-filter="all">All screens</button
+        ><button data-plugin-filter="library">Library</button
+        ><button data-plugin-filter="automation">Automations</button
+        ><button data-plugin-filter="approval">Approval & trust</button>
+      </nav>
+
+      <section class="gallery" id="library">
+        <div class="section-head">
+          <div>
+            <div class="kicker">DESKTOP REFERENCE</div>
+            <h2>Library and automation control center.</h2>
+          </div>
+          <p>
+            The desktop client owns browsing, configuration, account management, and detailed audit.
+            It uses the same collapsible Claire rail as the rest of the product.
+          </p>
+        </div>
+
+        <article class="mock-case" data-kind="library">
+          <div class="mock-label"><b>01 / PLUGIN LIBRARY</b><span>DESKTOP · DISCOVERY</span></div>
+          <div class="window">
+            <div class="titlebar">
+              <div class="traffic"><i></i><i></i><i></i></div>
+              <span>Claire — Plugins</span><button><i data-heroicon="search"></i></button>
+            </div>
+            <div class="desktop-shell">
+              <aside class="rail">
+                <button><i data-heroicon="home"></i><span>Home</span></button
+                ><button><i data-heroicon="inbox"></i><span>Inbox</span></button
+                ><button><i data-heroicon="sparkles"></i><span>Ask Claire</span></button
+                ><button class="active"><i data-heroicon="plus"></i><span>Plugins</span></button
+                ><button><i data-heroicon="settings"></i><span>Settings</span></button>
+              </aside>
+              <section class="library">
+                <header>
+                  <div>
+                    <small>PLUGIN LIBRARY</small>
+                    <h3>Make Claire useful beyond chat.</h3>
+                  </div>
+                  <button class="installed">Installed <b>4</b></button>
+                </header>
+                <div class="search">
+                  <i data-heroicon="search"></i><span>Search calendar, tasks, notes, CRM…</span
+                  ><kbd>⌘ K</kbd>
+                </div>
+                <div class="category-row">
+                  <button class="active">Featured</button><button>Productivity</button
+                  ><button>Calendar</button><button>Sales</button><button>Knowledge</button
+                  ><button>Developer</button>
+                </div>
+                <div class="feature-plugin">
+                  <div class="app-icon calendar">31</div>
+                  <div>
+                    <small>FEATURED WORKFLOW</small>
+                    <h4>Calendar</h4>
+                    <p>Turn confirmed plans in any conversation into clean calendar events.</p>
+                    <span class="permission-line"
+                      >Reads selected messages · Creates events with approval</span
+                    >
+                  </div>
+                  <button>View plugin</button>
+                </div>
+                <div class="plugin-grid">
+                  <article>
+                    <div class="app-icon notes">N</div>
+                    <b>Notion</b>
+                    <p>Save decisions and conversation summaries.</p>
+                    <span>NOTES · KNOWLEDGE</span>
+                  </article>
+                  <article>
+                    <div class="app-icon todo">✓</div>
+                    <b>Todoist</b>
+                    <p>Turn promises into assigned tasks.</p>
+                    <span>PRODUCTIVITY</span>
+                  </article>
+                  <article>
+                    <div class="app-icon crm">H</div>
+                    <b>HubSpot</b>
+                    <p>Log customer context and follow-ups.</p>
+                    <span>SALES · CRM</span>
+                  </article>
+                  <article>
+                    <div class="app-icon drive">△</div>
+                    <b>Google Drive</b>
+                    <p>Find and share relevant documents.</p>
+                    <span>FILES · SEARCH</span>
+                  </article>
+                  <article>
+                    <div class="app-icon slack">S</div>
+                    <b>Slack</b>
+                    <p>Send a message or create a channel summary.</p>
+                    <span>COMMUNICATION</span>
+                  </article>
+                  <article>
+                    <div class="app-icon code">&lt;/&gt;</div>
+                    <b>GitHub</b>
+                    <p>Create issues from technical discussions.</p>
+                    <span>DEVELOPER</span>
+                  </article>
+                </div>
+              </section>
+            </div>
+          </div>
+          <p class="note">
+            The library separates verified Claire plugins, community plugins, and private workspace
+            plugins. A “plugin” can expose actions and context sources; automation is configured
+            only after installation.
+          </p>
+        </article>
+
+        <article class="mock-case" data-kind="library">
+          <div class="mock-label">
+            <b>02 / PLUGIN DETAIL</b><span>DESKTOP · PERMISSIONS BEFORE INSTALL</span>
+          </div>
+          <div class="detail-board">
+            <div class="detail-main">
+              <div class="detail-title">
+                <div class="app-icon calendar large">31</div>
+                <div>
+                  <small>VERIFIED BY CLAIRE</small>
+                  <h3>Calendar</h3>
+                  <p>Google Calendar · Microsoft Outlook · CalDAV</p>
+                </div>
+                <button>Install plugin</button>
+              </div>
+              <div class="demo-event">
+                <div class="message-source">
+                  <span class="avatar">M</span>
+                  <p><b>Maya</b> “Tuesday at 10 works for me. Let’s do 45 minutes.”</p>
+                </div>
+                <i data-heroicon="arrow-right"></i>
+                <div class="event-card">
+                  <small>DRAFT EVENT</small><b>Launch review with Maya</b>
+                  <p>Tue, Aug 18 · 10:00–10:45</p>
+                </div>
+              </div>
+              <h4>What this plugin can do</h4>
+              <div class="capability-list">
+                <div>
+                  <i data-heroicon="search"></i
+                  ><span
+                    ><b>Find availability</b
+                    ><small>Reads calendar free/busy only when you ask.</small></span
+                  >
+                </div>
+                <div>
+                  <i data-heroicon="plus"></i
+                  ><span
+                    ><b>Create and update events</b
+                    ><small>Always asks before inviting another person.</small></span
+                  >
+                </div>
+                <div>
+                  <i data-heroicon="sparkles"></i
+                  ><span
+                    ><b>Suggest from conversation context</b
+                    ><small>Only in chats you select after installation.</small></span
+                  >
+                </div>
+              </div>
+            </div>
+            <aside class="permission-card">
+              <small>ACCESS SUMMARY</small>
+              <h4>Nothing is shared yet.</h4>
+              <div><b>Calendar account</b><span>Not connected</span></div>
+              <div><b>Conversation access</b><span>None selected</span></div>
+              <div><b>Action policy</b><span>Always ask</span></div>
+              <p>
+                Installation adds capabilities. You connect accounts and choose chats in a separate
+                step.
+              </p>
+              <a>Privacy & data handling <i data-heroicon="external"></i></a>
+            </aside>
+          </div>
+        </article>
+
+        <article class="mock-case" data-kind="automation">
+          <div class="mock-label">
+            <b>03 / AUTOMATION BUILDER</b><span>DESKTOP · TRIGGER → ACTION → APPROVAL</span>
+          </div>
+          <div class="builder">
+            <header>
+              <div>
+                <button class="back"><i data-heroicon="back"></i></button>
+                <div>
+                  <small>NEW AUTOMATION</small>
+                  <h3>Plan conversations → Calendar</h3>
+                </div>
+              </div>
+              <span class="draft">DRAFT</span>
+            </header>
+            <div class="builder-grid">
+              <section class="steps">
+                <article class="step complete">
+                  <i>1</i>
+                  <div>
+                    <small>WHEN THIS HAPPENS</small>
+                    <h4>A date and time are confirmed</h4>
+                    <p>Claire looks for agreement, not merely a suggestion.</p>
+                    <div class="chips">
+                      <span>Selected chats</span><span>Confidence ≥ 90%</span>
+                    </div>
+                  </div>
+                  <button>Edit</button>
+                </article>
+                <article class="step complete">
+                  <i>2</i>
+                  <div>
+                    <small>USE THIS CONTEXT</small>
+                    <h4>Work and close-friend conversations</h4>
+                    <p>14 people · groups excluded · last 12 messages maximum</p>
+                  </div>
+                  <button>Edit</button>
+                </article>
+                <article class="step active">
+                  <i>3</i>
+                  <div>
+                    <small>THEN DO THIS</small>
+                    <h4>Draft a calendar event</h4>
+                    <label
+                      >Calendar<select>
+                        <option>Luc · Work</option>
+                      </select></label
+                    ><label>Event title<input value="Use the conversation topic" /></label>
+                  </div>
+                </article>
+                <article class="step">
+                  <i>4</i>
+                  <div>
+                    <small>BEFORE IT RUNS</small>
+                    <h4>Ask me every time</h4>
+                    <p>Show title, time, guests, calendar, and source messages.</p>
+                  </div>
+                </article>
+              </section>
+              <aside class="builder-preview">
+                <small>LIVE PREVIEW</small>
+                <div class="preview-chat">
+                  <p><b>Maya</b> Tuesday at 10?</p>
+                  <p class="mine">Perfect. Let’s do 45 minutes.</p>
+                </div>
+                <div class="preview-arrow">↓</div>
+                <div class="event-card">
+                  <small>CALENDAR · NEEDS APPROVAL</small><b>Launch review with Maya</b>
+                  <p>Tue, Aug 18 · 10:00–10:45</p>
+                  <span>Luc · Work</span>
+                </div>
+                <div class="builder-actions">
+                  <button>Save draft</button><button class="primary">Turn on automation</button>
+                </div>
+              </aside>
+            </div>
+          </div>
+        </article>
+
+        <article class="mock-case" data-kind="approval">
+          <div class="mock-label">
+            <b>04 / ACTIVITY & TRUST</b><span>DESKTOP · AUDITABLE BY DEFAULT</span>
+          </div>
+          <div class="activity">
+            <aside>
+              <small>PLUGINS</small><button class="active">Activity <b>2</b></button
+              ><button>Installed</button><button>Automations</button
+              ><button>Connected accounts</button>
+              <hr />
+              <button>Developer settings</button>
+            </aside>
+            <section>
+              <header>
+                <div>
+                  <small>PLUGIN ACTIVITY</small>
+                  <h3>Every action has a receipt.</h3>
+                </div>
+                <button>Export activity</button>
+              </header>
+              <div class="activity-filters">
+                <button class="active">All</button><button>Needs approval <b>2</b></button
+                ><button>Completed</button><button>Failed</button>
+              </div>
+              <article class="activity-row pending">
+                <div class="app-icon calendar">31</div>
+                <div>
+                  <small>NEEDS YOUR APPROVAL · 2 MIN AGO</small
+                  ><b>Create “Launch review with Maya”</b>
+                  <p>
+                    Triggered by a confirmed time in WhatsApp · Calendar will receive title, time,
+                    guest email, and source link.
+                  </p>
+                </div>
+                <button>Review</button>
+              </article>
+              <article class="activity-row">
+                <div class="app-icon todo">✓</div>
+                <div>
+                  <small>COMPLETED · 1 HOUR AGO</small><b>Created task “Send revised brief”</b>
+                  <p>Todoist · Work projects · Approved by you on iPhone</p>
+                </div>
+                <button>View receipt</button>
+              </article>
+              <article class="activity-row">
+                <div class="app-icon notes">N</div>
+                <div>
+                  <small>SKIPPED · YESTERDAY</small><b>Decision summary not saved</b>
+                  <p>
+                    Low confidence: the conversation did not reach a final decision. No external
+                    data was sent.
+                  </p>
+                </div>
+                <button>Details</button>
+              </article>
+            </section>
+          </div>
+        </article>
+      </section>
+
+      <section class="gallery mobile-gallery">
+        <div class="section-head">
+          <div>
+            <div class="kicker">MOBILE REFERENCE</div>
+            <h2>Plugins appear where decisions happen.</h2>
+          </div>
+          <p>
+            Mobile favors contextual action, short review, and immediate control. Complex automation
+            building remains available but is optimized for desktop.
+          </p>
+        </div>
+        <div class="phones">
+          <article class="phone-case" data-kind="library">
+            <div class="mock-label"><b>05 / MOBILE LIBRARY</b><span>DISCOVER</span></div>
+            <div class="phone">
+              <div class="island"></div>
+              <div class="phone-status">9:41 <span>● ◒</span></div>
+              <div class="phone-screen">
+                <header>
+                  <span>Plugins</span><button><i data-heroicon="search"></i></button>
+                </header>
+                <div class="mobile-feature">
+                  <div class="app-icon calendar">31</div>
+                  <small>FEATURED</small>
+                  <h3>Turn plans into events.</h3>
+                  <p>Calendar notices confirmed times and prepares the details.</p>
+                  <button>View Calendar</button>
+                </div>
+                <div class="mobile-section"><b>Popular with Claire</b><span>See all</span></div>
+                <div class="mobile-plugin">
+                  <div class="app-icon todo">✓</div>
+                  <div><b>Todoist</b><small>Promises → tasks</small></div>
+                  <button>Get</button>
+                </div>
+                <div class="mobile-plugin">
+                  <div class="app-icon notes">N</div>
+                  <div><b>Notion</b><small>Decisions → notes</small></div>
+                  <button>Get</button>
+                </div>
+                <div class="mobile-plugin">
+                  <div class="app-icon crm">H</div>
+                  <div><b>HubSpot</b><small>Follow-ups → CRM</small></div>
+                  <button>Get</button>
+                </div>
+              </div>
+            </div>
+          </article>
+          <article class="phone-case" data-kind="approval">
+            <div class="mock-label">
+              <b>06 / CONTEXTUAL APPROVAL</b><span>CHAT · REVIEW BEFORE WRITE</span>
+            </div>
+            <div class="phone">
+              <div class="island"></div>
+              <div class="phone-status">9:41 <span>● ◒</span></div>
+              <div class="phone-screen chat-screen">
+                <header>
+                  <button><i data-heroicon="back"></i></button>
+                  <div><b>Maya Kim</b><small>WhatsApp</small></div>
+                  <button><i data-heroicon="more"></i></button>
+                </header>
+                <div class="mobile-chat">
+                  <p class="their">Tuesday at 10 works for me. Let’s do 45 minutes.</p>
+                  <p class="mine">Perfect, see you then.</p>
+                </div>
+                <div class="approval-sheet">
+                  <div class="sheet-handle"></div>
+                  <small>CALENDAR FOUND A CONFIRMED PLAN</small>
+                  <h3>Add this to your calendar?</h3>
+                  <div class="event-card">
+                    <small>DRAFT EVENT</small><b>Launch review with Maya</b>
+                    <p>Tue, Aug 18 · 10:00–10:45</p>
+                    <span>Luc · Work · Invite Maya</span>
+                  </div>
+                  <button class="primary">Review and create</button
+                  ><button class="quiet-button">Not this time</button>
+                  <p class="why">Why this appeared · Manage automation</p>
+                </div>
+              </div>
+            </div>
+          </article>
+          <article class="phone-case" data-kind="approval">
+            <div class="mock-label">
+              <b>07 / ACTION REVIEW</b><span>EXACT DATA + DESTINATION</span>
+            </div>
+            <div class="phone">
+              <div class="island"></div>
+              <div class="phone-status">9:41 <span>● ◒</span></div>
+              <div class="phone-screen review">
+                <header>
+                  <button><i data-heroicon="back"></i></button><span>Review action</span><i></i>
+                </header>
+                <div class="review-plugin">
+                  <div class="app-icon calendar">31</div>
+                  <div><b>Calendar</b><small>Creating one event</small></div>
+                </div>
+                <label>Title<input value="Launch review with Maya" /></label>
+                <div class="field-row">
+                  <label>Date<input value="Tue, Aug 18" /></label
+                  ><label>Time<input value="10:00–10:45" /></label>
+                </div>
+                <label>Calendar<input value="Luc · Work" /></label
+                ><label>Guests<input value="Maya Kim" /></label>
+                <div class="shared-data">
+                  <small>DATA SENT TO GOOGLE CALENDAR</small>
+                  <p>Event title, start/end time, your account ID, and Maya’s email.</p>
+                </div>
+                <button class="primary bottom">Create event</button>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="components">
+        <div class="section-head">
+          <div>
+            <div class="kicker">PLUGIN COMPONENTS</div>
+            <h2>A visible grammar for agency.</h2>
+          </div>
+          <p>
+            These components should be shared by mobile and desktop so users can recognize what is
+            installed, proposed, approved, or blocked.
+          </p>
+        </div>
+        <div class="component-grid">
+          <article>
+            <small>PLUGIN IDENTITY</small>
+            <div class="component-demo">
+              <div class="app-icon calendar">31</div>
+              <div><b>Calendar</b><span class="verified">VERIFIED</span></div>
+            </div>
+            <p>Vendor identity never substitutes for permission or trust status.</p>
+          </article>
+          <article>
+            <small>RISK & APPROVAL</small>
+            <div class="pills">
+              <span>READ ONLY</span><span class="warning">ASK EVERY TIME</span
+              ><span class="success">AUTO-RUN</span>
+            </div>
+            <p>Auto-run is available only for low-risk, reversible actions.</p>
+          </article>
+          <article>
+            <small>ACTION RECEIPT</small>
+            <div class="receipt">
+              <i data-heroicon="check-circle"></i
+              ><span><b>Event created</b><small>Approved by you · 10:04</small></span
+              ><button>Undo</button>
+            </div>
+            <p>Receipts preserve source, actor, destination, inputs, and result.</p>
+          </article>
+          <article>
+            <small>CONTEXT SCOPE</small>
+            <div class="scope">
+              <button class="active">This chat</button><button>Selected people</button
+              ><button>No messages</button>
+            </div>
+            <p>Conversation access is granted independently of account OAuth.</p>
+          </article>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

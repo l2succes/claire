@@ -7,6 +7,51 @@ import { logger } from '../utils/logger';
 
 const router = Router();
 
+type PromiseConversationRow = {
+  id: string;
+  message_id?: string | null;
+  chat_id?: string | null;
+  contact_name?: string | null;
+  platform?: string | null;
+  contact?: unknown;
+  chat?: unknown;
+  [key: string]: unknown;
+};
+
+async function hydratePromiseConversations(userId: string, rows: PromiseConversationRow[]) {
+  const messageIds = [...new Set(rows.map((row) => row.message_id).filter((id): id is string => Boolean(id)))];
+  if (!messageIds.length) return rows;
+
+  const { data: sources, error } = await supabase
+    .from('messages')
+    .select(`
+      id, chat_id, contact_name, platform,
+      contact:contacts!messages_contact_id_fkey(name, inferred_name, avatar_url),
+      chat:chats!messages_chat_id_fkey(
+        name, is_group, platform,
+        contact:contacts!chats_contact_id_fkey(name, inferred_name, avatar_url)
+      )
+    `)
+    .eq('user_id', userId)
+    .in('id', messageIds);
+  if (error) throw error;
+
+  const byMessageId = new Map((sources || []).map((source) => [source.id, source]));
+  return rows.map((row) => {
+    const source = row.message_id ? byMessageId.get(row.message_id) : null;
+    if (!source) return row;
+    const sourceChat = source.chat as { contact?: unknown } | null;
+    return {
+      ...row,
+      chat_id: row.chat_id || source.chat_id,
+      contact_name: row.contact_name || source.contact_name,
+      platform: row.platform || source.platform,
+      contact: source.contact || sourceChat?.contact || row.contact || null,
+      chat: source.chat || row.chat || null,
+    };
+  });
+}
+
 // ---- Schema validators ----
 
 const listPromisesSchema = z.object({
@@ -30,6 +75,15 @@ const updatePromiseSchema = z.object({
     priority: z.enum(['low', 'medium', 'high']).optional(),
   }).refine(data => Object.keys(data).length > 0, {
     message: 'At least one field must be provided',
+  }),
+});
+
+const createPromiseSchema = z.object({
+  body: z.object({
+    content: z.string().trim().min(1).max(1_000),
+    deadline: z.string().datetime().nullable().optional(),
+    priority: z.enum(['low', 'medium', 'high']).optional().default('medium'),
+    chat_id: z.string().uuid().nullable().optional(),
   }),
 });
 
@@ -72,6 +126,39 @@ async function getOwnedPromise(id: string, userId: string) {
 
 // ---- Routes ----
 
+/** Create a user-authored promise without requiring a source message. */
+router.post(
+  '/',
+  requireAuth,
+  validateRequest(createPromiseSchema),
+  async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) return res.status(401).json({ error: 'User not authenticated' });
+      const { data, error } = await supabase
+        .from('promises')
+        .insert({
+          user_id: userId,
+          content: req.body.content,
+          deadline: req.body.deadline || null,
+          priority: req.body.priority,
+          chat_id: req.body.chat_id || null,
+          type: 'task',
+          from_me: true,
+          status: 'pending',
+          confidence: 1,
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      return res.status(201).json({ success: true, data });
+    } catch (error) {
+      logger.error('Error creating promise:', error);
+      return res.status(500).json({ success: false, error: 'Failed to create promise' });
+    }
+  }
+);
+
 /**
  * GET /promises
  * List promises for the authenticated user, with optional filters.
@@ -91,7 +178,14 @@ router.get(
 
       let query = supabase
         .from('promises')
-        .select('*', { count: 'exact' })
+        .select(`
+          *,
+          contact:contacts!promises_contact_id_fkey(name, inferred_name, avatar_url),
+          chat:chats!promises_chat_id_fkey(
+            name, is_group, platform,
+            contact:contacts!chats_contact_id_fkey(name, inferred_name, avatar_url)
+          )
+        `, { count: 'exact' })
         .eq('user_id', userId)
         .order('created_at', { ascending: false });
 
@@ -106,7 +200,8 @@ router.get(
         return res.status(500).json({ success: false, error: 'Failed to fetch promises' });
       }
 
-      return res.json({ success: true, data, total: count ?? 0 });
+      const hydrated = await hydratePromiseConversations(userId, (data || []) as PromiseConversationRow[]);
+      return res.json({ success: true, data: hydrated, total: count ?? 0 });
     } catch (error) {
       logger.error('Error in GET /promises:', error);
       return res.status(500).json({ success: false, error: 'Internal server error' });

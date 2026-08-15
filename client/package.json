@@ -29,6 +29,7 @@
     "e2e:web": "bunx playwright test"
   },
   "dependencies": {
+    "@claire/design-system": "file:../packages/design-system",
     "@expo/vector-icons": "^15.0.2",
     "@gluestack-ui/nativewind-utils": "^1.0.0",
     "@gluestack-ui/overlay": "^0.1.0",
@@ -51,6 +52,7 @@
     "expo-dev-client": "^55.0.19",
     "expo-device": "~55.0.10",
     "expo-font": "~55.0.4",
+    "expo-image": "~55.0.6",
     "expo-linking": "~55.0.9",
     "expo-notifications": "~55.0.14",
     "expo-router": "~55.0.8",
@@ -65,6 +67,7 @@
     "react-native": "0.83.4",
     "react-native-gesture-handler": "~2.30.0",
     "react-native-gifted-chat": "^3.3.2",
+    "react-native-heroicons": "^4.0.0",
     "react-native-keyboard-controller": "1.20.7",
     "react-native-reanimated": "4.2.1",
     "react-native-safe-area-context": "~5.6.2",

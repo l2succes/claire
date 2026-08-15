@@ -26,16 +26,19 @@ import { aiRateLimit, authRateLimit } from './middleware/rate-limit';
 import seedRoutes from './routes/seed';
 import promiseRoutes from './routes/promises';
 import pushTokenRoutes from './routes/push-tokens';
+import notificationDeviceRoutes from './routes/notification-devices';
 import contactRoutes from './routes/contacts';
 import deviceRoutes from './routes/devices';
+import searchRoutes from './routes/search';
 import { ensureCompanionSchema } from './services/companion-schema';
 import { platformManager } from './adapters';
 import { aiProcessor } from './services/ai-processor';
 import { conversationAssistant } from './services/conversation-assistant';
 import { voiceProfileService } from './services/voice-profile-service';
+import { incomingContactId } from './services/contact-identity';
 import { promiseDetector } from './services/promise-detector';
 import { autoReplyEngine } from './services/auto-reply-engine';
-import { pushNotificationService } from './services/push-notification';
+import { notificationDeliveryService } from './services/notification-delivery';
 import { Platform, PlatformStatus } from './adapters/types';
 import { whatsappAdapter } from './adapters/whatsapp';
 import { telegramAdapter } from './adapters/telegram';
@@ -63,31 +66,7 @@ async function notifyIncomingMessage(message: {
   content: string;
   messageId: string;
 }): Promise<void> {
-  const { data: preferences, error } = await supabase
-    .from('user_preferences')
-    .select('notification_enabled, preferences')
-    .eq('user_id', message.userId)
-    .maybeSingle();
-  if (error) {
-    logger.debug('Notification preferences unavailable:', error.message);
-    return;
-  }
-
-  const options = (preferences?.preferences || {}) as { notify_messages?: boolean };
-  if (preferences?.notification_enabled === false || options.notify_messages === false) return;
-
-  await pushNotificationService.sendToUser(message.userId, {
-    title: message.senderName || 'New message',
-    body: message.content.trim().slice(0, 160) || 'Sent you an update',
-    sound: 'default',
-    channelId: 'messages',
-    data: {
-      type: 'new_message',
-      chatId: message.chatId,
-      platform: message.platform,
-      messageId: message.messageId,
-    },
-  });
+  await notificationDeliveryService.enqueueIncomingMessage(message);
 }
 
 // Sentry request handler — must come first in the middleware chain
@@ -125,13 +104,17 @@ app.use('/preferences', preferencesRoutes);
 app.use('/seed', seedRoutes);
 app.use('/promises', promiseRoutes);
 app.use('/push-tokens', pushTokenRoutes);
+app.use('/notification-devices', notificationDeviceRoutes);
 app.use('/contacts', contactRoutes);
 app.use('/devices', deviceRoutes);
+app.use('/search', searchRoutes);
 app.use('/auto-reply', autoReplyRoutes);
 
-// GoTrue falls back to its site URL when a custom application scheme is not
-// allow-listed. Route OAuth codes back to the correct Claire client while
-// retaining the email-confirmation page for requests without OAuth fields.
+// GoTrue sends an OAuth authorization code to its configured site URL when a
+// custom mobile/desktop redirect is not allow-listed. The production site URL
+// is this service, so forward only the known OAuth callback fields to the
+// registered Claire Desktop scheme instead of trying to render the email
+// confirmation page (which previously became a generic 500 response).
 app.get('/', (req, res, next) => {
   const code = typeof req.query.code === 'string' ? req.query.code : null;
   const error = typeof req.query.error === 'string' ? req.query.error : null;
@@ -156,6 +139,8 @@ app.get('/', (req, res, next) => {
     return res.redirect(302, callback);
   }
 
+  // Supabase email confirmations use fragment parameters, which are not sent
+  // to the server. Keep the browser confirmation page for that flow.
   return res.sendFile(__dirname + '/routes/email-confirm.html', (sendError) => {
     if (sendError) next(sendError);
   });
@@ -418,9 +403,7 @@ async function initializePlatforms() {
       // inbox a stable avatar/name relationship instead of trying to infer it
       // from the latest message row on every render.
       let contactId: string | null = null;
-      const senderContactId = !message.isFromMe
-        ? message.senderId?.match(/@(?:whatsapp|_telegram|meta|_imessage)_([^:]+):/)?.[1] || null
-        : null;
+      const senderContactId = incomingContactId(message);
       if (senderContactId) {
         const platformContactId = senderContactId;
         {
@@ -495,7 +478,7 @@ async function initializePlatforms() {
           }
         }
 
-        if (!message.isFromMe && savedMsg?.id) {
+        if (!message.isFromMe && !isBackfill && savedMsg?.id) {
           void notifyIncomingMessage({
             userId: message.userId,
             chatId: chat.id,

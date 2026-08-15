@@ -23,6 +23,20 @@ import {
 
 export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001';
 
+export interface PlatformDefinition {
+  id: string;
+  name: string;
+  mark: string;
+  accent: string;
+  iconUrl: string;
+  supportStatus: 'available' | 'beta' | 'planned' | 'unavailable';
+  setupSurface: 'phone' | 'desktop' | 'mac';
+  setupLabel: string;
+  runtimeLabel: string;
+  authSummary: string;
+  detail: string;
+}
+
 // Create axios instance with default config
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -58,6 +72,19 @@ api.interceptors.response.use(
  * Platform API methods
  */
 export const platformsApi = {
+  async getPlatformDefinitions(): Promise<PlatformDefinition[]> {
+    const response = await api.get<{ success: boolean; platforms: PlatformDefinition[] }>('/platforms/definitions');
+    return response.data.platforms;
+  },
+
+  async getPlatformInterests(): Promise<string[]> {
+    const response = await api.get<{ success: boolean; platformIds: string[] }>('/platforms/interests');
+    return response.data.platformIds;
+  },
+
+  async requestPlatformInterest(platformId: string): Promise<void> {
+    await api.post(`/platforms/${encodeURIComponent(platformId)}/interest`, { source: 'mobile' });
+  },
   /**
    * Get all available platforms and their status
    */
@@ -188,8 +215,8 @@ export const platformsApi = {
   },
 
   /**
-   * Start Instagram login via bridge HTTP API.
-   * Returns sessionId, loginId, stepId to pass into instagramLoginSubmit.
+   * Companion-only bridge helper. Mobile and web must direct people to Claire
+   * Desktop rather than collecting an Instagram browser session themselves.
    */
   async instagramLoginStart(client: 'native' | 'web' = 'native'): Promise<InstagramLoginStep> {
     const response = await api.post<{
@@ -217,7 +244,7 @@ export const platformsApi = {
   },
 
   /**
-   * Submit extracted Instagram cookies to complete bridge login.
+   * Companion-only bridge helper for a securely captured desktop session.
    */
   async instagramLoginSubmit(
     sessionId: string,

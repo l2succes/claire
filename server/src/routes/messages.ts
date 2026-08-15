@@ -61,7 +61,7 @@ router.get(
       if (search) {
         messages = await messageIngestion.searchMessages(userId, search, limit);
       } else if (chatId) {
-        messages = await messageIngestion.getChatMessages(userId, chatId, limit);
+        messages = await messageIngestion.getChatMessages(userId, chatId, limit, offset);
       } else {
         messages = await messageIngestion.getUserMessages(userId, limit, offset);
       }
@@ -100,7 +100,30 @@ router.get(
 
       if (error) throw error;
 
-      return res.json(chats ?? []);
+      const chatRows = chats || [];
+      const chatIds = chatRows.map((chat) => chat.id);
+      if (!chatIds.length) return res.json([]);
+
+      // A single batched lookup keeps inbox rows useful without an N+1 query.
+      // `messages` is ordered newest first, so the first row for each chat is
+      // its preview. The client remains free to ignore this additive field.
+      const { data: latestMessages, error: latestError } = await supabase
+        .from('messages')
+        .select('id, chat_id, content, content_type, media_mime_type, timestamp, from_me')
+        .eq('user_id', userId)
+        .in('chat_id', chatIds)
+        .order('timestamp', { ascending: false });
+      if (latestError) throw latestError;
+
+      const latestByChat = new Map<string, Record<string, unknown>>();
+      for (const message of latestMessages || []) {
+        if (message.chat_id && !latestByChat.has(message.chat_id)) latestByChat.set(message.chat_id, message);
+      }
+
+      return res.json(chatRows.map((chat) => ({
+        ...chat,
+        latest_message: latestByChat.get(chat.id) || null,
+      })));
     } catch (error) {
       logger.error('Failed to get chats:', error);
       return res.status(500).json({ error: 'Failed to retrieve chats' });
@@ -205,6 +228,53 @@ router.get(
     } catch (error) {
       logger.error('Failed to get message:', error);
       return res.status(500).json({ error: 'Failed to retrieve message' });
+    }
+  }
+);
+
+/**
+ * GET /messages/:messageId/context
+ * Load a bounded chronological window around a cited message. This keeps
+ * global-search deep links useful even when the target falls outside the
+ * normal recent-message page.
+ */
+router.get(
+  '/:messageId/context',
+  requireAuth,
+  async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id as string;
+      const { messageId } = req.params;
+      const { data: target, error: targetError } = await supabase
+        .from('messages')
+        .select('id, chat_id, timestamp')
+        .eq('id', messageId)
+        .eq('user_id', userId)
+        .maybeSingle();
+      if (targetError) throw targetError;
+      if (!target?.chat_id) return res.status(404).json({ error: 'Message not found' });
+
+      const select = '*, contact:contacts(*), chat:chats!messages_chat_id_fkey(*)';
+      const [before, after] = await Promise.all([
+        supabase.from('messages').select(select)
+          .eq('user_id', userId).eq('chat_id', target.chat_id)
+          .lte('timestamp', target.timestamp)
+          .order('timestamp', { ascending: false }).limit(50),
+        supabase.from('messages').select(select)
+          .eq('user_id', userId).eq('chat_id', target.chat_id)
+          .gt('timestamp', target.timestamp)
+          .order('timestamp', { ascending: true }).limit(50),
+      ]);
+      if (before.error) throw before.error;
+      if (after.error) throw after.error;
+
+      const messages = [...(before.data || []), ...(after.data || [])]
+        .filter((message, index, rows) => rows.findIndex((candidate) => candidate.id === message.id) === index)
+        .sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp));
+      return res.json({ chatId: target.chat_id, messages });
+    } catch (error) {
+      logger.error('Failed to retrieve message context:', error);
+      return res.status(500).json({ error: 'Failed to retrieve message context' });
     }
   }
 );
@@ -402,6 +472,25 @@ router.post(
     }
   }
 );
+
+/** Pinning is Claire-local inbox state and never mutates the source platform. */
+router.patch('/chats/:chatId/pin', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.id as string;
+    const pinned = req.body?.pinned;
+    if (typeof pinned !== 'boolean') return res.status(400).json({ error: 'pinned must be a boolean' });
+    const { data, error } = await supabase.from('chats')
+      .update({ is_pinned: pinned, pinned_at: pinned ? new Date().toISOString() : null })
+      .eq('id', req.params.chatId).eq('user_id', userId)
+      .select('id,is_pinned,pinned_at').maybeSingle();
+    if (error) throw error;
+    if (!data) return res.status(404).json({ error: 'Chat not found' });
+    return res.json({ success: true, chat: data });
+  } catch (error) {
+    logger.error('Failed to update chat pin:', error);
+    return res.status(500).json({ error: 'Failed to update chat pin' });
+  }
+});
 
 /**
  * POST /messages/typing

@@ -15,6 +15,7 @@ An AI-powered unified messaging companion that bridges WhatsApp, Telegram, and I
 ## Tech Stack
 
 ### Backend
+
 - **Runtime**: Bun + TypeScript
 - **Server**: Express.js on port 3001
 - **Database**: Supabase (PostgreSQL, Auth, Realtime, Storage) — self-hosted via Docker
@@ -23,6 +24,7 @@ An AI-powered unified messaging companion that bridges WhatsApp, Telegram, and I
 - **AI**: OpenAI GPT-4
 
 ### Frontend
+
 - **Framework**: Expo SDK 55 + TypeScript
 - **React Native**: 0.83.4 with new architecture (Bridgeless)
 - **Navigation**: Expo Router v4
@@ -30,6 +32,7 @@ An AI-powered unified messaging companion that bridges WhatsApp, Telegram, and I
 - **Auth**: Supabase Auth with Google OAuth
 
 ### Infrastructure
+
 - **Matrix homeserver**: Synapse on port 8008
 - **Bridges**: mautrix-whatsapp, mautrix-telegram, mautrix-instagram
 - All services run in Docker containers via Docker Compose
@@ -47,6 +50,7 @@ Claire uses [mautrix bridges](https://docs.mau.fi/) to connect to messaging plat
 7. **App displays messages** from all platforms in a unified inbox
 
 Each platform has its own auth method:
+
 - **WhatsApp**: QR code scan or phone pairing code
 - **Telegram**: Phone number + SMS verification code
 - **Instagram**: Browser cookie extraction
@@ -55,12 +59,12 @@ For detailed bridge API docs, see [docs/MATRIX_BRIDGE_REFERENCE.md](docs/MATRIX_
 
 ## Production
 
-| Service | URL |
-|---|---|
-| Claire server | https://claire-production-1450.up.railway.app |
-| Supabase API (Kong) | https://kong-production-2679.up.railway.app |
-| Supabase Studio | https://supabase-studio-production-b766.up.railway.app |
-| Postgres (external) | `hopper.proxy.rlwy.net:46800` user: `supabase_admin` |
+| Service             | URL                                                    |
+| ------------------- | ------------------------------------------------------ |
+| Claire server       | https://claire-production-1450.up.railway.app          |
+| Supabase API (Kong) | https://kong-production-2679.up.railway.app            |
+| Supabase Studio     | https://supabase-studio-production-b766.up.railway.app |
+| Postgres (external) | `hopper.proxy.rlwy.net:46800` user: `supabase_admin`   |
 
 See [docs/deployment/PRODUCTION_SETUP.md](docs/deployment/PRODUCTION_SETUP.md) for health checks, EAS env var setup, and CI.
 
@@ -96,16 +100,16 @@ bun run docker:supabase   # Supabase only (PostgreSQL, Kong, GoTrue, PostgREST, 
 bun run docker:matrix     # Matrix only (Synapse + mautrix bridges)
 ```
 
-| Script | What it does |
-|---|---|
-| `bun run docker:up` | Start Supabase + Matrix |
-| `bun run docker:down` | Stop both stacks |
-| `bun run docker:supabase` | Start Supabase stack |
-| `bun run docker:supabase:down` | Stop Supabase |
-| `bun run docker:supabase:logs` | Tail Supabase logs |
-| `bun run docker:matrix` | Start Matrix stack |
-| `bun run docker:matrix:down` | Stop Matrix stack |
-| `bun run docker:matrix:logs` | Tail Matrix logs |
+| Script                         | What it does            |
+| ------------------------------ | ----------------------- |
+| `bun run docker:up`            | Start Supabase + Matrix |
+| `bun run docker:down`          | Stop both stacks        |
+| `bun run docker:supabase`      | Start Supabase stack    |
+| `bun run docker:supabase:down` | Stop Supabase           |
+| `bun run docker:supabase:logs` | Tail Supabase logs      |
+| `bun run docker:matrix`        | Start Matrix stack      |
+| `bun run docker:matrix:down`   | Stop Matrix stack       |
+| `bun run docker:matrix:logs`   | Tail Matrix logs        |
 
 ### 3. Configure environment
 
@@ -146,12 +150,12 @@ bun run client:ios:prod
 bun run client:ios:prod:device
 ```
 
-| Script | Environment |
-|---|---|
-| `bun run dev` | Local server + local Supabase |
-| `bun run client:prod` | Local server + **Railway** Supabase |
-| `bun run client:ios:prod` | Simulator → **Railway** |
-| `bun run client:ios:prod:device` | Physical device → **Railway** |
+| Script                           | Environment                         |
+| -------------------------------- | ----------------------------------- |
+| `bun run dev`                    | Local server + local Supabase       |
+| `bun run client:prod`            | Local server + **Railway** Supabase |
+| `bun run client:ios:prod`        | Simulator → **Railway**             |
+| `bun run client:ios:prod:device` | Physical device → **Railway**       |
 
 ### Building for device / distribution
 
@@ -209,6 +213,9 @@ EAS environment variables are stored in the cloud — no `.env` file needed on C
 - [Design System Migration Guide](docs/DESIGN_SYSTEM_MIGRATION_GUIDE.md) — Incremental migration of the Expo app and shared desktop primitives
 - [Platform Connector Roadmap](docs/PLATFORM_CONNECTOR_ROADMAP.md) — 16-network catalog, desktop setup classes, rollout waves, and privacy gates
 - [AI Platform & Self-Hosting Spec](docs/AI_PLATFORM_AND_SELF_HOSTING_SPEC.md) — Community/Cloud packaging, BYOK and local models, billing, privacy, and provider-neutral architecture
+- [Payments & AI Credits Spec](docs/PAYMENTS_AND_AI_CREDITS_SPEC.md) — Claire Plus consumer subscription, prepaid managed-AI credits, BYOK, ledger, entitlements, and payment controls
+- [Security Claims & Validation Roadmap](docs/SECURITY_CLAIMS_AND_ROADMAP.md) — Current public claims, data boundaries, and evidence gates for stronger privacy statements
+- [Claire Plugin System Spec](docs/CLAIRE_PLUGIN_SYSTEM_SPEC.md) — Plugin manifests, permissions, conversation triggers, approvals, execution, audit, and rollout
 - [Interactive Product Mockups](landing/README.md) — Landing page, mobile screens, desktop screens, and visual style guide
 - [Official mautrix docs](https://docs.mau.fi/) — Upstream bridge documentation
 

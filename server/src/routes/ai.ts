@@ -50,6 +50,10 @@ const assistantQuestionSchema = z.object({
   }),
 });
 
+const aiSearchSchema = z.object({
+  body: z.object({ query: z.string().trim().min(1).max(2_000) }),
+});
+
 const getAnalyticsSchema = z.object({
   query: z.object({
     startDate: z.string().optional(),
@@ -184,6 +188,46 @@ router.delete('/assistant/threads/:threadId', requireAuth, async (req: Request, 
   }
 });
 
+/** One persisted, strict-scope assistant thread for each conversation. */
+router.get('/assistant/conversations/:chatId', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: 'User not authenticated' });
+    return res.json({ success: true, data: await conversationAssistant.getConversationThread(userId, req.params.chatId) });
+  } catch (error) {
+    if ((error as Error).message === 'ASSISTANT_THREAD_NOT_FOUND') return res.status(404).json({ success: false, error: 'Conversation assistant has no saved thread yet' });
+    if ((error as Error).message === 'CHAT_NOT_FOUND') return res.status(404).json({ success: false, error: 'Conversation not found' });
+    logger.error('Error loading conversation assistant:', error);
+    return res.status(500).json({ success: false, error: 'Failed to load conversation assistant' });
+  }
+});
+
+router.post('/assistant/conversations/:chatId/messages', requireAuth, validateRequest(assistantQuestionSchema), async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: 'User not authenticated' });
+    if (!conversationAssistant.isConfigured) return res.status(503).json({ success: false, error: 'AI is not configured' });
+    return res.json({ success: true, data: await conversationAssistant.askConversation(userId, req.params.chatId, req.body.question) });
+  } catch (error) {
+    if ((error as Error).message === 'CHAT_NOT_FOUND') return res.status(404).json({ success: false, error: 'Conversation not found' });
+    logger.error('Error answering conversation assistant:', error);
+    return res.status(500).json({ success: false, error: 'Failed to answer conversation assistant' });
+  }
+});
+
+router.delete('/assistant/conversations/:chatId', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: 'User not authenticated' });
+    await conversationAssistant.clearConversationThread(userId, req.params.chatId);
+    return res.json({ success: true });
+  } catch (error) {
+    if ((error as Error).message === 'CHAT_NOT_FOUND') return res.status(404).json({ success: false, error: 'Conversation not found' });
+    logger.error('Error clearing conversation assistant:', error);
+    return res.status(500).json({ success: false, error: 'Failed to clear conversation assistant' });
+  }
+});
+
 router.post('/assistant/threads/:threadId/messages', requireAuth, validateRequest(assistantQuestionSchema), async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id;
@@ -194,6 +238,19 @@ router.post('/assistant/threads/:threadId/messages', requireAuth, validateReques
     if ((error as Error).message === 'ASSISTANT_THREAD_NOT_FOUND') return res.status(404).json({ success: false, error: 'Assistant thread not found' });
     logger.error('Error answering assistant question:', error);
     return res.status(500).json({ success: false, error: 'Failed to answer assistant question' });
+  }
+});
+
+/** Cited semantic search without adding noise to persisted Ask Claire threads. */
+router.post('/search', requireAuth, validateRequest(aiSearchSchema), async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: 'User not authenticated' });
+    if (!conversationAssistant.isConfigured) return res.status(503).json({ success: false, error: 'AI is not configured' });
+    return res.json({ success: true, data: await conversationAssistant.search(userId, req.body.query) });
+  } catch (error) {
+    logger.error('Error answering semantic search:', error);
+    return res.status(500).json({ success: false, error: 'Failed to answer search' });
   }
 });
 

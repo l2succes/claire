@@ -1,7 +1,7 @@
 # Claire AI Platform, Self-Hosting, and Managed Cloud Specification
 
-**Status:** Proposed  
-**Audience:** Product, design, backend, desktop, infrastructure, security, and billing  
+**Status:** Proposed
+**Audience:** Product, design, backend, desktop, infrastructure, security, and billing
 **Scope:** Product packaging and the provider-neutral AI platform that powers reply assistance,
 Ask Claire, conversation memory, promise detection, summaries, and semantic search.
 
@@ -234,10 +234,11 @@ The user-facing plan may call the allowance “AI credits,” but the UI must al
 such as “$8 of managed AI included” or a feature-level estimate. Exact plan prices and markup remain
 a go-to-market decision.
 
-Recommended packaging:
+Launch packaging:
 
 - **Community:** free self-hosted software; BYOK or local models; no managed allowance.
-- **Claire Cloud:** managed infrastructure subscription with an included monthly AI allowance.
+- **Claire Plus:** a $10 USD monthly personal subscription with a monthly managed-AI credit
+  allowance.
 - **Cloud + BYOK:** same infrastructure subscription; provider usage bypasses the Claire allowance.
 - **Top-ups or overage:** opt-in only, with a user-set hard cap. Never silently run an unlimited
   bill.

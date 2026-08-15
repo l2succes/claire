@@ -10,6 +10,10 @@ const router = Router();
 
 const VALID_TONES = ['friendly', 'professional', 'casual', 'formal', 'empathetic'] as const;
 const VALID_STYLES = ['concise', 'detailed', 'balanced'] as const;
+const desktopShortcutSchema = z.record(z.string(), z.string().min(1).max(32)).refine(
+  (shortcuts) => new Set(Object.values(shortcuts)).size === Object.values(shortcuts).length,
+  'Desktop shortcuts must not conflict',
+);
 
 const updatePreferencesSchema = z.object({
   body: z.object({
@@ -26,6 +30,13 @@ const updatePreferencesSchema = z.object({
         notify_messages: z.boolean().optional(),
         notify_promises: z.boolean().optional(),
         notify_ai_suggestions: z.boolean().optional(),
+        desktop_appearance: z.object({
+          theme: z.enum(['system', 'light', 'dark']).optional(),
+          density: z.enum(['comfortable', 'compact']).optional(),
+          scale: z.number().min(0.9).max(1.15).optional(),
+        }).optional(),
+        desktop_shortcuts: desktopShortcutSchema.optional(),
+        desktop_inbox_inspector: z.enum(['contact', 'assistant']).optional(),
       })
       .optional(),
   }),
@@ -80,7 +91,16 @@ router.put(
     if (response_style !== undefined) updates.response_style = response_style;
     if (language !== undefined) updates.language = language;
     if (notification_enabled !== undefined) updates.notification_enabled = notification_enabled;
-    if (preferences !== undefined) updates.preferences = preferences;
+    if (preferences !== undefined) {
+      const { data: current } = await supabase
+        .from('user_preferences')
+        .select('preferences')
+        .eq('user_id', userId)
+        .maybeSingle();
+      // Preference updates are partial from different clients. Preserve keys the
+      // current desktop/client does not know about rather than clobbering them.
+      updates.preferences = { ...(current?.preferences || {}), ...preferences };
+    }
 
     const { data, error } = await supabase
       .from('user_preferences')
@@ -96,6 +116,28 @@ router.put(
     return res.json({ success: true, data });
   }
 );
+
+router.get('/account', requireAuth, async (req: Request, res: Response) => {
+  if (!req.user?.id) return res.status(401).json({ error: 'User not authenticated' });
+  const { data, error } = await supabase.from('users')
+    .select('email,name,avatar_url')
+    .eq('id', req.user.id)
+    .maybeSingle();
+  if (error) return res.status(500).json({ error: 'Failed to load account profile' });
+  return res.json({ success: true, data: data || { email: req.user.email || '', name: null, avatar_url: null } });
+});
+
+router.put('/account', requireAuth, async (req: Request, res: Response) => {
+  if (!req.user?.id) return res.status(401).json({ error: 'User not authenticated' });
+  const name = typeof req.body?.name === 'string' ? req.body.name.trim().slice(0, 120) : undefined;
+  const avatarUrl = typeof req.body?.avatar_url === 'string' ? req.body.avatar_url.trim().slice(0, 2048) : undefined;
+  if (name === undefined && avatarUrl === undefined) return res.status(400).json({ error: 'Provide a name or avatar URL' });
+  const { data, error } = await supabase.from('users')
+    .upsert({ id: req.user.id, email: req.user.email || '', ...(name !== undefined ? { name } : {}), ...(avatarUrl !== undefined ? { avatar_url: avatarUrl } : {}), updated_at: new Date().toISOString() }, { onConflict: 'id' })
+    .select('email,name,avatar_url').single();
+  if (error) return res.status(500).json({ error: 'Failed to update account profile' });
+  return res.json({ success: true, data });
+});
 
 router.get('/voice-profiles', requireAuth, async (req: Request, res: Response) => {
   try {

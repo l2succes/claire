@@ -16,7 +16,9 @@ const router = Router();
 
 /** Deployment diagnostic for desktop setup. Returns no account/device data. */
 router.get('/readiness', async (_req: Request, res: Response) => {
-  const { count, error } = await supabase.from('companion_devices').select('id', { count: 'exact', head: true });
+  const { count, error } = await supabase
+    .from('companion_devices')
+    .select('id', { count: 'exact', head: true });
   return res.status(error ? 503 : 200).json({ ready: !error, enrolledDevices: count || 0 });
 });
 

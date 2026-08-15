@@ -109,9 +109,7 @@ export function PlatformSelector({
               )}
 
               {!available && (
-                <Text className="text-xs text-orange-500 mt-1">
-                  {platform === Platform.IMESSAGE ? 'Mac companion required' : 'Coming soon'}
-                </Text>
+                <Text className="text-xs text-orange-500 mt-1">Coming soon</Text>
               )}
             </TouchableOpacity>
           );

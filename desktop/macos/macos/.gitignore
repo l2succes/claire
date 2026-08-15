@@ -1,0 +1,6 @@
+# CocoaPods
+Pods/
+
+# Local public runtime endpoints for Xcode development. The template is tracked.
+ClaireDesktop.xcconfig
+.DS_Store

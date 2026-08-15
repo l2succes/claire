@@ -4,7 +4,7 @@
  * Dynamic authentication modal that handles different auth flows:
  * - WhatsApp: QR code display
  * - Telegram: Phone number + verification code
- * - Instagram: Cookie paste instructions
+ * - Instagram: Claire Desktop companion setup
  */
 
 import React, { useState, useEffect } from 'react';
@@ -20,7 +20,7 @@ import {
   KeyboardAvoidingView,
   Platform as RNPlatform,
 } from 'react-native';
-import { X, Check, AlertCircle, Wifi } from 'lucide-react-native';
+import { X, Check, AlertCircle, Wifi, Monitor } from 'lucide-react-native';
 import { PlatformIconButton } from './PlatformIcon';
 import { Button } from './ui/Button';
 import {
@@ -29,13 +29,8 @@ import {
   PLATFORM_DISPLAY,
   PlatformSession,
   getPlatformAuthMethod,
-  InstagramLoginStep,
-  InstagramLoginSubmission,
 } from '../types/platform';
 import { usePlatformStore } from '../stores/platformStore';
-import { InstagramWebViewLogin } from './InstagramWebViewLogin';
-import { platformsApi, pollAuthStatus } from '../services/platforms';
-import { getInstagramLoginMode, platformCapabilities } from '../utils/platformCapabilities';
 
 interface PlatformAuthModalProps {
   platform: Platform | null;
@@ -64,20 +59,12 @@ export function PlatformAuthModal({
 
   const [phoneNumber, setPhoneNumber] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
-  const [showInstagramWebView, setShowInstagramWebView] = useState(false);
-  const [instagramLoginSession, setInstagramLoginSession] = useState<InstagramLoginStep | null>(null);
-  const [instagramConnecting, setInstagramConnecting] = useState(false);
-  const [instagramError, setInstagramError] = useState<string | null>(null);
 
   // Reset state when modal opens/closes
   useEffect(() => {
     if (!visible) {
       setPhoneNumber('');
       setVerificationCode('');
-      setShowInstagramWebView(false);
-      setInstagramLoginSession(null);
-      setInstagramConnecting(false);
-      setInstagramError(null);
       clearError();
     }
   }, [visible, clearError]);
@@ -110,48 +97,6 @@ export function PlatformAuthModal({
       await connectPlatform(platform, { phoneNumber });
     } else {
       await connectPlatform(platform);
-    }
-  };
-
-  const handleInstagramWebViewOpen = async () => {
-    setInstagramError(null);
-    try {
-      const session = await platformsApi.instagramLoginStart(
-        platformCapabilities.isWeb ? 'web' : 'native'
-      );
-      setInstagramLoginSession(session);
-      setShowInstagramWebView(true);
-    } catch (err) {
-      console.error('[Instagram] Failed to start login session:', err);
-      setInstagramError(
-        err instanceof Error ? err.message : 'Failed to start Instagram login'
-      );
-    }
-  };
-
-  const handleInstagramCookies = async (submission: InstagramLoginSubmission) => {
-    setShowInstagramWebView(false);
-    if (!instagramLoginSession) return;
-    const { sessionId, loginId, stepId } = instagramLoginSession;
-
-    setInstagramConnecting(true);
-    setInstagramError(null);
-    try {
-      await platformsApi.instagramLoginSubmit(sessionId, loginId, stepId, submission);
-      pollAuthStatus(Platform.INSTAGRAM, sessionId, (session) => {
-        if (session.status === 'connected') {
-          setInstagramConnecting(false);
-          onSuccess();
-        } else if (session.status === 'failed') {
-          setInstagramConnecting(false);
-          setInstagramError(session.error || 'Instagram connection failed');
-        }
-      });
-    } catch (err) {
-      setInstagramConnecting(false);
-      setInstagramError(
-        err instanceof Error ? err.message : 'Failed to connect Instagram'
-      );
     }
   };
 
@@ -245,6 +190,14 @@ export function PlatformAuthModal({
       );
     }
 
+    if (platform === Platform.INSTAGRAM) {
+      return renderInstagramCompanionFlow();
+    }
+
+    if (platform === Platform.IMESSAGE) {
+      return renderIMessageCompanionFlow();
+    }
+
     // Auth flow in progress
     switch (authMethod) {
       case AuthMethod.QR_CODE:
@@ -254,7 +207,7 @@ export function PlatformAuthModal({
       case AuthMethod.PHONE_CODE:
         return renderPhoneCodeFlow();
       case AuthMethod.COOKIE:
-        return renderCookieFlow();
+        return null;
       default:
         return null;
     }
@@ -473,62 +426,57 @@ export function PlatformAuthModal({
     );
   };
 
-  const renderCookieFlow = () => {
-    if (instagramConnecting) {
-      return (
-        <View className="items-center py-8" testID="instagram-connecting-state">
-          <ActivityIndicator size="large" color={display.color} />
-          <Text className="text-gray-500 dark:text-gray-400 mt-4">
-            Connecting to Instagram...
-          </Text>
-        </View>
-      );
-    }
-
-    if (instagramError) {
-      return (
-        <View className="items-center py-8" testID="instagram-error-state">
-          <View className="w-16 h-16 rounded-full bg-red-100 items-center justify-center mb-4">
-            <AlertCircle size={32} color="#ef4444" />
-          </View>
-          <Text className="text-xl font-semibold text-gray-900 dark:text-white">
-            Connection Failed
-          </Text>
-          <Text className="text-gray-500 dark:text-gray-400 mt-2 text-center px-4">
-            {instagramError}
-          </Text>
-          <Button
-            variant="primary"
-            onPress={() => {
-              setInstagramError(null);
-              handleInstagramWebViewOpen();
-            }}
-            className="mt-6"
-            testID="instagram-retry-button"
-          >
-            Try Again
-          </Button>
-        </View>
-      );
-    }
-
+  const renderInstagramCompanionFlow = () => {
     return (
-      <View className="py-4">
-        <Text className="text-gray-600 dark:text-gray-300 text-center mb-6">
-          {getInstagramLoginMode() === 'embedded'
-            ? 'Log in to Instagram to connect your account'
-            : 'Sign in securely to connect your Instagram messages'}
+      <View className="items-center py-4" testID="instagram-companion-required">
+        <View className="w-16 h-16 rounded-full bg-pink-100 items-center justify-center mb-4">
+          <Monitor size={32} color={display.color} />
+        </View>
+        <Text className="text-xl font-semibold text-gray-900 dark:text-white text-center">
+          Connect with Claire Desktop
         </Text>
-        <Button
-          variant="primary"
-          onPress={handleInstagramWebViewOpen}
-          loading={isLoading}
-          className="w-full"
-          testID="instagram-login-trigger"
-        >
-          {getInstagramLoginMode() === 'embedded'
-            ? 'Log in to Instagram'
-            : 'Sign in to Instagram'}
+        <Text className="text-gray-600 dark:text-gray-300 text-center mt-3 px-4">
+          Instagram requires Claire Desktop to complete its secure browser connection and keep your chats syncing.
+        </Text>
+        <View className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 mt-6 w-full">
+          <Text className="text-gray-800 dark:text-gray-100 font-medium mb-2">On your computer:</Text>
+          <Text className="text-gray-600 dark:text-gray-300 text-sm">
+            1. Open Claire Desktop{`\n`}2. Go to Settings → Connected platforms{`\n`}3. Choose Instagram → Connect{`\n`}4. Return here once it shows Connected
+          </Text>
+        </View>
+        <Text className="text-gray-500 dark:text-gray-400 text-sm text-center mt-5 px-4">
+          Claire will never ask you to paste a browser cookie or use developer tools.
+        </Text>
+        <Button variant="secondary" onPress={onSuccess} className="mt-6 w-full" testID="instagram-companion-refresh-button">
+          I’ve connected it — Refresh
+        </Button>
+      </View>
+    );
+  };
+
+  const renderIMessageCompanionFlow = () => {
+    return (
+      <View className="items-center py-4" testID="imessage-companion-required">
+        <View className="w-16 h-16 rounded-full bg-blue-100 items-center justify-center mb-4">
+          <Monitor size={32} color={display.color} />
+        </View>
+        <Text className="text-xl font-semibold text-gray-900 dark:text-white text-center">
+          Connect with Claire Desktop on your Mac
+        </Text>
+        <Text className="text-gray-600 dark:text-gray-300 text-center mt-3 px-4">
+          iMessage needs a Mac signed in to Messages. Claire Desktop securely connects that Mac to your other Claire clients.
+        </Text>
+        <View className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 mt-6 w-full">
+          <Text className="text-gray-800 dark:text-gray-100 font-medium mb-2">On your Mac:</Text>
+          <Text className="text-gray-600 dark:text-gray-300 text-sm">
+            1. Open Claire Desktop{`\n`}2. Go to Settings → Connected platforms{`\n`}3. Choose iMessage → Connect{`\n`}4. Allow the requested macOS permissions{`\n`}5. Return here once it shows Connected
+          </Text>
+        </View>
+        <Text className="text-gray-500 dark:text-gray-400 text-sm text-center mt-5 px-4">
+          Keep the Mac online so new iMessages can sync.
+        </Text>
+        <Button variant="secondary" onPress={onSuccess} className="mt-6 w-full" testID="imessage-companion-refresh-button">
+          I’ve connected it — Refresh
         </Button>
       </View>
     );
@@ -546,14 +494,7 @@ export function PlatformAuthModal({
         behavior={RNPlatform.OS === 'ios' ? 'padding' : 'height'}
         className="flex-1 bg-white dark:bg-gray-900"
       >
-        {showInstagramWebView ? (
-          <InstagramWebViewLogin
-            onSuccess={handleInstagramCookies}
-            onCancel={() => setShowInstagramWebView(false)}
-            loginStep={instagramLoginSession}
-          />
-        ) : (
-          <>
+        <>
             {/* Header */}
             <View className="flex-row items-center justify-between px-4 py-4 border-b border-gray-200 dark:border-gray-700">
               <TouchableOpacity onPress={handleClose} className="p-2">
@@ -581,8 +522,7 @@ export function PlatformAuthModal({
 
               {renderContent()}
             </ScrollView>
-          </>
-        )}
+        </>
       </KeyboardAvoidingView>
     </Modal>
   );

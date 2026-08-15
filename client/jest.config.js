@@ -15,6 +15,9 @@ module.exports = {
   ],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',
+    '^react$': '<rootDir>/node_modules/react/index.js',
+    '^react-native$': '<rootDir>/node_modules/react-native/index.js',
+    '^react-native-css-interop/(.*)$': '<rootDir>/node_modules/react-native-css-interop/$1',
   },
   setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'],
   testEnvironment: 'jsdom',

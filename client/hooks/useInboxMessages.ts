@@ -22,6 +22,7 @@ export interface InboxMessage {
   contact_phone?: string;
   platform?: Platform;
   snoozed_until?: string | null;
+  is_pinned?: boolean;
 }
 
 interface MessagePage {
@@ -41,7 +42,7 @@ interface RawMessage {
   contact_phone?: string;
   contact_name?: string;
   snoozed_until?: string | null;
-  chats?: { name?: string; platform_chat_id?: string; unread_count?: number } | null;
+  chats?: { name?: string; platform_chat_id?: string; unread_count?: number; is_pinned?: boolean } | null;
   contacts?: { avatar_url?: string | null } | null;
   ai_suggestions?: Array<{ id: string; confidence?: number }>;
 }
@@ -104,6 +105,7 @@ function normalizeRows(rows: RawMessage[]) {
       unread_count: row.chats?.unread_count ?? 0,
       platform,
       snoozed_until: row.snoozed_until ?? null,
+      is_pinned: row.chats?.is_pinned ?? false,
     });
   }
 
@@ -123,11 +125,11 @@ function sameMessage(a: InboxMessage, b: InboxMessage) {
     a.from_me === b.from_me && a.status === b.status && a.contact_name === b.contact_name &&
     a.contact_avatar === b.contact_avatar && a.chat_name === b.chat_name &&
     a.contact_phone === b.contact_phone && a.has_ai_response === b.has_ai_response &&
-    a.snoozed_until === b.snoozed_until && a.unread_count === b.unread_count;
+    a.snoozed_until === b.snoozed_until && a.unread_count === b.unread_count && a.is_pinned === b.is_pinned;
 }
 
 function sortMessages(messages: InboxMessage[]) {
-  return [...messages].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  return [...messages].sort((a, b) => Number(!!b.is_pinned) - Number(!!a.is_pinned) || new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 }
 
 export function useInboxMessages(userId?: string) {
@@ -149,15 +151,31 @@ export function useInboxMessages(userId?: string) {
       const now = new Date().toISOString();
       const userTraceId = userId.slice(0, 8);
       inboxTrace('fetch:start', { page: pageParam, pageSize, user: userTraceId });
-      const { data, error, count } = await supabase
+      let messageResult = await supabase
         .from('messages')
         .select(`id, content, timestamp, from_me, is_group, status, platform,
           chat_id, contact_phone, contact_name, snoozed_until,
-          chats!messages_chat_id_fkey (name, platform_chat_id, unread_count), ai_suggestions (id, confidence)`, { count: 'exact' })
+          chats!messages_chat_id_fkey (name, platform_chat_id, unread_count, is_pinned), ai_suggestions (id, confidence)`, { count: 'exact' })
         .eq('user_id', userId)
         .or(`snoozed_until.is.null,snoozed_until.lte.${now}`)
         .order('timestamp', { ascending: false })
         .range(from, from + pageSize - 1);
+      // A rolling deploy can briefly leave a mobile client ahead of the
+      // database migration that adds chat pinning. Do not let that optional
+      // feature blank the entire inbox; retry the identical feed without it.
+      if (messageResult.error?.code === '42703') {
+        inboxTrace('fetch:pinning-unavailable', { page: pageParam, user: userTraceId });
+        messageResult = await supabase
+          .from('messages')
+          .select(`id, content, timestamp, from_me, is_group, status, platform,
+            chat_id, contact_phone, contact_name, snoozed_until,
+            chats!messages_chat_id_fkey (name, platform_chat_id, unread_count), ai_suggestions (id, confidence)`, { count: 'exact' })
+          .eq('user_id', userId)
+          .or(`snoozed_until.is.null,snoozed_until.lte.${now}`)
+          .order('timestamp', { ascending: false })
+          .range(from, from + pageSize - 1) as typeof messageResult;
+      }
+      const { data, error, count } = messageResult;
       if (error) {
         inboxError('fetch:messages-failed', error, { page: pageParam, user: userTraceId });
         throw error;
@@ -247,6 +265,7 @@ export function useInboxMessages(userId?: string) {
         unread_count: 0,
         has_ai_response: false,
         snoozed_until: row.snoozed_until ?? null,
+        is_pinned: false,
       };
       const first = old.pages[0];
       if (!first) return { ...old, pages: [{ messages: [newMessage], hasMore: false }] };
@@ -297,7 +316,7 @@ export function useInboxMessages(userId?: string) {
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages', filter: `user_id=eq.${userId}` }, ({ new: row }) => patchRealtimeMessage(row as RawMessage & { id: string }))
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'chats', filter: `user_id=eq.${userId}` }, ({ new: row }) => {
-        const chat = row as { id: string; platform?: Platform; unread_count?: number };
+        const chat = row as { id: string; platform?: Platform; unread_count?: number; is_pinned?: boolean };
         const key = conversationKey(chat.id, chat.platform || Platform.WHATSAPP);
         queryClient.setQueryData<InboxQueryData>(queryKey, (old) => {
           if (!old) return old;
@@ -305,9 +324,9 @@ export function useInboxMessages(userId?: string) {
           const pages = old.pages.map((page) => ({
             ...page,
             messages: page.messages.map((message) => {
-              if (message.conversation_key !== key || message.unread_count === chat.unread_count) return message;
+              if (message.conversation_key !== key || (message.unread_count === chat.unread_count && message.is_pinned === chat.is_pinned)) return message;
               changed = true;
-              return { ...message, unread_count: chat.unread_count ?? 0 };
+              return { ...message, unread_count: chat.unread_count ?? message.unread_count ?? 0, is_pinned: chat.is_pinned ?? message.is_pinned };
             }),
           }));
           return changed ? { ...old, pages } : old;

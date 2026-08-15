@@ -10,7 +10,7 @@ The migration must remain incremental. Do not rewrite routing, data fetching, an
 
 ## 1. Migration goals
 
-- One semantic token source for iOS, Android, macOS, and marketing web.
+- One semantic token source for iOS, Android, macOS, Windows, and marketing web.
 - Shared product language without pretending mobile and desktop layouts are identical.
 - Replace one-off colors, radii, and text sizes with primitives.
 - Preserve existing messaging, bridge, authentication, and AI behavior throughout the visual rollout.
@@ -205,7 +205,8 @@ Ship one screen at a time behind the design flag. Run existing functional tests 
 
 - Move tokens/primitives to `packages/design-system`.
 - Keep mobile navigation and desktop window composition outside the shared package.
-- Share patterns only when their inputs and behavior match; allow `.macos.tsx` variants for layout and native affordances.
+- Share patterns only when their inputs and behavior match; allow `.macos.tsx`
+  and `.windows.tsx` variants for layout and native affordances.
 
 ## 8. Navigation migration
 
@@ -264,13 +265,17 @@ Use three layers:
 Examples:
 
 - `ConversationRow.tsx` shares behavior and base visuals.
-- `ConversationRow.macos.tsx` adds hover, context menu, selection, and pointer density.
+- `ConversationRow.macos.tsx` and `ConversationRow.windows.tsx` add host
+  keyboard conventions, hover, context menus, selection, and pointer density.
 - `ChatScreen` remains separate mobile/desktop composition while reusing bubbles, AI cards, and composer logic.
 - Do not scale a 390-point phone screen to fill a desktop window.
 
 ## 11. Styling technology
 
-The marketing mockups use CSS, but native production code should consume token objects and React Native style props. Do not make Tailwind/NativeWind a requirement for the shared desktop package until macOS compatibility is proven.
+The marketing mockups use CSS, but native production code should consume token
+objects and React Native style props. Do not make Tailwind/NativeWind a
+requirement for the shared desktop package until both desktop-host compatibility
+spikes are proven.
 
 During migration:
 
@@ -298,7 +303,7 @@ Test each migrated screen at:
 
 - iPhone SE width, standard iPhone, and large iPhone.
 - iPad split view if tablet support remains enabled.
-- macOS 1,024×680 minimum, 1,280×800, and 1,440×900.
+- macOS and Windows at 1,024×680 minimum, 1,280×800, and 1,440×900.
 - Increased text size at 135% and 200%.
 - Reduce Motion, Increase Contrast, and VoiceOver.
 - Empty, one-item, typical, and high-density data.

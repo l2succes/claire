@@ -51,6 +51,11 @@ textarea {
   place-items: center;
   font-style: normal;
 }
+.docs-brand-mark {
+  width: 32px;
+  height: 32px;
+  display: block;
+}
 .docs-brand span {
   color: var(--neutral-400);
   font-weight: 500;
@@ -341,6 +346,45 @@ textarea {
   align-items: center;
   gap: 30px;
   height: 110px;
+}
+.icon-foundation {
+  grid-column: 1 / -1;
+}
+.icon-specimen {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+.icon-specimen > span {
+  min-width: 86px;
+  min-height: 74px;
+  padding: 12px;
+  border: 1px solid var(--neutral-200);
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  gap: 7px;
+  background: var(--claire-paper);
+}
+.icon-specimen .hero-icon {
+  width: 26px;
+  height: 26px;
+  stroke-width: 1.7;
+}
+.icon-specimen small {
+  font: 500 10px var(--font-mono);
+  color: var(--neutral-600);
+}
+.icon-guidance {
+  max-width: 760px;
+  margin: 16px 0 0;
+  color: var(--neutral-600);
+  line-height: 1.6;
+}
+.demo-button .hero-icon {
+  width: 18px;
+  height: 18px;
 }
 .motion-demo i {
   width: 50px;

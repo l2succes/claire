@@ -17,6 +17,7 @@ import { requireAuth } from '../middleware/auth';
 import { BridgeHttpClient } from '../adapters/matrix/bridge-http-client';
 import { loginWithCredentials, submitTwoFactorCode } from '../services/instagram-login';
 import { platformCatalog, platformCatalogVersion } from '../platform-catalog';
+import { supabase } from '../services/supabase';
 
 // Railway services cannot reach each other through localhost. Railway does not
 // inject NODE_ENV by default, so its public-domain marker is also used to
@@ -147,6 +148,47 @@ function resolveInstagramCookies(body: {
 router.use((req, res, next) => {
   if (req.method === 'GET' && req.path === '/') return next();
   return requireAuth(req, res, next);
+});
+
+/** Authenticated opt-in platform interest. No external credentials are stored. */
+router.get('/interests', async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });
+    const { data, error } = await supabase
+      .from('platform_interest_requests')
+      .select('platform_id')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return res.json({ success: true, platformIds: (data || []).map((row) => row.platform_id) });
+  } catch (error) {
+    logger.error('Error loading platform interest:', error);
+    return res.status(500).json({ success: false, error: 'Failed to load platform interest' });
+  }
+});
+
+router.post('/:platform/interest', async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });
+    const definition = platformCatalog.find((platform) => platform.id === req.params.platform);
+    if (!definition) return res.status(404).json({ success: false, error: 'Unknown platform' });
+    if (definition.supportStatus === 'available' || definition.supportStatus === 'beta') {
+      return res.status(409).json({ success: false, error: 'This platform is already available to connect' });
+    }
+    const { error } = await supabase.from('platform_interest_requests').upsert({
+      user_id: userId,
+      platform_id: definition.id,
+      source: 'desktop',
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id,platform_id' });
+    if (error) throw error;
+    return res.status(201).json({ success: true, platformId: definition.id, requested: true });
+  } catch (error) {
+    logger.error('Error saving platform interest:', error);
+    return res.status(500).json({ success: false, error: 'Failed to save platform interest' });
+  }
 });
 
 /**

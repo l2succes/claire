@@ -55,6 +55,13 @@ const envSchema = z.object({
   // Monitoring
   SENTRY_DSN: z.string().url().optional(),
 
+  // Direct APNs delivery for the native macOS client.
+  APNS_KEY_ID: z.string().optional(),
+  APNS_TEAM_ID: z.string().optional(),
+  APNS_PRIVATE_KEY: z.string().optional(),
+  APNS_MACOS_TOPIC: z.string().optional(),
+  APNS_USE_SANDBOX: z.string().default('false').transform((val) => val === 'true'),
+
   // Platform Configuration
   TELEGRAM_ENABLED: z.string().default('true').transform((val) => val === 'true'),
   IMESSAGE_ENABLED: z.string().default('true').transform((val) => val === 'true'),

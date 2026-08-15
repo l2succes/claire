@@ -1,5 +1,7 @@
-import { View, Text, TouchableOpacity, Image } from 'react-native';
-import { User, Users, Check, CheckCheck, Clock } from 'lucide-react-native';
+import { Pressable, Text, View } from 'react-native';
+import { Image } from 'expo-image';
+import { Check, CheckCheck, Clock, Pin, Sparkles, UserRound, UsersRound } from 'lucide-react-native';
+import { colors, mobileType, space } from '@claire/design-system';
 import { useState } from 'react';
 import { PlatformBadge } from './PlatformIcon';
 import { Platform } from '../types/platform';
@@ -20,121 +22,86 @@ interface MessageCardProps {
     has_ai_response?: boolean;
     has_open_promise?: boolean;
     platform?: Platform;
+    is_pinned?: boolean;
   };
+  variant?: 'default' | 'pinned' | 'recent';
   onPress: () => void;
   onLongPress?: () => void;
 }
 
-export function MessageCard({ message, onPress, onLongPress }: MessageCardProps) {
+export function MessageCard({ message, variant = 'default', onPress, onLongPress }: MessageCardProps) {
   const [imageError, setImageError] = useState(false);
-
-  const getStatusIcon = () => {
-    switch (message.status) {
-      case 'sent':
-        return <Check size={14} color="#6b7280" />;
-      case 'delivered':
-        return <CheckCheck size={14} color="#6b7280" />;
-      case 'read':
-        return <CheckCheck size={14} color="#3b82f6" />;
-      case 'pending':
-        return <Clock size={14} color="#f59e0b" />;
-      default:
-        return null;
-    }
-  };
-
-  const timestampLabel = formatInboxTimestamp(message.timestamp);
+  const name = message.chat_name || message.contact_name || 'Unknown conversation';
+  const isPinnedPresentation = variant === 'pinned';
+  const isCompactPresentation = variant === 'recent';
+  const statusIcon = message.status === 'read'
+    ? <CheckCheck size={14} color={colors.focus} />
+    : message.status === 'delivered'
+      ? <CheckCheck size={14} color={colors.neutral[600]} />
+      : message.status === 'sent'
+        ? <Check size={14} color={colors.neutral[600]} />
+        : message.status === 'pending'
+          ? <Clock size={14} color={colors.warning} />
+          : null;
 
   return (
-    <TouchableOpacity
+    <Pressable
       onPress={onPress}
       onLongPress={onLongPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${name}${message.unread_count ? `, ${message.unread_count} unread` : ''}`}
       testID={`message-card-${message.id}`}
-      className="bg-white dark:bg-gray-800 px-4 py-3 border-b border-gray-100 dark:border-gray-700"
-      activeOpacity={0.7}
+      style={({ pressed }) => ({
+        minHeight: isPinnedPresentation ? 82 : 70,
+        marginHorizontal: isPinnedPresentation ? space[4] : 0,
+        marginTop: isPinnedPresentation ? space[2] : 0,
+        paddingHorizontal: isPinnedPresentation ? space[3] : space[4],
+        paddingVertical: isPinnedPresentation ? 10 : space[3],
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: space[3],
+        backgroundColor: isPinnedPresentation ? '#FFF8DC' : colors.cream,
+        borderRadius: isPinnedPresentation ? 17 : 0,
+        borderWidth: isPinnedPresentation ? 1 : 0,
+        borderColor: isPinnedPresentation ? '#E5D69A' : 'transparent',
+        borderBottomWidth: isPinnedPresentation ? 1 : 1,
+        borderBottomColor: isPinnedPresentation ? '#E5D69A' : colors.neutral[200],
+        opacity: pressed ? 0.64 : 1,
+      })}
     >
-      <View className="flex-row">
-        {/* Avatar */}
-        <View className="mr-3">
+      <View style={{ width: 42, height: 42, flexShrink: 0 }}>
+        <View style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: message.is_group ? colors.sky : colors.blush, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
           {message.contact_avatar && !imageError ? (
-            <Image
-              source={{ uri: message.contact_avatar }}
-              className="w-12 h-12 rounded-full"
-              onError={() => setImageError(true)}
-            />
-          ) : (
-            <View className="w-12 h-12 rounded-full bg-gray-200 dark:bg-gray-700 items-center justify-center">
-              {message.is_group ? (
-                <Users size={24} color="#6b7280" />
-              ) : (
-                <User size={24} color="#6b7280" />
-              )}
-            </View>
-          )}
+            <Image source={{ uri: message.contact_avatar }} style={{ width: 42, height: 42 }} contentFit="cover" transition={120} onError={() => setImageError(true)} />
+          ) : message.is_group ? <UsersRound size={20} color={colors.neutral[600]} /> : <UserRound size={20} color={colors.neutral[600]} />}
         </View>
-
-        {/* Content */}
-        <View className="flex-1">
-          {/* Header */}
-          <View className="flex-row justify-between items-start mb-1">
-            <View className="flex-1 mr-2">
-              <Text className="text-base font-semibold text-gray-900 dark:text-white" numberOfLines={1}>
-                {message.chat_name || message.contact_name || 'Unknown'}
-              </Text>
-            </View>
-            <View className="flex-row items-center">
-              {message.from_me && getStatusIcon()}
-              {message.platform && (
-                <PlatformBadge platform={message.platform} size={14} className="ml-1" />
-              )}
-              <Text className="text-xs text-gray-500 dark:text-gray-400 ml-1" testID="message-card-timestamp">
-                {timestampLabel}
-              </Text>
-            </View>
-          </View>
-
-          {/* Message Preview */}
-          <View className="flex-row items-center">
-            <Text
-              className={`flex-1 text-sm ${
-                message.unread_count ? 'text-gray-900 dark:text-white font-medium' : 'text-gray-600 dark:text-gray-300'
-              }`}
-              numberOfLines={2}
-            >
-              {message.from_me && <Text className="text-gray-500">You: </Text>}
-              {message.content}
-            </Text>
-          </View>
-
-          {/* Bottom Row - Badges */}
-          <View className="flex-row items-center mt-2">
-            {!!message.unread_count && message.unread_count > 0 && (
-              <View className="bg-green-500 rounded-full px-2 py-0.5 mr-2">
-                <Text className="text-white text-xs font-semibold">
-                  {message.unread_count}
-                </Text>
-              </View>
-            )}
-            {message.has_open_promise && (
-              <View
-                testID={`message-card-promise-badge-${message.id}`}
-                className="bg-amber-100 dark:bg-amber-900 rounded-full px-2 py-0.5 mr-2"
-              >
-                <Text className="text-amber-700 dark:text-amber-300 text-xs">
-                  Promise
-                </Text>
-              </View>
-            )}
-            {message.has_ai_response && (
-              <View className="bg-blue-100 dark:bg-blue-900 rounded-full px-2 py-0.5">
-                <Text className="text-blue-600 dark:text-blue-300 text-xs">
-                  AI suggestion
-                </Text>
-              </View>
-            )}
-          </View>
-        </View>
+        {message.platform ? <View style={{ position: 'absolute', right: -4, bottom: -3, borderRadius: 10, borderWidth: 2, borderColor: colors.cream, backgroundColor: colors.paper }}><PlatformBadge platform={message.platform} size={16} /></View> : null}
       </View>
-    </TouchableOpacity>
+
+      <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}>
+          {message.is_pinned && !isPinnedPresentation ? <Pin size={13} color={colors.neutral[600]} fill={colors.neutral[600]} /> : null}
+          <Text selectable numberOfLines={1} style={{ ...mobileType.body, flex: 1, fontWeight: message.unread_count ? '700' : '600', color: colors.ink }}>{name}</Text>
+          <Text selectable testID="message-card-timestamp" style={{ ...mobileType.monoLabel, color: colors.neutral[400] }}>{formatInboxTimestamp(message.timestamp)}</Text>
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+          {message.from_me ? statusIcon : null}
+          <Text selectable numberOfLines={1} style={{ ...mobileType.bodySmall, flex: 1, color: message.unread_count ? colors.neutral[800] : colors.neutral[600], fontWeight: message.unread_count ? '600' : '400' }}>
+            {isCompactPresentation ? '' : message.from_me ? 'You: ' : ''}{message.content || 'Media'}
+          </Text>
+          {message.unread_count ? (
+            <View style={{ minWidth: 20, height: 20, paddingHorizontal: 5, borderRadius: 10, backgroundColor: colors.lime, alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={{ ...mobileType.label, color: colors.ink, fontVariant: ['tabular-nums'] }}>{message.unread_count}</Text>
+            </View>
+          ) : null}
+        </View>
+        {variant === 'default' && (message.has_open_promise || message.has_ai_response) ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2], paddingTop: 2 }}>
+            {message.has_open_promise ? <Text testID={`message-card-promise-badge-${message.id}`} style={{ ...mobileType.monoLabel, color: colors.warning }}>OPEN PROMISE</Text> : null}
+            {message.has_ai_response ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}><Sparkles size={11} color={colors.focus} /><Text style={{ ...mobileType.monoLabel, color: colors.focus }}>REPLY READY</Text></View> : null}
+          </View>
+        ) : null}
+      </View>
+    </Pressable>
   );
 }
