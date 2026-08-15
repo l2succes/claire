@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">Claire Continuous Thread logo</title>
+  <desc id="desc">One continuous dark line draws a letter C and a conversation tail.</desc>
+  <rect x="2" y="2" width="60" height="60" rx="20" fill="#FFFDF8"/>
+  <path d="M45 17c-4-4.2-9.2-6-15-5.1-9.4 1.4-16.7 9.3-16.7 19.1 0 10.7 8.4 19.4 18.8 19.4 5.5 0 10.5-2.4 13.9-6.3l7 6.5-1.8-15.3" fill="none" stroke="#10120F" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="45.2" cy="17.2" r="4.4" fill="#DFFF64" stroke="#10120F" stroke-width="2"/>
+</svg>
