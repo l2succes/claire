@@ -1331,7 +1331,7 @@ const desktopShellStyles = StyleSheet.create({
   titleBarToggle: { width: 48, paddingLeft: space[2], justifyContent: 'center' },
   titleBarSearchArea: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space[3] },
   titleBarSearch: { width: '56%', minWidth: 240, maxWidth: 560, height: 32, paddingLeft: space[2], paddingRight: 3, borderWidth: 1, borderColor: colors.neutral[200], borderRadius: 10, backgroundColor: colors.neutral[50], flexDirection: 'row', alignItems: 'center', columnGap: space[1] },
-  titleBarSearchInput: { flex: 1, minWidth: 0, height: 30, color: colors.ink, fontFamily: 'Inter', fontSize: 13, lineHeight: 18, paddingVertical: 0, textAlignVertical: 'center' },
+  titleBarSearchInput: { flex: 1, minWidth: 0, height: 30, color: colors.ink, fontFamily: 'Inter', fontSize: 13, lineHeight: 18, paddingTop: 6, paddingBottom: 6 },
   titleBarSearchShortcut: { minWidth: 28, height: 24, paddingHorizontal: 5, alignItems: 'center', justifyContent: 'center', borderRadius: 7, backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.neutral[200] },
   titleBarSearchShortcutText: { color: colors.neutral[600], fontSize: 10 },
   titleBarDivider: { position: 'absolute', left: 148, right: 0, bottom: 0, height: 1, backgroundColor: colors.neutral[200] },
@@ -1342,7 +1342,7 @@ const desktopShellStyles = StyleSheet.create({
   navButton: { minHeight: 44 },
   navButtonCompact: { width: 46, minHeight: 46, borderRadius: 14 },
   navEntryContent: { flexDirection: 'row', alignItems: 'center', columnGap: 10 },
-  inboxSearchInput: { paddingTop: 5, paddingBottom: 0 },
+  inboxSearchInput: {},
 });
 
 const desktopReplyStyles = StyleSheet.create({
@@ -1404,7 +1404,7 @@ const desktopAskStyles = StyleSheet.create({
   toolTitle: { fontWeight: '700' },
   sourceList: { rowGap: space[2] },
   composer: { minHeight: 60, flexDirection: 'row', alignItems: 'center', columnGap: space[3], borderWidth: 1, borderColor: colors.ink, borderRadius: radius.card, backgroundColor: colors.paper, paddingLeft: space[3], paddingRight: space[2] },
-  composerInput: { flex: 1, minWidth: 0, color: colors.ink, fontFamily: 'Inter', fontSize: 16, lineHeight: 22, paddingVertical: 0, textAlignVertical: 'center' },
+  composerInput: { flex: 1, minWidth: 0, color: colors.ink, fontFamily: 'Inter', fontSize: 16, lineHeight: 22, paddingTop: 18, paddingBottom: 18 },
   composerSend: { width: 40, height: 40, borderRadius: 14, backgroundColor: colors.ink },
   evidence: { width: 280, backgroundColor: '#fcfcfb', borderLeftWidth: 1, borderColor: colors.neutral[200], padding: space[4], paddingTop: space[6], rowGap: space[3] },
   evidenceCard: { padding: space[3], rowGap: space[2] },
@@ -1422,7 +1422,7 @@ const desktopSettingsStyles = StyleSheet.create({
   shortcutGrid: { flexDirection: 'row', flexWrap: 'wrap', columnGap: space[2], rowGap: space[2] },
   shortcutRow: { flexBasis: 250, flexGrow: 1, minHeight: 48, flexDirection: 'row', alignItems: 'center', columnGap: space[2], borderWidth: 1, borderColor: colors.neutral[200], borderRadius: radius.control, backgroundColor: colors.cream, paddingHorizontal: space[3] },
   shortcutLabel: { flex: 1, minWidth: 0 },
-  shortcutInput: { width: 76, color: colors.ink, fontFamily: 'DM Mono', fontSize: 13, textAlign: 'right', paddingVertical: 0, textAlignVertical: 'center' },
+  shortcutInput: { width: 76, color: colors.ink, fontFamily: 'DM Mono', fontSize: 13, lineHeight: 18, textAlign: 'right', paddingTop: 8, paddingBottom: 8 },
 });
 
 const desktopContactInspectorStyles = StyleSheet.create({
@@ -1445,7 +1445,7 @@ const desktopPeopleStyles = StyleSheet.create({
   listPaneNarrow: { width: '100%', maxHeight: 270, borderRightWidth: 0, borderBottomWidth: 1, borderBottomColor: colors.neutral[200] },
   listTitle: { marginBottom: space[3] },
   search: { height: 52, borderRadius: radius.control, backgroundColor: '#f1f0eb', flexDirection: 'row', alignItems: 'center', columnGap: space[2], paddingHorizontal: space[3], marginBottom: space[3] },
-  searchInput: { flex: 1, minWidth: 0, color: colors.ink, fontFamily: 'Inter', fontSize: 16, lineHeight: 21, paddingVertical: 0, textAlignVertical: 'center' },
+  searchInput: { flex: 1, minWidth: 0, color: colors.ink, fontFamily: 'Inter', fontSize: 16, lineHeight: 21, paddingTop: 14, paddingBottom: 14 },
   listLabel: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: space[2] },
   personList: { rowGap: space[1], paddingBottom: space[4] },
   personRow: { minHeight: 68, borderRadius: radius.control, flexDirection: 'row', alignItems: 'center', columnGap: space[3], paddingHorizontal: space[2], paddingVertical: space[2] },
