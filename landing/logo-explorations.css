@@ -99,6 +99,110 @@
   margin-left: 5px;
 }
 
+.open-c-studies {
+  margin-top: 84px;
+  padding: 48px;
+  border-radius: 34px;
+  background: var(--claire-sky);
+}
+
+.open-c-experiments {
+  margin-top: 24px;
+  background: var(--claire-lavender);
+}
+
+.open-c-studies-heading {
+  display: grid;
+  grid-template-columns: 1fr minmax(240px, 0.7fr);
+  gap: 64px;
+  align-items: end;
+  margin-bottom: 30px;
+}
+
+.open-c-studies-heading h2 {
+  margin: 10px 0 0;
+  font-size: clamp(2.2rem, 4vw, 4rem);
+  line-height: 0.95;
+  letter-spacing: -0.055em;
+}
+
+.open-c-studies-heading p {
+  margin: 0;
+  color: var(--neutral-600);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.open-c-study-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.open-c-study-card {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid rgb(16 18 15 / 14%);
+  border-radius: 24px;
+  background: var(--claire-paper);
+}
+
+.open-c-study-card.is-open-c-pick {
+  border-color: var(--claire-ink);
+  box-shadow: 5px 5px 0 var(--claire-lime);
+}
+
+.open-c-study-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.open-c-study-meta span {
+  width: 34px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 99px;
+  background: var(--claire-ink);
+  color: white;
+  font: 500 9px var(--font-mono);
+}
+
+.open-c-study-meta b {
+  color: var(--neutral-600);
+  font: 500 8px var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.open-c-stage {
+  min-height: 210px;
+  display: grid;
+  place-items: center;
+  border-radius: 18px;
+}
+
+.open-c-stage img {
+  width: 126px;
+  height: 126px;
+}
+
+.open-c-study-card h3 {
+  margin: 18px 0 7px;
+  font-size: 22px;
+  letter-spacing: -0.04em;
+}
+
+.open-c-study-card > p {
+  min-height: 42px;
+  margin: 0;
+  color: var(--neutral-600);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .logo-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -187,6 +291,105 @@
   font-size: 12px;
 }
 
+.thread-studies {
+  margin-top: 92px;
+  padding: 48px;
+  border-radius: 34px;
+  background: var(--neutral-100);
+}
+
+.thread-studies-heading {
+  display: grid;
+  grid-template-columns: 1fr minmax(240px, 0.7fr);
+  gap: 64px;
+  align-items: end;
+  margin-bottom: 30px;
+}
+
+.thread-studies-heading h2 {
+  margin: 10px 0 0;
+  font-size: clamp(2.2rem, 4vw, 4rem);
+  line-height: 0.95;
+  letter-spacing: -0.055em;
+}
+
+.thread-studies-heading p {
+  margin: 0;
+  color: var(--neutral-600);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.thread-study-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.thread-study-card {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--neutral-200);
+  border-radius: 24px;
+  background: var(--claire-paper);
+}
+
+.thread-study-card.is-thread-pick {
+  border-color: var(--claire-ink);
+  box-shadow: 5px 5px 0 var(--claire-lime);
+}
+
+.thread-study-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.thread-study-meta span {
+  width: 34px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 99px;
+  background: var(--claire-ink);
+  color: white;
+  font: 500 9px var(--font-mono);
+}
+
+.thread-study-meta b {
+  color: var(--neutral-600);
+  font: 500 8px var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.thread-stage {
+  min-height: 210px;
+  display: grid;
+  place-items: center;
+  border-radius: 18px;
+}
+
+.thread-stage img {
+  width: 126px;
+  height: 126px;
+}
+
+.thread-study-card h3 {
+  margin: 18px 0 7px;
+  font-size: 22px;
+  letter-spacing: -0.04em;
+}
+
+.thread-study-card > p {
+  min-height: 42px;
+  margin: 0;
+  color: var(--neutral-600);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .size-test {
   min-height: 82px;
   margin-top: 22px;
@@ -273,12 +476,22 @@
 @media (max-width: 960px) {
   .logo-hero,
   .recommendation,
-  .logo-usage {
+  .logo-usage,
+  .open-c-studies-heading,
+  .thread-studies-heading {
     grid-template-columns: 1fr;
     gap: 38px;
   }
 
   .logo-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .thread-study-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .open-c-study-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -316,6 +529,22 @@
 
   .logo-usage {
     padding: 30px 22px;
+  }
+
+  .thread-studies {
+    padding: 28px 22px;
+  }
+
+  .open-c-studies {
+    padding: 28px 22px;
+  }
+
+  .thread-study-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .open-c-study-grid {
+    grid-template-columns: 1fr;
   }
 
   .usage-lockups {

@@ -444,7 +444,8 @@ textarea {
   left: 9px;
   right: 9px;
   bottom: 8px;
-  height: 60px;
+  height: 66px;
+  padding: 0 4px;
   border: 1px solid rgb(16 18 15/10%);
   background: rgb(255 253 248/94%);
   backdrop-filter: blur(14px);
@@ -461,6 +462,39 @@ textarea {
   font-size: 15px;
   gap: 2px;
   color: var(--neutral-400);
+}
+.tab-bar .ask-claire {
+  position: relative;
+  z-index: 0;
+  min-width: 53px;
+  padding: 0 4px;
+  gap: 4px;
+  color: var(--claire-ink);
+}
+.tab-bar .ask-claire:after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  top: -5px;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--claire-ink);
+  border-radius: 13px;
+  background: var(--claire-lime);
+  box-shadow: 0 5px 14px rgb(223 255 100 / 38%);
+}
+.tab-bar .ask-claire .hero-icon {
+  position: relative;
+  z-index: 1;
+  width: 20px;
+  height: 20px;
+  stroke-width: 2;
+}
+.tab-bar .ask-claire small {
+  position: relative;
+  z-index: 1;
+  color: var(--claire-ink);
+  white-space: nowrap;
 }
 .tab-bar .hero-icon {
   width: 22px;
@@ -1468,7 +1502,7 @@ mark {
   font-size: 9px;
 }
 .tab-bar {
-  height: 66px;
+  height: 70px;
 }
 .tab-bar span {
   gap: 3px;
@@ -1477,6 +1511,16 @@ mark {
 .tab-bar .hero-icon {
   width: 24px;
   height: 24px;
+}
+.tab-bar .ask-claire:after {
+  top: -5px;
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+}
+.tab-bar .ask-claire .hero-icon {
+  width: 21px;
+  height: 21px;
 }
 .tab-bar small {
   font-size: 8px;

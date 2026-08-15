@@ -1,9 +1,9 @@
 const catalogPayload = window.CLAIRE_PLATFORM_CATALOG;
 
 const setupIcons = {
-  phone: '⌁',
-  desktop: '▱',
-  mac: '⌂',
+  phone: 'phone',
+  desktop: 'desktop',
+  mac: 'desktop',
 };
 
 const supportLabels = {
@@ -87,7 +87,7 @@ const renderPlatformCatalog = (platforms) => {
     setup.className = 'platform-setup';
     const setupIcon = document.createElement('span');
     setupIcon.className = 'platform-setup-icon';
-    setupIcon.textContent = setupIcons[platform.setupSurface];
+    setupIcon.dataset.heroicon = setupIcons[platform.setupSurface];
     setupIcon.setAttribute('aria-hidden', 'true');
     setup.append(setupIcon, document.createTextNode(platform.setupLabel));
 
