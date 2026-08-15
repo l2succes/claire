@@ -20,6 +20,7 @@ import { useConversationSettingsStore } from '../../stores/conversationSettingsS
 import { GroupChatSummary } from '../../components/GroupChatSummary';
 import { Platform } from '../../types/platform';
 import { VideoView, useVideoPlayer } from 'expo-video';
+import { setActiveNotificationChat, syncNotificationBadge, updateNotificationPresence } from '../../services/notifications';
 
 interface ChatMessage {
   id: string;
@@ -95,6 +96,7 @@ export default function ChatScreen() {
   }>();
 
   const user = useAuthStore((state) => state.user);
+  const accessToken = useAuthStore((state) => state.token);
   const connectedSessions = usePlatformStore((state) => state.connectedSessions);
   const {
     settings: convSettings,
@@ -181,10 +183,21 @@ export default function ChatScreen() {
     );
     try {
       await platformsApi.markChatRead(chatId, session?.id);
+      await syncNotificationBadge().catch(() => undefined);
     } catch (error) {
       console.warn('Failed to mark conversation read:', error);
     }
   }, [chatId, platform, connectedSessions]);
+
+  useEffect(() => {
+    if (!chatId) return;
+    setActiveNotificationChat(chatId);
+    if (accessToken) updateNotificationPresence(accessToken, 'foreground', chatId).catch(() => undefined);
+    return () => {
+      setActiveNotificationChat(undefined);
+      if (accessToken) updateNotificationPresence(accessToken, 'foreground').catch(() => undefined);
+    };
+  }, [accessToken, chatId]);
 
   useEffect(() => {
     fetchMessages().then(markConversationRead);

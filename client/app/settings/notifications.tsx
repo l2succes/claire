@@ -5,13 +5,13 @@
  * Persists to /preferences on the server.
  */
 
-import { View, Text, ScrollView, Switch, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, ScrollView, Switch, TouchableOpacity, ActivityIndicator, Alert, Linking, Platform } from 'react-native';
 import { useState, useEffect } from 'react';
 import { router } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
 import { supabase } from '../../services/supabase';
 import { API_BASE_URL } from '../../services/platforms';
-import { requestWebNotificationPermission, supportsWebNotifications } from '../../services/notifications';
+import { getNativeNotificationPermission, registerNotificationDevice, requestWebNotificationPermission, supportsWebNotifications } from '../../services/notifications';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -186,6 +186,7 @@ export default function NotificationsSettingsScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [prefs, setPrefs] = useState<NotificationPrefs>(DEFAULTS);
+  const [systemPermission, setSystemPermission] = useState('unknown');
 
   useEffect(() => {
     (async () => {
@@ -195,6 +196,7 @@ export default function NotificationsSettingsScreen() {
         if (!token) return;
         const loaded = await fetchNotificationPrefs(token);
         setPrefs(loaded);
+        setSystemPermission(await getNativeNotificationPermission());
       } catch {
         // silently use defaults
       } finally {
@@ -227,6 +229,17 @@ export default function NotificationsSettingsScreen() {
     } else if (permission !== 'unsupported') {
       Alert.alert('Browser notifications are off', 'Enable notifications for Claire in your browser settings to receive message alerts.');
     }
+  };
+
+  const handleNativePermission = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) return;
+    if (systemPermission === 'denied') {
+      await Linking.openSettings();
+      return;
+    }
+    await registerNotificationDevice(session.access_token);
+    setSystemPermission(await getNativeNotificationPermission());
   };
 
   if (loading) {
@@ -300,6 +313,18 @@ export default function NotificationsSettingsScreen() {
             <Text className="font-semibold text-gray-900 dark:text-white">Enable browser notifications</Text>
             <Text className="text-sm text-gray-500 dark:text-gray-400 mt-1">
               Receive alerts while Claire is open in this browser.
+            </Text>
+          </TouchableOpacity>
+        )}
+        {Platform.OS !== 'web' && (
+          <TouchableOpacity
+            onPress={() => { handleNativePermission().catch(() => Alert.alert('Notifications unavailable', 'Claire could not update the system notification permission.')); }}
+            className="bg-white dark:bg-gray-800 rounded-xl px-4 py-3 mt-3"
+            testID="notif-enable-native"
+          >
+            <Text className="font-semibold text-gray-900 dark:text-white">System permission: {systemPermission}</Text>
+            <Text className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              {systemPermission === 'denied' ? 'Open system settings to allow Claire notifications.' : 'Tap to enable alerts and register this device.'}
             </Text>
           </TouchableOpacity>
         )}

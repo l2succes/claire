@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../services/supabase';
+import { deregisterNotificationDevice } from '../services/notifications';
 
 interface User {
   id: string;
@@ -165,6 +166,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   logout: async () => {
     try {
+      const accessToken = get().token;
+      if (accessToken) await deregisterNotificationDevice(accessToken).catch(() => undefined);
       await supabase.auth.signOut();
       await AsyncStorage.clear();
       set({ 

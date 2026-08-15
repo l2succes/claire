@@ -32,11 +32,16 @@ export const REQUIRED_SCHEMA: SchemaRequirement[] = [
   { table: 'contacts', columns: ['inferred_relationship', 'inference_confidence'] },
   { table: 'ai_suggestions', columns: ['selected_index', 'feedback'] },
   { table: 'push_tokens', columns: ['token', 'device_id'] },
+  { table: 'notification_devices', columns: ['device_id', 'provider', 'token', 'enabled', 'timezone', 'last_seen_at'] },
+  { table: 'notification_deliveries', columns: ['device_id', 'message_id', 'state', 'attempts', 'provider_receipt_id'] },
   { table: 'auto_reply_rules', columns: ['trigger_type', 'reply_template'] },
   { table: 'contact_memory', columns: ['key', 'value', 'confidence'] },
   { table: 'chat_categories', columns: ['category'] },
   { table: 'contact_profiles', columns: ['key_facts'] },
   { table: 'smart_cards', columns: ['dismissed'] },
+  { table: 'conversation_assistant_threads', columns: ['user_id', 'chat_id', 'updated_at'] },
+  { table: 'conversation_assistant_turns', columns: ['thread_id', 'scope_chat_ids', 'citations'] },
+  { table: 'platform_interest_requests', columns: ['user_id', 'platform_id', 'source'] },
 ];
 
 export interface SchemaDriftEntry {
