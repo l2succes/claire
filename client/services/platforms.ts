@@ -188,8 +188,8 @@ export const platformsApi = {
   },
 
   /**
-   * Start Instagram login via bridge HTTP API.
-   * Returns sessionId, loginId, stepId to pass into instagramLoginSubmit.
+   * Companion-only bridge helper. Mobile and web must direct people to Claire
+   * Desktop rather than collecting an Instagram browser session themselves.
    */
   async instagramLoginStart(client: 'native' | 'web' = 'native'): Promise<InstagramLoginStep> {
     const response = await api.post<{
@@ -217,7 +217,7 @@ export const platformsApi = {
   },
 
   /**
-   * Submit extracted Instagram cookies to complete bridge login.
+   * Companion-only bridge helper for a securely captured desktop session.
    */
   async instagramLoginSubmit(
     sessionId: string,

@@ -40,20 +40,26 @@ export interface AssistantAnswer {
   indexing: AssistantIndexStatus;
 }
 
-interface AssistantThread {
+export interface AssistantThread {
   id: string;
   title: string;
+  chat_id?: string | null;
   created_at: string;
   updated_at: string;
 }
 
-interface AssistantTurn {
+export interface AssistantTurn {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   citations: AssistantCitation[];
   scope_chat_ids: string[];
   created_at: string;
+}
+
+export interface AssistantThreadHistory {
+  thread: AssistantThread;
+  turns: AssistantTurn[];
 }
 
 interface MessageToIndex {
@@ -78,7 +84,7 @@ class ConversationAssistantService {
     const { data, error } = await supabase
       .from('conversation_assistant_threads')
       .insert({ user_id: userId, title })
-      .select('id, title, created_at, updated_at')
+      .select('id, title, chat_id, created_at, updated_at')
       .single();
     if (error) throw error;
     return data as AssistantThread;
@@ -87,21 +93,25 @@ class ConversationAssistantService {
   async listThreads(userId: string): Promise<AssistantThread[]> {
     const { data, error } = await supabase
       .from('conversation_assistant_threads')
-      .select('id, title, created_at, updated_at')
+      .select('id, title, chat_id, created_at, updated_at')
       .eq('user_id', userId)
+      .is('chat_id', null)
       .order('updated_at', { ascending: false });
     if (error) throw error;
     return (data || []) as AssistantThread[];
   }
 
-  async getThread(userId: string, threadId: string): Promise<{ thread: AssistantThread; turns: AssistantTurn[] }> {
+  async getThread(userId: string, threadId: string, allowConversationThread = false): Promise<AssistantThreadHistory> {
+    const threadQuery = supabase
+      .from('conversation_assistant_threads')
+      .select('id, title, chat_id, created_at, updated_at')
+      .eq('id', threadId)
+      .eq('user_id', userId);
+
+    if (!allowConversationThread) threadQuery.is('chat_id', null);
+
     const [{ data: thread, error: threadError }, { data: turns, error: turnsError }] = await Promise.all([
-      supabase
-        .from('conversation_assistant_threads')
-        .select('id, title, created_at, updated_at')
-        .eq('id', threadId)
-        .eq('user_id', userId)
-        .maybeSingle(),
+      threadQuery.maybeSingle(),
       supabase
         .from('conversation_assistant_turns')
         .select('id, role, content, citations, scope_chat_ids, created_at')
@@ -115,12 +125,42 @@ class ConversationAssistantService {
     return { thread: thread as AssistantThread, turns: (turns || []) as AssistantTurn[] };
   }
 
+  async getConversationThread(userId: string, chatId: string): Promise<AssistantThreadHistory> {
+    await this.assertChatOwnership(userId, chatId);
+    const { data, error } = await supabase
+      .from('conversation_assistant_threads')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('chat_id', chatId)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) throw new Error('ASSISTANT_THREAD_NOT_FOUND');
+    return this.getThread(userId, data.id, true);
+  }
+
+  async clearConversationThread(userId: string, chatId: string): Promise<void> {
+    await this.assertChatOwnership(userId, chatId);
+    const { error } = await supabase
+      .from('conversation_assistant_threads')
+      .delete()
+      .eq('user_id', userId)
+      .eq('chat_id', chatId);
+    if (error) throw error;
+  }
+
+  async askConversation(userId: string, chatId: string, question: string): Promise<AssistantAnswer & AssistantThreadHistory> {
+    const thread = await this.ensureConversationThread(userId, chatId);
+    const answer = await this.ask(userId, thread.id, question, [chatId], true);
+    return { ...answer, ...(await this.getThread(userId, thread.id, true)) };
+  }
+
   async deleteThread(userId: string, threadId: string): Promise<void> {
     const { error } = await supabase
       .from('conversation_assistant_threads')
       .delete()
       .eq('id', threadId)
-      .eq('user_id', userId);
+      .eq('user_id', userId)
+      .is('chat_id', null);
     if (error) throw error;
   }
 
@@ -178,14 +218,14 @@ class ConversationAssistantService {
     if (error) throw error;
   }
 
-  async ask(userId: string, threadId: string, question: string, preferredChatIds: string[] = []): Promise<AssistantAnswer> {
+  async ask(userId: string, threadId: string, question: string, preferredChatIds: string[] = [], strictScope = false): Promise<AssistantAnswer> {
     if (!this.openai) throw new Error('NO_AI_PROVIDER');
     const { thread, turns } = await this.getThread(userId, threadId);
     const cleanQuestion = question.trim();
     if (!cleanQuestion) throw new Error('QUESTION_REQUIRED');
 
     const [citations, indexing, conversationInstructions] = await Promise.all([
-      this.retrieve(userId, cleanQuestion, preferredChatIds),
+      this.retrieve(userId, cleanQuestion, preferredChatIds, strictScope),
       this.getIndexStatus(userId),
       this.getConversationInstructions(userId, preferredChatIds),
     ]);
@@ -237,6 +277,41 @@ class ConversationAssistantService {
     return { answer, citations, indexing };
   }
 
+  /** One-shot cited search answer. Unlike Ask Claire, this does not create or mutate a thread. */
+  async search(userId: string, question: string): Promise<AssistantAnswer> {
+    if (!this.openai) throw new Error('NO_AI_PROVIDER');
+    const cleanQuestion = question.trim();
+    if (!cleanQuestion) throw new Error('QUESTION_REQUIRED');
+    const [citations, indexing] = await Promise.all([
+      this.retrieve(userId, cleanQuestion),
+      this.getIndexStatus(userId),
+    ]);
+    if (!citations.length) {
+      return { answer: 'I could not find a message that answers that confidently.', citations: [], indexing };
+    }
+    const sources = citations.map((citation, index) =>
+      `[${index + 1}] ${citation.timestamp} · ${citation.platform} · ${citation.fromMe ? 'You' : citation.senderName}: ${citation.excerpt}`
+    ).join('\n');
+    const completion = await this.openai.chat.completions.create({
+      model: openaiConfig.model,
+      response_format: { type: 'json_object' },
+      temperature: 0.1,
+      max_tokens: 450,
+      messages: [
+        { role: 'system', content: 'Answer the search question only from the supplied conversation excerpts. Be concise, distinguish inference from exact wording, state uncertainty, and return JSON only: {"answer":"..."}.' },
+        { role: 'user', content: `Question: ${cleanQuestion}\n\nSources:\n${sources}` },
+      ],
+    });
+    let answer = 'I found related messages, but could not summarize them confidently.';
+    try {
+      const parsed = JSON.parse(completion.choices[0]?.message.content || '{}') as { answer?: unknown };
+      if (typeof parsed.answer === 'string' && parsed.answer.trim()) answer = parsed.answer.trim();
+    } catch {
+      logger.warn('Search answer returned invalid JSON');
+    }
+    return { answer, citations, indexing };
+  }
+
   private async runBackfill(userId: string): Promise<void> {
     await this.writeIndexState(userId, { status: 'indexing', last_error: null });
     try {
@@ -263,20 +338,36 @@ class ConversationAssistantService {
     }
   }
 
-  private async retrieve(userId: string, query: string, preferredChatIds: string[] = []): Promise<AssistantCitation[]> {
-    const exactPromise = supabase.rpc('search_scoped_conversation_messages', {
-      query_text: query,
-      target_user_id: userId,
-      preferred_chat_ids: preferredChatIds,
-      result_limit: RETRIEVAL_LIMIT,
-    });
-    const semanticPromise = this.embed(query)
-      .then(embedding => supabase.rpc('match_scoped_conversation_messages', {
-        query_embedding: embedding,
+  private async retrieve(userId: string, query: string, preferredChatIds: string[] = [], strictScope = false): Promise<AssistantCitation[]> {
+    const strictChatId = strictScope ? preferredChatIds[0] : null;
+    if (strictScope && !strictChatId) throw new Error('CHAT_SCOPE_REQUIRED');
+    const exactPromise = strictChatId
+      ? supabase.rpc('search_conversation_messages_in_chat', {
+        query_text: query,
+        target_user_id: userId,
+        target_chat_id: strictChatId,
+        result_limit: RETRIEVAL_LIMIT,
+      })
+      : supabase.rpc('search_scoped_conversation_messages', {
+        query_text: query,
         target_user_id: userId,
         preferred_chat_ids: preferredChatIds,
         result_limit: RETRIEVAL_LIMIT,
-      }))
+      });
+    const semanticPromise = this.embed(query)
+      .then(embedding => strictChatId
+        ? supabase.rpc('match_conversation_messages_in_chat', {
+          query_embedding: embedding,
+          target_user_id: userId,
+          target_chat_id: strictChatId,
+          result_limit: RETRIEVAL_LIMIT,
+        })
+        : supabase.rpc('match_scoped_conversation_messages', {
+          query_embedding: embedding,
+          target_user_id: userId,
+          preferred_chat_ids: preferredChatIds,
+          result_limit: RETRIEVAL_LIMIT,
+        }))
       .catch(error => {
         logger.warn('Semantic conversation search unavailable; using exact search:', error);
         return { data: [], error: null };
@@ -315,6 +406,48 @@ class ConversationAssistantService {
       .select('chat_id, ai_instruction').eq('user_id', userId).in('chat_id', chatIds).not('ai_instruction', 'is', null);
     if (error) throw error;
     return (data || []).map(row => `Chat ${row.chat_id}: ${row.ai_instruction}`).join('\n');
+  }
+
+  private async ensureConversationThread(userId: string, chatId: string): Promise<AssistantThread> {
+    await this.assertChatOwnership(userId, chatId);
+    const { data: existing, error: existingError } = await supabase
+      .from('conversation_assistant_threads')
+      .select('id, title, chat_id, created_at, updated_at')
+      .eq('user_id', userId)
+      .eq('chat_id', chatId)
+      .maybeSingle();
+    if (existingError) throw existingError;
+    if (existing) return existing as AssistantThread;
+
+    const { data: chat, error: chatError } = await supabase
+      .from('chats')
+      .select('name')
+      .eq('id', chatId)
+      .eq('user_id', userId)
+      .single();
+    if (chatError) throw chatError;
+    const { data, error } = await supabase
+      .from('conversation_assistant_threads')
+      .insert({ user_id: userId, chat_id: chatId, title: `Claire · ${chat.name || 'Conversation'}` })
+      .select('id, title, chat_id, created_at, updated_at')
+      .single();
+    if (!error && data) return data as AssistantThread;
+    // A second signed-in desktop may have created the thread concurrently.
+    const { data: concurrent, error: concurrentError } = await supabase
+      .from('conversation_assistant_threads')
+      .select('id, title, chat_id, created_at, updated_at')
+      .eq('user_id', userId)
+      .eq('chat_id', chatId)
+      .maybeSingle();
+    if (concurrentError) throw concurrentError;
+    if (concurrent) return concurrent as AssistantThread;
+    throw error || new Error('Unable to create conversation assistant thread');
+  }
+
+  private async assertChatOwnership(userId: string, chatId: string): Promise<void> {
+    const { data, error } = await supabase.from('chats').select('id').eq('id', chatId).eq('user_id', userId).maybeSingle();
+    if (error) throw error;
+    if (!data) throw new Error('CHAT_NOT_FOUND');
   }
 
   private async embed(input: string): Promise<number[]> {

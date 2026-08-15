@@ -144,13 +144,13 @@ export const PLATFORM_DISPLAY: Record<Platform, {
     name: 'Instagram',
     color: '#E4405F',
     bgColor: '#fce7f3',
-    description: 'Connect via browser cookies',
+    description: 'Connect with Claire Desktop companion',
   },
   [Platform.IMESSAGE]: {
     name: 'iMessage',
     color: '#007AFF',
     bgColor: '#dbeafe',
-    description: 'Requires a companion Mac',
+    description: 'Connect with Claire Desktop on a Mac',
   },
 };
 
@@ -172,9 +172,9 @@ export const getPlatformAuthMethod = (platform: Platform): AuthMethod => {
 
 // Helper to check if platform is available
 export const isPlatformAvailable = (platform: Platform): boolean => {
-  // iMessage requires macOS, so check platform
-  if (platform === Platform.IMESSAGE) {
-    return false; // Disabled until implemented
-  }
+  // A platform can be selectable even when it needs a companion. The auth
+  // modal then explains the supported setup instead of pretending a generic
+  // mobile/web login exists.
+  void platform;
   return true;
 };

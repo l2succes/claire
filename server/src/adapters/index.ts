@@ -24,7 +24,7 @@ export * from './types';
 type MessageHandler = (message: UnifiedMessage) => void | Promise<void>;
 type EventHandler = (data: PlatformEventData) => void | Promise<void>;
 
-class PlatformManager {
+export class PlatformManager {
   private adapters: Map<Platform, IPlatformAdapter> = new Map();
   private messageHandlers: Set<MessageHandler> = new Set();
   private eventHandlers: Map<PlatformEvent, Set<EventHandler>> = new Map();
@@ -139,7 +139,7 @@ class PlatformManager {
   /**
    * Handle incoming message from any platform
    */
-  private handleIncomingMessage(message: UnifiedMessage): void {
+  private async handleIncomingMessage(message: UnifiedMessage): Promise<void> {
     logger.debug(`Message received from ${message.platform}`, {
       messageId: message.id,
       chatId: message.chatId,
@@ -147,7 +147,7 @@ class PlatformManager {
 
     for (const handler of this.messageHandlers) {
       try {
-        handler(message);
+        await handler(message);
       } catch (error) {
         logger.error('Error in message handler:', error);
       }
@@ -198,6 +198,16 @@ class PlatformManager {
    */
   onMessage(handler: MessageHandler): void {
     this.messageHandlers.add(handler);
+  }
+
+  /**
+   * Accept a validated message from a trusted local companion. The companion
+   * route authenticates the host device and derives userId server-side before
+   * calling this method, so it follows the identical ingestion path as Matrix
+   * events without exposing the event emitter itself over HTTP.
+   */
+  async ingestMessage(message: UnifiedMessage): Promise<void> {
+    await this.handleIncomingMessage(message);
   }
 
   /**
