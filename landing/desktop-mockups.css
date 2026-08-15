@@ -318,6 +318,20 @@ textarea {
   background: var(--claire-lime);
   color: var(--claire-ink);
 }
+.rail-icon .hero-icon {
+  width: 22px;
+  height: 22px;
+}
+.window-tools .hero-icon,
+.desk-search .hero-icon,
+.compact-composer .hero-icon {
+  width: 20px;
+  height: 20px;
+}
+.sidebar-nav button .hero-icon {
+  width: 18px;
+  height: 18px;
+}
 .rail-divider {
   width: 26px;
   height: 1px;

@@ -248,6 +248,24 @@ button {
   color: #92968e;
   font-size: 17px;
 }
+.nav-icon .hero-icon {
+  width: 20px;
+  height: 20px;
+}
+.button .hero-icon,
+.text-link .hero-icon {
+  width: 18px;
+  height: 18px;
+}
+.flow-icon .hero-icon,
+.hosting-symbol .hero-icon {
+  width: 28px;
+  height: 28px;
+}
+.disclosure-icon .hero-icon {
+  width: 20px;
+  height: 20px;
+}
 .nav-icon.active {
   background: var(--claire-lime);
   color: var(--claire-ink);
