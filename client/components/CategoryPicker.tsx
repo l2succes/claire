@@ -1,13 +1,14 @@
-import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
-import { User, Users, Briefcase, Plane, Heart } from 'lucide-react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Briefcase, Heart, Plane, UserRound, UsersRound, type LucideIcon } from 'lucide-react-native';
+import { colors, mobileType, radius, space } from '@claire/design-system';
 import type { ChatCategory } from '../types/conversationSettings';
 
-const CATEGORIES: Array<{ key: ChatCategory; label: string; Icon: typeof User; color: string }> = [
-  { key: 'personal', label: 'Personal', Icon: User, color: '#6b7280' },
-  { key: 'friend', label: 'Friend', Icon: Users, color: '#3b82f6' },
-  { key: 'business', label: 'Business', Icon: Briefcase, color: '#8b5cf6' },
-  { key: 'trip', label: 'Trip', Icon: Plane, color: '#10b981' },
-  { key: 'romantic', label: 'Romantic', Icon: Heart, color: '#ef4444' },
+const CATEGORIES: Array<{ key: ChatCategory; label: string; Icon: LucideIcon; color: string }> = [
+  { key: 'personal', label: 'Personal', Icon: UserRound, color: colors.neutral[600] },
+  { key: 'friend', label: 'Friend', Icon: UsersRound, color: '#3B82F6' },
+  { key: 'business', label: 'Business', Icon: Briefcase, color: '#8B5CF6' },
+  { key: 'trip', label: 'Trip', Icon: Plane, color: '#10B981' },
+  { key: 'romantic', label: 'Romantic', Icon: Heart, color: '#EC4899' },
 ];
 
 interface CategoryPickerProps {
@@ -15,44 +16,23 @@ interface CategoryPickerProps {
   onSelect: (category: ChatCategory) => void;
 }
 
+/** The relationship picker deliberately preserves the familiar category icons. */
 export function CategoryPicker({ selected, onSelect }: CategoryPickerProps) {
   return (
-    <View style={{ paddingVertical: 12 }}>
-      <Text style={{ fontSize: 13, fontWeight: '600', color: '#6b7280', marginBottom: 8, paddingHorizontal: 16 }}>
-        Conversation Type
+    <View style={{ gap: space[2] }}>
+      <Text maxFontSizeMultiplier={1} style={{ ...mobileType.monoLabel, color: colors.neutral[800] }}>
+        WHAT KIND OF RELATIONSHIP IS THIS?
       </Text>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: 12, gap: 8 }}
-      >
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space[2], paddingRight: space[4] }}>
         {CATEGORIES.map(({ key, label, Icon, color }) => {
           const isSelected = selected === key;
           return (
-            <TouchableOpacity
-              key={key}
-              onPress={() => onSelect(key)}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                paddingHorizontal: 14,
-                paddingVertical: 8,
-                borderRadius: 20,
-                backgroundColor: isSelected ? color : '#f3f4f6',
-                borderWidth: 1,
-                borderColor: isSelected ? color : '#e5e7eb',
-                gap: 6,
-              }}
-            >
-              <Icon size={16} color={isSelected ? '#ffffff' : color} />
-              <Text style={{
-                fontSize: 13,
-                fontWeight: '600',
-                color: isSelected ? '#ffffff' : '#374151',
-              }}>
-                {label}
-              </Text>
-            </TouchableOpacity>
+            <Pressable key={key} accessibilityRole="button" accessibilityState={{ selected: isSelected }} accessibilityLabel={`${label} relationship`} onPress={() => onSelect(key)}>
+              <View style={{ minHeight: 36, flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 12, borderRadius: radius.pill, borderCurve: 'continuous', borderWidth: 1, borderColor: isSelected ? colors.ink : colors.neutral[200], backgroundColor: isSelected ? colors.ink : colors.paper }}>
+                <Icon size={17} strokeWidth={2.2} color={isSelected ? colors.lime : color} />
+                <Text maxFontSizeMultiplier={1} style={{ ...mobileType.label, color: isSelected ? colors.paper : colors.ink }}>{label}</Text>
+              </View>
+            </Pressable>
           );
         })}
       </ScrollView>

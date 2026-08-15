@@ -59,6 +59,32 @@ function reconcileDesktopMessages(current: DesktopMessage[], incoming: DesktopMe
   return mergeChronologicalMessages(stillPending, incoming);
 }
 
+function sameChat(left: DesktopChat, right: DesktopChat) {
+  return left.id === right.id
+    && left.name === right.name
+    && left.platform === right.platform
+    && left.platform_chat_id === right.platform_chat_id
+    && left.is_group === right.is_group
+    && left.last_message_at === right.last_message_at
+    && left.unread_count === right.unread_count
+    && left.contact?.name === right.contact?.name
+    && left.contact?.inferred_name === right.contact?.inferred_name
+    && left.contact?.avatar_url === right.contact?.avatar_url
+    && left.latest_message?.content === right.latest_message?.content
+    && left.latest_message?.content_type === right.latest_message?.content_type
+    && left.latest_message?.media_mime_type === right.latest_message?.media_mime_type
+    && left.latest_message?.timestamp === right.latest_message?.timestamp
+    && left.latest_message?.from_me === right.latest_message?.from_me;
+}
+
+function reconcileDesktopChats(current: DesktopChat[], incoming: DesktopChat[]) {
+  const currentById = new Map(current.map((chat) => [chat.id, chat]));
+  return incoming.map((chat) => {
+    const previous = currentById.get(chat.id);
+    return previous && sameChat(previous, chat) ? previous : chat;
+  });
+}
+
 export default function DesktopApp({ compactWindow = false, initialConversationId, runtimeConfig }: { compactWindow?: boolean; initialConversationId?: string; runtimeConfig?: DesktopRuntimeConfig }) {
   const [auth, setAuth] = useState<DesktopAuth | null | undefined>(undefined);
   const [session, setSession] = useState<Session | null>(null);
@@ -166,6 +192,8 @@ function DesktopWorkspace({ auth, compactWindow, initialConversationId, session 
   const syncingIMessageRef = useRef(false);
   const inspectorPreferenceLoadedRef = useRef(false);
   const selectedConversationIdRef = useRef<string | null>(initialConversationId || null);
+  const chatRefreshInFlightRef = useRef<Promise<void> | null>(null);
+  const chatRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const api = useMemo(() => auth.config.apiUrl ? new ClaireApi(auth.config.apiUrl, session.access_token) : null, [auth.config.apiUrl, session.access_token]);
   const conversations = useMemo(() => chats.map(toConversation), [chats]);
   const selected = useMemo(() => conversations.find((item) => item.id === selectedConversationId) ?? conversations[0] ?? null, [conversations, selectedConversationId]);
@@ -198,18 +226,39 @@ function DesktopWorkspace({ auth, compactWindow, initialConversationId, session 
 
   const refreshChats = useCallback(async (showLoading = true) => {
     if (!api) return;
-    if (showLoading) setLoadingChats(true);
+    if (chatRefreshInFlightRef.current) return chatRefreshInFlightRef.current;
+    const request = (async () => {
+      if (showLoading) setLoadingChats(true);
+      try {
+        const nextChats = await api.getChats();
+        setChats((current) => reconcileDesktopChats(current, nextChats));
+        setSelectedConversationId((current) => current && nextChats.some((chat) => chat.id === current) ? current : (initialConversationId && nextChats.some((chat) => chat.id === initialConversationId) ? initialConversationId : nextChats[0]?.id ?? null));
+        if (showLoading) setDataError(null);
+      } catch (error) {
+        if (showLoading) setDataError(error instanceof Error ? error.message : 'Unable to load conversations.');
+      } finally {
+        if (showLoading) setLoadingChats(false);
+      }
+    })();
+    chatRefreshInFlightRef.current = request;
     try {
-      const nextChats = await api.getChats();
-      setChats(nextChats);
-      setSelectedConversationId((current) => current && nextChats.some((chat) => chat.id === current) ? current : (initialConversationId && nextChats.some((chat) => chat.id === initialConversationId) ? initialConversationId : nextChats[0]?.id ?? null));
-      if (showLoading) setDataError(null);
-    } catch (error) {
-      if (showLoading) setDataError(error instanceof Error ? error.message : 'Unable to load conversations.');
+      await request;
     } finally {
-      if (showLoading) setLoadingChats(false);
+      if (chatRefreshInFlightRef.current === request) chatRefreshInFlightRef.current = null;
     }
   }, [api, initialConversationId]);
+
+  const scheduleChatRefresh = useCallback(() => {
+    if (chatRefreshTimerRef.current) return;
+    chatRefreshTimerRef.current = setTimeout(() => {
+      chatRefreshTimerRef.current = null;
+      refreshChats(false).catch(() => undefined);
+    }, 200);
+  }, [refreshChats]);
+
+  useEffect(() => () => {
+    if (chatRefreshTimerRef.current) clearTimeout(chatRefreshTimerRef.current);
+  }, []);
 
   const refreshVisibleMessages = useCallback(async () => {
     if (!api || !selectedConversationId || highlightedMessageId) return;
@@ -222,8 +271,9 @@ function DesktopWorkspace({ auth, compactWindow, initialConversationId, session 
     if (!api || syncingIMessageRef.current) return;
     syncingIMessageRef.current = true;
     try {
-      let cursor = Number(await companionBridge.getSecureValue('companion.imessage.cursor') || '0');
-      const initialSyncComplete = await companionBridge.getSecureValue('companion.imessage.initial_sync_complete') === 'true';
+      const decoderVersion = await companionBridge.getSecureValue('companion.imessage.decoder_version');
+      let cursor = decoderVersion === '6' ? Number(await companionBridge.getSecureValue('companion.imessage.cursor') || '0') : 0;
+      const initialSyncComplete = decoderVersion === '6' && await companionBridge.getSecureValue('companion.imessage.initial_sync_complete') === 'true';
       const syncKind = initialSyncComplete ? 'live' : 'backfill';
       let synced = 0;
       while (true) {
@@ -254,7 +304,10 @@ function DesktopWorkspace({ auth, compactWindow, initialConversationId, session 
         await companionBridge.setSecureValue('companion.imessage.cursor', String(cursor));
         if (batch.length < 200) break;
       }
-      if (!initialSyncComplete) await companionBridge.setSecureValue('companion.imessage.initial_sync_complete', 'true');
+      if (!initialSyncComplete) {
+        await companionBridge.setSecureValue('companion.imessage.initial_sync_complete', 'true');
+        await companionBridge.setSecureValue('companion.imessage.decoder_version', '6');
+      }
       if (synced) {
         setCompanionNotice(`Synced ${synced} iMessage${synced === 1 ? '' : 's'} from this Mac.`);
         await refreshChats();
@@ -447,9 +500,9 @@ function DesktopWorkspace({ auth, compactWindow, initialConversationId, session 
 
   useEffect(() => {
     if (!api) return;
-    const interval = setInterval(() => { refreshChats(false).catch(() => undefined); }, 12_000);
+    const interval = setInterval(scheduleChatRefresh, 12_000);
     return () => clearInterval(interval);
-  }, [api, refreshChats]);
+  }, [api, scheduleChatRefresh]);
 
   useEffect(() => {
     if (!api || !selectedConversationId) return;
@@ -492,23 +545,25 @@ function DesktopWorkspace({ auth, compactWindow, initialConversationId, session 
       .channel(`claire-desktop-${session.user.id}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `user_id=eq.${session.user.id}` }, ({ new: row }) => {
         const message = row as { chat_id?: string; from_me?: boolean; contact_name?: string | null; content?: string | null };
-        refreshChats(false).catch(() => undefined);
-        if (message.chat_id === selectedConversationId) {
+        scheduleChatRefresh();
+        if (message.chat_id === selectedConversationIdRef.current) {
           refreshVisibleMessages().catch(() => undefined);
           if (!message.from_me) api.markChatRead(message.chat_id).catch(() => undefined);
         }
       })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages', filter: `user_id=eq.${session.user.id}` }, () => {
-        refreshVisibleMessages().catch(() => undefined);
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages', filter: `user_id=eq.${session.user.id}` }, ({ new: row }) => {
+        const message = row as { chat_id?: string };
+        scheduleChatRefresh();
+        if (message.chat_id === selectedConversationIdRef.current) refreshVisibleMessages().catch(() => undefined);
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'chats', filter: `user_id=eq.${session.user.id}` }, () => {
-        refreshChats(false).catch(() => undefined);
+        scheduleChatRefresh();
       })
       .subscribe((status) => {
         setRealtimeStatus(status === 'SUBSCRIBED' ? 'live' : 'reconnecting');
       });
     return () => { auth.client.removeChannel(channel); };
-  }, [api, auth.client, refreshChats, refreshVisibleMessages, selectedConversationId, session.user.id]);
+  }, [api, auth.client, refreshVisibleMessages, scheduleChatRefresh, selectedConversationId, session.user.id]);
 
   const loadOlderMessages = async () => {
     if (!api || !selectedConversationId || loadingOlderMessages || !hasMoreMessages) return;
@@ -587,7 +642,7 @@ function DesktopWorkspace({ auth, compactWindow, initialConversationId, session 
       <View style={styles.appFrame}>
         <NavigationRail compact={usesCompactNavigation} destination={destination} onSelect={(next) => { setDestination(next); if (next === 'Inbox') setCompactChatOpen(false); }} />
         {destination === 'Home' ? <HomePane api={api} companion={companion} conversations={conversations} onOpenChat={openConversation} onOpenInbox={() => setDestination('Inbox')} /> : null}
-        {destination === 'Promises' ? <PromisesPane api={api} onOpenChat={openConversation} /> : null}
+        {destination === 'Promises' ? <PromisesPane api={api} onOpenChat={openConversation} onOpenInbox={() => setDestination('Inbox')} /> : null}
         {destination === 'People' ? <PeoplePane api={api} conversations={conversations} selectedConversationId={peopleSelectionId} onOpenChat={openConversation} /> : null}
         {destination === 'Search' ? <AssistantPane api={api} selected={selected} initialQuestion={globalSearchSeed} onInitialQuestionConsumed={clearGlobalSearchSeed} onOpenMessage={(chatId, messageId) => { setSelectedConversationId(chatId); setHighlightedMessageId(messageId); setDestination('Inbox'); }} /> : null}
         {destination === 'Settings' ? <SettingsPane api={api} companion={companion} companionNotice={companionNotice} apiUrl={auth.config.apiUrl} accessToken={session.access_token} onNotificationPreferenceChange={setNotificationsEnabled} /> : null}
@@ -661,7 +716,7 @@ function ConversationPane({ compact, width, selectedId, onSelect, onOpenSearch, 
     {showNewConversation ? <View style={styles.newConversationPicker}><View style={styles.newConversationHeader}><View><ClaireText variant="sectionTitle">New conversation</ClaireText><ClaireText variant="bodySmall" style={styles.muted}>Choose someone from your synced chats.</ClaireText></View><ClaireButton variant="quiet" onPress={() => setShowNewConversation(false)}>Close</ClaireButton></View>{conversations.slice(0, 4).map((conversation) => <Pressable key={conversation.id} accessibilityRole="button" onPress={() => { setShowNewConversation(false); onSelect(conversation.id); }} style={({ pressed }) => [styles.newConversationRow, pressed && styles.pressed]}><ClaireAvatar initials={conversation.initials} source={conversation.avatarUrl ? { uri: conversation.avatarUrl } : undefined} tone={conversation.tone} size={34} /><View style={styles.newConversationRowCopy}><ClaireText variant="body" numberOfLines={1}>{conversation.name}</ClaireText><ClaireText variant="bodySmall" style={styles.muted}>{conversation.platform}</ClaireText></View><ClaireText variant="label" style={styles.replyLabel}>Message</ClaireText></Pressable>)}<ClaireText variant="bodySmall" style={styles.newConversationHint}>To message someone new, start the chat in its source app first; Claire will add it after sync.</ClaireText></View> : null}
     <View style={styles.inboxSearch}><Search size={17} color={colors.neutral[400]} /><TextInput accessibilityLabel="Search conversations" value={query} onChangeText={setQuery} placeholder="Search everything" placeholderTextColor={colors.neutral[400]} style={[styles.inboxSearchInput, desktopShellStyles.inboxSearchInput]} /><Pressable accessibilityRole="button" accessibilityLabel="Open global search" onPress={onOpenSearch} style={({ pressed }) => [styles.searchShortcut, pressed && styles.pressed]}><ClaireText variant="monoLabel" style={styles.searchShortcutText}>⌘K</ClaireText></Pressable></View>
     <View style={styles.inboxFilters}>{([['all', 'All'], ['unread', unreadCount ? `Unread ${unreadCount}` : 'Unread'], ['groups', 'Groups']] as const).map(([value, label]) => <Pressable key={value} accessibilityRole="button" accessibilityState={{ selected: filter === value }} onPress={() => setFilter(value)} style={({ pressed }) => [styles.inboxFilter, filter === value && styles.inboxFilterActive, pressed && styles.pressed]}><ClaireText variant="label" style={filter === value ? styles.inboxFilterActiveText : styles.inboxFilterText}>{label}</ClaireText></Pressable>)}</View>
-    <ScrollView contentContainerStyle={styles.conversationList} showsVerticalScrollIndicator={false}>{loading ? <LoadingRow label="Loading conversations…" /> : null}{!loading && error ? <ClaireText variant="bodySmall" style={styles.errorText}>{error}</ClaireText> : null}{!loading && !error && conversations.length === 0 ? <ClaireText variant="bodySmall" style={styles.muted}>No conversations have synced to this account yet.</ClaireText> : null}{!loading && !error && conversations.length > 0 && visibleConversations.length === 0 ? <ClaireText variant="bodySmall" style={styles.muted}>No conversations match this view.</ClaireText> : null}{visibleConversations.map((item) => <ClaireConversationRow key={item.id} name={item.name} preview={item.preview} timestamp={item.time} platform={item.platform} unreadCount={item.unread} initials={item.initials} avatarSource={item.avatarUrl ? { uri: item.avatarUrl } : undefined} avatarTone={item.tone} selected={selectedId === item.id} onPress={() => onSelect(item.id)} />)}</ScrollView>
+    <ScrollView contentContainerStyle={styles.conversationList} showsVerticalScrollIndicator={false}>{loading ? <LoadingRow label="Loading conversations…" /> : null}{!loading && error ? <ClaireText variant="bodySmall" style={styles.errorText}>{error}</ClaireText> : null}{!loading && !error && conversations.length === 0 ? <ClaireText variant="bodySmall" style={styles.muted}>No conversations have synced to this account yet.</ClaireText> : null}{!loading && !error && conversations.length > 0 && visibleConversations.length === 0 ? <ClaireText variant="bodySmall" style={styles.muted}>No conversations match this view.</ClaireText> : null}{visibleConversations.map((item) => <ClaireConversationRow key={item.id} name={item.name} preview={item.preview} timestamp={item.time} platform={item.platform} unreadCount={item.unread} initials={item.initials} avatarSource={item.avatarUrl ? { uri: item.avatarUrl } : undefined} avatarTone={item.tone} avatarOverlay={<PlatformAvatarBadge platform={item.platform} />} selected={selectedId === item.id} onPress={() => onSelect(item.id)} />)}</ScrollView>
   </View>;
 }
 
@@ -769,8 +824,9 @@ function mediaUrl(value: string, apiBaseUrl: string) {
 function MediaMessage({ message, apiBaseUrl }: { message: DesktopMessage; apiBaseUrl: string }) {
   const [failed, setFailed] = useState(false);
   const url = message.media_url ? mediaUrl(message.media_url, apiBaseUrl) : null;
+  const source = useMemo(() => url ? { uri: url } : undefined, [url]);
   const isImage = Boolean(url && (message.media_mime_type?.startsWith('image/') || message.content_type === 'image'));
-  if (isImage && !failed) return <Image accessibilityLabel="Message image" source={{ uri: url! }} onError={() => setFailed(true)} style={styles.mediaImage} />;
+  if (isImage && !failed && source) return <Image accessibilityLabel="Message image" source={source} onError={() => setFailed(true)} style={styles.mediaImage} />;
   if (url && failed) return <ClaireText variant="bodySmall" style={styles.muted}>Media unavailable</ClaireText>;
   if (url) return <ClaireText variant="bodySmall">{message.content || 'Media message'}</ClaireText>;
   return <ClaireText variant="body">{message.content || 'Message unavailable'}</ClaireText>;
@@ -795,10 +851,11 @@ function deadlineLabel(value?: string | null) {
   return `Due ${due.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
 }
 
-function PromisesPane({ api, onOpenChat }: { api: ClaireApi | null; onOpenChat: (chatId: string) => void }) {
+function PromisesPane({ api, onOpenChat, onOpenInbox }: { api: ClaireApi | null; onOpenChat: (chatId: string) => void; onOpenInbox: () => void }) {
   const [promises, setPromises] = useState<DesktopPromise[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
   const refresh = useCallback(async () => {
     if (!api) return;
     setLoading(true);
@@ -806,16 +863,77 @@ function PromisesPane({ api, onOpenChat }: { api: ClaireApi | null; onOpenChat: 
   }, [api]);
   useEffect(() => { refresh().catch(() => undefined); }, [refresh]);
   const open = promises.filter((item) => item.status === 'pending' || item.status === 'overdue');
-  return <ScrollView style={styles.promisesPane} contentContainerStyle={styles.promisesContent}><View style={styles.promiseHeader}><View><ClaireText variant="screenTitle">Promises</ClaireText><ClaireText variant="bodySmall" style={styles.muted}>{open.length} open commitments to follow up on</ClaireText></View><ClaireButton variant="secondary" onPress={() => { refresh().catch(() => undefined); }}>Refresh</ClaireButton></View>{loading ? <LoadingRow label="Loading promises…" /> : null}{error ? <ClaireText variant="bodySmall" style={styles.errorText}>{error}</ClaireText> : null}{!loading && !error && !open.length ? <ClaireText variant="bodySmall" style={styles.muted}>No open promises right now.</ClaireText> : null}{open.map((promise) => { const conversation = promiseConversation(promise); const avatarUrl = promise.contact?.avatar_url || promise.chat?.contact?.avatar_url || undefined; const overdue = promise.status === 'overdue' || Boolean(promise.deadline && new Date(promise.deadline).getTime() < Date.now()); return <Pressable key={promise.id} accessibilityRole={promise.chat_id ? 'button' : undefined} disabled={!promise.chat_id} onPress={() => promise.chat_id && onOpenChat(promise.chat_id)} style={({ pressed }) => [styles.promiseCard, overdue && styles.promiseCardOverdue, pressed && promise.chat_id && styles.pressed]}><View style={styles.promisePerson}><ClaireAvatar initials={initials(conversation)} source={avatarUrl ? { uri: avatarUrl } : undefined} tone="sky" size={36} /><View style={styles.promisePersonText}><ClaireText variant="body" style={styles.conversationName}>{conversation}</ClaireText><ClaireText variant="monoLabel" style={styles.platformLabel}>{promise.platform || promise.chat?.platform || 'Conversation'}</ClaireText></View><ClaireText variant="label" style={styles.replyLabel}>{promise.chat_id ? 'Reply' : ''}</ClaireText></View><ClaireText variant="body" style={styles.promiseText}>{promise.content}</ClaireText>{deadlineLabel(promise.deadline) ? <ClaireText variant="bodySmall" style={overdue ? styles.overdueText : styles.muted}>{deadlineLabel(promise.deadline)}</ClaireText> : null}</Pressable>; })}</ScrollView>;
+  const overdueCount = open.filter((item) => item.status === 'overdue' || Boolean(item.deadline && new Date(item.deadline).getTime() < Date.now())).length;
+  const snoozeUntil = () => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(9, 0, 0, 0);
+    return tomorrow.toISOString();
+  };
+  const update = async (promise: DesktopPromise, action: 'complete' | 'snooze') => {
+    if (!api || updatingId) return;
+    setUpdatingId(promise.id);
+    setError(null);
+    try {
+      const updated = action === 'complete'
+        ? await api.updatePromise(promise.id, { status: 'completed' })
+        : await api.snoozePromise(promise.id, snoozeUntil());
+      setPromises((current) => current.map((item) => item.id === promise.id ? { ...item, ...updated } : item));
+    } catch (updateError) {
+      setError(updateError instanceof Error ? updateError.message : 'Unable to update this promise.');
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+  return <ScrollView style={styles.promisesPane} contentContainerStyle={desktopPromisesStyles.content}>
+    <View style={desktopPromisesStyles.header}>
+      <View style={desktopPromisesStyles.headerCopy}><ClaireText variant="monoLabel" style={styles.dailyBriefDate}>FOLLOW-THROUGH</ClaireText><ClaireText variant="display">Promises</ClaireText><ClaireText variant="body" style={styles.muted}>{open.length ? `${open.length} commitments are waiting for your next move.` : 'Claire will surface commitments from your conversations here.'}</ClaireText></View>
+      <ClaireIconButton accessibilityLabel="Refresh promises" disabled={loading} onPress={() => { refresh().catch(() => undefined); }}>{loading ? <ActivityIndicator size="small" color={colors.ink} /> : <RefreshCw size={18} color={colors.ink} />}</ClaireIconButton>
+    </View>
+    {!loading && !error ? <View style={desktopPromisesStyles.summary}><ClaireStatusPill tone={overdueCount ? 'warning' : 'success'}>{overdueCount ? `${overdueCount} overdue` : 'On track'}</ClaireStatusPill><ClaireText variant="bodySmall" style={styles.muted}>{open.length} open · {promises.filter((item) => item.status === 'completed').length} completed</ClaireText></View> : null}
+    {loading ? <LoadingRow label="Loading promises…" /> : null}
+    {error ? <View style={desktopPromisesStyles.error}><ClaireText variant="bodySmall" style={styles.errorText}>{error}</ClaireText><ClaireButton variant="quiet" onPress={() => { refresh().catch(() => undefined); }}>Try again</ClaireButton></View> : null}
+    {!loading && !error && !open.length ? <ClaireCard tone="paper" style={desktopPromisesStyles.empty}><View style={desktopPromisesStyles.emptyMark}><ListTodo size={24} color={colors.ink} /></View><ClaireText variant="sectionTitle">Nothing open right now</ClaireText><ClaireText variant="body" style={styles.muted}>When a conversation contains a commitment, Claire will keep it here with a direct path back to the chat.</ClaireText><ClaireButton onPress={onOpenInbox}>Open Inbox</ClaireButton></ClaireCard> : null}
+    <View style={desktopPromisesStyles.list}>{open.map((promise) => {
+      const conversation = promiseConversation(promise);
+      const avatarUrl = promise.contact?.avatar_url || promise.chat?.contact?.avatar_url || undefined;
+      const overdue = promise.status === 'overdue' || Boolean(promise.deadline && new Date(promise.deadline).getTime() < Date.now());
+      const isUpdating = updatingId === promise.id;
+      return <Pressable key={promise.id} accessibilityRole={promise.chat_id ? 'button' : undefined} accessibilityLabel={promise.chat_id ? `Open ${conversation} conversation for promise: ${promise.content}` : undefined} disabled={!promise.chat_id} onPress={() => promise.chat_id && onOpenChat(promise.chat_id)} style={({ pressed }) => [desktopPromisesStyles.card, overdue && desktopPromisesStyles.cardOverdue, pressed && promise.chat_id && styles.pressed]}>
+        <View style={desktopPromisesStyles.cardHead}><View style={desktopPromisesStyles.person}><ClaireAvatar initials={initials(conversation)} source={avatarUrl ? { uri: avatarUrl } : undefined} tone="sky" size={42} /><View style={desktopPromisesStyles.personCopy}><ClaireText variant="body" style={styles.conversationName}>{conversation}</ClaireText><ClaireText variant="monoLabel" style={styles.platformLabel}>{promise.platform || promise.chat?.platform || 'Conversation'}</ClaireText></View></View><View onStartShouldSetResponder={() => true} style={desktopPromisesStyles.cardActions}>
+          <ClaireIconButton accessibilityLabel={`Mark “${promise.content}” complete`} disabled={Boolean(updatingId)} onPress={() => { update(promise, 'complete').catch(() => undefined); }}>{isUpdating ? <ActivityIndicator size="small" color={colors.ink} /> : <ListTodo size={17} color={colors.ink} />}</ClaireIconButton>
+          <ClaireIconButton accessibilityLabel={`Snooze “${promise.content}” until tomorrow`} disabled={Boolean(updatingId)} onPress={() => { update(promise, 'snooze').catch(() => undefined); }}><RefreshCw size={16} color={colors.neutral[600]} /></ClaireIconButton>
+        </View></View>
+        <ClaireText variant="sectionTitle" style={desktopPromisesStyles.promiseText}>{promise.content}</ClaireText>
+        <View style={desktopPromisesStyles.cardFoot}><ClaireStatusPill tone={overdue ? 'warning' : 'info'}>{deadlineLabel(promise.deadline) || 'No due date'}</ClaireStatusPill><ClaireText variant="label" style={styles.replyLabel}>{promise.chat_id ? 'Open conversation' : 'Conversation unavailable'}</ClaireText></View>
+      </Pressable>;
+    })}</View>
+  </ScrollView>;
 }
 
 function HomePane({ api, companion, conversations, onOpenChat, onOpenInbox }: { api: ClaireApi | null; companion: CompanionStatus | null; conversations: Conversation[]; onOpenChat: (chatId: string) => void; onOpenInbox: () => void }) {
   const [promises, setPromises] = useState<DesktopPromise[]>([]);
   const [loadingPromises, setLoadingPromises] = useState(Boolean(api));
+  const [connectionDefinitions, setConnectionDefinitions] = useState<DesktopPlatformDefinition[]>([]);
+  const [connectionStatuses, setConnectionStatuses] = useState<Record<string, DesktopPlatformStatus>>({});
   useEffect(() => {
     let active = true;
     if (!api) return () => { active = false; };
     api.getPromises().then((next) => active && setPromises(next)).catch(() => undefined).finally(() => active && setLoadingPromises(false));
+    return () => { active = false; };
+  }, [api]);
+  useEffect(() => {
+    let active = true;
+    if (!api) return () => { active = false; };
+    const load = async () => {
+      const definitions = await api.getPlatformDefinitions().catch(() => desktopPlatformFallback);
+      const available = definitions.filter((definition) => ['whatsapp', 'telegram', 'instagram', 'imessage'].includes(definition.id) && definition.supportStatus !== 'planned');
+      const statuses = await Promise.all(available.filter((definition) => definition.id !== 'imessage').map(async (definition) => [definition.id, await api.getPlatformStatus(definition.id).catch(() => undefined)] as const));
+      if (!active) return;
+      setConnectionDefinitions(available);
+      setConnectionStatuses(Object.fromEntries(statuses.filter((entry): entry is [string, DesktopPlatformStatus] => Boolean(entry[1]))));
+    };
+    load().catch(() => undefined);
     return () => { active = false; };
   }, [api]);
   const unread = conversations.reduce((total, conversation) => total + (conversation.unread || 0), 0);
@@ -825,6 +943,7 @@ function HomePane({ api, companion, conversations, onOpenChat, onOpenInbox }: { 
   const today = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
   const firstName = 'Luc';
   const companionHealthy = companion?.health === 'healthy';
+  const healthPlatforms = connectionDefinitions.length ? connectionDefinitions : desktopPlatformFallback.filter((definition) => ['whatsapp', 'telegram', 'instagram', 'imessage'].includes(definition.id));
   const { width } = useWindowDimensions();
   const stacked = width < 1100;
   const expansive = width >= 1460;
@@ -837,7 +956,12 @@ function HomePane({ api, companion, conversations, onOpenChat, onOpenInbox }: { 
     </View>
     <View style={[desktopHomeStyles.row, stacked && desktopHomeStyles.rowStacked]}>
       <ClaireCard tone="sky" style={[desktopHomeStyles.card, desktopHomeStyles.hero, stacked && desktopHomeStyles.cardStacked, expansive && desktopHomeStyles.heroExpansive]}><ClaireText variant="monoLabel" style={styles.dailyBriefDate}>CONTINUE CONVERSATION</ClaireText><ClaireText variant="screenTitle" style={{ fontSize: heroTitle, lineHeight: heroTitle + 5 }}>{'Pick up where\nyou left off.'}</ClaireText>{latest ? <Pressable accessibilityRole="button" onPress={() => onOpenChat(latest.id)} style={({ pressed }) => [desktopHomeStyles.actionRow, pressed && styles.pressed]}><ClaireAvatar initials={latest.initials} source={latest.avatarUrl ? { uri: latest.avatarUrl } : undefined} size={42} tone={latest.tone} /><View style={styles.dailyBriefRowCopy}><ClaireText variant="body" style={desktopHomeStyles.actionTitle}>{latest.name}</ClaireText><ClaireText variant="bodySmall" numberOfLines={1} style={desktopHomeStyles.actionDetail}>{latest.preview}</ClaireText></View><ClaireText variant="label" style={styles.replyLabel}>Continue</ClaireText></Pressable> : <ClaireText variant="body" style={styles.muted}>Your latest conversation will appear here after sync.</ClaireText>}</ClaireCard>
-      <ClaireCard tone="paper" style={[desktopHomeStyles.card, desktopHomeStyles.health, stacked && desktopHomeStyles.cardStacked]}><ClaireText variant="monoLabel" style={styles.dailyBriefDate}>CONNECTION HEALTH</ClaireText><View style={desktopHomeStyles.healthRow}><View style={[styles.healthDot, companionHealthy && styles.healthDotHealthy]} /><View style={styles.dailyBriefRowCopy}><ClaireText variant="body" style={desktopHomeStyles.actionTitle}>This Mac</ClaireText><ClaireText variant="bodySmall" style={desktopHomeStyles.actionDetail}>{companionHealthy ? 'Companion ready for local connections' : 'Companion setup pending'}</ClaireText></View><ClaireStatusPill tone={companionHealthy ? 'success' : 'warning'}>{companionHealthy ? 'Healthy' : 'Action'}</ClaireStatusPill></View><ClaireText variant="bodySmall" style={styles.muted}>Platform status and recovery stay available in Connections.</ClaireText></ClaireCard>
+      <ClaireCard tone="paper" style={[desktopHomeStyles.card, desktopHomeStyles.health, stacked && desktopHomeStyles.cardStacked]}><ClaireText variant="monoLabel" style={styles.dailyBriefDate}>CONNECTION HEALTH</ClaireText><View style={desktopHomeStyles.healthList}>{healthPlatforms.map((platform) => {
+        const summary = platform.id === 'imessage'
+          ? { tone: companionHealthy ? 'success' as const : 'warning' as const, label: companionHealthy ? 'Ready' : 'Set up', detail: companionHealthy ? 'Available on this Mac' : 'Needs local setup' }
+          : connectionSummary(connectionStatuses[platform.id]);
+        return <View key={platform.id} style={desktopHomeStyles.healthRow}><View style={[desktopHomeStyles.platformMark, { backgroundColor: platform.accent }]}><ClaireText variant="label" style={desktopHomeStyles.platformMarkText}>{platform.mark}</ClaireText></View><View style={styles.dailyBriefRowCopy}><ClaireText variant="bodySmall" style={desktopHomeStyles.platformName}>{platform.name}</ClaireText><ClaireText variant="bodySmall" numberOfLines={1} style={desktopHomeStyles.actionDetail}>{summary.detail}</ClaireText></View><ClaireStatusPill tone={summary.tone}>{summary.label === 'Not connected' ? 'Available' : summary.label}</ClaireStatusPill></View>;
+      })}</View></ClaireCard>
     </View>
     <View style={[desktopHomeStyles.row, stacked && desktopHomeStyles.rowStacked]}>
       <ClaireCard tone="paper" style={[desktopHomeStyles.card, desktopHomeStyles.supportCard, stacked && desktopHomeStyles.cardStacked]}><ClaireText variant="monoLabel" style={styles.dailyBriefDate}>NEEDS A REPLY</ClaireText>{needsReply.length ? needsReply.map((conversation) => <Pressable key={conversation.id} accessibilityRole="button" onPress={() => onOpenChat(conversation.id)} style={({ pressed }) => [desktopHomeStyles.actionRow, pressed && styles.pressed]}><ClaireAvatar initials={conversation.initials} source={conversation.avatarUrl ? { uri: conversation.avatarUrl } : undefined} size={36} tone={conversation.tone} /><View style={styles.dailyBriefRowCopy}><ClaireText variant="body" style={desktopHomeStyles.actionTitle}>{conversation.name}</ClaireText><ClaireText variant="bodySmall" numberOfLines={1} style={desktopHomeStyles.actionDetail}>{conversation.preview}</ClaireText></View><ClaireText variant="label" style={styles.replyLabel}>Reply</ClaireText></Pressable>) : <ClaireText variant="body" style={styles.muted}>No unread conversations right now.</ClaireText>}</ClaireCard>
@@ -1068,9 +1192,26 @@ function ConnectionsPane({ companion, companionNotice, api, apiUrl, accessToken,
     {loadingStatuses && !definitions.length ? <LoadingRow label="Loading Claire’s platform catalog…" /> : null}
     {definitions.length ? <><View style={desktopConnectionsStyles.grid}>{activeDefinitions.map((item) => <ConnectionOverviewCard key={item.id} definition={item} selected={item.id === selectedPlatformId} summary={summaryFor(item)} requested={false} onPress={() => { setSelectedPlatformId(item.id); setInterestNotice(null); }} />)}</View>
       {roadmapDefinitions.length ? <View style={desktopConnectionsStyles.roadmap}><View><ClaireText variant="monoLabel" style={styles.contextLabel}>ROADMAP</ClaireText><ClaireText variant="sectionTitle">Request a platform</ClaireText><ClaireText variant="bodySmall" style={styles.muted}>Requests express interest only—Claire never asks for credentials here.</ClaireText></View><View style={desktopConnectionsStyles.grid}>{roadmapDefinitions.map((item) => <ConnectionOverviewCard key={item.id} definition={item} selected={item.id === selectedPlatformId} requested={requestedPlatformIds.includes(item.id)} onPress={() => { setSelectedPlatformId(item.id); setInterestNotice(null); }} />)}</View></View> : null}
+      {selectedPlatform?.id === 'imessage' ? <IMessageSetupGuide companion={companion} onOpenPermissions={() => { companionBridge.openSystemSettings('full_disk_access').catch(() => undefined); }} /> : null}
       {selectedPlatform ? <View style={desktopConnectionsStyles.detail}><ConnectionDetail definition={selectedPlatform} requested={requestedPlatformIds.includes(selectedPlatform.id)} companion={companion} companionNotice={companionNotice} summary={summaryFor(selectedPlatform)} whatsAppPhoneNumber={whatsAppPhoneNumber} onWhatsAppPhoneNumber={setWhatsAppPhoneNumber} connectingWhatsApp={connectingWhatsApp} pairingCode={pairingCode} whatsAppNotice={whatsAppNotice} onConnectWhatsApp={connectWhatsApp} connectingInstagram={connectingInstagram} instagramNotice={instagramNotice} onConnectInstagram={connectInstagram} onOpenMacPermissions={() => { companionBridge.openSystemSettings('full_disk_access').catch(() => undefined); }} requestingInterest={requestingInterest} interestNotice={interestNotice} onRequestInterest={requestInterest} /></View> : null}
     </> : null}
   </ScrollView>;
+}
+
+function IMessageSetupGuide({ companion, onOpenPermissions }: { companion: CompanionStatus | null; onOpenPermissions: () => void }) {
+  const permissionReady = companion?.iMessagePermissionState === 'ready';
+  const syncing = companion?.health === 'healthy';
+  const steps = [
+    { title: 'Messages is signed in', detail: 'Claire uses the Apple account already active in the Messages app.', complete: companion?.iMessagePermissionState !== 'unavailable' },
+    { title: 'Allow Full Disk Access', detail: 'macOS requires this to read the local Messages database. Claire reads it on this Mac and sends only normalized conversation events to your signed-in Claire account.', complete: permissionReady },
+    { title: 'Keep Claire running', detail: 'iMessage is a desktop-only connection. The menu-bar indicator shows whether this Mac is available and syncing.', complete: syncing },
+  ];
+  return <View testID="imessage-setup-guide"><ClaireCard tone="cream" style={desktopConnectionsStyles.setupGuide}>
+    <View style={desktopConnectionsStyles.setupGuideHead}><View><ClaireText variant="monoLabel" style={styles.contextLabel}>IMESSAGE ONBOARDING</ClaireText><ClaireText variant="sectionTitle">Connect this Mac in three steps</ClaireText></View><ClaireStatusPill tone={syncing ? 'success' : 'warning'}>{syncing ? 'Syncing' : 'Setup required'}</ClaireStatusPill></View>
+    <ClaireText variant="bodySmall" style={styles.muted}>Claire never asks for your Apple Account password. macOS owns the permission prompt, and you can revoke access at any time in System Settings.</ClaireText>
+    <View style={desktopConnectionsStyles.setupSteps}>{steps.map((step, index) => <View key={step.title} style={desktopConnectionsStyles.setupStep}><View style={[desktopConnectionsStyles.setupStepNumber, step.complete && desktopConnectionsStyles.setupStepComplete]}><ClaireText variant="label">{step.complete ? '✓' : String(index + 1)}</ClaireText></View><View style={desktopConnectionsStyles.setupStepCopy}><ClaireText variant="bodySmall" style={styles.conversationName}>{step.title}</ClaireText><ClaireText variant="bodySmall" style={styles.muted}>{step.detail}</ClaireText></View></View>)}</View>
+    {!permissionReady ? <ClaireButton variant="secondary" onPress={onOpenPermissions}>Open Full Disk Access</ClaireButton> : null}
+  </ClaireCard></View>;
 }
 
 function ConnectionOverviewCard({ definition, selected, summary, requested, onPress }: { definition: DesktopPlatformDefinition; selected: boolean; summary?: { tone: 'success' | 'warning' | 'neutral'; label: string; detail: string }; requested: boolean; onPress: () => void }) {
@@ -1091,13 +1232,29 @@ function ConnectionDetail({ definition, requested, companion, companionNotice, s
 }
 
 /** Bundled vector marks keep catalog cards legible offline; unknown catalog IDs fall back to their server-provided mark. */
-function PlatformGlyph({ definition, size = 22 }: { definition: DesktopPlatformDefinition; size?: number }) {
+function PlatformGlyph({ definition, size = 22 }: { definition: Pick<DesktopPlatformDefinition, 'id' | 'mark'>; size?: number }) {
   if (definition.id === 'telegram') return <Send size={size} color={colors.paper} />;
   if (definition.id === 'discord') return <Users size={size} color={colors.paper} />;
   if (definition.id === 'imessage' || definition.id === 'whatsapp') return <MessageCircle size={size} color={colors.paper} />;
   if (definition.id === 'instagram') return <View style={[desktopConnectionsStyles.instagramGlyph, { width: size, height: size }]}><View style={desktopConnectionsStyles.instagramLens} /></View>;
   return <ClaireText variant="label" style={desktopConnectionsStyles.cardMark}>{definition.mark}</ClaireText>;
 }
+
+const platformBadgeDetails: Record<string, { mark: string; color: string }> = {
+  whatsapp: { mark: 'W', color: '#25D366' },
+  telegram: { mark: 'T', color: '#229ED9' },
+  imessage: { mark: 'i', color: '#3478F6' },
+  instagram: { mark: 'I', color: '#D62976' },
+};
+
+function PlatformAvatarBadge({ platform }: { platform: string }) {
+  const detail = platformBadgeDetails[platform] || { mark: platform.slice(0, 1).toUpperCase() || '?', color: colors.neutral[600] };
+  return <View accessibilityLabel={`${platform} platform`} style={[desktopPlatformBadgeStyles.badge, { backgroundColor: detail.color }]}><PlatformGlyph definition={{ id: platform, mark: detail.mark }} size={11} /></View>;
+}
+
+const desktopPlatformBadgeStyles = StyleSheet.create({
+  badge: { position: 'absolute', right: -3, bottom: -3, width: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.paper },
+});
 
 function SettingsPane({ api, companion, companionNotice, apiUrl, accessToken, onNotificationPreferenceChange }: { api: ClaireApi | null; companion: CompanionStatus | null; companionNotice: string | null; apiUrl: string; accessToken: string; onNotificationPreferenceChange: (enabled: boolean) => void }) {
   const [preferences, setPreferences] = useState<DesktopPreferences | null>(null);
@@ -1251,23 +1408,21 @@ function ConversationAssistantInspector({ api, selected, width, onCollapse, onOp
 function ConversationContactInspector({ api, selected, width, onOpenAssistant, onOpenPerson }: { api: ClaireApi | null; selected: Conversation | null; width: number; onOpenAssistant: () => void; onOpenPerson: (chatId: string) => void }) {
   const [settings, setSettings] = useState<DesktopConversationSettings | null>(null);
   const [promises, setPromises] = useState<DesktopPromise[]>([]);
-  const [loading, setLoading] = useState(false);
+  const selectedId = selected?.id;
 
   useEffect(() => {
     let active = true;
     setSettings(null); setPromises([]);
-    if (!api || !selected) return () => { active = false; };
-    setLoading(true);
-    Promise.all([api.getConversationSettings(selected.id), api.getPromises()])
+    if (!api || !selectedId) return () => { active = false; };
+    Promise.all([api.getConversationSettings(selectedId), api.getPromises()])
       .then(([nextSettings, nextPromises]) => {
         if (!active) return;
         setSettings(nextSettings);
-        setPromises(nextPromises.filter((item) => item.chat_id === selected.id && item.status !== 'completed').slice(0, 3));
+        setPromises(nextPromises.filter((item) => item.chat_id === selectedId && item.status !== 'completed').slice(0, 3));
       })
-      .catch(() => active && setSettings(null))
-      .finally(() => active && setLoading(false));
+      .catch(() => active && setSettings(null));
     return () => { active = false; };
-  }, [api, selected]);
+  }, [api, selectedId]);
 
   if (!selected) return <View style={[styles.inspector, desktopContactInspectorStyles.root, { width }]}><View style={styles.inspectorEmpty}><Users size={22} color={colors.neutral[400]} /><ClaireText variant="body">Pick a conversation</ClaireText><ClaireText variant="bodySmall" style={styles.muted}>Contact details appear here.</ClaireText></View></View>;
   const memory = settings?.profile?.relationship_context || settings?.profile?.ai_instruction;
@@ -1279,7 +1434,6 @@ function ConversationContactInspector({ api, selected, width, onOpenAssistant, o
       <View style={desktopContactInspectorStyles.actions}><ClaireButton variant="quiet" onPress={() => onOpenPerson(selected.id)}>Profile</ClaireButton><ClaireButton variant="quiet" onPress={onOpenAssistant}>Ask Claire</ClaireButton></View>
     </View>
     <ScrollView contentContainerStyle={desktopContactInspectorStyles.content}>
-      {loading ? <LoadingRow label="Loading conversation context…" /> : null}
       <View style={desktopContactInspectorStyles.section}><ClaireText variant="monoLabel" style={styles.dailyBriefDate}>RELATIONSHIP MEMORY</ClaireText><ClaireCard tone="sky" style={desktopContactInspectorStyles.memory}><ClaireText variant="bodySmall">{memory || 'Add relationship context in People to guide Claire’s replies for this conversation.'}</ClaireText></ClaireCard></View>
       <View style={desktopContactInspectorStyles.section}><ClaireText variant="monoLabel" style={styles.dailyBriefDate}>OPEN PROMISES</ClaireText>{promises.length ? promises.map((promise) => <Pressable key={promise.id} accessibilityRole="button" onPress={() => onOpenPerson(selected.id)} style={({ pressed }) => [desktopContactInspectorStyles.promise, pressed && styles.pressed]}><View style={desktopContactInspectorStyles.promiseDot} /><View style={desktopContactInspectorStyles.promiseCopy}><ClaireText variant="bodySmall" numberOfLines={2}>{promise.content}</ClaireText><ClaireText variant="bodySmall" style={styles.muted}>{promise.deadline ? new Date(promise.deadline).toLocaleDateString() : 'No due date'}</ClaireText></View></Pressable>) : <ClaireText variant="bodySmall" style={styles.muted}>No open promises in this conversation.</ClaireText>}</View>
       <View style={desktopContactInspectorStyles.section}><ClaireText variant="monoLabel" style={styles.dailyBriefDate}>SHARED</ClaireText><ClaireText variant="bodySmall" style={styles.muted}>Shared media and files will appear here as they sync.</ClaireText></View>
@@ -1316,8 +1470,8 @@ const styles = Object.assign(StyleSheet.create({
   inspector: { backgroundColor: colors.paper, borderLeftWidth: 1, borderColor: colors.neutral[200], minWidth: 0 }, inspectorHeader: { minHeight: 82, padding: space[4], paddingBottom: space[3], flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', columnGap: space[2], borderBottomWidth: 1, borderColor: colors.neutral[200] }, inspectorHeaderCopy: { flex: 1, minWidth: 0 }, inspectorHeaderActions: { flexDirection: 'row', columnGap: space[1] }, inspectorTitleRow: { flexDirection: 'row', alignItems: 'center', columnGap: space[2], marginBottom: 4 }, inspectorMark: { width: 26, height: 26, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.infoSurface, borderRadius: 9 }, inspectorContent: { padding: space[3], rowGap: space[3] }, inspectorEmpty: { paddingVertical: space[6], alignItems: 'center', rowGap: space[2], textAlign: 'center' }, inspectorThinking: { flexDirection: 'row', alignItems: 'center', columnGap: space[2], paddingVertical: space[2] }, inspectorComposer: { borderTopWidth: 1, borderColor: colors.neutral[200], padding: space[3], flexDirection: 'row', alignItems: 'flex-end', columnGap: space[2] }, inspectorInput: { flex: 1, minHeight: 42, maxHeight: 100, borderWidth: 1, borderColor: colors.neutral[200], borderRadius: radius.control, color: colors.ink, fontFamily: 'Avenir Next', fontSize: 14, lineHeight: 20, paddingHorizontal: space[3], paddingVertical: space[2], textAlignVertical: 'top' }, inspectorTurn: { alignItems: 'flex-start', rowGap: 4 }, inspectorTurnUser: { alignItems: 'flex-end' }, inspectorTurnUserLabel: { color: colors.focus }, inspectorTurnClaireLabel: { color: colors.neutral[600] }, inspectorTurnCard: { padding: space[3], maxWidth: '100%' }, inspectorSources: { width: '100%', rowGap: space[2], marginTop: space[1] },
   emptyPane: { justifyContent: 'center', alignItems: 'center', rowGap: space[2] }, loadingRow: { flexDirection: 'row', alignItems: 'center', columnGap: space[2], paddingVertical: space[4] }, errorText: { color: colors.danger, paddingVertical: space[2] }, successText: { color: colors.success, paddingVertical: space[2] },
   promisesPane: { flex: 1, minWidth: 620, backgroundColor: colors.cream }, promisesContent: { padding: space[6], maxWidth: 900 }, promiseHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: space[5] }, promiseCard: { backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.neutral[200], borderLeftWidth: 4, borderLeftColor: colors.warning, borderRadius: radius.card, padding: space[4], marginBottom: space[3] }, promiseCardOverdue: { borderLeftColor: colors.danger }, promisePerson: { flexDirection: 'row', alignItems: 'center', columnGap: space[3], marginBottom: space[3] }, promisePersonText: { flex: 1 }, replyLabel: { color: colors.focus }, promiseText: { fontWeight: '600', marginBottom: space[2] }, overdueText: { color: colors.danger },
-  surfacePane: { flex: 1, minWidth: 620, backgroundColor: colors.cream }, surfaceContent: { padding: space[6], maxWidth: 920, rowGap: space[3] }, dailyBriefContent: { padding: space[6], maxWidth: 980, rowGap: space[5] }, dailyBriefHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', columnGap: space[4] }, dailyBriefDate: { color: colors.neutral[600], marginBottom: space[1] }, dailyBriefGrid: { flexDirection: 'row', flexWrap: 'wrap', columnGap: space[3], rowGap: space[3] }, dailyBriefCard: { width: 360, flexGrow: 1, minHeight: 190, rowGap: space[3] }, dailyBriefHero: { minHeight: 220, justifyContent: 'space-between' }, dailyBriefRow: { minHeight: 44, flexDirection: 'row', alignItems: 'center', columnGap: space[2], paddingVertical: space[1] }, dailyBriefRowCopy: { flex: 1, minWidth: 0, rowGap: 2 }, healthRow: { flexDirection: 'row', alignItems: 'center', columnGap: space[2] }, healthDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.warning }, healthDotHealthy: { backgroundColor: colors.success }, promiseDot: { width: 12, height: 12, borderRadius: 6, borderWidth: 2, borderColor: colors.warning }, connectionsContent: { padding: space[5], rowGap: space[3] }, surfaceSection: { marginTop: space[4], rowGap: space[2] }, surfaceHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', columnGap: space[3] }, surfaceHeaderCopy: { flex: 1, minWidth: 0 }, connectionsWorkspace: { flexDirection: 'row', alignItems: 'flex-start', columnGap: space[4] }, platformCatalog: { flex: 1, minWidth: 420, rowGap: space[3] }, catalogHeading: { marginTop: space[2], rowGap: 3 }, platformGrid: { flexDirection: 'row', flexWrap: 'wrap', columnGap: space[2], rowGap: space[2] }, platformCatalogCard: { width: 210, minHeight: 88, backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.neutral[200], borderRadius: radius.control, padding: space[3], flexDirection: 'row', alignItems: 'center', columnGap: space[3] }, platformCatalogCardSelected: { borderColor: colors.focus, borderWidth: 2, backgroundColor: colors.sky }, platformIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0 }, platformIconImage: { width: 22, height: 22, resizeMode: 'contain' }, platformCardCopy: { flex: 1, minWidth: 0, rowGap: 3 }, connectionDetail: { width: 330, minWidth: 300, rowGap: space[3] }, connectionDetailHead: { flexDirection: 'row', alignItems: 'center', columnGap: space[3] }, connectionDetailCopy: { flex: 1, minWidth: 0 }, connectionMeta: { backgroundColor: colors.cream, borderRadius: radius.control, padding: space[3], rowGap: space[1] }, summaryGrid: { flexDirection: 'row', flexWrap: 'wrap', columnGap: space[3], rowGap: space[3], marginTop: space[3] }, summaryCard: { minWidth: 210, flexGrow: 1, rowGap: space[1] }, homeConversation: { minHeight: 62, backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.neutral[200], borderRadius: radius.control, padding: space[3], flexDirection: 'row', alignItems: 'center', columnGap: space[3] }, peopleRow: { minHeight: 68, backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.neutral[200], borderRadius: radius.control, padding: space[3], flexDirection: 'row', alignItems: 'center', columnGap: space[3] }, scopeControl: { flexDirection: 'row', alignItems: 'center', columnGap: space[3], backgroundColor: colors.sky, borderRadius: radius.control, padding: space[3], marginTop: space[3] }, scopeCheck: { width: 20, height: 20, borderWidth: 1, borderColor: colors.neutral[400], borderRadius: 6, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.paper }, scopeCheckSelected: { backgroundColor: colors.lime, borderColor: colors.ink }, assistantCard: { marginTop: space[3] }, assistantInput: { minHeight: 104, color: colors.ink, fontFamily: 'System', fontSize: 15, lineHeight: 22, textAlignVertical: 'top', padding: 0 }, assistantActions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', columnGap: space[3], borderTopWidth: 1, borderColor: colors.neutral[200], paddingTop: space[3], marginTop: space[3] }, answerArea: { marginTop: space[4], rowGap: space[3] }, citationCard: { backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.infoBorder, borderRadius: radius.control, padding: space[3], rowGap: space[1] }, citationCardCompact: { padding: space[2] }, citationHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', columnGap: space[3] }, citationName: { color: colors.focus }, connectionCard: { marginTop: space[3], rowGap: space[2] }, connectionInput: { minHeight: 46, borderWidth: 1, borderColor: colors.neutral[200], borderRadius: radius.control, backgroundColor: colors.cream, color: colors.ink, fontFamily: 'System', fontSize: 15, lineHeight: 20, paddingHorizontal: space[3], paddingVertical: 0, textAlignVertical: 'center' }, pairingCode: { alignSelf: 'flex-start', backgroundColor: colors.sky, borderRadius: radius.control, paddingHorizontal: space[3], paddingVertical: space[2], rowGap: space[1] }, pairingCodeLabel: { color: colors.neutral[600] }, pairingCodeText: { letterSpacing: 2 }, settingsCard: { rowGap: space[3] }, settingsActions: { flexDirection: 'row', flexWrap: 'wrap', columnGap: space[2], rowGap: space[2] },
-  authScreen: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.cream, padding: space[6] }, authCard: { width: 420, maxWidth: '100%', rowGap: space[4] }, authLabel: { marginTop: space[3] }, authBody: { marginTop: space[2] }, authInput: { minHeight: 46, borderRadius: radius.control, borderWidth: 1, borderColor: colors.neutral[200], color: colors.ink, fontFamily: 'Avenir Next', fontSize: 14, lineHeight: 20, paddingHorizontal: space[3], paddingVertical: 0, textAlignVertical: 'center' },
+  surfacePane: { flex: 1, minWidth: 620, backgroundColor: colors.cream }, surfaceContent: { padding: space[6], maxWidth: 920, rowGap: space[3] }, dailyBriefContent: { padding: space[6], maxWidth: 980, rowGap: space[5] }, dailyBriefHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', columnGap: space[4] }, dailyBriefDate: { color: colors.neutral[600], marginBottom: space[1] }, dailyBriefGrid: { flexDirection: 'row', flexWrap: 'wrap', columnGap: space[3], rowGap: space[3] }, dailyBriefCard: { width: 360, flexGrow: 1, minHeight: 190, rowGap: space[3] }, dailyBriefHero: { minHeight: 220, justifyContent: 'space-between' }, dailyBriefRow: { minHeight: 44, flexDirection: 'row', alignItems: 'center', columnGap: space[2], paddingVertical: space[1] }, dailyBriefRowCopy: { flex: 1, minWidth: 0, rowGap: 2 }, healthRow: { flexDirection: 'row', alignItems: 'center', columnGap: space[2] }, healthDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.warning }, healthDotHealthy: { backgroundColor: colors.success }, promiseDot: { width: 12, height: 12, borderRadius: 6, borderWidth: 2, borderColor: colors.warning }, connectionsContent: { padding: space[5], rowGap: space[3] }, surfaceSection: { marginTop: space[4], rowGap: space[2] }, surfaceHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', columnGap: space[3] }, surfaceHeaderCopy: { flex: 1, minWidth: 0 }, connectionsWorkspace: { flexDirection: 'row', alignItems: 'flex-start', columnGap: space[4] }, platformCatalog: { flex: 1, minWidth: 420, rowGap: space[3] }, catalogHeading: { marginTop: space[2], rowGap: 3 }, platformGrid: { flexDirection: 'row', flexWrap: 'wrap', columnGap: space[2], rowGap: space[2] }, platformCatalogCard: { width: 210, minHeight: 88, backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.neutral[200], borderRadius: radius.control, padding: space[3], flexDirection: 'row', alignItems: 'center', columnGap: space[3] }, platformCatalogCardSelected: { borderColor: colors.focus, borderWidth: 2, backgroundColor: colors.sky }, platformIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0 }, platformIconImage: { width: 22, height: 22, resizeMode: 'contain' }, platformCardCopy: { flex: 1, minWidth: 0, rowGap: 3 }, connectionDetail: { width: 330, minWidth: 300, rowGap: space[3] }, connectionDetailHead: { flexDirection: 'row', alignItems: 'center', columnGap: space[3] }, connectionDetailCopy: { flex: 1, minWidth: 0 }, connectionMeta: { backgroundColor: colors.cream, borderRadius: radius.control, padding: space[3], rowGap: space[1] }, summaryGrid: { flexDirection: 'row', flexWrap: 'wrap', columnGap: space[3], rowGap: space[3], marginTop: space[3] }, summaryCard: { minWidth: 210, flexGrow: 1, rowGap: space[1] }, homeConversation: { minHeight: 62, backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.neutral[200], borderRadius: radius.control, padding: space[3], flexDirection: 'row', alignItems: 'center', columnGap: space[3] }, peopleRow: { minHeight: 68, backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.neutral[200], borderRadius: radius.control, padding: space[3], flexDirection: 'row', alignItems: 'center', columnGap: space[3] }, scopeControl: { flexDirection: 'row', alignItems: 'center', columnGap: space[3], backgroundColor: colors.sky, borderRadius: radius.control, padding: space[3], marginTop: space[3] }, scopeCheck: { width: 20, height: 20, borderWidth: 1, borderColor: colors.neutral[400], borderRadius: 6, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.paper }, scopeCheckSelected: { backgroundColor: colors.lime, borderColor: colors.ink }, assistantCard: { marginTop: space[3] }, assistantInput: { minHeight: 104, color: colors.ink, fontFamily: 'Inter', fontSize: 15, lineHeight: 22, textAlignVertical: 'top', padding: 0 }, assistantActions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', columnGap: space[3], borderTopWidth: 1, borderColor: colors.neutral[200], paddingTop: space[3], marginTop: space[3] }, answerArea: { marginTop: space[4], rowGap: space[3] }, citationCard: { backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.infoBorder, borderRadius: radius.control, padding: space[3], rowGap: space[1] }, citationCardCompact: { padding: space[2] }, citationHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', columnGap: space[3] }, citationName: { color: colors.focus }, connectionCard: { marginTop: space[3], rowGap: space[2] }, connectionInput: { minHeight: 46, borderWidth: 1, borderColor: colors.neutral[200], borderRadius: radius.control, backgroundColor: colors.cream, color: colors.ink, fontFamily: 'Inter', fontSize: 15, lineHeight: 20, paddingHorizontal: space[3], paddingTop: 13, paddingBottom: 13 }, pairingCode: { alignSelf: 'flex-start', backgroundColor: colors.sky, borderRadius: radius.control, paddingHorizontal: space[3], paddingVertical: space[2], rowGap: space[1] }, pairingCodeLabel: { color: colors.neutral[600] }, pairingCodeText: { letterSpacing: 2 }, settingsCard: { rowGap: space[3] }, settingsActions: { flexDirection: 'row', flexWrap: 'wrap', columnGap: space[2], rowGap: space[2] },
+  authScreen: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.cream, padding: space[6] }, authCard: { width: 420, maxWidth: '100%', rowGap: space[4] }, authLabel: { marginTop: space[3] }, authBody: { marginTop: space[2] }, authInput: { minHeight: 46, borderRadius: radius.control, borderWidth: 1, borderColor: colors.neutral[200], color: colors.ink, fontFamily: 'Inter', fontSize: 14, lineHeight: 20, paddingHorizontal: space[3], paddingTop: 13, paddingBottom: 13 },
 }), desktopConversationStyles);
 
 const desktopShellStyles = StyleSheet.create({
@@ -1502,6 +1656,13 @@ const desktopConnectionsStyles = StyleSheet.create({
   cardFooter: { alignSelf: 'flex-start', borderWidth: 1, borderColor: colors.neutral[200], borderRadius: radius.pill, paddingHorizontal: space[3], paddingVertical: space[2], backgroundColor: colors.paper },
   roadmap: { rowGap: space[3], paddingTop: space[3] },
   detail: { maxWidth: 620, alignSelf: 'stretch' },
+  setupGuide: { maxWidth: 820, alignSelf: 'stretch', padding: space[5], rowGap: space[4] },
+  setupGuideHead: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', columnGap: space[4] },
+  setupSteps: { rowGap: space[3] },
+  setupStep: { flexDirection: 'row', alignItems: 'flex-start', columnGap: space[3] },
+  setupStepNumber: { width: 28, height: 28, borderRadius: 14, borderWidth: 1, borderColor: colors.neutral[300], backgroundColor: colors.paper, alignItems: 'center', justifyContent: 'center' },
+  setupStepComplete: { backgroundColor: colors.lime, borderColor: colors.ink },
+  setupStepCopy: { flex: 1, minWidth: 0, rowGap: 3 },
 });
 
 const desktopHomeStyles = StyleSheet.create({
@@ -1517,10 +1678,33 @@ const desktopHomeStyles = StyleSheet.create({
   hero: { flex: 1.45, minHeight: 276, justifyContent: 'space-between', backgroundColor: colors.sky },
   heroExpansive: { minHeight: 324 },
   health: { minHeight: 276, justifyContent: 'flex-start' },
+  healthList: { flex: 1, justifyContent: 'space-between', rowGap: space[2] },
   supportCard: { flex: 1.45, minHeight: 228 },
   promises: { minHeight: 228 },
   actionRow: { minHeight: 54, flexDirection: 'row', alignItems: 'center', columnGap: space[3], paddingVertical: space[1] },
   actionTitle: { fontSize: 16, lineHeight: 22, fontWeight: '700' },
   actionDetail: { fontSize: 14, lineHeight: 20, color: colors.neutral[600] },
-  healthRow: { minHeight: 58, flexDirection: 'row', alignItems: 'center', columnGap: space[3] },
+  healthRow: { minHeight: 46, flexDirection: 'row', alignItems: 'center', columnGap: space[2] },
+  platformMark: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  platformMarkText: { color: colors.paper, fontWeight: '800' },
+  platformName: { fontWeight: '700', color: colors.ink },
+});
+
+const desktopPromisesStyles = StyleSheet.create({
+  content: { paddingHorizontal: space[8], paddingVertical: space[6], maxWidth: 1180, alignSelf: 'center', width: '100%', rowGap: space[4] },
+  header: { minHeight: 108, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', columnGap: space[4] },
+  headerCopy: { flex: 1, minWidth: 0, rowGap: space[1] },
+  summary: { minHeight: 36, flexDirection: 'row', alignItems: 'center', columnGap: space[2] },
+  error: { flexDirection: 'row', alignItems: 'center', columnGap: space[2] },
+  empty: { alignItems: 'flex-start', maxWidth: 640, padding: space[6], rowGap: space[3] },
+  emptyMark: { width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.lime },
+  list: { rowGap: space[3] },
+  card: { backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.neutral[200], borderLeftWidth: 4, borderLeftColor: colors.warning, borderRadius: radius.card, padding: space[4], rowGap: space[3] },
+  cardOverdue: { borderLeftColor: colors.danger },
+  cardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', columnGap: space[3] },
+  person: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', columnGap: space[3] },
+  personCopy: { flex: 1, minWidth: 0 },
+  cardActions: { flexDirection: 'row', alignItems: 'center', columnGap: space[1] },
+  promiseText: { fontSize: 19, lineHeight: 26 },
+  cardFoot: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', columnGap: space[3], borderTopWidth: 1, borderColor: colors.neutral[200], paddingTop: space[3] },
 });

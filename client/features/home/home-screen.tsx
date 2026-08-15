@@ -10,6 +10,7 @@ import { useInboxMessages } from '../../hooks/useInboxMessages';
 import { supabase } from '../../services/supabase';
 import { API_BASE_URL } from '../../services/platforms';
 import { formatInboxTimestamp } from '../../utils/messageTimestamp';
+import { computeUrgencyScore } from '../../utils/urgency';
 
 interface UrgentMessage {
   id: string;
@@ -68,12 +69,39 @@ export function HomeScreen() {
     queryKey: ['mobile-home-promises', user?.id],
     enabled: !!user?.id,
     staleTime: 60_000,
-    queryFn: () => authJson<BriefPromise[]>('/promises?status=pending&limit=20'),
+    // The Home brief includes overdue commitments too. The previous pending-only
+    // request made a real overdue queue disappear from this screen.
+    queryFn: () => authJson<BriefPromise[]>('/promises?limit=20'),
   });
 
   const firstName = user?.name?.trim().split(/\s+/)[0] || user?.email?.split('@')[0] || 'there';
-  const urgent = brief.data?.urgent_messages ?? [];
-  const openPromises = promises.data ?? [];
+  const inboxUrgent = useMemo(() => inbox.messages
+    .filter(message => !message.from_me)
+    .map(message => ({
+      id: message.id,
+      chat_id: message.chat_id,
+      contact_name: message.contact_name,
+      chat_name: message.chat_name,
+      content: message.content,
+      timestamp: message.timestamp,
+      platform: message.platform,
+      is_group: message.is_group,
+      score: (message.unread_count || 0) > 0
+        ? 100
+        : computeUrgencyScore({ timestamp: message.timestamp, from_me: message.from_me, content: message.content }),
+    }))
+    .filter(message => message.score >= 30)
+    .sort((a, b) => b.score - a.score || new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+    .slice(0, 5), [inbox.messages]);
+  // The server brief is a useful ranking enhancement, but the synced inbox is
+  // canonical on-device. Falling back here keeps Home useful during a deploy,
+  // while offline after cached data loads, or when AI is unavailable.
+  const urgent = brief.data?.urgent_messages?.length ? brief.data.urgent_messages : inboxUrgent;
+  const openPromises = (promises.data ?? []).filter(promise => ['pending', 'overdue'].includes(promise.status));
+  const actionCount = urgent.length + openPromises.length;
+  const defaultBrief = actionCount
+    ? `${actionCount} item${actionCount === 1 ? '' : 's'} need${actionCount === 1 ? 's' : ''} your attention${urgent[0] ? ` — starting with ${urgent[0].contact_name || urgent[0].chat_name || 'a conversation'}.` : '.'}`
+    : 'Your priorities will settle here as conversations sync.';
   const dayItems = useMemo(() => [
     ...urgent.slice(0, 3).map(message => ({
       key: `message-${message.id}`,
@@ -113,7 +141,7 @@ export function HomeScreen() {
       <MobileHeader
         eyebrow={new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
         title={`${greeting()},\n${firstName}.`}
-        subtitle={urgent.length + openPromises.length === 0 ? "You're clear right now." : "You're clear after a few quick actions."}
+        subtitle={actionCount === 0 ? "You're clear right now." : `${actionCount} item${actionCount === 1 ? '' : 's'} need${actionCount === 1 ? 's' : ''} your attention.`}
         safeArea
         profile={
           <Pressable accessibilityRole="button" accessibilityLabel="Open settings" onPress={() => router.push('/(tabs)/settings')}>
@@ -140,7 +168,7 @@ export function HomeScreen() {
         </Pressable>
 
         <SectionLabel title="Your day" detail={`${dayItems.length} items`} />
-        {brief.isLoading || promises.isLoading ? (
+        {(brief.isLoading && inbox.loading) || promises.isLoading ? (
           <View style={{ paddingVertical: 56 }}><ActivityIndicator color={colors.ink} /></View>
         ) : dayItems.length === 0 ? (
           <MobileState title="A calm day" message="New messages and promises that need attention will appear here." />
@@ -165,7 +193,7 @@ export function HomeScreen() {
           <Sparkles size={21} color={colors.ink} />
           <View style={{ flex: 1, gap: 3 }}>
             <Text selectable style={{ ...mobileType.monoLabel, color: colors.ink }}>CLAIRE'S TAKE</Text>
-            <Text selectable style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>{brief.data?.brief_text || 'Your priorities will settle here as conversations sync.'}</Text>
+            <Text selectable style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>{brief.data?.brief_text || defaultBrief}</Text>
           </View>
           <MobileIconButton label="Open settings" onPress={() => router.push('/(tabs)/settings')}><Settings size={18} color={colors.ink} /></MobileIconButton>
         </View>

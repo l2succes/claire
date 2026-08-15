@@ -4,12 +4,17 @@
 #import <React/RCTLinkingManager.h>
 #import <ReactAppDependencyProvider/RCTAppDependencyProvider.h>
 
-@interface AppDelegate () <NSWindowDelegate>
+@interface AppDelegate () <NSWindowDelegate, NSMenuDelegate>
 @property (nonatomic, strong) NSWindow *compactChatWindow;
 @property (nonatomic, strong) id compactChatObserver;
+@property (nonatomic, strong) NSStatusItem *connectionStatusItem;
+@property (nonatomic, strong) NSMenuItem *iMessageStatusMenuItem;
+@property (nonatomic, strong) NSMenuItem *instagramStatusMenuItem;
 - (NSDictionary *)runtimeConfig;
 - (void)handleURLEvent:(NSAppleEventDescriptor *)event withReplyEvent:(NSAppleEventDescriptor *)replyEvent;
 - (void)positionTrafficLights:(NSNotification *)notification;
+- (void)installConnectionStatusItem;
+- (void)openConnectionSettingsFromMenu:(id)sender;
 @end
 
 @implementation AppDelegate
@@ -44,10 +49,61 @@
     [self positionTrafficLights:nil];
   });
   [self installDesktopCommandMenu];
+  [self installConnectionStatusItem];
   __weak __typeof__(self) weakSelf = self;
   self.compactChatObserver = [[NSNotificationCenter defaultCenter] addObserverForName:@"ClaireOpenCompactChat" object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *notification) {
     [weakSelf openCompactChatForConversationId:notification.userInfo[@"conversationId"]];
   }];
+}
+
+- (void)installConnectionStatusItem
+{
+  self.connectionStatusItem = [[NSStatusBar systemStatusBar] statusItemWithLength:NSSquareStatusItemLength];
+  NSImage *image = [NSImage imageWithSystemSymbolName:@"bubble.left.and.bubble.right.fill" accessibilityDescription:@"Claire desktop connections"];
+  [image setTemplate:YES];
+  self.connectionStatusItem.button.image = image;
+  self.connectionStatusItem.button.toolTip = @"Claire desktop connections";
+
+  NSMenu *menu = [[NSMenu alloc] initWithTitle:@"Claire desktop connections"];
+  menu.delegate = self;
+  NSMenuItem *heading = [[NSMenuItem alloc] initWithTitle:@"Desktop connections" action:nil keyEquivalent:@""];
+  heading.enabled = NO;
+  [menu addItem:heading];
+  self.iMessageStatusMenuItem = [[NSMenuItem alloc] initWithTitle:@"iMessage — Checking…" action:nil keyEquivalent:@""];
+  self.iMessageStatusMenuItem.enabled = NO;
+  [menu addItem:self.iMessageStatusMenuItem];
+  self.instagramStatusMenuItem = [[NSMenuItem alloc] initWithTitle:@"Instagram — Not connected" action:nil keyEquivalent:@""];
+  self.instagramStatusMenuItem.enabled = NO;
+  [menu addItem:self.instagramStatusMenuItem];
+  [menu addItem:NSMenuItem.separatorItem];
+  NSMenuItem *openConnections = [[NSMenuItem alloc] initWithTitle:@"Open Connection Settings…" action:@selector(openConnectionSettingsFromMenu:) keyEquivalent:@""];
+  openConnections.target = self;
+  [menu addItem:openConnections];
+  NSMenuItem *showClaire = [[NSMenuItem alloc] initWithTitle:@"Show Claire" action:@selector(showClaireFromMenu:) keyEquivalent:@""];
+  showClaire.target = self;
+  [menu addItem:showClaire];
+  self.connectionStatusItem.menu = menu;
+}
+
+- (void)menuNeedsUpdate:(NSMenu *)menu
+{
+  NSString *messagesPath = [NSHomeDirectory() stringByAppendingPathComponent:@"Library/Messages/chat.db"];
+  BOOL messagesReadable = [[NSFileManager defaultManager] isReadableFileAtPath:messagesPath];
+  self.iMessageStatusMenuItem.title = messagesReadable ? @"iMessage — Syncing on this Mac" : @"iMessage — Needs Full Disk Access";
+  BOOL instagramConnected = [[NSUserDefaults standardUserDefaults] boolForKey:@"ClaireInstagramDesktopConnected"];
+  self.instagramStatusMenuItem.title = instagramConnected ? @"Instagram — Connected" : @"Instagram — Not connected";
+}
+
+- (void)showClaireFromMenu:(id)sender
+{
+  [NSApp activateIgnoringOtherApps:YES];
+  [self.window makeKeyAndOrderFront:nil];
+}
+
+- (void)openConnectionSettingsFromMenu:(id)sender
+{
+  [self showClaireFromMenu:sender];
+  [[NSNotificationCenter defaultCenter] postNotificationName:@"ClaireDesktopCommand" object:self userInfo:@{ @"command": @"settings" }];
 }
 
 - (void)application:(NSApplication *)application didRegisterForRemoteNotificationsWithDeviceToken:(NSData *)deviceToken

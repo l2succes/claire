@@ -8,6 +8,12 @@ network:
     mode: instagram
     displayname_template: '{{or .DisplayName .Username "Unknown user"}}'
 
+    # Fetch the complete thread list during the initial Instagram sync. Message
+    # history is limited separately by the top-level `backfill` block below.
+    thread_backfill:
+        batch_count: -1
+        batch_delay: 2s
+
 homeserver:
     address: http://synapse:8008
     # Railway assigns the Matrix server name at deploy time. Keep the bridge's
@@ -54,6 +60,26 @@ double_puppet:
 
 provisioning:
     shared_secret: __PROVISIONING_SECRET__
+
+# Populate newly-created Matrix portals with recent Instagram history. The
+# bridge defaults this to disabled, which creates rooms without any message
+# events and leaves Claire's inbox empty until a new DM arrives.
+backfill:
+    enabled: true
+    max_initial_messages: 50
+    max_catchup_messages: 500
+    unread_hours_threshold: 720
+    threads:
+        max_initial_messages: 50
+    # Backwards insertion is Beeper-only; standard Synapse uses timestamped
+    # initial/catch-up events instead.
+    queue:
+        enabled: false
+        manual: false
+        batch_size: 100
+        batch_delay: 20
+        max_batches: -1
+        max_batches_override: {}
 
 logging:
     min_level: info

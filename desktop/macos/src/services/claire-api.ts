@@ -178,37 +178,11 @@ export class ClaireApi {
   }
 
   async getChats(): Promise<DesktopChat[]> {
-    const chats = await this.request<DesktopChat[]>('/messages/chats');
-
-    // Older deployed servers returned only chat rows. Keep desktop rows useful
-    // while those servers roll forward by fetching one preview only for rows
-    // that lack the additive latest_message field. New servers stay batched.
-    const needsPreview = chats.filter((chat) => !chat.latest_message);
-    if (!needsPreview.length) return chats;
-
-    const previews = await Promise.all(needsPreview.map(async (chat) => {
-      try {
-        const messages = await this.getMessages(chat.id, 1);
-        return [chat.id, messages[0] || null] as const;
-      } catch {
-        return [chat.id, null] as const;
-      }
-    }));
-    const previewByChat = new Map(previews);
-    return chats.map((chat) => {
-      const preview = previewByChat.get(chat.id);
-      return preview ? {
-        ...chat,
-        last_message_at: chat.last_message_at || preview.timestamp,
-        latest_message: {
-          content: preview.content,
-          content_type: preview.content_type,
-          media_mime_type: preview.media_mime_type,
-          timestamp: preview.timestamp,
-          from_me: preview.from_me,
-        },
-      } : chat;
-    });
+    // The server returns each chat and its newest message in one batched
+    // response. Do not turn a routine inbox refresh into one request per
+    // conversation: a large inbox would otherwise continuously refetch rows
+    // and visibly flash while every preview resolves.
+    return this.request<DesktopChat[]>('/messages/chats');
   }
 
   async getMessages(chatId: string, limit = 100, offset = 0): Promise<DesktopMessage[]> {
@@ -247,6 +221,22 @@ export class ClaireApi {
 
   async getPromises(): Promise<DesktopPromise[]> {
     const response = await this.request<{ data: DesktopPromise[] }>('/promises?limit=200');
+    return response.data;
+  }
+
+  async updatePromise(id: string, updates: Pick<DesktopPromise, 'status'> | Partial<Pick<DesktopPromise, 'deadline' | 'priority'>>): Promise<DesktopPromise> {
+    const response = await this.request<{ data: DesktopPromise }>(`/promises/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates),
+    });
+    return response.data;
+  }
+
+  async snoozePromise(id: string, snoozeUntil: string): Promise<DesktopPromise> {
+    const response = await this.request<{ data: DesktopPromise }>(`/promises/${encodeURIComponent(id)}/snooze`, {
+      method: 'POST',
+      body: JSON.stringify({ snooze_until: snoozeUntil }),
+    });
     return response.data;
   }
 

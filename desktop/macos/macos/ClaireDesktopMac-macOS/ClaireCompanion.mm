@@ -39,6 +39,84 @@ static NSMutableSet<ClaireInstagramLoginController *> *ClaireInstagramLogins(voi
   return logins;
 }
 
+static NSString *ClaireStringFromDecodedMessageObject(id decoded)
+{
+  if ([decoded isKindOfClass:NSAttributedString.class]) return [(NSAttributedString *)decoded string] ?: @"";
+  if ([decoded isKindOfClass:NSString.class]) return (NSString *)decoded;
+  if ([decoded isKindOfClass:NSDictionary.class]) {
+    for (id value in [(NSDictionary *)decoded allValues]) {
+      NSString *candidate = ClaireStringFromDecodedMessageObject(value);
+      if (candidate.length) return candidate;
+    }
+  }
+  if ([decoded isKindOfClass:NSArray.class] || [decoded isKindOfClass:NSSet.class]) {
+    for (id value in decoded) {
+      NSString *candidate = ClaireStringFromDecodedMessageObject(value);
+      if (candidate.length) return candidate;
+    }
+  }
+  // Some Messages releases archive a private attributed-string wrapper. Avoid
+  // linking private frameworks, but accept the public string selector it exposes.
+  if ([decoded respondsToSelector:@selector(string)]) {
+    id value = [decoded valueForKey:@"string"];
+    if ([value isKindOfClass:NSString.class]) return value;
+  }
+  return @"";
+}
+
+static NSString *ClaireDecodeAttributedBody(const void *bytes, int length)
+{
+  if (bytes == NULL || length <= 0) return @"";
+  NSData *data = [NSData dataWithBytes:bytes length:(NSUInteger)length];
+  @try {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+    id decoded = [NSUnarchiver unarchiveObjectWithData:data];
+#pragma clang diagnostic pop
+    NSString *content = ClaireStringFromDecodedMessageObject(decoded);
+    if (content.length) return content;
+  } @catch (__unused NSException *exception) {
+    // Some Messages versions use a keyed archive instead of typedstream.
+  }
+  @try {
+    NSSet *classes = [NSSet setWithObjects:NSAttributedString.class, NSMutableAttributedString.class, NSString.class, NSMutableString.class, NSDictionary.class, NSArray.class, NSNumber.class, NSColor.class, NSFont.class, nil];
+    NSError *error = nil;
+    id decoded = [NSKeyedUnarchiver unarchivedObjectOfClasses:classes fromData:data error:&error];
+    NSString *content = ClaireStringFromDecodedMessageObject(decoded);
+    if (content.length) return content;
+  } @catch (__unused NSException *exception) {}
+
+  // Legacy and current Messages typedstreams both delimit the plain string
+  // with SOH/plus (01 2b) and SSA/index (86 84). Foundation can refuse the
+  // full private attributed-string graph even though the text run is valid,
+  // so extract only that documented typedstream segment as a final fallback.
+  const uint8_t *buffer = (const uint8_t *)bytes;
+  NSInteger start = NSNotFound;
+  NSInteger end = NSNotFound;
+  for (NSInteger index = 0; index + 1 < length; index += 1) {
+    if (buffer[index] == 0x01 && buffer[index + 1] == 0x2b) { start = index + 2; break; }
+  }
+  if (start != NSNotFound) {
+    for (NSInteger index = start + 1; index + 1 < length; index += 1) {
+      if (buffer[index] == 0x86 && buffer[index + 1] == 0x84) { end = index; break; }
+    }
+  }
+  if (start != NSNotFound && end != NSNotFound && end > start) {
+    // The first byte is the typedstream string-length marker. A few older
+    // archives use three prefix bytes, so try both layouts without logging or
+    // exposing the underlying message body.
+    for (NSNumber *offsetValue in @[ @1, @3 ]) {
+      NSInteger offset = offsetValue.integerValue;
+      if (start + offset >= end) continue;
+      NSString *content = [[NSString alloc] initWithBytes:buffer + start + offset
+                                                   length:(NSUInteger)(end - start - offset)
+                                                 encoding:NSUTF8StringEncoding];
+      if (content.length) return content;
+    }
+  }
+  return @"";
+}
+
 @implementation ClaireInstagramLoginController
 
 - (instancetype)initWithAPIURL:(NSString *)apiURL accessToken:(NSString *)accessToken sessionId:(NSString *)sessionId loginId:(NSString *)loginId stepId:(NSString *)stepId resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject
@@ -97,6 +175,7 @@ static NSMutableSet<ClaireInstagramLoginController *> *ClaireInstagramLogins(voi
     [ClaireCompanion requestJSON:[ClaireCompanion apiURL:self.apiURL path:@"/platforms/instagram/login/submit"] method:@"POST" headers:headers body:body completion:^(NSDictionary *payload, NSInteger statusCode, NSError *requestError) {
       if (requestError != nil) { [self finishWithError:requestError]; return; }
       if (![payload[@"success"] boolValue]) { [self finishWithError:[NSError errorWithDomain:@"ClaireInstagramLogin" code:2 userInfo:@{ NSLocalizedDescriptionKey: @"Instagram did not complete the bridge connection." }]]; return; }
+      [[NSUserDefaults standardUserDefaults] setBool:YES forKey:@"ClaireInstagramDesktopConnected"];
       [self finishWithResult:@{ @"status": @"connected", @"userLoginId": payload[@"userLoginId"] ?: @"" }];
     }];
   }];
@@ -113,10 +192,25 @@ static NSMutableSet<ClaireInstagramLoginController *> *ClaireInstagramLogins(voi
   self.finished = YES;
   dispatch_async(dispatch_get_main_queue(), ^{
     [self.cookieTimer invalidate];
+    self.cookieTimer = nil;
+    [self.webView stopLoading];
+    self.webView.navigationDelegate = nil;
     self.window.delegate = nil;
-    [self.window close];
-    [ClaireInstagramLogins() removeObject:self];
-    self.resolve(result);
+    // Do not close and release a WebKit-backed window while AppKit is still
+    // committing the navigation/OTP transition. On macOS 26 that can release
+    // _NSWindowTransformAnimation twice and crash in objc_release. Hide now,
+    // then detach and release the window on a later run-loop transaction.
+    [self.window orderOut:nil];
+    RCTPromiseResolveBlock resolve = [self.resolve copy];
+    self.resolve = nil;
+    self.reject = nil;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.35 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+      self.window.contentView = nil;
+      self.webView = nil;
+      self.window = nil;
+      [ClaireInstagramLogins() removeObject:self];
+      if (resolve) resolve(result);
+    });
   });
 }
 
@@ -126,10 +220,21 @@ static NSMutableSet<ClaireInstagramLoginController *> *ClaireInstagramLogins(voi
   self.finished = YES;
   dispatch_async(dispatch_get_main_queue(), ^{
     [self.cookieTimer invalidate];
+    self.cookieTimer = nil;
+    [self.webView stopLoading];
+    self.webView.navigationDelegate = nil;
     self.window.delegate = nil;
-    [self.window close];
-    [ClaireInstagramLogins() removeObject:self];
-    self.reject(@"instagram_connection_failed", error.localizedDescription, error);
+    [self.window orderOut:nil];
+    RCTPromiseRejectBlock reject = [self.reject copy];
+    self.resolve = nil;
+    self.reject = nil;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.35 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+      self.window.contentView = nil;
+      self.webView = nil;
+      self.window = nil;
+      [ClaireInstagramLogins() removeObject:self];
+      if (reject) reject(@"instagram_connection_failed", error.localizedDescription, error);
+    });
   });
 }
 
@@ -197,6 +302,7 @@ static NSString *const ClaireDeviceCredentialService = @"com.claire.desktop.comp
       @"supabase.session.claire-desktop",
       @"companion.imessage.cursor",
       @"companion.imessage.initial_sync_complete",
+      @"companion.imessage.decoder_version",
     ]];
   });
   return [allowedAccounts containsObject:account];
@@ -828,7 +934,7 @@ RCT_REMAP_METHOD(fetchIMessageMessages,
   }
 
   static const char *query =
-    "SELECT m.ROWID, m.guid, m.text, m.date, m.is_from_me, m.is_read, m.cache_has_attachments, "
+    "SELECT m.ROWID, m.guid, m.text, m.attributedBody, m.date, m.is_from_me, m.is_read, m.cache_has_attachments, "
     "h.id, c.chat_identifier, c.display_name, c.group_id "
     "FROM message m "
     "LEFT JOIN handle h ON m.handle_id = h.ROWID "
@@ -853,14 +959,16 @@ RCT_REMAP_METHOD(fetchIMessageMessages,
     int64_t rowId = sqlite3_column_int64(statement, 0);
     const unsigned char *guidText = sqlite3_column_text(statement, 1);
     const unsigned char *bodyText = sqlite3_column_text(statement, 2);
-    double date = sqlite3_column_double(statement, 3);
-    BOOL fromMe = sqlite3_column_int(statement, 4) == 1;
-    BOOL isRead = sqlite3_column_int(statement, 5) == 1;
-    BOOL hasMedia = sqlite3_column_int(statement, 6) == 1;
-    const unsigned char *handleText = sqlite3_column_text(statement, 7);
-    const unsigned char *chatIdText = sqlite3_column_text(statement, 8);
-    const unsigned char *chatNameText = sqlite3_column_text(statement, 9);
-    BOOL isGroup = sqlite3_column_type(statement, 10) != SQLITE_NULL;
+    const void *attributedBody = sqlite3_column_blob(statement, 3);
+    int attributedBodyLength = sqlite3_column_bytes(statement, 3);
+    double date = sqlite3_column_double(statement, 4);
+    BOOL fromMe = sqlite3_column_int(statement, 5) == 1;
+    BOOL isRead = sqlite3_column_int(statement, 6) == 1;
+    BOOL hasMedia = sqlite3_column_int(statement, 7) == 1;
+    const unsigned char *handleText = sqlite3_column_text(statement, 8);
+    const unsigned char *chatIdText = sqlite3_column_text(statement, 9);
+    const unsigned char *chatNameText = sqlite3_column_text(statement, 10);
+    BOOL isGroup = sqlite3_column_type(statement, 11) != SQLITE_NULL;
 
     NSString *guid = guidText ? [NSString stringWithUTF8String:(const char *)guidText] : [NSString stringWithFormat:@"imessage-%lld", rowId];
     NSString *senderId = fromMe ? @"me" : (handleText ? [NSString stringWithUTF8String:(const char *)handleText] : @"unknown");
@@ -868,10 +976,11 @@ RCT_REMAP_METHOD(fetchIMessageMessages,
     NSString *chatName = chatNameText ? [NSString stringWithUTF8String:(const char *)chatNameText] : chatId;
     // chat.db stores nanoseconds since the Apple epoch.
     NSDate *timestamp = [NSDate dateWithTimeIntervalSince1970:(appleEpochMilliseconds + date / 1000000.0) / 1000.0];
+    NSString *content = bodyText ? [NSString stringWithUTF8String:(const char *)bodyText] : ClaireDecodeAttributedBody(attributedBody, attributedBodyLength);
     [messages addObject:@{
       @"rowId": @(rowId),
       @"platformMessageId": guid,
-      @"content": bodyText ? [NSString stringWithUTF8String:(const char *)bodyText] : @"",
+      @"content": content ?: @"",
       // Attachment paths remain native-only. syncIMessageMedia reads and uploads
       // the bytes separately after the event row has been ingested.
       @"contentType": @"text",

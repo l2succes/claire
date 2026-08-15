@@ -356,11 +356,18 @@ async function initializePlatforms() {
       // Fast-path: skip duplicate messages (backfill replay) without touching the DB further
       const { data: existing } = await supabase
         .from('messages')
-        .select('id')
+        .select('id,content,platform')
         .eq('whatsapp_id', message.platformMessageId)
         .maybeSingle();
 
       if (existing) {
+        // Replaying a Mac history sync is also our repair path when a newer
+        // local Messages decoder can recover text that an older build could
+        // not read. Keep the operation idempotent and never overwrite content
+        // that was already imported successfully.
+        if (message.platform === Platform.IMESSAGE && message.content && !existing.content) {
+          await supabase.from('messages').update({ content: message.content }).eq('id', existing.id).eq('user_id', message.userId);
+        }
         return; // already processed — skip chat/AI/contact upserts
       }
 

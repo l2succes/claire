@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, type ReactNode } from 'react';
+import React, { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
 import { Image, Pressable, StyleSheet, Text, TextInput, View, type ImageSourcePropType, type StyleProp, type TextInputProps, type TextProps, type TextStyle, type ViewStyle } from 'react-native';
 import { colors, fonts, mobileType, radius, space, type ClaireTextVariant, type as desktopType } from './tokens';
 
@@ -47,7 +47,14 @@ export function ClaireDivider({ style }: { style?: StyleProp<ViewStyle> }) {
 }
 
 export function ClaireAvatar({ initials, size = 40, source, tone = 'mint' }: { initials: string; size?: number; source?: ImageSourcePropType; tone?: ClaireAvatarTone }) {
-  return <View accessibilityLabel={`${initials} avatar`} style={[styles.avatar, avatarToneStyles[tone], { width: size, height: size, borderRadius: size / 2 }]}>{source ? <Image source={source} style={{ width: size, height: size, borderRadius: size / 2 }} /> : <ClaireText variant="label">{initials}</ClaireText>}</View>;
+  // Broken remote avatar URLs must settle to initials. Leaving a failed Image
+  // mounted makes native image loaders retry during parent re-renders.
+  const [failed, setFailed] = useState(false);
+  const sourceUri = typeof source === 'object' && source && !Array.isArray(source) && 'uri' in source ? source.uri : undefined;
+  // Callers naturally create `{ uri }` inline. Keep the native source object
+  // stable so a harmless parent render does not trigger another image request.
+  const stableSource = useMemo<ImageSourcePropType | undefined>(() => sourceUri ? { uri: sourceUri } : source, [sourceUri]);
+  return <View accessibilityLabel={`${initials} avatar`} style={[styles.avatar, avatarToneStyles[tone], { width: size, height: size, borderRadius: size / 2 }]}>{stableSource && !failed ? <Image source={stableSource} onError={() => setFailed(true)} style={{ width: size, height: size, borderRadius: size / 2 }} /> : <ClaireText variant="label">{initials}</ClaireText>}</View>;
 }
 
 export function ClaireStatusPill({ children, tone = 'neutral' }: { children: ReactNode; tone?: 'neutral' | 'success' | 'warning' | 'info' }) {
@@ -78,6 +85,7 @@ export function ClaireConversationRow({
   initials,
   avatarSource,
   avatarTone = 'mint',
+  avatarOverlay,
   selected = false,
   onPress,
   style,
@@ -90,6 +98,8 @@ export function ClaireConversationRow({
   initials: string;
   avatarSource?: ImageSourcePropType;
   avatarTone?: ClaireAvatarTone;
+  /** Optional host-rendered platform mark, positioned over the avatar. */
+  avatarOverlay?: ReactNode;
   selected?: boolean;
   onPress?: () => void;
   style?: StyleProp<ViewStyle>;
@@ -97,11 +107,14 @@ export function ClaireConversationRow({
   const label = `${name}, ${platform} conversation${unreadCount ? `, ${unreadCount} unread` : ''}`;
   const [focused, setFocused] = useState(false);
   return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ selected }} onBlur={() => setFocused(false)} onFocus={() => setFocused(true)} onPress={onPress} style={({ pressed }) => [styles.conversationRow, selected && styles.conversationRowSelected, focused && styles.focusRing, pressed && styles.pressed, style]}>
-    <ClaireAvatar initials={initials} source={avatarSource} size={42} tone={avatarTone} />
+    <View style={styles.conversationAvatarWrap}>
+      <ClaireAvatar initials={initials} source={avatarSource} size={42} tone={avatarTone} />
+      {avatarOverlay}
+    </View>
     <View style={styles.conversationContent}>
       <View style={styles.conversationTopRow}><ClaireText variant="body" numberOfLines={1} style={styles.conversationName}>{name}</ClaireText>{timestamp ? <ClaireText variant="bodySmall" style={styles.conversationTimestamp}>{timestamp}</ClaireText> : null}</View>
       <View style={styles.conversationTopRow}><ClaireText variant="bodySmall" numberOfLines={1} style={styles.conversationPreview}>{preview}</ClaireText>{unreadCount ? <View accessibilityLabel={`${unreadCount} unread messages`} style={styles.unread}><ClaireText variant="label" style={styles.unreadText}>{unreadCount}</ClaireText></View> : null}</View>
-      <ClairePlatformBadge platform={platform} />
+      {!avatarOverlay ? <ClairePlatformBadge platform={platform} /> : null}
     </View>
   </Pressable>;
 }
@@ -126,5 +139,5 @@ const styles = StyleSheet.create({
   fieldGroup: { rowGap: space[1] }, field: { minHeight: 44, borderWidth: 1, borderColor: colors.neutral[200], borderRadius: radius.control, backgroundColor: colors.paper, color: colors.ink, fontFamily: fonts.sans, fontSize: 14, lineHeight: 20, paddingHorizontal: space[3], paddingTop: 10, paddingBottom: 10 }, fieldError: { borderColor: colors.danger }, hintText: { color: colors.neutral[600] }, errorText: { color: colors.danger }, divider: { height: 1, backgroundColor: colors.neutral[200] },
   platformBadge: { alignSelf: 'flex-start', minHeight: 24, justifyContent: 'center', backgroundColor: colors.neutral[100], borderRadius: radius.pill, paddingHorizontal: space[2], paddingVertical: 0 }, platformBadgeText: { color: colors.neutral[600], lineHeight: 16, textAlignVertical: 'center' },
   messageBubble: { borderRadius: radius.card, paddingHorizontal: space[3], paddingVertical: space[2], maxWidth: '78%' }, messageBubbleMine: { alignSelf: 'flex-end', backgroundColor: colors.mint }, messageBubbleTheirs: { alignSelf: 'flex-start', backgroundColor: colors.neutral[100] },
-  conversationRow: { borderRadius: radius.card, padding: space[3], flexDirection: 'row', columnGap: space[3], marginBottom: space[1], minHeight: 72 }, conversationRowSelected: { backgroundColor: colors.sky }, conversationContent: { flex: 1, minWidth: 0 }, conversationTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', columnGap: space[2] }, conversationName: { fontWeight: '700', flexShrink: 1 }, conversationTimestamp: { color: colors.neutral[600] }, conversationPreview: { color: colors.neutral[600], flex: 1, marginTop: 2 }, unread: { minWidth: 18, height: 18, borderRadius: 9, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' }, unreadText: { color: colors.lime },
+  conversationRow: { borderRadius: radius.card, padding: space[3], flexDirection: 'row', columnGap: space[3], marginBottom: space[1], minHeight: 72 }, conversationRowSelected: { backgroundColor: colors.sky }, conversationAvatarWrap: { width: 42, height: 42, flexShrink: 0, position: 'relative' }, conversationContent: { flex: 1, minWidth: 0 }, conversationTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', columnGap: space[2] }, conversationName: { fontWeight: '700', flexShrink: 1 }, conversationTimestamp: { color: colors.neutral[600] }, conversationPreview: { color: colors.neutral[600], flex: 1, marginTop: 2 }, unread: { minWidth: 18, height: 18, borderRadius: 9, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' }, unreadText: { color: colors.lime },
 });

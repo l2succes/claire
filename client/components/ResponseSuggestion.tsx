@@ -116,14 +116,24 @@ export function ResponseSuggestion({ messageId, messageContent, isGroup, refresh
   const pending = loading || generating;
   const summary = pending ? 'Claire is preparing reply options…' : generateError ? generateError : suggestions.length ? `${suggestions.length} reply option${suggestions.length === 1 ? '' : 's'} ready` : 'Reply options will appear here.';
 
-  return <View testID="ai-suggestion-strip" style={{ backgroundColor: colors.sky, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.infoBorder }}>
-    <Pressable testID="reply-options-toggle" accessibilityRole="button" accessibilityState={{ expanded }} onPress={() => setExpanded(current => !current)} style={({ pressed }) => ({ minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: space[2], paddingHorizontal: space[4], opacity: pressed ? 0.7 : 1 })}>
-      {pending ? <ActivityIndicator size="small" color={colors.ink} /> : <Sparkles size={18} color={colors.ink} />}
-      <View style={{ flex: 1 }}><Text maxFontSizeMultiplier={1} style={{ ...mobileType.label, color: colors.ink }}>REPLY OPTIONS</Text><Text maxFontSizeMultiplier={1} numberOfLines={1} style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{summary}</Text></View>
-      {expanded ? <ChevronDown size={19} color={colors.ink} /> : <ChevronUp size={19} color={colors.ink} />}
-    </Pressable>
+  return <View testID="ai-suggestion-strip" style={{ paddingHorizontal: space[3], paddingTop: space[2], paddingBottom: space[2] }}>
+    <View style={{ overflow: 'hidden', borderRadius: radius.card, borderCurve: 'continuous', borderWidth: 1, borderColor: colors.ink, backgroundColor: colors.sky }}>
+      <Pressable testID="reply-options-toggle" accessibilityRole="button" accessibilityState={{ expanded }} accessibilityLabel={`${summary}. ${expanded ? 'Collapse' : 'Expand'} reply options`} onPress={() => setExpanded(current => !current)}>
+        <View style={{ minHeight: 62, flexDirection: 'row', alignItems: 'center', gap: space[2], paddingHorizontal: space[3] }}>
+          <View style={{ width: 34, height: 34, alignItems: 'center', justifyContent: 'center', borderRadius: 11, backgroundColor: colors.lime }}>
+            {pending ? <ActivityIndicator size="small" color={colors.ink} /> : <Sparkles size={18} color={colors.ink} />}
+          </View>
+          <View style={{ flex: 1, minWidth: 0, gap: 1 }}>
+            <Text maxFontSizeMultiplier={1} style={{ ...mobileType.monoLabel, color: colors.ink }}>REPLY OPTIONS</Text>
+            <Text maxFontSizeMultiplier={1} numberOfLines={1} style={{ ...mobileType.bodySmall, color: colors.neutral[800] }}>{summary}</Text>
+          </View>
+          <View style={{ width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill, borderWidth: 1, borderColor: colors.ink, backgroundColor: colors.paper }}>
+            {expanded ? <ChevronUp size={18} color={colors.ink} /> : <ChevronDown size={18} color={colors.ink} />}
+          </View>
+        </View>
+      </Pressable>
 
-    {expanded ? <View style={{ paddingHorizontal: space[3], paddingBottom: space[3], gap: space[3] }}>
+    {expanded ? <View style={{ paddingHorizontal: space[3], paddingBottom: space[3], gap: space[3], borderTopWidth: 1, borderTopColor: colors.infoBorder }}>
       <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: space[1] }}>
         <Pressable accessibilityLabel="Adjust reply options" onPress={() => setShowGuidance(true)} style={{ width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}><SlidersHorizontal size={18} color={colors.ink} /></Pressable>
         <Pressable accessibilityLabel="Make replies longer" disabled={pending} onPress={() => void generate(true, 'Make every reply longer while preserving the language, intent, and demonstrated voice.')} style={{ width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center', opacity: pending ? 0.5 : 1 }}><Expand size={18} color={colors.ink} /></Pressable>
@@ -131,6 +141,7 @@ export function ResponseSuggestion({ messageId, messageContent, isGroup, refresh
       </View>
       {suggestions.length ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space[2] }} testID="ai-suggestion-scroll">{suggestions.map(suggestion => <View key={suggestion.id} style={{ width: 238, minHeight: 130, padding: space[3], borderWidth: 1, borderColor: colors.neutral[200], borderRadius: radius.control, backgroundColor: colors.paper, justifyContent: 'space-between', gap: space[3] }}><Text maxFontSizeMultiplier={1} numberOfLines={3} style={{ ...mobileType.body, color: colors.ink }}>{suggestion.suggestion}</Text><View style={{ flexDirection: 'row', alignItems: 'center' }}><Pressable accessibilityLabel="Like reply" onPress={() => void feedback(suggestion, 'positive')} style={{ padding: 5 }}><ThumbsUp size={16} color={suggestion.feedback === 'positive' ? colors.success : colors.neutral[600]} /></Pressable><Pressable accessibilityLabel="Dislike reply" onPress={() => void feedback(suggestion, 'negative')} style={{ padding: 5 }}><ThumbsDown size={16} color={suggestion.feedback === 'negative' ? colors.danger : colors.neutral[600]} /></Pressable><View style={{ flex: 1 }} /><Pressable accessibilityLabel="Use this reply" testID={`ai-suggestion-use-${suggestion.id}`} onPress={() => void selectSuggestion(suggestion)} style={{ minHeight: 34, flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, borderRadius: radius.control, backgroundColor: colors.ink }}><Send size={14} color={colors.lime} /><Text maxFontSizeMultiplier={1} style={{ ...mobileType.label, color: colors.paper }}>Use</Text></Pressable></View></View>)}</ScrollView> : <Text maxFontSizeMultiplier={1} style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{generateError || 'Preparing suggestions…'}</Text>}
     </View> : null}
+    </View>
 
     <Modal visible={showGuidance} transparent animationType="slide" onRequestClose={() => setShowGuidance(false)}><View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(16,18,15,0.35)' }}><View testID="reply-guidance-panel" style={{ padding: space[5], paddingBottom: 36, gap: space[3], borderTopLeftRadius: radius.panel, borderTopRightRadius: radius.panel, backgroundColor: colors.paper }}><Text maxFontSizeMultiplier={1} style={{ ...mobileType.sectionTitle, color: colors.ink }}>Adjust these replies</Text><TextInput maxFontSizeMultiplier={1} value={guidance} onChangeText={setGuidance} placeholder="e.g. less formal, more like me" placeholderTextColor={colors.neutral[400]} multiline style={{ minHeight: 92, padding: space[3], borderRadius: radius.control, borderWidth: 1, borderColor: colors.neutral[200], backgroundColor: colors.cream, ...mobileType.body, color: colors.ink }} /><View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: space[3] }}><Pressable onPress={() => setShowGuidance(false)} style={{ minHeight: 42, justifyContent: 'center', paddingHorizontal: space[3] }}><Text style={{ ...mobileType.label, color: colors.neutral[600] }}>Cancel</Text></Pressable><Pressable onPress={() => void generate(true)} style={{ minHeight: 42, justifyContent: 'center', paddingHorizontal: space[3], borderRadius: radius.control, backgroundColor: colors.ink }}><Text style={{ ...mobileType.label, color: colors.paper }}>Regenerate</Text></Pressable></View></View></View></Modal>
   </View>;
