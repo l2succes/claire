@@ -45,11 +45,11 @@ export class MatrixEventConverter {
     // Determine if message is from us.
     // Without double puppeting:
     //   - sender matches our own ghost user (e.g. @whatsapp_15166100494:claire.local)
-    //   - OR sender is not a ghost (i.e. the bot user @claire_bot:...)
+    //   - OR sender matches the local Matrix user (the bot, @claire_bot:...) when
+    //     matrixUserId is passed through. Live Claire sends are persisted from
+    //     sendMessage(); this path covers backfill and timeline echoes.
     // With double puppeting:
     //   - sender is the real Matrix user ID (e.g. @user123:claire.local)
-    //   - The above non-ghost check still covers this since the real Matrix user
-    //     is not a ghost user. When matrixUserId is provided we narrow to an exact match.
     const selfGhostIds = Array.isArray(selfGhostUserId)
       ? selfGhostUserId
       : selfGhostUserId ? [selfGhostUserId] : [];

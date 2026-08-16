@@ -123,6 +123,33 @@ describe('WhatsApp DM (1:1)', () => {
     expect(msg.isFromMe).toBe(true);
   });
 
+  it('isFromMe is true for Claire bot sends when the local Matrix user id is provided', async () => {
+    const event = makeEvent('@claire_bot:claire.local', "I'm down for 11, finishing something rn");
+    const msg = await converter.toUnifiedMessage(
+      event,
+      room,
+      'sess1',
+      'user1',
+      Platform.WHATSAPP,
+      selfGhost,
+      '@claire_bot:claire.local'
+    );
+    expect(msg.isFromMe).toBe(true);
+  });
+
+  it('isFromMe is false for Claire bot sends when the local Matrix user id is omitted', async () => {
+    const event = makeEvent('@claire_bot:claire.local', "I'm down for 11, finishing something rn");
+    const msg = await converter.toUnifiedMessage(
+      event,
+      room,
+      'sess1',
+      'user1',
+      Platform.WHATSAPP,
+      selfGhost
+    );
+    expect(msg.isFromMe).toBe(false);
+  });
+
   it('uses an encrypted Matrix file URL for media', async () => {
     const msg = await converter.toUnifiedMessage(
       makeEncryptedMediaEvent(otherGhost), room, 'sess1', 'user1', Platform.WHATSAPP, selfGhost,
