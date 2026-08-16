@@ -1,16 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 import Link from 'next/link';
-import { exploreLinks, primaryNavigation } from '@/content/site';
-import { Button } from '@/components/ui/Button';
+import { downloadOptions, moreLinks, primaryNavigation } from '@/content/site';
 import { HeroIcon } from '@/components/site/HeroIcon';
+import { OsIcon } from '@/components/site/OsIcon';
 
-export function SiteHeader({
-  active,
-  cta = { href: '/#pricing', label: 'See pricing' },
-}: {
-  active?: string;
-  cta?: { href: string; label: string };
-}) {
+export function SiteHeader({ active }: { active?: string }) {
   return (
     <header className="site-header">
       <Link className="brand" href="/" aria-label="Claire home">
@@ -27,10 +21,10 @@ export function SiteHeader({
         ))}
         <details className="site-nav-more">
           <summary>
-            Explore <HeroIcon name="chevron-down" className="size-3.5" />
+            More <HeroIcon name="chevron-down" className="size-3.5" />
           </summary>
           <div className="site-nav-popover">
-            {exploreLinks.map((item) => (
+            {moreLinks.map((item) => (
               <Link href={item.href} key={item.href}>
                 <b>{item.title}</b>
                 <span>{item.body}</span>
@@ -49,16 +43,43 @@ export function SiteHeader({
               {item.label}
             </Link>
           ))}
-          {exploreLinks.map((item) => (
+          {moreLinks.map((item) => (
             <Link href={item.href} key={`mobile-${item.href}`}>
               {item.title}
             </Link>
           ))}
+          {downloadOptions.map((option) =>
+            option.available && option.href ? (
+              <Link href={option.href} key={`mobile-${option.id}`}>
+                {option.name}
+              </Link>
+            ) : (
+              <span key={`mobile-${option.id}`}>
+                {option.name} · Coming soon
+              </span>
+            ),
+          )}
         </nav>
       </details>
-      <Button href={cta.href} size="small">
-        {cta.label} <HeroIcon name="arrow-right" className="size-4" />
-      </Button>
+      <details className="download-menu">
+        <summary>Download</summary>
+        <div className="download-popover">
+          {downloadOptions.map((option) =>
+            option.available && option.href ? (
+              <Link href={option.href} key={option.id}>
+                <OsIcon id={option.id} />
+                <b>{option.name}</b>
+              </Link>
+            ) : (
+              <span className="is-soon" key={option.id}>
+                <OsIcon id={option.id} />
+                <b>{option.name}</b>
+                <em>Coming soon</em>
+              </span>
+            ),
+          )}
+        </div>
+      </details>
     </header>
   );
 }

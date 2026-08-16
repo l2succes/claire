@@ -5,7 +5,8 @@
    landing HTML used the browser default of bold for h1–h3. */
 h1,
 h2,
-h3 {
+h3,
+h4 {
   font-weight: 700;
 }
 html {
@@ -144,9 +145,69 @@ button {
 }
 .site-header nav {
   display: flex;
-  gap: 34px;
-  font-size: 14px;
+  gap: 26px;
+  font-size: 13px;
   font-weight: 500;
+}
+.download-menu {
+  position: relative;
+}
+.download-menu summary {
+  list-style: none;
+  cursor: pointer;
+  border-radius: var(--radius-pill);
+  padding: 11px 18px;
+  background: var(--claire-ink);
+  color: white;
+  font-size: 13px;
+  font-weight: 600;
+}
+.download-menu summary::-webkit-details-marker {
+  display: none;
+}
+.download-menu[open] summary {
+  background: #292c28;
+}
+.download-popover {
+  position: absolute;
+  top: calc(100% + 12px);
+  right: 0;
+  width: 240px;
+  padding: 8px;
+  display: grid;
+  gap: 2px;
+  border: 1px solid var(--neutral-200);
+  border-radius: 18px;
+  background: var(--claire-paper);
+  box-shadow: var(--shadow-lg);
+}
+.download-popover a,
+.download-popover .is-soon {
+  display: grid;
+  grid-template-columns: 22px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+}
+.download-popover a:hover {
+  background: var(--neutral-100);
+  opacity: 1;
+}
+.download-popover .is-soon {
+  color: var(--neutral-600);
+}
+.download-popover em {
+  font: 500 9px var(--font-mono);
+  font-style: normal;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.os-icon {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
 }
 .site-header nav a:hover,
 .text-link:hover {
@@ -2284,7 +2345,10 @@ code {
 }
 .usage-card h4 {
   margin: 28px 0 0;
-  font-size: 17px;
+  font-family: var(--font-sans);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.035em;
 }
 .usage-card p {
   margin: 9px 0 0;
@@ -2363,6 +2427,87 @@ code {
   color: var(--neutral-600);
   font-size: 11px;
   line-height: 1.52;
+}
+.open-source {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 64px;
+  align-items: center;
+  margin-bottom: 130px;
+  padding: 54px;
+  border-radius: var(--radius-xl);
+  background: var(--claire-mint);
+}
+.open-source-copy h2 {
+  margin: 14px 0 0;
+  font-size: clamp(2.5rem, 4.2vw, 4.4rem);
+  line-height: 0.98;
+  letter-spacing: -0.06em;
+}
+.open-source-copy h2 span {
+  position: relative;
+  isolation: isolate;
+  z-index: 0;
+}
+.open-source-copy h2 span:after {
+  content: '';
+  position: absolute;
+  height: 0.28em;
+  background: var(--claire-lime);
+  left: -0.04em;
+  right: -0.04em;
+  bottom: 0.04em;
+  z-index: -1;
+  transform: rotate(-1deg);
+  border-radius: 4px;
+}
+.open-source-copy > p {
+  max-width: 460px;
+  margin: 23px 0 28px;
+  font-size: 14px;
+  line-height: 1.58;
+}
+.open-source-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 22px;
+}
+.open-source-panel {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.open-source-panel article {
+  min-height: 190px;
+  padding: 22px;
+  border: 1px solid var(--claire-ink);
+  border-radius: 18px;
+  background: var(--claire-paper);
+}
+.open-source-panel-wide {
+  grid-column: 1 / -1;
+  min-height: 0;
+  background: var(--claire-lime);
+}
+.open-source-panel small {
+  font: 500 9px var(--font-mono);
+  letter-spacing: 0.1em;
+}
+.open-source-panel h3 {
+  margin: 18px 0 8px;
+  font-size: 20px;
+  letter-spacing: -0.04em;
+}
+.open-source-panel p {
+  margin: 0;
+  color: var(--neutral-600);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.open-source-panel code {
+  font: 500 11px var(--font-mono);
+  color: var(--claire-ink);
 }
 .security-teaser {
   display: grid;
@@ -2638,6 +2783,14 @@ code {
   .mobile-nav nav a:hover {
     background: var(--neutral-100);
   }
+  .mobile-nav nav span {
+    padding: 11px 12px;
+    color: var(--neutral-600);
+    font-size: 13px;
+  }
+  .download-menu summary {
+    padding: 10px 13px;
+  }
   .trust-strip {
     flex-wrap: wrap;
   }
@@ -2674,6 +2827,7 @@ code {
     align-items: start;
     flex-direction: column;
   }
+  .open-source,
   .security-teaser {
     grid-template-columns: 1fr;
     gap: 44px;
@@ -2878,11 +3032,18 @@ code {
   .pricing-rules {
     margin: 0 20px 28px;
   }
+  .open-source,
   .security-teaser {
     display: block;
     margin-bottom: 90px;
     padding: 38px 20px;
     border-radius: 28px;
+  }
+  .open-source-panel {
+    margin-top: 32px;
+  }
+  .open-source-panel article {
+    min-height: 0;
   }
   .security-visual {
     margin-top: 38px;

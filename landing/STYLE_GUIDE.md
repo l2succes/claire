@@ -23,12 +23,33 @@ The full neutral scale and CSS custom properties live in `tokens.css`.
 
 ## Typography
 
-- Display: Inter Semibold, `clamp(3.25rem, 8vw, 7.5rem)`, 0.88 line-height, -0.075em tracking.
-- Section heading: Inter Semibold, `clamp(1.8rem, 3vw, 2.75rem)`, 1.02 line-height, -0.05em tracking.
-- Body: Inter Regular, 1rem / 1.5. Large intro copy uses 1.125rem.
-- Labels and code: DM Mono Medium. Labels use 0.75rem or smaller with 0.08–0.12em tracking.
+Claire uses **two families only**. Extra weights can look like extra fonts — they are not.
 
-Fallbacks are Avenir Next/Helvetica for sans and SFMono/Consolas for mono.
+| Family | Loaded weights | Token | Use |
+| --- | --- | --- | --- |
+| **Inter** | 400, 500, 600, 700 | `--font-sans` | Voice, headings, body, nav, buttons, card titles |
+| **DM Mono** | 400, 500 | `--font-mono` | Kickers, status pills, captions, code, system metadata |
+
+Do not introduce a third family for marketing, cards, or the website. Card titles such as “Claire AI credits” use Inter 700, same as `h1–h4`.
+
+Weight roles:
+
+- Inter 400 — body and supporting paragraphs
+- Inter 500 — navigation and quiet UI labels
+- Inter 600 — display titles and some buttons
+- Inter 700 — section headings, card titles (`h1–h4`)
+- DM Mono 400 — inline code
+- DM Mono 500 — kickers, pills, and mono captions
+
+Scale:
+
+- Display: Inter 600, `clamp(3.25rem, 8vw, 7.5rem)`, 0.88 line-height, -0.075em tracking.
+- Section heading: Inter 700, `clamp(1.8rem, 3vw, 2.75rem)`, 1.02 line-height, -0.05em tracking.
+- Card title: Inter 700, ~18px, -0.035em tracking.
+- Body: Inter 400, 1rem / 1.5. Large intro copy uses 1.125rem.
+- Labels: DM Mono 500, 0.75rem or smaller, 0.08–0.12em tracking.
+
+Fallbacks are Avenir Next/Helvetica for sans and SFMono/Consolas for mono. The website loads these faces in `website/src/app/layout.tsx`.
 
 ## Foundations
 

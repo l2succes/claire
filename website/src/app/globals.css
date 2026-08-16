@@ -147,7 +147,7 @@ summary:focus-visible {
   height: 72%;
 }
 
-.platform-mark--sm {
+.platform-mark.platform-mark--sm {
   width: 22px;
   height: 22px;
   flex-basis: 22px;
@@ -155,12 +155,12 @@ summary:focus-visible {
   font-size: 6px;
 }
 
-.platform-mark--sm img {
+.platform-mark.platform-mark--sm img {
   width: 72%;
   height: 72%;
 }
 
-.platform-mark--lg {
+.platform-mark.platform-mark--lg {
   width: 52px;
   height: 52px;
   flex-basis: 52px;
@@ -168,7 +168,7 @@ summary:focus-visible {
   font-size: 12px;
 }
 
-.platform-mark--xl {
+.platform-mark.platform-mark--xl {
   width: 72px;
   height: 72px;
   flex-basis: 72px;
@@ -176,7 +176,7 @@ summary:focus-visible {
   font-size: 14px;
 }
 
-.platform-mark--hero {
+.platform-mark.platform-mark--hero {
   width: 88px;
   height: 88px;
   flex-basis: 88px;
@@ -185,8 +185,8 @@ summary:focus-visible {
   box-shadow: 6px 6px 0 rgb(16 18 15 / 16%);
 }
 
-.platform-mark--hero img,
-.platform-mark--xl img {
+.platform-mark.platform-mark--hero img,
+.platform-mark.platform-mark--xl img {
   width: 62%;
   height: 62%;
 }

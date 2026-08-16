@@ -26,10 +26,7 @@ export function HomePage() {
           </p>
           <div className="hero-actions">
             <Link className="button button-dark" href="#start">
-              Choose your setup <HeroIcon name="arrow-right" />
-            </Link>
-            <Link className="text-link" href="#product">
-              See the AI in action <HeroIcon name="arrow-right" />
+              Download
             </Link>
           </div>
           <div className="hero-art" aria-label="Claire application preview">
@@ -718,6 +715,57 @@ export function HomePage() {
           </div>
         </section>
 
+        <section className="open-source shell" id="open-source" aria-labelledby="open-source-title">
+          <div className="open-source-copy">
+            <div className="kicker">OPEN SOURCE FIRST</div>
+            <h2 id="open-source-title">
+              Inspect it.
+              <br />
+              <span>Run it yourself.</span>
+            </h2>
+            <p>
+              Claire is an open-source product, not a closed messaging service. You can read the
+              code, contribute, and operate the stack on servers you control—or use Claire Cloud when
+              you want the bridges kept online for you.
+            </p>
+            <div className="open-source-actions">
+              <a className="button button-dark" href="https://github.com/l2succes/claire">
+                View the GitHub repository
+              </a>
+              <Link className="text-link" href="/docs/getting-started/repository-setup">
+                Self-hosting guide
+              </Link>
+            </div>
+          </div>
+          <div className="open-source-panel">
+            <article>
+              <small>APACHE-2.0</small>
+              <h3>Clients and packages</h3>
+              <p>
+                Mobile, desktop, the website, design system, and plugin SDK are Apache-2.0, so you
+                can build on the product surfaces with a permissive license.
+              </p>
+            </article>
+            <article>
+              <small>AGPL-3.0</small>
+              <h3>Server and infrastructure</h3>
+              <p>
+                The API, Docker stack, and database configuration are AGPL-3.0. If you run a modified
+                network service, the corresponding source stays available to the people who use it.
+              </p>
+            </article>
+            <article className="open-source-panel-wide">
+              <small>YOUR SERVERS</small>
+              <h3>Self-host the same stack.</h3>
+              <p>
+                Clone the repository, run <code>bun run setup</code>, then bring up Supabase, Matrix,
+                Redis, and the bridges on hardware you operate. Claire Cloud is optional—not a
+                requirement to use the product.
+              </p>
+            </article>
+          </div>
+        </section>
+
         <section className="pricing shell" id="pricing">
           <div className="pricing-heading">
             <div>
@@ -821,14 +869,6 @@ export function HomePage() {
                   <small>Available only when the model host stays reachable.</small>
                 </article>
               </div>
-            </div>
-            <div className="pricing-rules">
-              <HeroIcon name="info" />
-              <p>
-                <b>Before launch:</b> the included monthly credit amount, top-up price, and supported
-                model tiers will be shown in the app. We will show usage and require an explicit
-                approval before any additional credit purchase.
-              </p>
             </div>
           </div>
           <div className="pricing-faq">

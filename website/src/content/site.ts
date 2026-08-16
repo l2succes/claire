@@ -1,18 +1,23 @@
 // SPDX-License-Identifier: Apache-2.0
 export const primaryNavigation = [
   { href: '/#product', label: 'Product' },
-  { href: '/#connections', label: 'Connections' },
-  { href: '/security', label: 'Security' },
   { href: '/#pricing', label: 'Pricing' },
+  { href: '/security', label: 'Security' },
+  { href: '/developers', label: 'Developers' },
 ] as const;
 
-export const exploreLinks = [
-  { href: '/#start', title: 'Cloud or local', body: 'Choose how Claire fits your setup.' },
-  { href: '/#stories', title: 'Stories', body: 'See the product in everyday conversation.' },
-  { href: '/security', title: 'Security details', body: 'See the current data boundaries.' },
-  { href: '/mockups/mobile', title: 'Mobile preview', body: 'Explore the app concept.' },
-  { href: '/mockups/desktop', title: 'Desktop preview', body: 'Explore the desktop concept.' },
-  { href: '/docs', title: 'Documentation', body: 'Set up the repo and contribute.' },
+export const moreLinks = [
+  { href: '/business', title: 'Business', body: 'A shared inbox for customer teams.' },
+  { href: '/docs', title: 'Docs', body: 'Set up the repo and run Claire yourself.' },
+  { href: '/#open-source', title: 'Open source', body: 'Licenses, GitHub, and self-hosting.' },
+  { href: '/faq', title: 'FAQ', body: 'Product, hosting, and contributor questions.' },
+] as const;
+
+export const downloadOptions = [
+  { id: 'macos', name: 'Mac', href: '/#start', available: true },
+  { id: 'ios', name: 'iOS', href: '/#start', available: true },
+  { id: 'windows', name: 'Windows', href: null, available: false },
+  { id: 'android', name: 'Android', href: null, available: false },
 ] as const;
 
 export const footerLinks = [

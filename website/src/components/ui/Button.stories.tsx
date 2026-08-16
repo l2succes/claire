@@ -13,4 +13,4 @@ type Story = StoryObj<typeof meta>;
 export const Dark: Story = {};
 export const Lime: Story = { args: { variant: 'lime', children: 'Read the docs' } };
 export const Outline: Story = { args: { variant: 'outline', children: 'View details' } };
-export const Small: Story = { args: { size: 'small', children: 'See pricing' } };
+export const Small: Story = { args: { size: 'small', children: 'Download' } };
