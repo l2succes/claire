@@ -19,6 +19,7 @@ import { Platform } from '../../types/platform';
 import { setActiveNotificationChat, syncNotificationBadge, updateNotificationPresence } from '../../services/notifications';
 import { colors, mobileType, radius, space } from '@claire/design-system';
 import { MobileAvatar, MobileIconButton } from '../../components/mobile/claire-mobile';
+import { cacheTimeline, cachedTimeline, usesNativeMobileCache } from '../../services/mobile-cache';
 
 interface ChatMessage {
   id: string;
@@ -160,9 +161,16 @@ export default function ChatScreen() {
       return;
     }
     try {
+      if (usesNativeMobileCache()) {
+        const cached = await cachedTimeline(user.id, chatId, 200);
+        if (cached.length) {
+          setMessages(cached as unknown as ChatMessage[]);
+          setLoading(false);
+        }
+      }
       const { data, error } = await supabase
         .from('messages')
-        .select('id, content, timestamp, from_me, contact_name, contact_phone, content_type, media_url, media_mime_type')
+        .select('id, chat_id, content, timestamp, from_me, contact_name, contact_phone, content_type, media_url, media_mime_type')
         .eq('chat_id', chatId)
         .eq('user_id', user.id)
         .order('timestamp', { ascending: true })
@@ -174,7 +182,7 @@ export default function ChatScreen() {
       if (highlightMessageId && !loadedMessages.some(message => message.id === highlightMessageId)) {
         const { data: highlightedMessage, error: highlightError } = await supabase
           .from('messages')
-          .select('id, content, timestamp, from_me, contact_name, contact_phone, content_type, media_url, media_mime_type')
+          .select('id, chat_id, content, timestamp, from_me, contact_name, contact_phone, content_type, media_url, media_mime_type')
           .eq('id', highlightMessageId)
           .eq('chat_id', chatId)
           .eq('user_id', user.id)
@@ -182,8 +190,10 @@ export default function ChatScreen() {
         if (highlightError) throw highlightError;
         if (highlightedMessage) loadedMessages = [...loadedMessages, highlightedMessage];
       }
-      setMessages([...new Map(loadedMessages.map(message => [message.id, message])).values()]
-        .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()));
+      const deduplicated = [...new Map(loadedMessages.map(message => [message.id, message])).values()]
+        .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+      setMessages(deduplicated);
+      if (usesNativeMobileCache()) void cacheTimeline(user.id, chatId, deduplicated).catch(() => undefined);
     } catch (err) {
       console.error('Failed to fetch messages:', err);
     } finally {
@@ -252,6 +262,7 @@ export default function ChatScreen() {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `chat_id=eq.${chatId}` },
         (payload) => {
           const inserted = payload.new as ChatMessage;
+          if (usesNativeMobileCache() && user?.id) void cacheTimeline(user.id, chatId, [{ ...inserted, chat_id: chatId }]).catch(() => undefined);
           setMessages((prev) => {
             // Avoid duplicates (e.g. optimistic message already in list)
             if (prev.some((m) => m.id === inserted.id)) return prev;
@@ -505,7 +516,7 @@ export default function ChatScreen() {
         gap: space[2],
         borderBottomWidth: 1,
         borderBottomColor: colors.neutral[200],
-        backgroundColor: colors.paper,
+        backgroundColor: colors.cream,
       }}>
         <MobileIconButton label="Back" onPress={() => router.back()}><ChevronLeft size={22} color={colors.ink} /></MobileIconButton>
         <MobileAvatar name={displayName} size={40} isGroup={is_group === '1'} />

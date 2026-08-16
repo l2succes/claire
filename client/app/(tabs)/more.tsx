@@ -8,7 +8,7 @@ const destinations = [
   { title: 'Search', detail: 'Messages, people, files, and promises', icon: Search, href: '/(tabs)/search' },
   { title: 'People', detail: 'Contacts and relationship context', icon: UsersRound, href: '/people' },
   { title: 'Connections', detail: 'Messaging accounts and setup', icon: Link2, href: '/connections' },
-  { title: 'Settings', detail: 'Notifications, AI, and account controls', icon: Settings, href: '/(tabs)/settings' },
+  { title: 'Settings', detail: 'Notifications, AI, and account controls', icon: Settings, href: '/settings' },
 ] as const;
 
 export default function MoreScreen() {

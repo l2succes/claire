@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useInfiniteQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query';
 import { supabase } from '../services/supabase';
 import { Platform } from '../types/platform';
 import { notifyWebMessageUpdate } from '../services/notifications';
+import { cacheTimeline, hydrateMobileCache, usesNativeMobileCache, type CachedChat } from '../services/mobile-cache';
 
 export interface InboxMessage {
   id: string;
@@ -55,14 +56,27 @@ function inboxTrace(event: string, details: Record<string, unknown> = {}) {
   console.info(`[Inbox] ${event}`, details);
 }
 
+function diagnosticText(value: unknown, limit = 320) {
+  if (typeof value !== 'string') return undefined;
+  return value.replace(/\s+/g, ' ').slice(0, limit);
+}
+
 function inboxError(event: string, error: { code?: string; message?: string; details?: string; hint?: string }, details: Record<string, unknown> = {}) {
-  console.error(`[Inbox] ${event}`, {
-    ...details,
-    code: error.code,
-    message: error.message,
-    details: error.details,
-    hint: error.hint,
-  });
+  // Supabase errors can retain a very large response/request graph. Passing
+  // that graph to the native console makes Hermes instrument every property
+  // and can itself throw "Property storage exceeds … properties". Keep error
+  // reporting primitive, bounded, and useful without ever logging the object.
+  const page = typeof details.page === 'number' ? details.page : undefined;
+  const user = typeof details.user === 'string' ? details.user.slice(0, 8) : undefined;
+  const summary = {
+    ...(page !== undefined ? { page } : {}),
+    ...(user ? { user } : {}),
+    ...(diagnosticText(error?.code, 80) ? { code: diagnosticText(error.code, 80) } : {}),
+    ...(diagnosticText(error?.message) ? { message: diagnosticText(error.message) } : {}),
+    ...(diagnosticText(error?.details) ? { details: diagnosticText(error.details) } : {}),
+    ...(diagnosticText(error?.hint) ? { hint: diagnosticText(error.hint) } : {}),
+  };
+  console.error(`[Inbox] ${event}`, JSON.stringify(summary));
 }
 
 function conversationKey(chatId: string, platform?: Platform) {
@@ -132,13 +146,52 @@ function sortMessages(messages: InboxMessage[]) {
   return [...messages].sort((a, b) => Number(!!b.is_pinned) - Number(!!a.is_pinned) || new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 }
 
+function cachedInboxMessages(chats: CachedChat[]): InboxMessage[] {
+  return sortMessages(chats.flatMap((chat) => {
+    const latest = chat.latest_message as Record<string, unknown> | null | undefined;
+    if (!latest || typeof latest.id !== 'string') return [];
+    const contact = chat.contact as Record<string, unknown> | null | undefined;
+    const name = typeof chat.name === 'string' ? chat.name : typeof contact?.name === 'string' ? contact.name : undefined;
+    return [{
+      id: latest.id,
+      conversation_key: conversationKey(chat.id, chat.platform as Platform | undefined),
+      contact_name: chat.is_group ? undefined : name,
+      contact_avatar: typeof contact?.avatar_url === 'string' ? contact.avatar_url : undefined,
+      chat_name: name,
+      content: typeof latest.content === 'string' ? latest.content : '',
+      timestamp: typeof latest.timestamp === 'string' ? latest.timestamp : String(chat.last_message_at || new Date(0).toISOString()),
+      from_me: latest.from_me === true,
+      is_group: chat.is_group === true,
+      chat_id: chat.id,
+      platform: (chat.platform as Platform | undefined) || Platform.WHATSAPP,
+      unread_count: typeof chat.unread_count === 'number' ? chat.unread_count : 0,
+      has_ai_response: false,
+      snoozed_until: null,
+      is_pinned: chat.is_pinned === true,
+    }];
+  }));
+}
+
 export function useInboxMessages(userId?: string) {
   const queryClient = useQueryClient();
   const queryKey = useMemo(() => ['messages-feed', userId] as const, [userId]);
+  const [cacheReady, setCacheReady] = useState(!usesNativeMobileCache());
+
+  useEffect(() => {
+    let active = true;
+    setCacheReady(!usesNativeMobileCache());
+    if (!userId || !usesNativeMobileCache()) return;
+    void hydrateMobileCache(userId).then((snapshot) => {
+      if (!active) return;
+      const messages = cachedInboxMessages(snapshot.chats);
+      if (messages.length) queryClient.setQueryData<InboxQueryData>(queryKey, { pages: [{ messages, hasMore: false }], pageParams: [0] });
+    }).catch(() => undefined).finally(() => { if (active) setCacheReady(true); });
+    return () => { active = false; };
+  }, [queryClient, queryKey, userId]);
 
   const query = useInfiniteQuery<MessagePage, Error, InboxQueryData, typeof queryKey, number>({
     queryKey,
-    enabled: !!userId,
+    enabled: !!userId && cacheReady,
     initialPageParam: 0,
     staleTime: 60_000,
     gcTime: 30 * 60_000,
@@ -201,6 +254,14 @@ export function useInboxMessages(userId?: string) {
           avatar_url: avatars.get(`${row.platform || Platform.WHATSAPP}:${row.contact_phone || ''}`) || null,
         },
       })) as RawMessage[];
+      if (usesNativeMobileCache()) {
+        const byChat = new Map<string, RawMessage[]>();
+        for (const row of rows) {
+          const key = row.chat_id || row.id;
+          byChat.set(key, [...(byChat.get(key) || []), row]);
+        }
+        void Promise.all([...byChat.entries()].map(([chatId, messages]) => cacheTimeline(userId, chatId, messages as Array<RawMessage & { id: string; chat_id: string; timestamp: string }>))).catch(() => undefined);
+      }
       const messages = normalizeRows(rows);
       inboxTrace('fetch:success', { page: pageParam, rows: rows.length, conversations: messages.length, total: count ?? null });
       return { messages, hasMore: count ? from + pageSize < count : false };
@@ -223,6 +284,9 @@ export function useInboxMessages(userId?: string) {
     if (!row.chat_id && !row.id) return;
     const platform = row.platform || Platform.WHATSAPP;
     const key = conversationKey(row.chat_id || row.id, platform);
+    if (usesNativeMobileCache() && userId && row.chat_id && row.timestamp) {
+      void cacheTimeline(userId, row.chat_id, [row as RawMessage & { id: string; chat_id: string; timestamp: string }]).catch(() => undefined);
+    }
     queryClient.setQueryData<InboxQueryData>(queryKey, (old) => {
       if (!old) return old;
       let found = false;
@@ -271,7 +335,7 @@ export function useInboxMessages(userId?: string) {
       if (!first) return { ...old, pages: [{ messages: [newMessage], hasMore: false }] };
       return { ...old, pages: [{ ...first, messages: sortMessages([newMessage, ...first.messages]) }, ...old.pages.slice(1)] };
     });
-  }, [queryClient, queryKey]);
+  }, [queryClient, queryKey, userId]);
 
   const markAiResponse = useCallback((messageId: string) => {
     queryClient.setQueryData<InboxQueryData>(queryKey, (old) => {

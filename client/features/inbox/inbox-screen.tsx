@@ -45,7 +45,7 @@ function InboxConversationRow({ message, pinned, onPress, onLongPress }: { messa
         borderColor: pinned ? '#E5D69A' : 'transparent',
         borderBottomWidth: pinned ? 1 : 1,
         borderBottomColor: pinned ? '#E5D69A' : colors.neutral[200],
-        backgroundColor: pinned ? '#FFF8DC' : colors.cream,
+        backgroundColor: pinned ? '#FFF8DC' : colors.paper,
         overflow: 'hidden',
       }}
     >
@@ -55,7 +55,7 @@ function InboxConversationRow({ message, pinned, onPress, onLongPress }: { messa
             ? <Image source={{ uri: message.contact_avatar }} style={{ width: 44, height: 44 }} contentFit="cover" transition={120} onError={() => setImageFailed(true)} />
             : <Text maxFontSizeMultiplier={1} style={{ ...mobileType.label, color: colors.ink }}>{initials}</Text>}
         </View>
-        {message.platform ? <View style={{ position: 'absolute', right: -3, bottom: -3, padding: 1, borderRadius: 11, borderWidth: 2, borderColor: pinned ? '#FFF8DC' : colors.cream, backgroundColor: colors.paper }}><PlatformBadge platform={message.platform} size={16} /></View> : null}
+        {message.platform ? <View style={{ position: 'absolute', right: -3, bottom: -3, padding: 1, borderRadius: 11, borderWidth: 2, borderColor: pinned ? '#FFF8DC' : colors.paper, backgroundColor: colors.paper }}><PlatformBadge platform={message.platform} size={16} /></View> : null}
       </View>
 
       <View style={{ position: 'absolute', top: pinned ? 20 : 14, left: inset + 58, right: inset, gap: 3 }}>
@@ -215,10 +215,10 @@ export function InboxScreen() {
     }
   }, [inbox, promiseChats]);
 
-  if (inbox.loading) return <View testID="messages-loading" style={{ flex: 1, backgroundColor: colors.cream, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator size="large" color={colors.ink} /></View>;
+  if (inbox.loading) return <View testID="messages-loading" style={{ flex: 1, backgroundColor: colors.paper, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator size="large" color={colors.ink} /></View>;
 
   return (
-    <View testID="messages-screen" style={{ flex: 1, backgroundColor: colors.cream }}>
+    <View testID="messages-screen" style={{ flex: 1, backgroundColor: colors.paper }}>
       <MobileHeader
         title="Inbox"
         safeArea

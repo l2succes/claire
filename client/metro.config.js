@@ -13,6 +13,8 @@ config.resolver.nodeModulesPaths = [
 config.resolver.extraNodeModules = {
   ...(config.resolver.extraNodeModules || {}),
   '@claire/design-system': path.resolve(workspaceRoot, 'packages/design-system'),
+  react: path.resolve(__dirname, 'node_modules/react'),
+  'react-native': path.resolve(__dirname, 'node_modules/react-native'),
 };
 
 // Redirect zustand ESM (.mjs) to CJS on web — ESM uses import.meta.env

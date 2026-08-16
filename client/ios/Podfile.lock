@@ -181,6 +181,8 @@ PODS:
     - Yoga
   - ExpoAsset (55.0.10):
     - ExpoModulesCore
+  - ExpoBlur (55.0.16):
+    - ExpoModulesCore
   - ExpoCrypto (55.0.10):
     - ExpoModulesCore
   - ExpoDevice (55.0.10):
@@ -241,7 +243,11 @@ PODS:
   - ExpoRouter (55.0.8):
     - ExpoModulesCore
     - RNScreens
+  - ExpoSecureStore (55.0.16):
+    - ExpoModulesCore
   - ExpoSplashScreen (55.0.13):
+    - ExpoModulesCore
+  - ExpoSQLite (55.0.18):
     - ExpoModulesCore
   - ExpoSymbols (55.0.5):
     - ExpoModulesCore
@@ -2519,6 +2525,7 @@ DEPENDENCIES:
   - expo-dev-menu (from `../node_modules/expo-dev-menu`)
   - expo-dev-menu-interface (from `../node_modules/expo-dev-menu-interface/ios`)
   - ExpoAsset (from `../node_modules/expo-asset/ios`)
+  - ExpoBlur (from `../node_modules/expo-blur/ios`)
   - ExpoCrypto (from `../node_modules/expo-crypto/ios`)
   - ExpoDevice (from `../node_modules/expo-device/ios`)
   - "ExpoDomWebView (from `../node_modules/@expo/dom-webview/ios`)"
@@ -2533,7 +2540,9 @@ DEPENDENCIES:
   - ExpoModulesJSI (from `../node_modules/expo-modules-core`)
   - ExpoNotifications (from `../node_modules/expo-notifications/ios`)
   - ExpoRouter (from `../node_modules/expo-router/ios`)
+  - ExpoSecureStore (from `../node_modules/expo-secure-store/ios`)
   - ExpoSplashScreen (from `../node_modules/expo-splash-screen/ios`)
+  - ExpoSQLite (from `../node_modules/expo-sqlite/ios`)
   - ExpoSymbols (from `../node_modules/expo-symbols/ios`)
   - ExpoVideo (from `../node_modules/expo-video/ios`)
   - ExpoWebBrowser (from `../node_modules/expo-web-browser/ios`)
@@ -2656,6 +2665,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/expo-dev-menu-interface/ios"
   ExpoAsset:
     :path: "../node_modules/expo-asset/ios"
+  ExpoBlur:
+    :path: "../node_modules/expo-blur/ios"
   ExpoCrypto:
     :path: "../node_modules/expo-crypto/ios"
   ExpoDevice:
@@ -2684,8 +2695,12 @@ EXTERNAL SOURCES:
     :path: "../node_modules/expo-notifications/ios"
   ExpoRouter:
     :path: "../node_modules/expo-router/ios"
+  ExpoSecureStore:
+    :path: "../node_modules/expo-secure-store/ios"
   ExpoSplashScreen:
     :path: "../node_modules/expo-splash-screen/ios"
+  ExpoSQLite:
+    :path: "../node_modules/expo-sqlite/ios"
   ExpoSymbols:
     :path: "../node_modules/expo-symbols/ios"
   ExpoVideo:
@@ -2875,6 +2890,7 @@ SPEC CHECKSUMS:
   expo-dev-menu: bbe77a8b5e6e021894e4eb667d1dd010b0b99b6f
   expo-dev-menu-interface: bf6f816d29b45bec038080790963c635e8d588c2
   ExpoAsset: 4966b4823ff0a7a0657c7b53e83b237a2eb9f45b
+  ExpoBlur: a399326c8128d012a519966335ec3cdde88e0fe5
   ExpoCrypto: 5024dc097f4d2e234d76f0a7e73a491629c1356a
   ExpoDevice: c9fdd7ae0e4a8f4d7a3359270ceab6018dbff01b
   ExpoDomWebView: d4f2ed3c3fa31d0ce89e79501a0c041c2f233189
@@ -2889,7 +2905,9 @@ SPEC CHECKSUMS:
   ExpoModulesJSI: ac4e45951c63c45631bf7969cb621f82d1ed6330
   ExpoNotifications: edd5c66352963386269d28d6d6f5406a598e704e
   ExpoRouter: e1d7631825e77421c752b7316458245a07fe1b88
+  ExpoSecureStore: 267fc7f3d7a4b9163fc12445acf3db4fa5c87b7a
   ExpoSplashScreen: e3672db2d145e62208d4b761671f4fca1d4ef126
+  ExpoSQLite: b9f5a126c3086be75903c8ef6b36d985612d4531
   ExpoSymbols: 0e00156bc2d2118be6838ae4755ceaa2bf00afe2
   ExpoVideo: 397d990a5bfe8b27fa0ca42df63bcf8d2390bd37
   ExpoWebBrowser: 7e5355c91ebb6213e1eee4c370f5578ce49fd612

@@ -58,7 +58,7 @@ export default function ContactsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.cream }} testID="contacts-screen">
-      <View style={{ minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: space[3], paddingHorizontal: space[3], backgroundColor: colors.paper, borderBottomWidth: 1, borderBottomColor: colors.neutral[200] }}>
+      <View style={{ minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: space[3], paddingHorizontal: space[3], backgroundColor: colors.cream, borderBottomWidth: 1, borderBottomColor: colors.neutral[200] }}>
         <MobileIconButton label="Back to Inbox" onPress={() => router.back()}><ChevronLeft size={21} color={colors.ink} /></MobileIconButton>
         <View style={{ flex: 1 }}><Text style={{ ...mobileType.sectionTitle, color: colors.ink }}>People</Text><Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>The people behind your conversations</Text></View>
       </View>

@@ -23,7 +23,7 @@ export function MobileScreen({ children, scroll = false, testID }: { children: R
   return <View testID={testID} style={{ flex: 1, backgroundColor: colors.cream }}>{children}</View>;
 }
 
-export function MobileHeader({ title, eyebrow, subtitle, actions, profile, safeArea = false }: { title: string; eyebrow?: string; subtitle?: string; actions?: ReactNode; profile?: ReactNode; safeArea?: boolean }) {
+export function MobileHeader({ title, eyebrow, subtitle, leading, actions, profile, safeArea = false }: { title: string; eyebrow?: string; subtitle?: string; leading?: ReactNode; actions?: ReactNode; profile?: ReactNode; safeArea?: boolean }) {
   const { top } = useSafeAreaInsets();
   // ScrollView/FlatList with automatic inset adjustment already owns this
   // space. View-rooted tab screens need to add it explicitly.
@@ -31,6 +31,7 @@ export function MobileHeader({ title, eyebrow, subtitle, actions, profile, safeA
   return (
     <View style={{ paddingHorizontal: space[4], paddingTop: Math.max(space[2], safeTop + space[2]), paddingBottom: space[3], gap: 2 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[3] }}>
+        {leading}
         <View style={{ flex: 1, minWidth: 0 }}>
           {eyebrow ? <Text selectable maxFontSizeMultiplier={1} style={{ ...mobileType.monoLabel, color: colors.neutral[600], textTransform: 'uppercase' }}>{eyebrow}</Text> : null}
           <Text selectable maxFontSizeMultiplier={1} style={{ ...mobileType.screenTitle, color: colors.ink }}>{title}</Text>
