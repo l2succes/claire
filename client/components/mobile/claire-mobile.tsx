@@ -28,16 +28,25 @@ export function MobileHeader({ title, eyebrow, subtitle, leading, actions, profi
   // ScrollView/FlatList with automatic inset adjustment already owns this
   // space. View-rooted tab screens need to add it explicitly.
   const safeTop = safeArea ? Math.max(top, process.env.EXPO_OS === 'ios' ? 48 : 0) : 0;
+  const stacked = Boolean(leading);
+
   return (
-    <View style={{ paddingHorizontal: space[4], paddingTop: Math.max(space[2], safeTop + space[2]), paddingBottom: space[3], gap: 2 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[3] }}>
-        {leading}
-        <View style={{ flex: 1, minWidth: 0 }}>
+    <View style={{ paddingHorizontal: space[4], paddingTop: Math.max(space[2], safeTop + space[2]), paddingBottom: space[3], gap: stacked ? space[3] : 2 }}>
+      {stacked ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 40 }}>
+          {leading}
+          <View style={{ flex: 1 }} />
+          {actions}
+        </View>
+      ) : null}
+      <View style={{ flexDirection: stacked ? 'column' : 'row', alignItems: stacked ? 'flex-start' : 'center', gap: stacked ? 2 : space[3] }}>
+        {stacked ? null : leading}
+        <View style={{ flex: stacked ? undefined : 1, width: stacked ? '100%' : undefined, minWidth: 0 }}>
           {eyebrow ? <Text selectable maxFontSizeMultiplier={1} style={{ ...mobileType.monoLabel, color: colors.neutral[600], textTransform: 'uppercase' }}>{eyebrow}</Text> : null}
           <Text selectable maxFontSizeMultiplier={1} style={{ ...mobileType.screenTitle, color: colors.ink }}>{title}</Text>
-          {subtitle ? <Text selectable maxFontSizeMultiplier={1} numberOfLines={1} style={{ ...mobileType.bodySmall, color: colors.neutral[600], paddingTop: 1 }}>{subtitle}</Text> : null}
+          {subtitle ? <Text selectable maxFontSizeMultiplier={1} numberOfLines={stacked ? undefined : 1} style={{ ...mobileType.bodySmall, color: colors.neutral[600], paddingTop: 1 }}>{subtitle}</Text> : null}
         </View>
-        {actions}
+        {stacked ? null : actions}
         {profile}
       </View>
     </View>

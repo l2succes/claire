@@ -5,10 +5,12 @@ import { router } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { colors, mobileType, radius, space } from '@claire/design-system';
 import { MobileAvatar, MobileHeader, MobileIconButton, MobileState, SectionLabel } from '../../components/mobile/claire-mobile';
+import { PlatformIcon } from '../../components/PlatformIcon';
 import { useAuthStore } from '../../stores/authStore';
 import { useInboxMessages } from '../../hooks/useInboxMessages';
 import { supabase } from '../../services/supabase';
 import { API_BASE_URL } from '../../services/platforms';
+import { resolvePlatform, platformLabel } from '../../types/platform';
 import { formatInboxTimestamp } from '../../utils/messageTimestamp';
 import { computeUrgencyScore } from '../../utils/urgency';
 
@@ -109,7 +111,8 @@ export function HomeScreen() {
       return {
       key: `message-${message.id}`,
       title: /(?:https?:\/\/|www\.)/i.test(content) ? `${person} shared a link` : content || `${person} needs a reply`,
-      subtitle: `${message.platform || 'Message'} · ${person}`,
+      subtitle: `${platformLabel(message.platform, 'Message')} · ${person}`,
+      platform: resolvePlatform(message.platform),
       time: formatInboxTimestamp(message.timestamp),
       kind: 'message' as const,
       urgent: 'score' in message && typeof message.score === 'number' && message.score >= 70,
@@ -119,6 +122,7 @@ export function HomeScreen() {
       key: `promise-${promise.id}`,
       title: promise.content,
       subtitle: `Promise · ${promise.deadline ? `due ${new Date(promise.deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}` : 'open'}`,
+      platform: undefined,
       time: promise.deadline ? formatInboxTimestamp(promise.deadline) : 'Now',
       kind: 'promise' as const,
       urgent: false,
@@ -187,7 +191,10 @@ export function HomeScreen() {
                   </View>
                   <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
                     <Text selectable numberOfLines={1} style={{ ...mobileType.body, fontWeight: '800', color: colors.ink }}>{item.title}</Text>
-                    <Text selectable numberOfLines={1} style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{item.subtitle}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      {item.platform ? <PlatformIcon platform={item.platform} size={14} /> : null}
+                      <Text selectable numberOfLines={1} style={{ flex: 1, ...mobileType.bodySmall, color: colors.neutral[600] }}>{item.subtitle}</Text>
+                    </View>
                   </View>
                   <Text selectable numberOfLines={1} style={{ width: 42, textAlign: 'right', ...mobileType.monoLabel, color: colors.neutral[600] }}>{item.time}</Text>
                 </View>

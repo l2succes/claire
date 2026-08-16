@@ -137,6 +137,11 @@ async function signIn(page) {
   await page.waitForURL('**/dashboard', { timeout: 15_000 });
 }
 
+async function openReplyOptions(page) {
+  await page.getByTestId('chat-composer-add').click();
+  await page.getByTestId('composer-action-reply-options').click();
+}
+
 test.describe('Visual tour', () => {
   test.beforeEach(async ({ page }) => {
     await mockBackend(page);
@@ -176,6 +181,7 @@ test.describe('Visual tour', () => {
     await signIn(page);
     await page.locator('[data-testid^="message-card-"]').first().click();
     await expect(page.getByTestId('chat-screen')).toBeVisible({ timeout: 10_000 });
+    await openReplyOptions(page);
     await expect(page.getByTestId('ai-suggestion-strip')).toBeVisible({ timeout: 8_000 });
     await page.screenshot({ path: `${SCREENSHOTS_DIR}/05-chat-ai-suggestions.png` });
   });
@@ -183,6 +189,8 @@ test.describe('Visual tour', () => {
   test('06 — composer filled from suggestion', async ({ page }) => {
     await signIn(page);
     await page.locator('[data-testid^="message-card-"]').first().click();
+    await expect(page.getByTestId('chat-screen')).toBeVisible({ timeout: 10_000 });
+    await openReplyOptions(page);
     await expect(page.getByTestId('ai-suggestion-strip')).toBeVisible({ timeout: 8_000 });
     await page.getByTestId('ai-suggestion-use-0').click();
     await page.waitForTimeout(300);

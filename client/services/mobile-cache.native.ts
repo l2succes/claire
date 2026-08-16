@@ -169,8 +169,8 @@ export async function cachedTimeline(userId: string, chatId: string, limit = 200
   if (!isNativeMobile) return [];
   const db = await database(userId);
   if (!db) return [];
-  const rows = await db.getAllAsync('SELECT payload FROM cache_messages WHERE chat_id = ? ORDER BY timestamp ASC, id ASC LIMIT ?', chatId, limit) as Array<{ payload: string }>;
-  return rows.map(row => JSON.parse(row.payload) as CachedMessage);
+  const rows = await db.getAllAsync('SELECT payload FROM cache_messages WHERE chat_id = ? ORDER BY timestamp DESC, id DESC LIMIT ?', chatId, limit) as Array<{ payload: string }>;
+  return rows.reverse().map(row => JSON.parse(row.payload) as CachedMessage);
 }
 
 export async function cacheTimeline<T extends { id: string; chat_id: string; timestamp: string }>(userId: string, chatId: string, messages: T[]): Promise<void> {

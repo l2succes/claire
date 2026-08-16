@@ -63,7 +63,12 @@ export default function ConnectionsScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.cream }}>
       <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ paddingBottom: 48 }}>
-        <MobileHeader title="Connections" subtitle="Bring your conversations into Claire." actions={<View style={{ flexDirection: 'row', gap: space[2] }}><MobileIconButton label="Back" onPress={() => router.back()}><ChevronLeft size={20} color={colors.ink} /></MobileIconButton><MobileIconButton label="Refresh connections" onPress={() => void load()}><RefreshCw size={18} color={colors.ink} /></MobileIconButton></View>} />
+        <MobileHeader
+          title="Connections"
+          subtitle="Bring your conversations into Claire."
+          leading={<MobileIconButton label="Back" onPress={() => router.back()}><ChevronLeft size={20} color={colors.ink} /></MobileIconButton>}
+          actions={<MobileIconButton label="Refresh connections" onPress={() => void load()}><RefreshCw size={18} color={colors.ink} /></MobileIconButton>}
+        />
         {loading ? <ActivityIndicator style={{ marginTop: 80 }} color={colors.ink} /> : error ? <MobileState error title="Connections unavailable" message={error} /> : <View style={{ paddingHorizontal: space[4], gap: space[4] }}>
           <View style={{ padding: space[4], borderRadius: radius.card, backgroundColor: colors.ink, gap: space[2] }}><View style={{ width: 38, height: 38, borderRadius: 13, backgroundColor: colors.lime, alignItems: 'center', justifyContent: 'center' }}><Plus size={19} color={colors.ink} /></View><Text style={{ ...mobileType.sectionTitle, color: colors.paper }}>One inbox, your choice of networks</Text><Text style={{ ...mobileType.bodySmall, color: colors.neutral[300] }}>Phone-safe setup happens here. Desktop-only connectors clearly tell you when Claire Desktop is required.</Text></View>
           <SectionLabel title="Connect now" />

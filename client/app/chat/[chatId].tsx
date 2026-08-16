@@ -1,21 +1,23 @@
 import {
   View, Text, ActivityIndicator, Pressable,
-  FlatList, TextInput, KeyboardAvoidingView, Platform as RNPlatform,
+  FlatList, KeyboardAvoidingView, Platform as RNPlatform,
   Image,
 } from 'react-native';
-import { ImageIcon, Volume2, Video, FileText, AlertCircle, Link2, MoreHorizontal, Plus, Sparkles, X } from 'lucide-react-native';
+import { ImageIcon, Volume2, Video, FileText, AlertCircle, Link2, MoreHorizontal, Sparkles, X, ChevronLeft } from 'lucide-react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { ChevronLeft, SendHorizonal } from 'lucide-react-native';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '../../services/supabase';
 import { platformsApi, API_BASE_URL } from '../../services/platforms';
 import { useAuthStore } from '../../stores/authStore';
 import { usePlatformStore } from '../../stores/platformStore';
+import { useChatPreferencesStore } from '../../stores/chatPreferencesStore';
 import { ResponseSuggestion } from '../../components/ResponseSuggestion';
+import { ChatComposer } from '../../components/claire/composer';
 import { useConversationSettingsStore } from '../../stores/conversationSettingsStore';
 import { GroupChatSummary } from '../../components/GroupChatSummary';
-import { Platform } from '../../types/platform';
+import { Platform, resolvePlatform } from '../../types/platform';
+import { PlatformBadge, PlatformName } from '../../components/PlatformIcon';
 import { setActiveNotificationChat, syncNotificationBadge, updateNotificationPresence } from '../../services/notifications';
 import { colors, mobileType, radius, space } from '@claire/design-system';
 import { MobileAvatar, MobileIconButton } from '../../components/mobile/claire-mobile';
@@ -125,6 +127,8 @@ export default function ChatScreen() {
     fetchSettings: fetchConvSettings,
     dismissCard,
   } = useConversationSettingsStore();
+  const plusDefault = useChatPreferencesStore((state) => state.plusDefault);
+  const hydrateChatPreferences = useChatPreferencesStore((state) => state.hydrate);
   const insets = useSafeAreaInsets();
   const smartCards = convSettings[chatId!]?.smartCards ?? [];
   const contactProfile = convSettings[chatId!]?.profile ?? null;
@@ -136,6 +140,7 @@ export default function ChatScreen() {
   const [sendError, setSendError] = useState<string | null>(null);
   const [inputText, setInputText] = useState('');
   const [suggestionRefreshKey, setSuggestionRefreshKey] = useState(0);
+  const [showReplyOptions, setShowReplyOptions] = useState(false);
   const [connectionRefreshing, setConnectionRefreshing] = useState(false);
   const platformChatIdRef = useRef<string | null>(null);
   const listRef = useRef<FlatList>(null);
@@ -148,12 +153,13 @@ export default function ChatScreen() {
   const displayName = is_group === '1'
     ? (chat_name || contact_name || 'Group')
     : (contact_name || chat_name || 'Unknown');
+  const resolvedPlatform = resolvePlatform(platform);
   const activeSession = connectedSessions.find(session => session.platform === (platform as Platform) && session.status === 'connected');
   const isConnected = !!activeSession;
   const contextCard = smartCards[0];
   const quickContext = contextCard?.subtitle || contextCard?.title || contactProfile?.ai_instruction || contactProfile?.relationship_context || null;
   const needsRelationshipContext = is_group !== '1' && !contactProfile?.relationship_context;
-  const showQuickContext = Boolean(quickContext || needsRelationshipContext);
+  const showQuickContext = Boolean(quickContext || needsRelationshipContext) && !showReplyOptions;
 
   const fetchMessages = useCallback(async () => {
     if (!user?.id || !chatId) {
@@ -173,7 +179,7 @@ export default function ChatScreen() {
         .select('id, chat_id, content, timestamp, from_me, contact_name, contact_phone, content_type, media_url, media_mime_type')
         .eq('chat_id', chatId)
         .eq('user_id', user.id)
-        .order('timestamp', { ascending: true })
+        .order('timestamp', { ascending: false })
         .limit(100);
       if (error) throw error;
       let loadedMessages = data || [];
@@ -269,7 +275,6 @@ export default function ChatScreen() {
             return [...prev, inserted];
           });
           if (!inserted.from_me) void markConversationRead();
-          setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
         }
       )
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages', filter: `chat_id=eq.${chatId}` },
@@ -294,19 +299,26 @@ export default function ChatScreen() {
   }, [chatId, user?.id, fetchMessages, markConversationRead, refreshConnection]);
 
   useEffect(() => {
+    void hydrateChatPreferences();
+  }, [hydrateChatPreferences]);
+
+  useEffect(() => {
     hasScrolledToHighlight.current = false;
   }, [highlightMessageId]);
 
+  const listData = useMemo(() => [...messages].reverse(), [messages]);
+  const lastInbound = useMemo(() => [...messages].reverse().find(message => !message.from_me), [messages]);
+
   useEffect(() => {
     if (!highlightMessageId || hasScrolledToHighlight.current) return;
-    const index = messages.findIndex(message => message.id === highlightMessageId);
+    const index = listData.findIndex(message => message.id === highlightMessageId);
     if (index < 0) return;
     const timer = setTimeout(() => {
       listRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.45 });
       hasScrolledToHighlight.current = true;
     }, 80);
     return () => clearTimeout(timer);
-  }, [messages, highlightMessageId]);
+  }, [listData, highlightMessageId]);
 
   // Clear error when user starts typing
   useEffect(() => {
@@ -348,7 +360,6 @@ export default function ChatScreen() {
     };
     setMessages((prev) => [...prev, optimistic]);
     setInputText('');
-    setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
 
     setSending(true);
     try {
@@ -519,12 +530,21 @@ export default function ChatScreen() {
         backgroundColor: colors.cream,
       }}>
         <MobileIconButton label="Back" onPress={() => router.back()}><ChevronLeft size={22} color={colors.ink} /></MobileIconButton>
-        <MobileAvatar name={displayName} size={40} isGroup={is_group === '1'} />
-        <View style={{ flex: 1 }}>
+        <MobileAvatar
+          name={displayName}
+          size={40}
+          isGroup={is_group === '1'}
+          badge={resolvedPlatform ? (
+            <View style={{ padding: 1, borderRadius: 10, borderWidth: 2, borderColor: colors.cream, backgroundColor: colors.paper }}>
+              <PlatformBadge platform={resolvedPlatform} size={14} />
+            </View>
+          ) : undefined}
+        />
+        <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
           <Text style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }} numberOfLines={1}>
             {displayName}
           </Text>
-          <Text style={{ ...mobileType.label, color: colors.neutral[600], textTransform: 'capitalize' }}>{platform || 'Conversation'}</Text>
+          <PlatformName platform={platform} size={13} />
         </View>
         <MobileIconButton
           label="Conversation settings"
@@ -539,7 +559,7 @@ export default function ChatScreen() {
         <View style={{ width: 28, height: 28, borderRadius: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.lime }}><Sparkles size={15} color={colors.ink} /></View>
         <View style={{ flex: 1, minWidth: 0 }}><Text maxFontSizeMultiplier={1} style={{ ...mobileType.monoLabel, color: colors.ink }}>QUICK CONTEXT</Text><Text maxFontSizeMultiplier={1} numberOfLines={1} style={{ ...mobileType.bodySmall, color: colors.ink }}>{quickContext || 'Add relationship context for more personal replies.'}</Text></View>
         {contextCard ? <Pressable accessibilityRole="button" accessibilityLabel="Dismiss quick context" onPress={() => void dismissCard(chatId!, contextCard.id)} hitSlop={8} style={{ width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }}><X size={17} color={colors.neutral[600]} /></Pressable> : null}
-        <Pressable onPress={() => needsRelationshipContext && !quickContext ? router.push({ pathname: '/chat/settings/[chatId]', params: { chatId: chatId!, platform, contact_name, chat_name, is_group } }) : router.push({ pathname: '/chat/assistant/[chatId]', params: { chatId: chatId!, name: displayName } })} style={({ pressed }) => ({ minHeight: 32, justifyContent: 'center', paddingHorizontal: space[2], borderRadius: radius.pill, borderWidth: 1, borderColor: colors.ink, backgroundColor: pressed ? colors.paper : 'transparent' })}><Text maxFontSizeMultiplier={1} style={{ ...mobileType.label, color: colors.ink }}>{needsRelationshipContext && !quickContext ? 'Set up' : 'Ask Claire'}</Text></Pressable>
+        <Pressable testID="ask-claire-button" onPress={() => needsRelationshipContext && !quickContext ? router.push({ pathname: '/chat/settings/[chatId]', params: { chatId: chatId!, platform, contact_name, chat_name, is_group } }) : router.push({ pathname: '/chat/assistant/[chatId]', params: { chatId: chatId!, name: displayName } })} style={({ pressed }) => ({ minHeight: 32, justifyContent: 'center', paddingHorizontal: space[2], borderRadius: radius.pill, borderWidth: 1, borderColor: colors.ink, backgroundColor: pressed ? colors.paper : 'transparent' })}><Text maxFontSizeMultiplier={1} style={{ ...mobileType.label, color: colors.ink }}>{needsRelationshipContext && !quickContext ? 'Set up' : 'Ask Claire'}</Text></Pressable>
       </View> : <View style={{ height: space[2] }} />}
 
       <KeyboardAvoidingView
@@ -559,20 +579,19 @@ export default function ChatScreen() {
         ) : (
           <FlatList
             ref={listRef}
-            data={messages}
+            data={listData}
+            inverted
             renderItem={renderMessage}
             keyExtractor={(item) => item.id}
             testID="chat-message-list"
             contentContainerStyle={{ paddingVertical: space[3] }}
-            onContentSizeChange={() => { if (!highlightMessageId) listRef.current?.scrollToEnd({ animated: false }); }}
-            onLayout={() => { if (!highlightMessageId) listRef.current?.scrollToEnd({ animated: false }); }}
+            keyboardShouldPersistTaps="handled"
             onScrollToIndexFailed={({ index, averageItemLength }) => {
               listRef.current?.scrollToOffset({ offset: Math.max(0, index * averageItemLength), animated: false });
               setTimeout(() => listRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.45 }), 100);
             }}
-            keyboardShouldPersistTaps="handled"
             ListEmptyComponent={
-              <View style={{ flex: 1, alignItems: 'center', paddingTop: 60 }} testID="chat-empty">
+              <View style={{ transform: [{ scaleY: -1 }], alignItems: 'center', paddingTop: 60 }} testID="chat-empty">
                 <Text style={{ ...mobileType.body, color: colors.neutral[400] }}>No messages yet</Text>
               </View>
             }
@@ -580,19 +599,16 @@ export default function ChatScreen() {
         )}
 
         {/* AI Response Suggestions / Draft reply button */}
-        {messages.filter(m => !m.from_me).length > 0 && (() => {
-          const lastInbound = [...messages].reverse().find(m => !m.from_me);
-          return (
-            <ResponseSuggestion
-              key={`${lastInbound?.id ?? ''}-${suggestionRefreshKey}`}
-              messageId={lastInbound?.id ?? ''}
-              messageContent={lastInbound?.content}
-              isGroup={is_group === '1'}
-              refreshKey={suggestionRefreshKey}
-              onSelectSuggestion={(text) => setInputText(text)}
-            />
-          );
-        })()}
+        {showReplyOptions && lastInbound ? (
+          <ResponseSuggestion
+            key={`${lastInbound.id}-${suggestionRefreshKey}`}
+            messageId={lastInbound.id}
+            messageContent={lastInbound.content}
+            isGroup={is_group === '1'}
+            refreshKey={suggestionRefreshKey}
+            onSelectSuggestion={(text) => setInputText(text)}
+          />
+        ) : null}
 
         {/* Error display */}
         {sendError && (
@@ -611,11 +627,18 @@ export default function ChatScreen() {
         )}
 
         <View style={{ paddingHorizontal: space[3], paddingTop: space[2], paddingBottom: Math.max(insets.bottom, space[2]), borderTopWidth: 1, borderTopColor: colors.neutral[200], backgroundColor: colors.cream }}>
-          {!isConnected && platform ? <Pressable testID="chat-reconnect" accessibilityRole="button" onPress={() => router.push('/connections')} style={({ pressed }) => ({ minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space[2], borderRadius: 16, borderWidth: 1, borderColor: colors.warning, backgroundColor: pressed ? colors.warningSurface : colors.paper, opacity: connectionRefreshing ? 0.65 : 1 })}><Link2 size={18} color={colors.warning} /><Text maxFontSizeMultiplier={1} style={{ ...mobileType.bodySmall, fontWeight: '700', color: colors.warning }}>{connectionRefreshing ? 'Checking connection…' : `Reconnect ${platform}`}</Text></Pressable> : <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: space[2], padding: 7, borderWidth: 1, borderColor: colors.neutral[200], borderRadius: 18, backgroundColor: colors.paper, boxShadow: '0 5px 15px rgba(16,18,15,0.08)' }}>
-            <Pressable disabled accessibilityRole="button" accessibilityLabel="Attachments coming soon" style={{ width: 38, height: 38, alignItems: 'center', justifyContent: 'center', borderRadius: 12, backgroundColor: colors.neutral[100], opacity: 0.6 }}><Plus size={19} color={colors.neutral[400]} /></Pressable>
-            <TextInput maxFontSizeMultiplier={1} style={{ flex: 1, minHeight: 40, maxHeight: 110, paddingHorizontal: space[2], paddingVertical: 9, ...mobileType.body, color: colors.ink }} placeholder="Write a message…" placeholderTextColor={colors.neutral[400]} value={inputText} onChangeText={setInputText} multiline blurOnSubmit={false} testID="chat-input" />
-            <Pressable onPress={() => void handleSend()} disabled={!inputText.trim() || sending} testID="chat-send-button" accessibilityRole="button" accessibilityLabel="Send message" style={({ pressed }) => ({ width: 40, height: 40, borderRadius: 13, justifyContent: 'center', alignItems: 'center', backgroundColor: inputText.trim() && !sending ? colors.ink : colors.neutral[200], opacity: pressed ? 0.72 : 1 })}>{sending ? <ActivityIndicator size="small" color={colors.lime} /> : <SendHorizonal size={18} color={inputText.trim() ? colors.lime : colors.neutral[400]} />}</Pressable>
-          </View>}
+          {!isConnected && platform ? <Pressable testID="chat-reconnect" accessibilityRole="button" onPress={() => router.push('/connections')} style={({ pressed }) => ({ minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space[2], borderRadius: 16, borderWidth: 1, borderColor: colors.warning, backgroundColor: pressed ? colors.warningSurface : colors.paper, opacity: connectionRefreshing ? 0.65 : 1 })}><Link2 size={18} color={colors.warning} /><Text maxFontSizeMultiplier={1} style={{ ...mobileType.bodySmall, fontWeight: '700', color: colors.warning }}>{connectionRefreshing ? 'Checking connection…' : `Reconnect ${platform}`}</Text></Pressable> : (
+            <ChatComposer
+              value={inputText}
+              onChangeText={setInputText}
+              onSend={() => void handleSend()}
+              sending={sending}
+              plusDefault={plusDefault}
+              replyOptionsVisible={showReplyOptions}
+              onToggleReplyOptions={lastInbound ? () => setShowReplyOptions((open) => !open) : undefined}
+              blurOnSubmit={false}
+            />
+          )}
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>

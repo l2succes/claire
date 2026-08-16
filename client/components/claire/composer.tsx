@@ -1,7 +1,10 @@
 import { useState, type ReactNode } from 'react';
 import { ActivityIndicator, Pressable, Text, TextInput, View, type StyleProp, type TextInputProps, type ViewStyle } from 'react-native';
-import { AtSign, Filter, List, MessageCircle, Plus, Search, SendHorizonal, Smile, Trash2, ArrowUpRight } from 'lucide-react-native';
+import { AtSign, Filter, List, MessageCircle, Plus, Search, SendHorizonal, Smile, Sparkles, Trash2, ArrowUpRight } from 'lucide-react-native';
 import { colors, mobileType, radius, space } from '@claire/design-system';
+import type { ChatPlusDefault } from '../../stores/chatPreferencesStore';
+
+const CONTROL = 36;
 
 export const ASK_TOOLS = [
   { id: 'catch-me-up', label: 'Catch me up', description: 'Summarize recent conversations.', prompt: 'Catch me up on the conversations that need my attention.' },
@@ -58,9 +61,11 @@ function ComposerBar({
   onSend,
   sending,
   onAddPress,
+  onAddLongPress,
   addIcon,
   sendIcon,
   addAccessibilityLabel,
+  addTestID,
   chips,
   menu,
   inputTestID,
@@ -72,9 +77,11 @@ function ComposerBar({
   onSend: () => void;
   sending?: boolean;
   onAddPress?: () => void;
+  onAddLongPress?: () => void;
   addIcon: ReactNode;
   sendIcon: ReactNode;
   addAccessibilityLabel: string;
+  addTestID?: string;
   chips?: ReactNode;
   menu?: ReactNode;
   inputTestID?: string;
@@ -86,8 +93,17 @@ function ComposerBar({
     <View style={style}>
       {chips}
       {menu}
-      <View style={{ minHeight: 48, flexDirection: 'row', alignItems: 'flex-end', gap: 6, paddingVertical: 6, paddingHorizontal: 8, borderWidth: 1, borderColor: colors.neutral[200], borderRadius: 18, backgroundColor: colors.paper, boxShadow: '0 5px 15px rgba(16,18,15,0.08)' }}>
-        <Pressable accessibilityRole="button" accessibilityLabel={addAccessibilityLabel} onPress={onAddPress} style={{ width: 26, height: 26, marginBottom: 4, borderRadius: 13, backgroundColor: colors.neutral[100], alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6, paddingHorizontal: 8, borderWidth: 1, borderColor: colors.neutral[200], borderRadius: 18, backgroundColor: colors.paper, boxShadow: '0 5px 15px rgba(16,18,15,0.08)' }}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={addAccessibilityLabel}
+          accessibilityHint="Touch and hold to switch between attachments and reply options"
+          onPress={onAddPress}
+          onLongPress={onAddLongPress}
+          delayLongPress={320}
+          testID={addTestID}
+          style={{ width: CONTROL, height: CONTROL, borderRadius: 12, backgroundColor: colors.neutral[100], alignItems: 'center', justifyContent: 'center' }}
+        >
           {addIcon}
         </Pressable>
         <TextInput
@@ -98,10 +114,18 @@ function ComposerBar({
           placeholderTextColor={colors.neutral[400]}
           multiline
           maxFontSizeMultiplier={1}
+          textAlignVertical="center"
           testID={inputTestID}
-          style={{ flex: 1, minHeight: 32, maxHeight: 88, paddingHorizontal: space[1], paddingVertical: 6, ...mobileType.body, color: colors.ink }}
+          style={{ flex: 1, minHeight: CONTROL, maxHeight: 110, paddingHorizontal: space[1], paddingTop: 8, paddingBottom: 8, ...mobileType.body, color: colors.ink }}
         />
-        <Pressable accessibilityRole="button" accessibilityLabel={variant === 'ask' ? 'Ask Claire' : 'Send message'} disabled={!armed} onPress={onSend} testID={sendTestID} style={{ width: 28, height: 28, marginBottom: 3, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: armed ? colors.ink : colors.neutral[200] }}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={variant === 'ask' ? 'Ask Claire' : 'Send message'}
+          disabled={!armed}
+          onPress={onSend}
+          testID={sendTestID}
+          style={{ width: CONTROL, height: CONTROL, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: armed ? colors.ink : colors.neutral[200] }}
+        >
           {sending ? <ActivityIndicator size="small" color={colors.lime} /> : sendIcon}
         </Pressable>
       </View>
@@ -140,25 +164,52 @@ export function ChatComposer({
   onChangeText,
   onSend,
   sending,
+  plusDefault = 'menu',
+  replyOptionsVisible = false,
+  onToggleReplyOptions,
   style,
   ...inputProps
-}: Omit<TextInputProps, 'style'> & { onSend: () => void; sending?: boolean; style?: StyleProp<ViewStyle> }) {
+}: Omit<TextInputProps, 'style'> & {
+  onSend: () => void;
+  sending?: boolean;
+  plusDefault?: ChatPlusDefault;
+  replyOptionsVisible?: boolean;
+  onToggleReplyOptions?: () => void;
+  style?: StyleProp<ViewStyle>;
+}) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const toggleMenu = () => setMenuOpen((open) => !open);
+  const toggleReplyOptions = () => {
+    setMenuOpen(false);
+    onToggleReplyOptions?.();
+  };
+  const onAddPress = () => plusDefault === 'menu' ? toggleMenu() : toggleReplyOptions();
+  const onAddLongPress = () => plusDefault === 'menu' ? toggleReplyOptions() : toggleMenu();
   const actions: ComposerAction[] = [
+    ...(onToggleReplyOptions ? [{
+      id: 'reply-options',
+      label: replyOptionsVisible ? 'Hide reply options' : 'Reply options',
+      description: replyOptionsVisible ? 'Put Claire’s drafts away.' : 'Claire drafts a few ways to answer.',
+      icon: <Sparkles size={13} color={colors.ink} />,
+      onPress: toggleReplyOptions,
+    }] : []),
     { id: 'photo', label: 'Attach a photo', description: 'Coming soon.', disabled: true, icon: <Plus size={13} color={colors.neutral[600]} />, onPress: () => undefined },
     { id: 'file', label: 'Attach a file', description: 'Coming soon.', disabled: true, icon: <Plus size={13} color={colors.neutral[600]} />, onPress: () => undefined },
   ];
+  const armed = Boolean(value?.toString().trim()) && !sending;
   return (
     <ComposerBar
       variant="chat"
       value={value}
       onChangeText={onChangeText}
-      onSend={onSend}
+      onSend={() => { setMenuOpen(false); onSend(); }}
       sending={sending}
-      onAddPress={() => setMenuOpen((open) => !open)}
-      addIcon={<Plus size={13} color={colors.ink} strokeWidth={2.2} />}
-      sendIcon={<SendHorizonal size={13} color={value?.toString().trim() && !sending ? colors.lime : colors.neutral[400]} />}
-      addAccessibilityLabel="Chat actions"
+      onAddPress={onAddPress}
+      onAddLongPress={onAddLongPress}
+      addIcon={<Plus size={18} color={colors.ink} strokeWidth={2.2} />}
+      sendIcon={<SendHorizonal size={18} color={armed ? colors.lime : colors.neutral[400]} strokeWidth={2.2} />}
+      addAccessibilityLabel={plusDefault === 'menu' ? 'Chat actions' : 'Reply options'}
+      addTestID="chat-composer-add"
       menu={menuOpen ? <ComposerMenu items={actions} testID="chat-composer-menu" /> : null}
       inputTestID="chat-input"
       sendTestID="chat-send-button"
@@ -232,8 +283,8 @@ export function AskComposer({
       onSend={() => { setMenuOpen(false); onSend(); }}
       sending={sending}
       onAddPress={() => setMenuOpen((open) => !open)}
-      addIcon={<Plus size={13} color={colors.ink} strokeWidth={2.2} />}
-      sendIcon={<SendHorizonal size={13} color={value?.toString().trim() && !sending ? colors.lime : colors.neutral[400]} />}
+      addIcon={<Plus size={18} color={colors.ink} strokeWidth={2.2} />}
+      sendIcon={<SendHorizonal size={18} color={value?.toString().trim() && !sending ? colors.lime : colors.neutral[400]} strokeWidth={2.2} />}
       addAccessibilityLabel="Claire chat actions"
       chips={chips}
       menu={menuOpen ? <ComposerMenu items={actions} testID="ask-composer-menu" /> : null}

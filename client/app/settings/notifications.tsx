@@ -5,10 +5,12 @@
  * Persists to /preferences on the server.
  */
 
-import { View, Text, ScrollView, Switch, TouchableOpacity, ActivityIndicator, Alert, Linking, Platform } from 'react-native';
+import { View, Text, ScrollView, Switch, TouchableOpacity, ActivityIndicator, Alert, Linking, Platform, Pressable } from 'react-native';
 import { useState, useEffect } from 'react';
 import { router } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
+import { colors, mobileType, radius } from '@claire/design-system';
+import { MobileHeader, MobileIconButton } from '../../components/mobile/claire-mobile';
 import { supabase } from '../../services/supabase';
 import { API_BASE_URL } from '../../services/platforms';
 import { getNativeNotificationPermission, registerNotificationDevice, requestWebNotificationPermission, supportsWebNotifications } from '../../services/notifications';
@@ -257,28 +259,17 @@ export default function NotificationsSettingsScreen() {
       className="flex-1 bg-gray-50 dark:bg-gray-900"
       testID="notifications-settings-screen"
     >
+      <MobileHeader
+        title="Notifications"
+        subtitle="Alerts, badges, and quiet hours."
+        leading={<MobileIconButton label="Back to Settings" testID="notifications-settings-back" onPress={() => router.back()}><ChevronLeft size={20} color={colors.ink} /></MobileIconButton>}
+        actions={
+          <Pressable testID="notifications-settings-save" onPress={() => void handleSave()} disabled={saving} style={{ minHeight: 36, paddingHorizontal: 14, borderRadius: radius.pill, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center', opacity: saving ? 0.6 : 1 }}>
+            {saving ? <ActivityIndicator size="small" color={colors.lime} /> : <Text style={{ ...mobileType.label, color: colors.paper }}>Save</Text>}
+          </Pressable>
+        }
+      />
       <View className="p-4">
-        {/* Header */}
-        <View className="flex-row items-center mb-6">
-          <TouchableOpacity onPress={() => router.back()} className="mr-3" testID="notifications-settings-back">
-            <ChevronLeft size={24} color="#6b7280" />
-          </TouchableOpacity>
-          <Text className="text-2xl font-bold text-gray-900 dark:text-white flex-1">
-            Notifications
-          </Text>
-          <TouchableOpacity
-            onPress={handleSave}
-            disabled={saving}
-            className="bg-green-500 px-4 py-2 rounded-full"
-            testID="notifications-settings-save"
-          >
-            {saving ? (
-              <ActivityIndicator size="small" color="white" />
-            ) : (
-              <Text className="text-white font-semibold">Save</Text>
-            )}
-          </TouchableOpacity>
-        </View>
 
         {/* DND — master kill-switch */}
         <Text className="text-lg font-semibold text-gray-900 dark:text-white mb-3">

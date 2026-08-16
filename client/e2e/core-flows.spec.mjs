@@ -684,6 +684,11 @@ async function signIn(page) {
   await page.waitForURL('**/dashboard', { timeout: 15_000 });
 }
 
+async function openReplyOptions(page) {
+  await page.getByTestId('chat-composer-add').click();
+  await page.getByTestId('composer-action-reply-options').click();
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -778,6 +783,7 @@ test.describe('Core loop — mock backend', () => {
     await page.locator('[data-testid^="message-card-"]').first().click();
 
     await expect(page.getByTestId('chat-screen')).toBeVisible({ timeout: 10_000 });
+    await openReplyOptions(page);
 
     // ResponseSuggestion renders suggestion text fetched from ai_suggestions table
     await expect(
@@ -795,6 +801,7 @@ test.describe('Core loop — mock backend', () => {
     await page.locator('[data-testid^="message-card-"]').first().click();
 
     await expect(page.getByTestId('chat-screen')).toBeVisible({ timeout: 10_000 });
+    await openReplyOptions(page);
 
     // Wait for the suggestion strip to appear
     await expect(page.getByTestId('ai-suggestion-strip')).toBeVisible({ timeout: 10_000 });
@@ -819,6 +826,7 @@ test.describe('Core loop — mock backend', () => {
     await page.locator('[data-testid^="message-card-"]').first().click();
 
     await expect(page.getByTestId('chat-screen')).toBeVisible({ timeout: 10_000 });
+    await openReplyOptions(page);
     await expect(page.getByTestId('ai-suggestion-strip')).toBeVisible({ timeout: 10_000 });
 
     // Both suggestion chips should be present (fixture has 2 suggestions)
@@ -843,6 +851,7 @@ test.describe('Core loop — mock backend', () => {
     await page.locator('[data-testid^="message-card-"]').first().click();
 
     await expect(page.getByTestId('chat-screen')).toBeVisible({ timeout: 10_000 });
+    await openReplyOptions(page);
     await expect(page.getByTestId('ai-suggestion-strip')).toBeVisible({ timeout: 10_000 });
 
     // Accept a suggestion (fills the composer)
@@ -906,6 +915,7 @@ test.describe('Core loop — mock backend', () => {
 
     await expect(page.getByTestId('chat-screen')).toBeVisible({ timeout: 10_000 });
     await expect(page.getByTestId('chat-message-list')).toBeVisible({ timeout: 8_000 });
+    await openReplyOptions(page);
 
     await expect(page.getByTestId('ai-suggestion-scroll')).toBeVisible({ timeout: 8_000 });
     await expect(page.getByTestId('draft-reply-button')).toHaveCount(0);

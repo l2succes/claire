@@ -5,10 +5,12 @@
  * which are persisted server-side and injected into AI prompt context.
  */
 
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, TextInput } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, TextInput, Pressable } from 'react-native';
 import { useState, useEffect } from 'react';
 import { router } from 'expo-router';
 import { ChevronLeft, Check } from 'lucide-react-native';
+import { colors, mobileType, radius } from '@claire/design-system';
+import { MobileHeader, MobileIconButton } from '../../components/mobile/claire-mobile';
 import { supabase } from '../../services/supabase';
 import { API_BASE_URL } from '../../services/platforms';
 
@@ -159,28 +161,17 @@ export default function AISettingsScreen() {
       className="flex-1 bg-gray-50 dark:bg-gray-900"
       testID="ai-settings-screen"
     >
+      <MobileHeader
+        title="AI Settings"
+        subtitle="How Claire should sound when it drafts a reply."
+        leading={<MobileIconButton label="Back to Settings" testID="ai-settings-back" onPress={() => router.back()}><ChevronLeft size={20} color={colors.ink} /></MobileIconButton>}
+        actions={
+          <Pressable testID="ai-settings-save" onPress={() => void handleSave()} disabled={saving} style={{ minHeight: 36, paddingHorizontal: 14, borderRadius: radius.pill, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center', opacity: saving ? 0.6 : 1 }}>
+            {saving ? <ActivityIndicator size="small" color={colors.lime} /> : <Text style={{ ...mobileType.label, color: colors.paper }}>Save</Text>}
+          </Pressable>
+        }
+      />
       <View className="p-4">
-        {/* Header */}
-        <View className="flex-row items-center mb-6">
-          <TouchableOpacity onPress={() => router.back()} className="mr-3" testID="ai-settings-back">
-            <ChevronLeft size={24} color="#6b7280" />
-          </TouchableOpacity>
-          <Text className="text-2xl font-bold text-gray-900 dark:text-white flex-1">
-            AI Settings
-          </Text>
-          <TouchableOpacity
-            onPress={handleSave}
-            disabled={saving}
-            className="bg-green-500 px-4 py-2 rounded-full"
-            testID="ai-settings-save"
-          >
-            {saving ? (
-              <ActivityIndicator size="small" color="white" />
-            ) : (
-              <Text className="text-white font-semibold">Save</Text>
-            )}
-          </TouchableOpacity>
-        </View>
 
         {/* Tone Section */}
         <Text className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
