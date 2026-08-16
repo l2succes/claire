@@ -1,0 +1,44 @@
+name: Bug report
+description: Something is broken in Claire
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: Search existing issues first. Do not include secrets, tokens, or production hostnames.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - mobile
+        - desktop
+        - server
+        - website
+        - docs
+        - plugins
+        - connectors
+        - infra
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Commit or version

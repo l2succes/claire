@@ -14,6 +14,6 @@ module.exports = {
     'no-console': ['warn', { allow: ['warn', 'error'] }],
     'no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
   },
-  // TypeScript linting is handled by server/.eslintrc.js and client/.eslintrc.js
-  ignorePatterns: ['server/**/*', 'client/**/*'],
+  // TypeScript linting is handled by server/.eslintrc.js and mobile/.eslintrc.js
+  ignorePatterns: ['server/**/*', 'mobile/**/*'],
 };

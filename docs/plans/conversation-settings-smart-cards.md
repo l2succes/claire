@@ -71,9 +71,9 @@ Post-migration: `NOTIFY pgrst, 'reload schema';`
 
 ## New Client Screen
 
-### Route: `client/app/chat/settings/[chatId].tsx`
+### Route: `mobile/app/chat/settings/[chatId].tsx`
 
-**Entry point**: Add an info/settings icon to the chat header in `client/app/chat/[chatId].tsx` (line ~header area). Tapping navigates:
+**Entry point**: Add an info/settings icon to the chat header in `mobile/app/chat/[chatId].tsx` (line ~header area). Tapping navigates:
 ```ts
 router.push({ pathname: '/chat/settings/[chatId]', params: { chatId, platform, contact_name, chat_name, is_group } });
 ```
@@ -93,7 +93,7 @@ router.push({ pathname: '/chat/settings/[chatId]', params: { chatId, platform, c
 
 ## New Components
 
-All in `client/components/`:
+All in `mobile/components/`:
 
 | Component | Purpose |
 |-----------|---------|
@@ -406,9 +406,9 @@ Cards are generated on: category set/change, manual "refresh", and (later) on ne
 
 ---
 
-## Client State Management
+## Mobile State Management
 
-### New store: `client/stores/conversationSettingsStore.ts`
+### New store: `mobile/stores/conversationSettingsStore.ts`
 
 Zustand store (following existing pattern from `platformStore.ts`):
 
@@ -432,8 +432,8 @@ Reads use Supabase client directly. Writes go through server API routes (for AI 
 
 ### Phase 1: Foundation (DB + Screen + Category Picker)
 1. Create migration SQL, apply to Supabase
-2. Create `client/app/chat/settings/[chatId].tsx` with basic layout
-3. Add settings icon to `client/app/chat/[chatId].tsx` header
+2. Create `mobile/app/chat/settings/[chatId].tsx` with basic layout
+3. Add settings icon to `mobile/app/chat/[chatId].tsx` header
 4. Build `CategoryPicker.tsx` and `EditableField.tsx`
 5. Implement direct Supabase reads/writes for category + profile (no server routes yet)
 
@@ -452,7 +452,7 @@ Reads use Supabase client directly. Writes go through server API routes (for AI 
 
 ### Phase 4: Smart Cards in Chat Screen + AI Integration
 1. Build `ChatSmartCardTray.tsx` (see section below)
-2. Integrate tray into `client/app/chat/[chatId].tsx` between FlatList and input bar
+2. Integrate tray into `mobile/app/chat/[chatId].tsx` between FlatList and input bar
 3. Modify `context-builder.ts` to include category
 4. Add category-specific prompt templates
 5. Modify `ai-processor.ts` for category-aware suggestions
@@ -461,9 +461,9 @@ Reads use Supabase client directly. Writes go through server API routes (for AI 
 
 ## Smart Cards in Chat Screen — Detailed Spec
 
-**File**: `client/app/chat/[chatId].tsx` (modify existing)
+**File**: `mobile/app/chat/[chatId].tsx` (modify existing)
 
-**New component**: `client/components/ChatSmartCardTray.tsx`
+**New component**: `mobile/components/ChatSmartCardTray.tsx`
 
 ### Placement
 
@@ -529,7 +529,7 @@ Actions that **open external apps**:
 
 After any CTA tap, the card animates out (slide left + fade, 200ms) and is marked `acted_on=true`.
 
-### Integration into `client/app/chat/[chatId].tsx`
+### Integration into `mobile/app/chat/[chatId].tsx`
 
 Changes to the existing file:
 
@@ -548,7 +548,7 @@ Changes to the existing file:
    ```
 5. The `onDraftMessage` callback sets the existing `inputText` state, which the TextInput already reads from.
 
-### New component file: `client/components/ChatSmartCardTray.tsx`
+### New component file: `mobile/components/ChatSmartCardTray.tsx`
 
 Props:
 ```ts

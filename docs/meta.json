@@ -1,0 +1,17 @@
+{
+  "title": "Claire Docs",
+  "source": "canonical",
+  "website": "website/content/docs",
+  "pages": [
+    "getting-started/repository-setup.md",
+    "architecture/overview.md",
+    "guides/mobile.md",
+    "guides/desktop.md",
+    "guides/plugins.md",
+    "guides/testing.md",
+    "guides/self-hosting.md",
+    "reference/environment.md",
+    "contributing/workflow.md",
+    "product/roadmap.md"
+  ]
+}

@@ -1,0 +1,29 @@
+title = "Claire secret scanning"
+
+[extend]
+useDefault = true
+
+# Official local Supabase demo JWTs (iss: supabase-demo) shipped by supabase/postgres.
+# These are public local-stack defaults, not production credentials.
+[[allowlists]]
+description = "Local Docker Supabase demo JWTs and documented placeholders"
+paths = [
+  '''docker/supabase/volumes/api/kong.yml''',
+  '''.github/workflows/nightly-e2e.yml''',
+  '''server/\.env\.example''',
+  '''server/\.env\.test''',
+  '''mobile/\.env\.example''',
+  '''client/\.env\.example''',  # historical path before the mobile rename
+  '''\.env\.production\.example''',
+]
+
+[[allowlists]]
+description = "Standard local Docker JWT secret and postgres defaults"
+regexes = [
+  '''super-secret-jwt-token-with-at-least-32-characters-long''',
+  '''your-supabase-anon-key''',
+  '''your-supabase-service-role-key''',
+  '''test-service-key''',
+  '''test-anon-key''',
+  '''sk-your-openai-api-key''',
+]

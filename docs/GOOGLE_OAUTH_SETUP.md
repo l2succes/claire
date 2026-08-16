@@ -32,9 +32,9 @@ This guide explains how to set up Google OAuth authentication with Supabase for 
    - Application type: "Web application"
    - Name: "Claire Supabase Auth"
    - Authorized JavaScript origins:
-     - Add: `https://khhvrwomoghmwhfxlnky.supabase.co` (your Supabase URL)
+     - Add: `https://<your-project-ref>.supabase.co`
    - Authorized redirect URIs:
-     - Add: `https://khhvrwomoghmwhfxlnky.supabase.co/auth/v1/callback`
+     - Add: `https://<your-project-ref>.supabase.co/auth/v1/callback`
    - Click "Create"
 
 6. Copy the Client ID and Client Secret
@@ -56,7 +56,7 @@ This guide explains how to set up Google OAuth authentication with Supabase for 
    - Additional redirect URLs:
      - `http://localhost:3000` (for development)
      - `claire://auth/callback` (for mobile deep linking)
-     - `exp://192.168.68.100:8081` (for Expo development - replace with your IP)
+     - `exp://<your-lan-ip>:8081` (for Expo development)
 
 6. Save the configuration
 
@@ -66,7 +66,7 @@ This guide explains how to set up Google OAuth authentication with Supabase for 
 
 1. Start the app:
    ```bash
-   cd client
+   cd mobile
    bun run ios
    ```
 
@@ -81,8 +81,8 @@ This guide explains how to set up Google OAuth authentication with Supabase for 
 ### Important URLs
 
 - **Redirect URI in app**: `claire://auth/callback`
-- **Supabase callback**: `https://khhvrwomoghmwhfxlnky.supabase.co/auth/v1/callback`
-- **Development redirect**: `exp://192.168.68.100:8081/auth/callback` (replace IP with yours)
+- **Supabase callback**: `https://<your-project-ref>.supabase.co/auth/v1/callback`
+- **Development redirect**: `exp://<your-lan-ip>:8081/auth/callback`
 
 ## Step 4: Production Setup
 

@@ -7,8 +7,8 @@ Claire runs across three environments. This guide covers switching between them.
 | Environment | API Server | Supabase | When to use |
 |---|---|---|---|
 | **local-sim** | `localhost:3001` | `localhost:8000` | Simulator on Mac |
-| **local-device** | `192.168.68.101:3001` | `192.168.68.101:8000` | Physical iPhone on same WiFi |
-| **production** | Railway (`claire-production-1450.up.railway.app`) | Supabase Cloud | TestFlight / App Store |
+| **local-device** | `<your-lan-ip>:3001` | `<your-lan-ip>:8000` | Physical iPhone on same WiFi |
+| **production** | Your deployed API origin | Your Supabase or self-hosted gateway | TestFlight / App Store |
 
 ---
 
@@ -97,14 +97,14 @@ psql "$CLOUD_DB" < /tmp/claire_data.sql
 ### File structure
 
 ```
-client/
+mobile/
   .env.example          # Template — copy to .env.local and fill in values (committed)
   .env.local            # Your device overrides — NEVER commit (gitignored)
   .env.production       # Production keys — NEVER commit (gitignored)
   eas.json              # EAS build profiles
 ```
 
-> **Setup:** `cp client/.env.example client/.env.local` then fill in your values.
+> **Setup:** `cp mobile/.env.example mobile/.env.local` then fill in your values.
 
 Expo loads env files in this priority order (later = higher priority):
 ```
@@ -113,20 +113,20 @@ Expo loads env files in this priority order (later = higher priority):
 
 ### Mode 1: Simulator on Mac (default)
 
-`client/.env` already has `localhost` — just run:
+`mobile/.env` already has `localhost` — just run:
 
 ```bash
-cd client && bunx expo run:ios
+cd mobile && bunx expo run:ios
 ```
 
 ### Mode 2: Physical iPhone on WiFi
 
-Your Mac's current IP is `192.168.68.101` (re-run `ipconfig getifaddr en0` if it changes).
+Look up your Mac IP with `ipconfig getifaddr en0` (it changes).
 
-Edit `client/.env.local`:
+Edit `mobile/.env.local`:
 ```
-EXPO_PUBLIC_API_URL=http://192.168.68.101:3001
-EXPO_PUBLIC_SUPABASE_URL=http://192.168.68.101:8000  # or cloud URL
+EXPO_PUBLIC_API_URL=http://<your-lan-ip>:3001
+EXPO_PUBLIC_SUPABASE_URL=http://<your-lan-ip>:8000  # or cloud URL
 EXPO_PUBLIC_SUPABASE_ANON_KEY=...
 EXPO_PUBLIC_ENV=development
 ```
@@ -139,7 +139,7 @@ cd server && bun run --watch src/index.ts
 
 Then run the app — it picks up `.env.local` automatically:
 ```bash
-cd client && bunx expo run:ios --device
+cd mobile && bunx expo run:ios --device
 ```
 
 Or scan the QR code with Expo Go (if using Expo Go instead of custom dev build).
@@ -155,10 +155,10 @@ npm install -g eas-cli
 eas login
 
 # Build for internal testing (TestFlight-style)
-cd client && eas build --profile preview --platform ios
+cd mobile && eas build --profile preview --platform ios
 
 # Build for App Store
-cd client && eas build --profile production --platform ios
+cd mobile && eas build --profile production --platform ios
 ```
 
 ---
@@ -167,7 +167,7 @@ cd client && eas build --profile production --platform ios
 
 ```bash
 # Check what env vars the app sees right now
-cd client && bunx expo config --type introspect 2>/dev/null | grep EXPO_PUBLIC
+cd mobile && bunx expo config --type introspect 2>/dev/null | grep EXPO_PUBLIC
 
 # Switch server to use local .env
 cd server && bun run --watch src/index.ts
@@ -187,10 +187,10 @@ git push origin l2succes/unified-ai-messenger
 
 ## Current Status
 
-| Service | URL | Status |
+| Service | Typical local value | Notes |
 |---|---|---|
-| Railway server | `https://claire-production-1450.up.railway.app` | ✅ Live |
-| Railway Redis | (managed) | ✅ Connected |
-| Supabase (self-hosted) | `localhost:8000` (local only) | ⚠️ Needs public URL for Railway |
-| iOS Simulator | `localhost` | ✅ Works today |
-| Physical device | `192.168.68.101` | ✅ Works on same WiFi |
+| Claire API | `http://localhost:3001` | `bun run dev:server` |
+| Redis | managed locally or via Docker | Required for sessions |
+| Supabase (self-hosted) | `http://localhost:8000` | `bun run docker:supabase` |
+| iOS Simulator | `localhost` | Default Expo target |
+| Physical device | `<your-lan-ip>` | Use `.env.local`, never commit it |

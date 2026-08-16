@@ -62,7 +62,7 @@ railway login
 ### 3. Initialize Project
 
 ```bash
-cd /path/to/claire/.conductor/bismarck
+cd /path/to/claire
 railway init
 ```
 
@@ -78,13 +78,13 @@ Set in Railway dashboard or via CLI:
 
 ```bash
 # Required
-railway variables set SUPABASE_URL=https://xxx.supabase.co
-railway variables set SUPABASE_ANON_KEY=eyJ...
-railway variables set SUPABASE_SERVICE_KEY=eyJ...
-railway variables set DATABASE_URL=postgresql://...
-railway variables set JWT_SECRET=$(openssl rand -hex 32)
-railway variables set ENCRYPTION_KEY=$(openssl rand -hex 16)
-railway variables set OPENAI_API_KEY=sk-...
+railway variables set SUPABASE_URL="$SUPABASE_URL"
+railway variables set SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
+railway variables set SUPABASE_SERVICE_KEY="$SUPABASE_SERVICE_KEY"
+railway variables set DATABASE_URL="$DATABASE_URL"
+railway variables set JWT_SECRET="$(openssl rand -hex 32)"
+railway variables set ENCRYPTION_KEY="$(openssl rand -hex 16)"
+railway variables set OPENAI_API_KEY="$OPENAI_API_KEY"
 
 # Platform mode
 railway variables set PLATFORM_MODE=direct

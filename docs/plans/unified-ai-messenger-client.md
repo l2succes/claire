@@ -77,7 +77,7 @@ interface PlatformStore {
 }
 ```
 
-### Client-Side Types
+### Mobile-Side Types
 
 ```typescript
 type PlatformType = 'whatsapp' | 'telegram' | 'instagram' | 'imessage';

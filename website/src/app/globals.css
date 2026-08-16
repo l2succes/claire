@@ -1,0 +1,180 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+@import 'tailwindcss';
+@import '@claire/design-system/css/tokens.css';
+@import 'fumadocs-ui/css/neutral.css';
+@import 'fumadocs-ui/css/preset.css';
+
+@source '../../content/docs/**/*.{md,mdx}';
+@source '../**/*.{ts,tsx}';
+
+@theme inline {
+  --color-ink: var(--claire-ink);
+  --color-cream: var(--claire-cream);
+  --color-paper: var(--claire-paper);
+  --color-lime: var(--claire-lime);
+  --color-lime-hover: var(--claire-lime-hover);
+  --color-sky: var(--claire-sky);
+  --color-blush: var(--claire-blush);
+  --color-coral: var(--claire-coral);
+  --color-lavender: var(--claire-lavender);
+  --color-mint: var(--claire-mint);
+  --color-neutral-50: var(--neutral-50);
+  --color-neutral-100: var(--neutral-100);
+  --color-neutral-200: var(--neutral-200);
+  --color-neutral-400: var(--neutral-400);
+  --color-neutral-600: var(--neutral-600);
+  --color-neutral-800: var(--neutral-800);
+  --color-neutral-950: var(--neutral-950);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-focus: var(--focus);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+  --radius-pill: var(--radius-pill);
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+}
+
+:root {
+  --color-fd-background: var(--claire-cream);
+  --color-fd-foreground: var(--claire-ink);
+  --color-fd-muted: var(--neutral-100);
+  --color-fd-muted-foreground: var(--neutral-600);
+  --color-fd-popover: var(--claire-paper);
+  --color-fd-popover-foreground: var(--claire-ink);
+  --color-fd-card: var(--claire-paper);
+  --color-fd-card-foreground: var(--claire-ink);
+  --color-fd-border: var(--neutral-200);
+  --color-fd-primary: var(--claire-ink);
+  --color-fd-primary-foreground: var(--claire-paper);
+  --color-fd-secondary: var(--claire-lime);
+  --color-fd-secondary-foreground: var(--claire-ink);
+  --color-fd-accent: var(--claire-lime);
+  --color-fd-accent-foreground: var(--claire-ink);
+  --color-fd-ring: var(--focus);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--claire-cream);
+  color: var(--claire-ink);
+  font-family: var(--font-sans);
+}
+
+a:focus-visible,
+button:focus-visible,
+summary:focus-visible {
+  outline: 3px solid var(--claire-lime);
+  outline-offset: 3px;
+}
+
+.claire-underline {
+  position: relative;
+  z-index: 0;
+}
+
+.claire-underline::after {
+  content: '';
+  position: absolute;
+  height: 0.28em;
+  background: var(--claire-lime);
+  left: -0.04em;
+  right: -0.04em;
+  bottom: 0.04em;
+  z-index: -1;
+  transform: rotate(-1deg);
+  border-radius: 4px;
+}
+
+.faq-page {
+  padding: 72px 0 120px;
+}
+
+.faq-group {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 40px;
+  padding: 38px 0;
+  border-bottom: 1px solid var(--neutral-200);
+}
+
+.faq-group h2 {
+  margin: 5px 0;
+  font-size: 28px;
+  letter-spacing: -0.04em;
+}
+
+.faq-page details {
+  border-top: 1px solid var(--neutral-200);
+}
+
+.faq-page summary {
+  min-height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  font-weight: 700;
+  list-style: none;
+}
+
+.faq-page details p {
+  max-width: 680px;
+  margin: -4px 0 22px;
+  color: var(--neutral-600);
+  line-height: 1.6;
+}
+
+.legal-page {
+  margin: 70px auto 120px;
+  padding: 42px;
+  border: 1px solid var(--neutral-200);
+  border-radius: var(--radius-md);
+  background: var(--claire-paper);
+}
+
+.legal-page p {
+  max-width: 760px;
+  color: var(--neutral-600);
+  line-height: 1.65;
+}
+
+.not-found-page {
+  min-height: 70vh;
+  width: min(1240px, calc(100% - 48px));
+  margin: auto;
+  display: grid;
+  place-content: center;
+  justify-items: start;
+}
+
+.mockup-frame {
+  width: 100%;
+  min-height: 100vh;
+  border: 0;
+  display: block;
+  background: var(--claire-cream);
+}
+
+@media (max-width: 900px) {
+  .faq-group {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}

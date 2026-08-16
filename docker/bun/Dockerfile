@@ -29,7 +29,7 @@ WORKDIR /app
 # Copy package files
 COPY package.json bun.lockb* ./
 COPY server/package.json ./server/
-COPY client/package.json ./client/
+COPY mobile/package.json ./mobile/
 
 # Install dependencies with Bun
 RUN bun install

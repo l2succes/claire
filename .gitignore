@@ -28,9 +28,9 @@ lerna-debug.log*
 .env.test.local
 .env.production.local
 # Expo overrides / local backups that may hold real URLs / tokens
-client/.env.override
-client/.env.local.backup
-client/.env.production
+mobile/.env.override
+mobile/.env.local.backup
+mobile/.env.production
 # Explicit catch-all for real .env files in any subdirectory
 **/.env.production
 **/.env.local

@@ -26,9 +26,9 @@ jobs:
             working-directory: ./server
             # Server tests use bun's test runner (bun:test / mock.module).
             test-command: bun test
-          - name: Client Tests
-            working-directory: ./client
-            # Client tests use jest (bun test can't parse React Native's Flow syntax).
+          - name: Mobile Tests
+            working-directory: ./mobile
+            # Mobile tests use jest (bun test can't parse React Native's Flow syntax).
             test-command: bunx jest --coverage
 
     steps:
@@ -43,7 +43,7 @@ jobs:
         run: |
           bun install
           cd server && bun install
-          cd ../client && bun install
+          cd ../mobile && bun install
 
       - name: Run tests
         working-directory: ${{ matrix.working-directory }}
@@ -72,7 +72,7 @@ jobs:
         run: |
           bun install
           cd server && bun install
-          cd ../client && bun install
+          cd ../mobile && bun install
 
       - name: Run linting
         run: bun run lint
@@ -80,7 +80,7 @@ jobs:
       - name: Run type checking
         run: |
           cd server && bun run typecheck
-          cd ../client && bun run typecheck
+          cd ../mobile && bun run typecheck
 
   e2e:
     name: Mock end-to-end tests
@@ -95,15 +95,15 @@ jobs:
           bun-version: latest
 
       - name: Install client dependencies
-        working-directory: ./client
+        working-directory: ./mobile
         run: bun install
 
       - name: Install Playwright Chromium
-        working-directory: ./client
+        working-directory: ./mobile
         run: bunx playwright install --with-deps chromium
 
       - name: Run mock end-to-end tests
-        working-directory: ./client
+        working-directory: ./mobile
         env:
           MOCK_BRIDGE: "true"
         run: bunx playwright test
@@ -124,12 +124,12 @@ jobs:
         run: |
           bun install
           cd server && bun install
-          cd ../client && bun install
+          cd ../mobile && bun install
 
       - name: Build server
         working-directory: ./server
         run: bun run build
 
       - name: Build client for web
-        working-directory: ./client
+        working-directory: ./mobile
         run: bunx expo export -p web
