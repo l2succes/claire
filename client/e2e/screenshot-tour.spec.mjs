@@ -205,7 +205,7 @@ test.describe('Visual tour', () => {
       const el = document.getElementById('error-toast');
       if (el) el.style.pointerEvents = 'none';
     });
-    await page.click('text=Promises');
+    await page.getByTestId('tab-promises').click();
     await expect(page.getByTestId('promises-screen')).toBeVisible({ timeout: 10_000 });
     await page.waitForTimeout(500);
     await page.screenshot({ path: `${SCREENSHOTS_DIR}/07-promises.png` });

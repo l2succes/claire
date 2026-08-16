@@ -320,7 +320,7 @@ export default function NotificationsSettingsScreen() {
           </TouchableOpacity>
         )}
         <ToggleRow
-          label="Promise reminders"
+          label="Loop reminders"
           value={prefs.notify_promises}
           onValueChange={(v) => update({ notify_promises: v })}
           testID="notif-toggle-promises"

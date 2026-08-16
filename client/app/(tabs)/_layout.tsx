@@ -71,7 +71,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="promises"
         options={{
-          title: 'Promises',
+          title: 'Loops',
           tabBarBadge: openPromiseCount && openPromiseCount > 0 ? (openPromiseCount > 99 ? '99+' : openPromiseCount) : undefined,
         }}
       />

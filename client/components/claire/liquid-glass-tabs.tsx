@@ -22,7 +22,7 @@ export function LiquidGlassTabs({ promiseCount }: { promiseCount?: number }) {
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="promises" disableTransparentOnScrollEdge>
         <NativeTabs.Trigger.Icon sf={{ default: 'checkmark.seal', selected: 'checkmark.seal.fill' }} md="verified" />
-        <NativeTabs.Trigger.Label hidden>Promises</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Label hidden>Loops</NativeTabs.Trigger.Label>
         {promiseCount && promiseCount > 0 ? (
           <NativeTabs.Trigger.Badge>{promiseCount > 99 ? '99+' : String(promiseCount)}</NativeTabs.Trigger.Badge>
         ) : null}
