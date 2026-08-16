@@ -16,24 +16,20 @@
     />
     <link rel="stylesheet" href="./tokens.css" />
     <link rel="stylesheet" href="./design-docs.css" />
+    <link rel="stylesheet" href="./lab-nav.css" />
     <link rel="icon" href="./assets/brand/claire-app-icon.svg" type="image/svg+xml" />
     <script src="./heroicons.js" defer></script>
   </head>
   <body>
-    <header class="docs-header">
-      <a class="docs-brand" href="./index.html"><img class="docs-brand-mark" src="./assets/brand/claire-app-icon-lime.svg" alt="" />claire <span>/ design system</span></a>
-      <nav class="docs-links">
-        <a href="./index.html">Landing</a><a class="active" href="./style-guide.html">Style guide</a
-        ><a href="./logo-explorations.html">Logo lab</a><a href="./app-mockups.html">Mobile</a
-        ><a href="./desktop-mockups.html">Desktop ↗</a>
-      </nav>
-    </header>
+    <header data-lab-nav="style"></header>
+    <script src="./lab-nav.js"></script>
     <div class="docs-shell">
       <aside class="docs-sidebar">
         <small>FOUNDATIONS</small>
         <nav>
           <a href="#principles">Principles</a><a href="#color">Color</a
           ><a href="#type">Typography</a><a href="#foundations">Spacing & form</a
+          ><a href="#surfaces">Surfaces</a
           ><a href="#components">Components</a><a href="#voice">Voice</a>
         </nav>
       </aside>
@@ -68,7 +64,7 @@
             </div>
           </div>
           <div class="color-grid">
-            <div class="swatch primary" style="background: #dfff64">
+            <div class="swatch" style="background: #dfff64">
               <span>PRIMARY SIGNAL</span>
               <div><b>Claire Lime</b><code>#DFFF64</code></div>
             </div>
@@ -76,8 +72,12 @@
               <span>CORE INK</span>
               <div><b>Claire Ink</b><code>#10120F</code></div>
             </div>
+            <div class="swatch" style="background: #f4f1ea">
+              <span>CANVAS</span>
+              <div><b>Cream</b><code>#F4F1EA</code></div>
+            </div>
             <div class="swatch" style="background: #fffdf8">
-              <span>SURFACE</span>
+              <span>RAISED</span>
               <div><b>Paper</b><code>#FFFDF8</code></div>
             </div>
             <div class="swatch" style="background: #b9dcff">
@@ -202,7 +202,7 @@
                 <span><i data-heroicon="inbox"></i><small>Inbox</small></span>
                 <span><i data-heroicon="promises"></i><small>Promises</small></span>
                 <span><i data-heroicon="search"></i><small>Search</small></span>
-                <span><i data-heroicon="sparkles"></i><small>AI</small></span>
+                <span><img class="icon-claire-mark" src="./assets/brand/claire-kept-thread-flipped-paper-dot.svg" alt="" /><small>Ask</small></span>
               </div>
               <p class="icon-guidance">
                 Use 24px outline icons for navigation and actions, with a consistent 1.7px optical
@@ -212,9 +212,89 @@
             </article>
           </div>
         </section>
+        <section class="docs-section" id="surfaces">
+          <div class="section-title">
+            <div class="overline">04 / SURFACES</div>
+            <div>
+              <h2>One canvas.<br />Nothing stacked on top.</h2>
+              <p>
+                Cream is the product canvas. Paper lifts bubbles, cards, and the composer. Chat
+                screens keep cream from the status bar through the header—no second bar, no white
+                cap under the island.
+              </p>
+            </div>
+          </div>
+          <div class="surface-board">
+            <article class="surface-card do">
+              <div class="surface-phone">
+                <div class="surface-phone-status"><span>9:41</span><i></i><span>● ◒</span></div>
+                <div class="surface-phone-head">
+                  <span>‹</span>
+                  <div>
+                    <b>Maya Kim</b>
+                    <small>WhatsApp · active now</small>
+                  </div>
+                  <span>···</span>
+                </div>
+                <div class="surface-phone-body">
+                  <em>Today</em>
+                  <p>Perfect. I’ll add comments tonight. Thank you!</p>
+                </div>
+              </div>
+              <div>
+                <h3>Do this</h3>
+                <p>
+                  Cream runs edge to edge. Status, header, and thread share one gray. The header is
+                  just type and an avatar sitting on the canvas.
+                </p>
+              </div>
+            </article>
+            <article class="surface-card dont">
+              <div class="surface-phone is-split">
+                <div class="surface-phone-status"><span>9:41</span><i></i><span>● ◒</span></div>
+                <div class="surface-phone-head">
+                  <span>‹</span>
+                  <div>
+                    <b>Maya Kim</b>
+                    <small>WhatsApp · active now</small>
+                  </div>
+                  <span>···</span>
+                </div>
+                <div class="surface-phone-body">
+                  <em>Today</em>
+                  <p>Perfect. I’ll add comments tonight. Thank you!</p>
+                </div>
+              </div>
+              <div>
+                <h3>Not this</h3>
+                <p>
+                  A paper or white header makes a cap. It reads like WhatsApp chrome, not Claire.
+                  Don’t give the status bar its own surface either.
+                </p>
+              </div>
+            </article>
+          </div>
+          <div class="surface-rules">
+            <article>
+              <small>CHAT</small>
+              <b>Cream to the top</b>
+              <p>Canvas, header, and composer tray are cream. Incoming bubbles and the input field are paper.</p>
+            </article>
+            <article>
+              <small>ASK CLAIRE</small>
+              <b>Sky to the top</b>
+              <p>The same rule in the research tab: sky fills the phone, including the status bar. Don’t drop a cream or paper bar above the thread.</p>
+            </article>
+            <article>
+              <small>LISTS</small>
+              <b>Paper home, cream chat</b>
+              <p>Inbox and people stay on paper. Opening a conversation switches the whole device to cream—not just the message list.</p>
+            </article>
+          </div>
+        </section>
         <section class="docs-section" id="components">
           <div class="section-title">
-            <div class="overline">04 / COMPONENTS</div>
+            <div class="overline">05 / COMPONENTS</div>
             <div>
               <h2>Quiet controls.<br />Expressive moments.</h2>
               <p>
@@ -249,6 +329,25 @@
               />
             </div>
             <div class="component-group full">
+              <div class="component-label">TAB BAR</div>
+              <div class="sg-tab-bar" aria-label="Claire tab bar">
+                <span><i data-heroicon="home"></i></span>
+                <span><i data-heroicon="inbox"></i></span>
+                <span class="ask-claire"
+                  ><img
+                    class="claire-mark"
+                    src="./assets/brand/claire-kept-thread-flipped-paper-dot.svg"
+                    alt=""
+                /></span>
+                <span><i data-heroicon="promises"></i></span>
+                <span><i data-heroicon="search"></i></span>
+              </div>
+              <p class="icon-guidance">
+                Five equal columns. The Claire mark sits on the lime tile and is optically centered.
+                The bar floats over content with a frosted paper fill—not a solid white dock.
+              </p>
+            </div>
+            <div class="component-group full">
               <div class="component-label">AI ASSIST CARD</div>
               <div class="ai-card-demo">
                 <i>✦</i>
@@ -262,7 +361,7 @@
         </section>
         <section class="docs-section" id="voice">
           <div class="section-title">
-            <div class="overline">05 / VOICE</div>
+            <div class="overline">06 / VOICE</div>
             <div>
               <h2>Helpful, never showy.</h2>
               <p>

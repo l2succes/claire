@@ -16,25 +16,14 @@
     />
     <link rel="stylesheet" href="./tokens.css" />
     <link rel="stylesheet" href="./plugin-mockups.css" />
+    <link rel="stylesheet" href="./lab-nav.css" />
     <link rel="icon" href="./assets/brand/claire-app-icon.svg" type="image/svg+xml" />
     <script src="./heroicons.js" defer></script>
     <script src="./plugin-mockups.js" defer></script>
   </head>
   <body>
-    <header class="doc-header">
-      <a class="brand" href="./index.html"
-        ><img
-          class="plugin-brand-mark"
-          src="./assets/brand/claire-app-icon-lime.svg"
-          alt=""
-        />claire <span>/ plugins</span></a
-      >
-      <nav>
-        <a href="./app-mockups.html">Mobile</a><a href="./desktop-mockups.html">Desktop</a
-        ><a href="./style-guide.html">Components</a
-        ><a class="active" href="./plugin-mockups.html">Plugins</a>
-      </nav>
-    </header>
+    <header data-lab-nav="plugins"></header>
+    <script src="./lab-nav.js"></script>
     <main>
       <section class="hero">
         <div>

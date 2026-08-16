@@ -813,6 +813,13 @@ main {
   overflow: hidden;
   position: relative;
 }
+.phone:has(.chat-screen) {
+  background: #f4f1ea;
+}
+.phone:has(.chat-screen) .phone-status,
+.phone:has(.chat-screen) .phone-screen {
+  background: #f4f1ea;
+}
 .island {
   position: absolute;
   width: 92px;
