@@ -137,6 +137,19 @@ export default function RootLayout() {
             <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#F4F1EA' } }}>
               <Stack.Screen name="(tabs)" />
               <Stack.Screen name="(auth)" />
+              <Stack.Screen
+                name="compose"
+                options={{
+                  presentation: 'formSheet',
+                  sheetGrabberVisible: true,
+                  sheetAllowedDetents: [1],
+                  headerShown: true,
+                  headerShadowVisible: false,
+                  headerBackVisible: false,
+                  headerStyle: { backgroundColor: '#FFFDF8' },
+                  contentStyle: { backgroundColor: '#FFFDF8' },
+                }}
+              />
               <Stack.Screen name="assistant" options={{ presentation: 'formSheet', sheetGrabberVisible: true, sheetAllowedDetents: [0.7, 1] }} />
               <Stack.Screen name="chat/assistant/[chatId]" options={{ presentation: 'formSheet', sheetGrabberVisible: true, sheetAllowedDetents: [0.7, 1] }} />
             </Stack>

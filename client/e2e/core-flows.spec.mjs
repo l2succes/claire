@@ -260,16 +260,54 @@ const MOCK_MORNING_BRIEF = {
 };
 
 // Chats table rows — needed by chat screen's fetchChatInfo() to resolve
-// platform_chat_id (used as the send target).
+// platform_chat_id (used as the send target) and by the new-message picker.
 const MOCK_CHATS = [
   {
     id: 'mock-chat-wa-alice',
     user_id: MOCK_USER_ID,
     platform: 'whatsapp',
     platform_chat_id: 'mock-chat-wa-alice',
-    name: null,
+    name: 'Alice (WA)',
+    is_group: false,
+    last_message_at: new Date(Date.now() - 3600_000).toISOString(),
+  },
+  {
+    id: 'mock-chat-tg-bob',
+    user_id: MOCK_USER_ID,
+    platform: 'telegram',
+    platform_chat_id: 'mock-chat-tg-bob',
+    name: 'Bob (TG)',
+    is_group: false,
+    last_message_at: new Date(Date.now() - 7200_000).toISOString(),
+  },
+  {
+    id: 'mock-chat-ig-carol',
+    user_id: MOCK_USER_ID,
+    platform: 'instagram',
+    platform_chat_id: 'mock-chat-ig-carol',
+    name: 'Carol (IG)',
+    is_group: false,
+    last_message_at: new Date(Date.now() - 14400_000).toISOString(),
+  },
+  {
+    id: 'mock-chat-wa-group-1',
+    user_id: MOCK_USER_ID,
+    platform: 'whatsapp',
+    platform_chat_id: 'mock-chat-wa-group-1',
+    name: 'Friday Crew',
+    is_group: true,
+    last_message_at: new Date(Date.now() - 1800_000).toISOString(),
   },
 ];
+
+function chatsPayload(url, headers = {}) {
+  const decoded = decodeURIComponent(url);
+  const accept = headers.accept || headers.Accept || '';
+  const idMatch = decoded.match(/[?&]id=eq\.([^&]+)/);
+  const wantsSingle = String(accept).includes('vnd.pgrst.object+json') || Boolean(idMatch);
+  if (!wantsSingle) return MOCK_CHATS;
+  return MOCK_CHATS.find((chat) => chat.id === idMatch?.[1]) || MOCK_CHATS[0];
+}
 
 // Group chat fixture — used by the group-summary e2e test
 const MOCK_GROUP_CHAT_ID = 'mock-chat-wa-group-1';
@@ -389,11 +427,12 @@ async function mockBackend(page) {
     } else if (url.includes('/chats')) {
       // chat screen's fetchChatInfo uses .single() which sends
       // Accept: application/vnd.pgrst.object+json → PostgREST returns
-      // a bare object, not an array. Return the first chat object.
+      // a bare object, not an array. List queries (new message, people)
+      // still need the full set.
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(MOCK_CHATS[0]),
+        body: JSON.stringify(chatsPayload(url, route.request().headers())),
       });
     } else if (url.includes('/platform_sessions')) {
       await route.fulfill({
@@ -473,6 +512,25 @@ async function mockBackend(page) {
   // Bun server API: platform status endpoints.
   // getAllSessions() calls /platforms/<platform>/status for each platform.
   await page.route('**/platforms/**', async (route) => {
+    const url = route.request().url();
+    if (route.request().method() === 'POST' && url.includes('/send')) {
+      const body = JSON.parse(route.request().postData() || '{}');
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          message: {
+            id: `local-${Date.now()}`,
+            platformMessageId: `evt-${Date.now()}`,
+            content: body.content || '',
+            timestamp: new Date().toISOString(),
+            isFromMe: true,
+          },
+        }),
+      });
+      return;
+    }
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -722,6 +780,35 @@ test.describe('Core loop — mock backend', () => {
     ).toBeVisible({ timeout: 8_000 });
   });
 
+  test('new message picker opens a conversation', async ({ page }) => {
+    await signIn(page);
+    await page.getByTestId('tab-messages').click();
+    await expect(page.getByTestId('messages-screen')).toBeVisible({ timeout: 10_000 });
+
+    await page.getByTestId('inbox-compose').click();
+    await expect(page.getByTestId('compose-screen')).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByTestId('compose-recipient-mock-chat-wa-alice')).toBeVisible();
+    await expect(page.getByTestId('compose-recipient-mock-chat-wa-group-1')).toBeVisible();
+
+    await page.getByTestId('compose-to-input').fill('Bob');
+    await expect(page.getByTestId('compose-recipient-mock-chat-wa-alice')).toHaveCount(0);
+    await page.getByTestId('compose-recipient-mock-chat-tg-bob').click();
+
+    await expect(page.getByTestId('chat-screen')).toBeVisible({ timeout: 10_000 });
+  });
+
+  test('closing new message returns to the inbox', async ({ page }) => {
+    await signIn(page);
+    await page.getByTestId('tab-messages').click();
+    await expect(page.getByTestId('messages-screen')).toBeVisible({ timeout: 10_000 });
+
+    await page.getByTestId('inbox-compose').click();
+    await expect(page.getByTestId('compose-screen')).toBeVisible({ timeout: 8_000 });
+    await page.getByTestId('compose-close').click();
+
+    await expect(page.getByTestId('messages-screen')).toBeVisible({ timeout: 8_000 });
+  });
+
   // 3. Chat — opening a conversation shows the chat message list
   test('opening a chat shows message list', async ({ page }) => {
     await signIn(page);
@@ -771,6 +858,7 @@ test.describe('Core loop — mock backend', () => {
 
     // Input should clear after sending (optimistic update clears immediately)
     await expect(page.getByTestId('chat-input')).toHaveValue('', { timeout: 5_000 });
+    await expect(page.getByText('Hello from e2e test')).toBeVisible({ timeout: 5_000 });
   });
 
   // 5. AI suggestions — suggestion text appears in the chat screen
@@ -890,7 +978,7 @@ test.describe('Core loop — mock backend', () => {
           await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_INBOX_MESSAGES) });
         }
       } else if (url.includes('/chats')) {
-        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_CHATS[0]) });
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(chatsPayload(url, route.request().headers())) });
       } else if (url.includes('/platform_sessions')) {
         await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_PLATFORM_SESSIONS) });
       } else if (url.includes('/smart_cards')) {
@@ -980,7 +1068,7 @@ test.describe('Core loop — mock backend', () => {
     await signIn(page);
 
     // Click Promises tab
-    await page.click('text=Promises');
+    await page.getByTestId('tab-promises').click();
 
     // Confirm the route loaded — the promises screen container is present
     await expect(page.getByTestId('promises-screen')).toBeVisible({ timeout: 10_000 });
@@ -990,7 +1078,7 @@ test.describe('Core loop — mock backend', () => {
   test('Promises screen shows seeded promise item', async ({ page }) => {
     await signIn(page);
 
-    await page.click('text=Promises');
+    await page.getByTestId('tab-promises').click();
     await expect(page.getByTestId('promises-screen')).toBeVisible({ timeout: 10_000 });
 
     // The promises list should be visible
@@ -1006,7 +1094,7 @@ test.describe('Core loop — mock backend', () => {
   test('Promises screen tab switching renders correct tab', async ({ page }) => {
     await signIn(page);
 
-    await page.click('text=Promises');
+    await page.getByTestId('tab-promises').click();
     await expect(page.getByTestId('promises-screen')).toBeVisible({ timeout: 10_000 });
 
     // Switch to Done tab
@@ -1027,7 +1115,7 @@ test.describe('Core loop — mock backend', () => {
   test('Promises screen opens the linked conversation from a promise card', async ({ page }) => {
     await signIn(page);
 
-    await page.click('text=Promises');
+    await page.getByTestId('tab-promises').click();
     await expect(page.getByTestId('promises-screen')).toBeVisible({ timeout: 10_000 });
 
     // Wait for the promise item to appear
@@ -1117,7 +1205,7 @@ test.describe('Core loop — mock backend', () => {
     await expect(page.getByTestId('messages-screen')).toBeVisible({ timeout: 10_000 });
 
     // Navigate to Promises tab (same approach as existing test 6)
-    await page.click('text=Promises');
+    await page.getByTestId('tab-promises').click();
     await expect(page.getByTestId('promises-screen')).toBeVisible({ timeout: 10_000 });
 
     // Verify 1 open promise item is present (matching the fixture count of 1 open promise)
@@ -1322,6 +1410,7 @@ test.describe('Core loop — mock backend', () => {
 
     // Input should be cleared after send
     await expect(page.getByTestId('chat-input')).toHaveValue('', { timeout: 5_000 });
+    await expect(page.getByText('Test media send path')).toBeVisible({ timeout: 5_000 });
   });
 
   // 14. Snooze — long-pressing a message card opens the snooze modal (#38)

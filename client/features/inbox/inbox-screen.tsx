@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, Modal, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { FlatList, Modal, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { PenSquare, Pin, Search, Sparkles, X } from 'lucide-react-native';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -14,6 +14,7 @@ import { API_BASE_URL } from '../../services/platforms';
 import { Platform } from '../../types/platform';
 import { PlatformBadge } from '../../components/PlatformIcon';
 import { formatInboxTimestamp } from '../../utils/messageTimestamp';
+import { InboxRowSkeleton, InboxSkeleton } from '../../components/claire/skeleton';
 
 type InboxFilter = 'all' | 'unread' | 'needs_reply' | 'groups';
 type PlatformFilter = 'all' | Platform;
@@ -71,7 +72,7 @@ function InboxConversationRow({ message, pinned, onPress, onLongPress }: { messa
 function HighlightCard({ message, onPress }: { message: InboxMessage; onPress: () => void }) {
   const name = message.chat_name || message.contact_name || 'Unknown conversation';
   const reason = message.has_open_promise
-    ? 'Open commitment'
+    ? 'Open loop'
     : message.has_ai_response
       ? 'Reply ready'
       : message.unread_count
@@ -195,7 +196,8 @@ export function InboxScreen() {
     () => visibleMessages.map(message => ({ ...message, has_open_promise: promiseChats.data?.has(message.chat_id) || message.has_open_promise })),
     [promiseChats.data, visibleMessages],
   );
-  const highlights = useMemo(() => [...inboxRows]
+  const searching = query.trim().length > 0;
+  const highlights = useMemo(() => searching ? [] : [...inboxRows]
     .map(message => ({
       message,
       score: (message.has_open_promise ? 8 : 0) + (message.has_ai_response ? 5 : 0) + (message.unread_count ? Math.min(message.unread_count, 4) : 0) + (!message.from_me ? 1 : 0),
@@ -203,9 +205,8 @@ export function InboxScreen() {
     .filter(candidate => candidate.score > 0)
     .sort((a, b) => b.score - a.score || new Date(b.message.timestamp).getTime() - new Date(a.message.timestamp).getTime())
     .slice(0, 3)
-    .map(candidate => candidate.message), [inboxRows]);
-  const highlightKeys = useMemo(() => new Set(highlights.map(message => message.conversation_key)), [highlights]);
-  const displayedMessages = useMemo(() => inboxRows.filter(message => !highlightKeys.has(message.conversation_key)), [highlightKeys, inboxRows]);
+    .map(candidate => candidate.message), [inboxRows, searching]);
+  const displayedMessages = inboxRows;
   const refresh = useCallback(async () => {
     setIsRefreshing(true);
     try {
@@ -213,9 +214,7 @@ export function InboxScreen() {
     } finally {
       setIsRefreshing(false);
     }
-  }, [inbox, promiseChats]);
-
-  if (inbox.loading) return <View testID="messages-loading" style={{ flex: 1, backgroundColor: colors.paper, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator size="large" color={colors.ink} /></View>;
+  }, [inbox.fetchMessages, promiseChats]);
 
   return (
     <View testID="messages-screen" style={{ flex: 1, backgroundColor: colors.paper }}>
@@ -235,6 +234,7 @@ export function InboxScreen() {
         </ScrollView>
       </View>
 
+      {inbox.loading ? <InboxSkeleton testID="messages-loading" /> : (
       <FlatList
         testID="messages-list"
         data={displayedMessages}
@@ -242,9 +242,11 @@ export function InboxScreen() {
         renderItem={({ item }) => <InboxConversationRow message={item} onPress={() => openChat(item)} onLongPress={() => setSnoozeTarget(item)} />}
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{ paddingBottom: 156 }}
-        maintainVisibleContentPosition={{ minIndexForVisible: 0, autoscrollToTopThreshold: 1 }}
-        onEndReached={() => { if (inbox.hasMore && !inbox.loadingMore) void inbox.fetchNextMessages(); }}
-        onEndReachedThreshold={0.5}
+        onEndReached={() => {
+          if (searching || !displayedMessages.length || !inbox.hasMore || inbox.loadingMore) return;
+          void inbox.fetchNextMessages();
+        }}
+        onEndReachedThreshold={0.4}
         refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => void refresh()} tintColor={colors.ink} />}
         ListHeaderComponent={<>
           {highlights.length ? <>
@@ -255,9 +257,10 @@ export function InboxScreen() {
           </> : null}
           <View style={{ paddingHorizontal: space[4], paddingTop: highlights.length ? space[4] : space[3], paddingBottom: space[1] }}><SectionLabel title="Recent" detail={`${displayedMessages.length} conversations`} /></View>
         </>}
-        ListFooterComponent={inbox.loadingMore ? <View style={{ padding: space[4] }}><ActivityIndicator color={colors.ink} /></View> : null}
-        ListEmptyComponent={<MobileState error={!!inbox.error} title={inbox.error ? "Couldn't load the inbox" : 'No conversations here'} message={inbox.error ? 'Pull to retry. Your cached conversations will remain available while Claire reconnects.' : 'Try another filter or connect a messaging account.'} />}
+        ListFooterComponent={!searching && inbox.loadingMore ? <InboxRowSkeleton /> : null}
+        ListEmptyComponent={inboxRows.length ? null : <MobileState error={!!inbox.error} title={inbox.error ? "Couldn't load the inbox" : 'No conversations here'} message={inbox.error ? 'Pull to retry. Your cached conversations will remain available while Claire reconnects.' : searching ? 'No conversations match that search.' : 'Try another filter or connect a messaging account.'} />}
       />
+      )}
 
       <Pressable
         testID="inbox-floating-compose"
