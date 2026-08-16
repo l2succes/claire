@@ -19,7 +19,11 @@ Then open `http://localhost:3000`. The page is dependency-free at runtime and ca
 - `logo-explorations.html` — six production SVG directions for the Claire conversation mark
 - `assets/brand/` — editable Claire logo SVGs used by the exploration and landing pages
 - `app-mockups.html` — complete mobile information architecture and screen gallery
+- `ask-claire-mockups.html` — Ask Claire tab, cited threads, and in-chat assistant gallery
 - `desktop-mockups.html` — standalone and companion desktop app screen gallery
+- `plugin-mockups.html` — plugin library, automation, approval, and activity reference
+- `developer.html` — shareable developer hub linking product references and implementation specs
+- `business.html` — Claire Business vision for shared customer conversations and automation
 
 Regenerate the connector snapshot after editing `server/src/platform-catalog.ts`:
 
