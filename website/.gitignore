@@ -1,5 +1,8 @@
-node_modules/
-.next/
-storybook-static/
-.vercel/
+.next
+.source
+storybook-static
+node_modules
 *.tsbuildinfo
+.env
+.env.local
+content/docs

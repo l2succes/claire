@@ -23,13 +23,13 @@ echo "🧹 Cleaning up npm/yarn artifacts..."
 # Remove node_modules and lock files
 rm -rf node_modules
 rm -rf server/node_modules
-rm -rf client/node_modules
+rm -rf mobile/node_modules
 rm -f package-lock.json
 rm -f yarn.lock
 rm -f server/package-lock.json
 rm -f server/yarn.lock
-rm -f client/package-lock.json
-rm -f client/yarn.lock
+rm -f mobile/package-lock.json
+rm -f mobile/yarn.lock
 
 echo "✅ Cleanup complete!"
 echo ""

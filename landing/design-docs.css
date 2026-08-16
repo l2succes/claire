@@ -352,6 +352,34 @@ textarea {
   border-radius: 0 14px 14px 0;
   color: white;
 }
+.type-stack {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.type-stack article {
+  padding: 24px;
+  border: 1px solid var(--neutral-200);
+  border-radius: 20px;
+  background: var(--claire-paper);
+}
+.type-stack small {
+  font: 500 10px var(--font-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--neutral-600);
+}
+.type-stack h3 {
+  margin: 10px 0 8px;
+  font-size: 32px;
+  letter-spacing: -0.05em;
+}
+.type-stack p {
+  margin: 0;
+  color: var(--neutral-600);
+  font-size: 14px;
+}
 .type-specimen {
   display: grid;
   gap: 0;
@@ -752,7 +780,8 @@ textarea {
   .color-grid {
     grid-template-columns: 1fr 1fr;
   }
-  .foundation-grid {
+  .foundation-grid,
+  .type-stack {
     grid-template-columns: 1fr;
   }
   .component-board {

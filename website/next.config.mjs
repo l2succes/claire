@@ -1,13 +1,19 @@
-import createMDX from '@next/mdx';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+// SPDX-License-Identifier: Apache-2.0
+import { createMDX } from 'fumadocs-mdx/next';
 
-const withMDX = createMDX({});
-const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const withMDX = createMDX();
 
-export default withMDX({
-  pageExtensions: ['ts', 'tsx', 'md', 'mdx'],
-  turbopack: {
-    root: repositoryRoot,
+/** @type {import('next').NextConfig} */
+const config = {
+  reactStrictMode: true,
+  async rewrites() {
+    return [
+      {
+        source: '/docs/:path*.md',
+        destination: '/llms.mdx/docs/:path*',
+      },
+    ];
   },
-});
+};
+
+export default withMDX(config);

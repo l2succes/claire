@@ -1,35 +1,51 @@
 {
   "name": "@claire/website",
+  "version": "0.1.0",
   "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
   "scripts": {
-    "dev": "next dev",
+    "postinstall": "fumadocs-mdx",
+    "predev": "bun run scripts/sync-docs.ts",
+    "dev": "next dev --port 3000",
+    "prebuild": "bun run scripts/sync-docs.ts",
     "build": "next build",
-    "start": "next start",
+    "start": "next start --port 3000",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "storybook": "storybook dev -p 6006",
-    "build-storybook": "storybook build"
+    "build-storybook": "storybook build",
+    "sync-docs": "bun run scripts/sync-docs.ts"
   },
   "dependencies": {
+    "@claire/design-system": "workspace:*",
+    "@claire/platform-catalog": "workspace:*",
     "@heroicons/react": "^2.2.0",
-    "@mdx-js/loader": "^3.1.1",
-    "@mdx-js/react": "^3.1.1",
-    "@next/mdx": "^16.3.1",
-    "next": "16.3.1",
-    "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "fumadocs-core": "^16.6.0",
+    "fumadocs-mdx": "^14.2.0",
+    "fumadocs-ui": "^16.6.0",
+    "mermaid": "^11.12.0",
+    "next": "^16.3.1",
+    "next-themes": "^0.4.6",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "tailwind-merge": "^3.3.1"
   },
   "devDependencies": {
     "@storybook/addon-a11y": "^10.5.8",
     "@storybook/addon-docs": "^10.5.8",
     "@storybook/nextjs-vite": "^10.5.8",
+    "@tailwindcss/postcss": "^4.1.12",
     "@types/mdx": "^2.0.13",
     "@types/node": "^24.0.0",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "eslint": "^9.0.0",
-    "eslint-config-next": "16.3.1",
+    "eslint-config-next": "^16.3.1",
     "storybook": "^10.5.8",
+    "tailwindcss": "^4.1.12",
     "typescript": "^5.9.0"
   }
 }

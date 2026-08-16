@@ -16,6 +16,7 @@
     "verify:schema": "bun run src/scripts/verify-schema.ts"
   },
   "dependencies": {
+    "@claire/platform-catalog": "workspace:*",
     "@anthropic-ai/bedrock-sdk": "^0.27.0",
     "@aws-sdk/client-s3": "^3.922.0",
     "@sentry/node": "^10.62.0",
@@ -33,6 +34,7 @@
     "matrix-js-sdk": "^40.2.0-rc.0",
     "morgan": "^1.10.0",
     "openai": "^4.24.1",
+    "postgres": "^3.4.7",
     "puppeteer": "^21.6.1",
     "qrcode": "^1.5.3",
     "qrcode-terminal": "^0.12.0",

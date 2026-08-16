@@ -492,7 +492,7 @@ router.delete('/cache/user',
  * Returns a morning-brief summary text + list of urgent (unanswered) messages.
  *
  * Urgency is scored by wait time, category bonus, and content keywords — mirroring
- * the client-side `computeUrgencyScore` in `client/utils/urgency.ts`.
+ * the client-side `computeUrgencyScore` in `mobile/utils/urgency.ts`.
  */
 router.get('/morning-brief',
   requireAuth,

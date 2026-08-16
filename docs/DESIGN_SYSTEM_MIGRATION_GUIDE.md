@@ -49,7 +49,7 @@ packages/design-system/
 └── package.json
 ```
 
-Start this package inside `client/design-system/` if workspace/package wiring would slow the first PR. Extract it to `packages/` when the desktop bootstrap begins.
+Start this package inside `mobile/design-system/` if workspace/package wiring would slow the first PR. Extract it to `packages/` when the desktop bootstrap begins.
 
 ## 3. Token translation
 

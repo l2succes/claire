@@ -1,22 +1,40 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # Claire website
 
-The public Claire site, developer hub, and component reference built with Next.js App Router.
+Next.js App Router marketing site, Fumadocs documentation, and public docs APIs.
 
-## Local development
+## Run
+
+From the repository root:
 
 ```bash
-bun install
+bun run dev:website
+```
+
+Or from this directory:
+
+```bash
+bun run sync-docs
 bun run dev
 ```
 
-## Component workshop
+Storybook:
 
 ```bash
 bun run storybook
 ```
 
-## Migration policy
+## Docs source
 
-The legacy `landing/` pages remain the visual baseline while their content is migrated. Do not remove a legacy page until its Next.js route has matching responsive behavior, interactions, accessibility, and content.
+Canonical Markdown lives in `../docs`. `bun run sync-docs` copies the public pages into `content/docs` before `dev` and `build`.
 
-Deep product and architecture specifications remain in the repository-level `docs/` folder and will be converted to MDX incrementally.
+## Public interfaces
+
+- `GET /api/search` — Fumadocs search
+- `POST /api/docs/ask` — Ask Claire (requires `OPENAI_API_KEY`)
+- `GET /llms.txt`
+- `GET /llms-full.txt`
+- `GET /docs/<path>.md`
+
+Ask Claire defaults to `CLAIRE_DOCS_ASK_MODEL=gpt-5.4-mini` and a `$50` in-memory monthly budget. If the API key is missing it returns `503` with `{ fallback: "search" }`.

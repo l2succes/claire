@@ -11,13 +11,13 @@ services:
       - REDIS_URL=redis://redis:6379
     ports:
       - "3001:3001"  # Server port
-      - "8081:8081"  # Client port
+      - "8081:8081"  # Mobile port
     volumes:
       - ./server:/app/server
-      - ./client:/app/client
+      - ./mobile:/app/client
       - /app/node_modules
       - /app/server/node_modules
-      - /app/client/node_modules
+      - /app/mobile/node_modules
     depends_on:
       - redis
     networks:

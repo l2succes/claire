@@ -1,6 +1,6 @@
 server/sessions/
 docker/
-client/
+mobile/
 docs/
 after_settings_tap.png
 *.png

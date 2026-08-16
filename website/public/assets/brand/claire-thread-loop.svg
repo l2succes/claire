@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">Claire Thread Loop logo</title>
+  <desc id="desc">A continuous conversation thread curves into a clear letter C and reply tail.</desc>
+  <rect x="2" y="2" width="60" height="60" rx="20" fill="#FFFDF8"/>
+  <path d="M46.5 18.2C42.8 14.3 37.8 12 32.2 12 21.5 12 13 20.4 13 31.3S21.5 51 32.2 51c5.6 0 10.6-2.4 14.3-6.3l6.4 6-1.6-14.2" fill="none" stroke="#10120F" stroke-width="6.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="46.6" cy="18.2" r="4.1" fill="#DFFF64" stroke="#10120F" stroke-width="2"/>
+</svg>

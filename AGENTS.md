@@ -6,7 +6,7 @@
 - **Platform mode**: `PLATFORM_MODE=matrix` in `server/.env`
 - **Server**: port 3001, run with `bun run --watch src/index.ts` from project root
 - **Client**: Expo SDK 55, React Native 0.83.4, React 19, new architecture (Bridgeless)
-- **iOS build**: `bunx expo prebuild --clean --platform ios && bunx expo run:ios` from `client/`
+- **iOS build**: `bunx expo prebuild --clean --platform ios && bunx expo run:ios` from `mobile/`
 
 ## Architecture
 
@@ -22,15 +22,16 @@ Mobile App  <-->  Bun Server  <-->  Synapse (Matrix)  <-->  mautrix bridges  <--
 
 Official docs: https://docs.mau.fi/ (source: https://github.com/mautrix/docs)
 
-**Local docs clone**: `docs/mautrix/` — search here first when implementing any bridge feature:
+**Optional local docs clone**: `vendor/mautrix-docs/` — initialize only for bridge work:
 ```bash
-grep -r "keyword" docs/mautrix/bridges/
+git submodule update --init vendor/mautrix-docs
+grep -r "keyword" vendor/mautrix-docs/bridges/
 ```
 Key paths:
-- `docs/mautrix/bridges/general/` — encryption, backfill, double-puppeting, troubleshooting
-- `docs/mautrix/bridges/go/whatsapp/` — WhatsApp-specific
-- `docs/mautrix/bridges/go/telegram/` — Telegram-specific
-- `docs/mautrix/bridges/go/meta/` — Instagram/Meta-specific
+- `vendor/mautrix-docs/bridges/general/` — encryption, backfill, double-puppeting, troubleshooting
+- `vendor/mautrix-docs/bridges/go/whatsapp/` — WhatsApp-specific
+- `vendor/mautrix-docs/bridges/go/telegram/` — Telegram-specific
+- `vendor/mautrix-docs/bridges/go/meta/` — Instagram/Meta-specific
 
 ### Key docs to consult:
 - **WhatsApp auth**: https://docs.mau.fi/bridges/go/whatsapp/authentication.html
@@ -99,10 +100,10 @@ docker exec supabase-db psql -U postgres -d postgres -c "NOTIFY pgrst, 'reload s
 
 ## Key Client Files
 
-- `client/app/(tabs)/dashboard.tsx` — Unified inbox
-- `client/app/(tabs)/contacts.tsx` — Contacts list
-- `client/app/chat/[chatId].tsx` — Chat detail screen
-- `client/components/MessageCard.tsx` — Message display with platform badges
+- `mobile/app/(tabs)/dashboard.tsx` — Unified inbox
+- `mobile/app/(tabs)/contacts.tsx` — Contacts list
+- `mobile/app/chat/[chatId].tsx` — Chat detail screen
+- `mobile/components/MessageCard.tsx` — Message display with platform badges
 
 ## Known Conventions
 

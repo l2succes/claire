@@ -3,8 +3,14 @@ import '../src/app/globals.css';
 
 const preview: Preview = {
   parameters: {
-    controls: { matchers: { color: /(background|color)$/i, date: /Date$/i } },
-    a11y: { test: 'todo' },
+    backgrounds: {
+      default: 'cream',
+      values: [
+        { name: 'cream', value: '#f4f1ea' },
+        { name: 'paper', value: '#fffdf8' },
+        { name: 'ink', value: '#10120f' },
+      ],
+    },
   },
 };
 

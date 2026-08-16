@@ -1,12 +1,12 @@
 {
   "compilerOptions": {
-    "target": "ES2017",
+    "target": "ES2022",
     "lib": [
       "dom",
       "dom.iterable",
       "esnext"
     ],
-    "allowJs": false,
+    "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
     "noEmit": true,
@@ -25,15 +25,19 @@
     "paths": {
       "@/*": [
         "./src/*"
+      ],
+      "@/.source": [
+        "./.source/server.ts"
       ]
     }
   },
   "include": [
     "next-env.d.ts",
-    ".next/types/**/*.ts",
     "**/*.ts",
     "**/*.tsx",
-    "**/*.mdx",
+    ".next/types/**/*.ts",
+    ".source/**/*.ts",
+    "source.config.ts",
     ".next/dev/types/**/*.ts"
   ],
   "exclude": [

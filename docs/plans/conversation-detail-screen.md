@@ -12,7 +12,7 @@ We'll use **`react-native-gifted-chat`** (v3.3.2, 95k weekly downloads, actively
 ## Dependencies to Install
 
 ```bash
-cd client
+cd mobile
 bun add react-native-gifted-chat react-native-reanimated react-native-keyboard-controller
 ```
 
@@ -22,7 +22,7 @@ bun add react-native-gifted-chat react-native-reanimated react-native-keyboard-c
 
 ## Changes
 
-### 1. Create `client/app/chat/[chatId].tsx` (NEW FILE)
+### 1. Create `mobile/app/chat/[chatId].tsx` (NEW FILE)
 
 Expo Router auto-discovers this — no layout changes needed.
 
@@ -53,7 +53,7 @@ Expo Router auto-discovers this — no layout changes needed.
 - `platformsApi` from `../../services/platforms`
 - `PlatformBadge` from `../../components/PlatformIcon`
 
-### 2. Edit `client/app/(tabs)/dashboard.tsx` — lines 207–210 only
+### 2. Edit `mobile/app/(tabs)/dashboard.tsx` — lines 207–210 only
 
 Replace stub with:
 ```typescript
@@ -74,9 +74,9 @@ const handleMessagePress = (message: Message) => {
 ---
 
 ## Files Changed
-- **CREATE** `client/app/chat/[chatId].tsx`
-- **EDIT** `client/app/(tabs)/dashboard.tsx` (4 lines)
-- **EDIT** `client/package.json` (2 new deps via `bun add`)
+- **CREATE** `mobile/app/chat/[chatId].tsx`
+- **EDIT** `mobile/app/(tabs)/dashboard.tsx` (4 lines)
+- **EDIT** `mobile/package.json` (2 new deps via `bun add`)
 
 ## Files NOT changing
 - `app/_layout.tsx` — Expo Router auto-discovers `chat/[chatId]`
@@ -85,7 +85,7 @@ const handleMessagePress = (message: Message) => {
 ---
 
 ## Verification
-1. `cd client && bun add react-native-gifted-chat react-native-reanimated react-native-keyboard-controller`
+1. `cd mobile && bun add react-native-gifted-chat react-native-reanimated react-native-keyboard-controller`
 2. `bunx expo run:ios` (native rebuild needed for new native modules)
 3. Tap any conversation on the Messages tab → chat screen opens
 4. Messages render as bubbles (green = sent, gray = received)

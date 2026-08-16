@@ -1,4 +1,4 @@
-import { platformCatalog, platformCatalogVersion } from '../server/src/platform-catalog';
+import { platformCatalog, platformCatalogVersion } from '../packages/platform-catalog/src/index';
 
 const target = new URL('../landing/platform-catalog.js', import.meta.url);
 const payload = {
