@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useInfiniteQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query';
 import { supabase } from '../services/supabase';
 import { Platform } from '../types/platform';
@@ -176,6 +176,8 @@ export function useInboxMessages(userId?: string) {
   const queryClient = useQueryClient();
   const queryKey = useMemo(() => ['messages-feed', userId] as const, [userId]);
   const [cacheReady, setCacheReady] = useState(!usesNativeMobileCache());
+  const realtimeId = useRef(Math.random().toString(36).slice(2, 8));
+  const refetchInbox = useRef<() => void>(() => undefined);
 
   useEffect(() => {
     let active = true;
@@ -268,6 +270,7 @@ export function useInboxMessages(userId?: string) {
     },
     getNextPageParam: (lastPage, allPages) => lastPage.hasMore ? allPages.length : undefined,
   });
+  refetchInbox.current = () => { void query.refetch(); };
 
   const messages = useMemo(() => {
     const merged = new Map<string, InboxMessage>();
@@ -355,17 +358,22 @@ export function useInboxMessages(userId?: string) {
 
   useEffect(() => {
     if (!userId) return;
+    let cancelled = false;
     let fallbackTimer: ReturnType<typeof setInterval> | undefined;
     const startFallback = (intervalMs: number) => {
+      if (cancelled) return;
       if (fallbackTimer) clearInterval(fallbackTimer);
-      fallbackTimer = setInterval(() => void query.refetch(), intervalMs);
+      fallbackTimer = setInterval(() => { if (!cancelled) refetchInbox.current(); }, intervalMs);
     };
 
     // Realtime is the fast path. This low-frequency reconciliation prevents a
     // missed database event from leaving an inbox stale indefinitely.
     startFallback(60_000);
+    // Home and Inbox both mount this hook. Reusing the same channel topic
+    // closes the other subscriber (CLOSED → refetch storm). Unique topics
+    // keep both listeners alive; patches are idempotent.
     const channel = supabase
-      .channel(`messages-feed-${userId}`)
+      .channel(`messages-feed-${userId}-${realtimeId.current}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `user_id=eq.${userId}` }, ({ new: row }) => {
         const message = row as RawMessage & { id: string };
         inboxTrace('realtime:message-insert', { chatId: message.chat_id, platform: message.platform, fromMe: message.from_me });
@@ -401,21 +409,22 @@ export function useInboxMessages(userId?: string) {
         if (suggestion.message_id) markAiResponse(suggestion.message_id);
       })
       .subscribe((status, error) => {
+        if (cancelled) return;
         inboxTrace('realtime:status', { status, hasError: !!error });
         if (status === 'SUBSCRIBED') {
           startFallback(60_000);
           return;
         }
+        if (status === 'CLOSED') return;
         console.warn('[Inbox] realtime subscription unavailable:', status, error ?? '');
-        // Recover quickly while the socket is joining/reconnecting or the
-        // server reports a subscription error.
-        startFallback(10_000);
+        startFallback(15_000);
       });
     return () => {
+      cancelled = true;
       if (fallbackTimer) clearInterval(fallbackTimer);
       void channel.unsubscribe();
     };
-  }, [userId, patchRealtimeMessage, markAiResponse, query.refetch]);
+  }, [userId, patchRealtimeMessage, markAiResponse, queryClient, queryKey]);
 
   return {
     ...query,
