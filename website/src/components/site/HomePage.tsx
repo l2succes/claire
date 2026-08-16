@@ -771,9 +771,9 @@ export function HomePage() {
             <div>
               <div className="kicker">ONE ACCOUNT. CLEAR COSTS.</div>
               <h2>
-                Claire Plus is
+                One plan for
                 <br />
-                <span>$10 / month.</span>
+                <span className="claire-underline">the whole product.</span>
               </h2>
             </div>
             <p>
@@ -823,6 +823,26 @@ export function HomePage() {
                 <span className="price-note">Monthly billing · personal account · no automatic AI overage</span>
               </aside>
             </div>
+            <div className="pricing-split">
+              <article className="pricing-covered">
+                <small>WHAT THE $10 COVERS</small>
+                <ul>
+                  <li>Hosted API, database, and cross-network search</li>
+                  <li>Matrix services and managed bridge operations</li>
+                  <li>Backups, upgrades, monitoring, and support</li>
+                  <li>Mobile, desktop, and web clients on one account</li>
+                </ul>
+              </article>
+              <article className="pricing-excluded">
+                <small>WHAT IT DELIBERATELY DOES NOT COVER</small>
+                <ul>
+                  <li>Model usage — metered separately, never bundled</li>
+                  <li>Your own provider key, if you bring one</li>
+                  <li>Networks that need a device you keep awake</li>
+                  <li>Anything we have not actually shipped yet</li>
+                </ul>
+              </article>
+            </div>
             <div className="pricing-usage">
               <div className="pricing-usage-head">
                 <div>
@@ -844,6 +864,15 @@ export function HomePage() {
                     Use Claire-managed models for replies, Ask Claire, summaries, and search. The
                     account gets a visible monthly credit balance, warnings, and a hard cap.
                   </p>
+                  <div className="credit-meter" aria-hidden="true">
+                    <div className="credit-bar">
+                      <span style={{ width: '62%' }} />
+                    </div>
+                    <div className="credit-legend">
+                      <b>62% used</b>
+                      <span>hard cap · no overage</span>
+                    </div>
+                  </div>
                   <small>Credits settle against actual model usage—not a made-up “one request” unit.</small>
                 </article>
                 <article className="usage-card">

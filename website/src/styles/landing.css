@@ -44,7 +44,8 @@ button {
 }
 .site-header {
   height: 82px;
-  width: min(1380px, calc(100% - 40px));
+  /* Matches .shell so the brand and the page content share one left edge. */
+  width: min(1240px, calc(100% - 48px));
   margin: auto;
   display: flex;
   align-items: center;
@@ -212,6 +213,12 @@ button {
 .site-header nav a:hover,
 .text-link:hover {
   opacity: 0.55;
+}
+.site-header .site-nav a.active {
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 6px;
+  text-decoration-color: var(--claire-lime);
 }
 .button {
   border-radius: var(--radius-pill);
@@ -1516,6 +1523,13 @@ button {
   color: var(--neutral-600);
   font-size: 15px;
 }
+/* Section heading placed on an ink surface. */
+.section-heading.inverse .kicker {
+  color: var(--claire-lime);
+}
+.section-heading.inverse > p {
+  color: #b9bdb2;
+}
 .feature-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -2160,11 +2174,89 @@ code {
   padding: 130px 0;
 }
 .pricing-heading h2 {
-  font-size: clamp(3rem, 5vw, 5rem);
+  font-size: clamp(2.4rem, 4.4vw, 4.2rem);
+  letter-spacing: -0.06em;
 }
-.pricing-heading h2 span {
-  color: var(--claire-lime);
-  -webkit-text-stroke: 1px var(--claire-ink);
+/* The price itself is an object in the plan card, not outlined display type. */
+.pricing-split {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  border-bottom: 1px solid var(--neutral-200);
+}
+.pricing-split article {
+  padding: 34px 48px 38px;
+}
+.pricing-split article + article {
+  border-left: 1px solid var(--neutral-200);
+  background: var(--neutral-50);
+}
+.pricing-split small {
+  font: 500 9px var(--font-mono);
+  letter-spacing: 0.12em;
+}
+.pricing-split ul {
+  display: grid;
+  gap: 0;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.pricing-split li {
+  position: relative;
+  padding: 11px 0 11px 26px;
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+.pricing-split li + li {
+  border-top: 1px solid var(--neutral-200);
+}
+.pricing-split li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 17px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+.pricing-covered li::before {
+  background: var(--claire-lime);
+  box-shadow: inset 0 0 0 1px var(--claire-ink);
+}
+.pricing-excluded li {
+  color: var(--neutral-600);
+}
+.pricing-excluded li::before {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--neutral-400);
+}
+.credit-meter {
+  margin: 18px 0 16px;
+}
+.credit-bar {
+  height: 10px;
+  border: 1px solid var(--claire-ink);
+  border-radius: var(--radius-pill);
+  background: rgb(16 18 15 / 8%);
+  overflow: hidden;
+}
+.credit-bar span {
+  display: block;
+  height: 100%;
+  background: var(--claire-ink);
+}
+.credit-legend {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
+  font: 500 9.5px var(--font-mono);
+  letter-spacing: 0.06em;
+}
+.credit-legend span {
+  opacity: 0.62;
 }
 .pricing-surface {
   overflow: hidden;
@@ -2525,9 +2617,24 @@ code {
   line-height: 0.98;
   letter-spacing: -0.06em;
 }
+/* Solid ink with the standard lime underline — the outlined treatment made this
+   headline unreadable against the sky field. */
 .security-teaser-copy h2 span {
-  color: var(--claire-paper);
-  -webkit-text-stroke: 1px var(--claire-ink);
+  position: relative;
+  isolation: isolate;
+  z-index: 0;
+}
+.security-teaser-copy h2 span::after {
+  content: '';
+  position: absolute;
+  left: -0.04em;
+  right: -0.04em;
+  bottom: 0.04em;
+  height: 0.24em;
+  z-index: -1;
+  border-radius: 4px;
+  background: var(--claire-lime);
+  transform: rotate(-1deg);
 }
 .security-teaser-copy > p {
   max-width: 440px;
@@ -2820,8 +2927,16 @@ code {
     align-items: start;
     gap: 30px;
   }
-  .pricing-plan {
+  .pricing-plan,
+  .pricing-split {
     grid-template-columns: 1fr;
+  }
+  .pricing-split article {
+    padding: 28px 24px 30px;
+  }
+  .pricing-split article + article {
+    border-left: 0;
+    border-top: 1px solid var(--neutral-200);
   }
   .pricing-usage-head {
     align-items: start;
