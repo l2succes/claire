@@ -760,8 +760,8 @@ button {
   position: relative;
 }
 .platform-mark img {
-  width: 59%;
-  height: 59%;
+  width: 68%;
+  height: 68%;
   max-width: none;
   object-fit: contain;
   position: absolute;
@@ -771,8 +771,10 @@ button {
   border: 0;
   box-shadow: none;
 }
-.platform-mark.has-image {
+.platform-mark.has-image,
+.platform-mark:has(img) {
   color: transparent;
+  font-size: 0;
 }
 .platform-mark.original {
   background: white;

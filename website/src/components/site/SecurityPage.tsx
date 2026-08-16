@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import Link from 'next/link';
 import { HeroIcon } from '@/components/site/HeroIcon';
+import { PlatformCluster, PlatformIcon } from '@/components/site/PlatformMark';
 import { SiteFooter } from '@/components/site/SiteFooter';
 import { SiteHeader } from '@/components/site/SiteHeader';
 
@@ -20,15 +21,30 @@ export function SecurityPage() {
               <br />
               <span>Real accountability.</span>
             </h1>
+            <div className="security-hero-networks" aria-label="Connected networks keep their own security model">
+              <PlatformCluster
+                items={[
+                  { id: 'whatsapp' },
+                  { id: 'telegram' },
+                  { id: 'instagram' },
+                  { id: 'imessage' },
+                ]}
+              />
+            </div>
           </div>
-          <p>
-            Security should make the product easier to understand—not hide its trade-offs behind a
-            badge.
-          </p>
+          <aside className="security-hero-aside">
+            <div className="security-hero-mark">
+              <HeroIcon name="shield" size="xl" />
+            </div>
+            <p>
+              Security should make the product easier to understand—not hide its trade-offs behind a
+              badge.
+            </p>
+          </aside>
         </section>
         <section className="security-statement shell" aria-labelledby="boundary-title">
           <div className="security-statement-mark">
-            <HeroIcon name="info" />
+            <HeroIcon name="lock" size="xl" />
           </div>
           <div>
             <div className="kicker">THE IMPORTANT PART</div>
@@ -57,14 +73,14 @@ export function SecurityPage() {
           <div className="security-control-grid">
             <article>
               <span>
-                <HeroIcon name="people" />
+                <HeroIcon name="people" size="xl" />
               </span>
               <h3>Authenticated account access</h3>
               <p>Protected application routes verify the signed-in account before serving private data.</p>
             </article>
             <article>
               <span>
-                <HeroIcon name="server" />
+                <HeroIcon name="server" size="xl" />
               </span>
               <h3>Production API guardrails</h3>
               <p>
@@ -74,7 +90,7 @@ export function SecurityPage() {
             </article>
             <article>
               <span>
-                <HeroIcon name="info" />
+                <HeroIcon name="info" size="xl" />
               </span>
               <h3>Visible AI boundary</h3>
               <p>
@@ -84,7 +100,7 @@ export function SecurityPage() {
             </article>
             <article>
               <span>
-                <HeroIcon name="desktop" />
+                <HeroIcon name="desktop" size="xl" />
               </span>
               <h3>Local mode is a separate promise</h3>
               <p>
@@ -105,7 +121,11 @@ export function SecurityPage() {
           <div className="security-map-grid">
             <article className="security-map-step">
               <span>01</span>
-              <HeroIcon name="phone" />
+              <div className="security-map-brands">
+                <PlatformIcon id="whatsapp" size="lg" />
+                <PlatformIcon id="telegram" size="lg" />
+                <PlatformIcon id="instagram" size="lg" />
+              </div>
               <h3>Connected network</h3>
               <p>
                 A message originates in WhatsApp, Telegram, Instagram, or another connected service,
@@ -117,7 +137,7 @@ export function SecurityPage() {
             </article>
             <article className="security-map-step emphasis">
               <span>02</span>
-              <HeroIcon name="server" />
+              <HeroIcon name="server" size="xl" />
               <h3>Claire sync boundary</h3>
               <p>
                 Claire receives and normalizes the data needed to show the unified inbox, preserve
@@ -129,7 +149,7 @@ export function SecurityPage() {
             </article>
             <article className="security-map-step">
               <span>03</span>
-              <HeroIcon name="sparkles" />
+              <HeroIcon name="sparkles" size="xl" />
               <h3>AI only when invoked</h3>
               <p>
                 Ask Claire, summaries, and suggestions use selected conversation context with the

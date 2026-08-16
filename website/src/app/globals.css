@@ -100,6 +100,153 @@ summary:focus-visible {
   border-radius: 4px;
 }
 
+.platform-mark {
+  width: 31px;
+  height: 31px;
+  flex: 0 0 31px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--platform-accent);
+  color: white;
+  font: 600 9px var(--font-mono);
+  letter-spacing: -0.04em;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 20%);
+  overflow: hidden;
+  position: relative;
+}
+
+.platform-mark img {
+  width: 68%;
+  height: 68%;
+  max-width: none;
+  object-fit: contain;
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.platform-mark.has-image,
+.platform-mark:has(img) {
+  color: transparent;
+  font-size: 0;
+}
+
+.platform-mark.original {
+  background: white;
+  box-shadow:
+    inset 0 0 0 1px rgb(16 18 15 / 10%),
+    0 2px 8px rgb(16 18 15 / 5%);
+}
+
+.platform-mark.original img {
+  width: 72%;
+  height: 72%;
+}
+
+.platform-mark--sm {
+  width: 22px;
+  height: 22px;
+  flex-basis: 22px;
+  border-radius: 7px;
+  font-size: 6px;
+}
+
+.platform-mark--sm img {
+  width: 72%;
+  height: 72%;
+}
+
+.platform-mark--lg {
+  width: 52px;
+  height: 52px;
+  flex-basis: 52px;
+  border-radius: 16px;
+  font-size: 12px;
+}
+
+.platform-mark--xl {
+  width: 72px;
+  height: 72px;
+  flex-basis: 72px;
+  border-radius: 22px;
+  font-size: 14px;
+}
+
+.platform-mark--hero {
+  width: 88px;
+  height: 88px;
+  flex-basis: 88px;
+  border-radius: 26px;
+  font-size: 16px;
+  box-shadow: 6px 6px 0 rgb(16 18 15 / 16%);
+}
+
+.platform-mark--hero img,
+.platform-mark--xl img {
+  width: 62%;
+  height: 62%;
+}
+
+.platform-cluster {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px 20px;
+  margin: 40px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.platform-cluster li {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  min-width: 88px;
+}
+
+.platform-cluster b {
+  font: 600 11px var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.platform-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px 8px 8px;
+  border: 1px solid rgb(16 18 15 / 18%);
+  border-radius: 999px;
+  background: rgb(255 253 248 / 72%);
+}
+
+.platform-chip b {
+  font: 600 11px var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 700px) {
+  .platform-mark--hero {
+    width: 64px;
+    height: 64px;
+    flex-basis: 64px;
+    border-radius: 20px;
+    box-shadow: 4px 4px 0 rgb(16 18 15 / 16%);
+  }
+
+  .platform-cluster {
+    gap: 14px 16px;
+  }
+
+  .platform-cluster li {
+    min-width: 64px;
+  }
+}
+
 .faq-page {
   padding: 72px 0 120px;
 }

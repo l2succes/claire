@@ -17,7 +17,9 @@ import {
   HomeIcon,
   InboxIcon,
   InformationCircleIcon,
+  LockClosedIcon,
   MagnifyingGlassIcon,
+  ShieldCheckIcon,
   PaperAirplaneIcon,
   PencilSquareIcon,
   PlusIcon,
@@ -49,6 +51,8 @@ const icons = {
   cloud: CloudIcon,
   server: ServerStackIcon,
   info: InformationCircleIcon,
+  lock: LockClosedIcon,
+  shield: ShieldCheckIcon,
   more: EllipsisHorizontalIcon,
   back: ChevronLeftIcon,
   'chevron-down': ChevronDownIcon,
@@ -64,7 +68,7 @@ export function HeroIcon({
 }: {
   name: HeroIconName;
   className?: string;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'sm' | 'md' | 'lg' | 'xl';
 }) {
   const Icon = icons[name];
   return (
@@ -74,7 +78,8 @@ export function HeroIcon({
         'hero-icon inline-block shrink-0 overflow-visible align-middle',
         size === 'sm' && 'size-5',
         size === 'md' && 'size-6',
-        size === 'lg' && 'size-7',
+        size === 'lg' && 'size-8',
+        size === 'xl' && 'size-12',
         className,
       )}
     />

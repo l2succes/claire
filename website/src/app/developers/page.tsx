@@ -2,6 +2,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { HeroIcon } from '@/components/site/HeroIcon';
+import { PlatformCluster } from '@/components/site/PlatformMark';
 import '@/styles/developer.css';
 
 export const metadata: Metadata = {
@@ -52,6 +53,17 @@ export default function DevelopersPage() {
               </a>
               <Link href="/docs">Read the docs</Link>
             </div>
+            <div className="dev-network-row" aria-label="Networks contributors can extend">
+              <PlatformCluster
+                items={[
+                  { id: 'whatsapp' },
+                  { id: 'telegram' },
+                  { id: 'instagram' },
+                  { id: 'imessage' },
+                  { id: 'discord' },
+                ]}
+              />
+            </div>
           </div>
           <aside className="dev-terminal">
             <header>
@@ -89,16 +101,19 @@ export default function DevelopersPage() {
             </p>
             <div className="vision-model">
               <article>
+                <HeroIcon name="desktop" size="xl" />
                 <span>COMMUNITY</span>
                 <b>Build and self-host</b>
                 <p>Run the stack, bring your own model, create private plugins, and contribute upstream.</p>
               </article>
               <article>
+                <HeroIcon name="cloud" size="xl" />
                 <span>CLAIRE CLOUD</span>
                 <b>Managed and always on</b>
                 <p>Hosted infrastructure, monitored connections, included AI allowance, and automatic updates.</p>
               </article>
               <article>
+                <HeroIcon name="sparkles" size="xl" />
                 <span>ECOSYSTEM</span>
                 <b>Extend conversations</b>
                 <p>Verified plugins, community tools, connector adapters, and reusable automation templates.</p>
@@ -293,28 +308,28 @@ export default function DevelopersPage() {
           <div className="build-grid">
             <article>
               <span>01</span>
-              <HeroIcon name="phone" />
+              <HeroIcon name="phone" size="xl" />
               <h3>Mobile experience</h3>
               <p>Expo Router screens, conversation interaction, accessibility, and design-system primitives.</p>
               <a href="https://github.com/l2succes/claire/tree/main/mobile">Open mobile/</a>
             </article>
             <article>
               <span>02</span>
-              <HeroIcon name="desktop" />
+              <HeroIcon name="desktop" size="xl" />
               <h3>Desktop client</h3>
               <p>React Native macOS, keyboard-first workflows, local bridge health, and dense workspace patterns.</p>
               <a href="https://github.com/l2succes/claire/tree/main/desktop">Open desktop/</a>
             </article>
             <article>
               <span>03</span>
-              <HeroIcon name="chat" />
+              <HeroIcon name="chat" size="xl" />
               <h3>Messaging connectors</h3>
               <p>Matrix event normalization, authentication, sync recovery, media, and network capability definitions.</p>
               <Link href="/docs/product/roadmap">Read the roadmap</Link>
             </article>
             <article>
               <span>04</span>
-              <HeroIcon name="sparkles" />
+              <HeroIcon name="sparkles" size="xl" />
               <h3>AI and plugins</h3>
               <p>Provider-neutral inference, Ask Claire, typed tools, permissions, approvals, and auditable automation.</p>
               <Link href="/docs/guides/plugins">Read the plugin guide</Link>

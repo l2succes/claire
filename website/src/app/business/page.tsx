@@ -2,7 +2,27 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { HeroIcon } from '@/components/site/HeroIcon';
+import { PlatformCluster, PlatformIcon } from '@/components/site/PlatformMark';
+import { getPlatform } from '@/lib/platforms';
 import '@/styles/business.css';
+
+const heroChannels = [
+  { id: 'instagram', label: 'Instagram' },
+  { id: 'whatsapp', label: 'WhatsApp' },
+  { id: 'linkedin', label: 'LinkedIn' },
+  { id: 'google-messages', label: 'SMS' },
+  { id: 'messenger', label: 'Messenger' },
+] as const;
+
+const channelCards = [
+  { id: 'whatsapp', status: 'AVAILABLE', note: 'Cloud or self-hosted bridge', available: true },
+  { id: 'instagram', status: 'AVAILABLE', note: 'Desktop-assisted setup', available: true },
+  { id: 'linkedin', status: 'PLANNED', note: 'Business messaging track' },
+  { id: 'google-messages', status: 'PLANNED', note: 'Provider adapter track', label: 'SMS / RCS' },
+  { id: 'messenger', status: 'PLANNED', note: 'Meta bridge track' },
+  { id: 'telegram', status: 'CORE AVAILABLE', note: 'Business routing planned' },
+  { id: 'slack', status: 'PLANNED', note: 'Internal collaboration', label: 'Slack & Teams' },
+] as const;
 
 export const metadata: Metadata = {
   title: 'Claire for Business',
@@ -51,11 +71,7 @@ export default function BusinessPage() {
               <a href="#workspace">See the workspace</a>
             </div>
             <div className="channel-line">
-              <span>INSTAGRAM</span>
-              <span>WHATSAPP</span>
-              <span>LINKEDIN</span>
-              <span>SMS</span>
-              <span>MESSENGER</span>
+              <PlatformCluster items={[...heroChannels]} />
             </div>
           </div>
           <aside className="inbox-preview">
@@ -91,7 +107,10 @@ export default function BusinessPage() {
                   <div>
                     <b>Ana Reyes</b>
                     <p>Do you have the blue one in medium?</p>
-                    <small>Instagram · 1m</small>
+                    <small>
+                      <PlatformIcon id="instagram" size="sm" />
+                      Instagram · 1m
+                    </small>
                   </div>
                   <em>HOT</em>
                 </article>
@@ -100,7 +119,10 @@ export default function BusinessPage() {
                   <div>
                     <b>Jordan Miles</b>
                     <p>Can we move the demo to Friday?</p>
-                    <small>WhatsApp · 8m</small>
+                    <small>
+                      <PlatformIcon id="whatsapp" size="sm" />
+                      WhatsApp · 8m
+                    </small>
                   </div>
                 </article>
                 <article>
@@ -108,7 +130,10 @@ export default function BusinessPage() {
                   <div>
                     <b>Sam Kim</b>
                     <p>Interested in your team plan.</p>
-                    <small>LinkedIn · 14m</small>
+                    <small>
+                      <PlatformIcon id="linkedin" size="sm" />
+                      LinkedIn · 14m
+                    </small>
                   </div>
                 </article>
               </aside>
@@ -116,7 +141,10 @@ export default function BusinessPage() {
                 <header>
                   <div>
                     <b>Ana Reyes</b>
-                    <small>Instagram · Product inquiry</small>
+                    <small>
+                      <PlatformIcon id="instagram" size="sm" />
+                      Instagram · Product inquiry
+                    </small>
                   </div>
                   <button>Assign to Maya</button>
                 </header>
@@ -199,7 +227,7 @@ export default function BusinessPage() {
           </header>
           <div className="workspace-grid">
             <article className="wide">
-              <HeroIcon name="inbox" />
+              <HeroIcon name="inbox" size="xl" />
               <span>SHARED INBOX</span>
               <h3>Every channel, owner, and status in one queue.</h3>
               <p>
@@ -208,19 +236,19 @@ export default function BusinessPage() {
               </p>
             </article>
             <article>
-              <HeroIcon name="people" />
+              <HeroIcon name="people" size="xl" />
               <span>TEAM ROUTING</span>
               <h3>Assign with context.</h3>
               <p>Route by channel, language, topic, customer value, territory, or availability.</p>
             </article>
             <article>
-              <HeroIcon name="sparkles" />
+              <HeroIcon name="sparkles" size="xl" />
               <span>AI COPILOT</span>
               <h3>Answers grounded in your business.</h3>
               <p>Draft replies from approved knowledge, inventory, policies, CRM context, and history.</p>
             </article>
             <article>
-              <HeroIcon name="check-circle" />
+              <HeroIcon name="check-circle" size="xl" />
               <span>FOLLOW-THROUGH</span>
               <h3>Promises become work.</h3>
               <p>Turn commitments into reminders, tasks, bookings, and pipeline updates.</p>
@@ -245,21 +273,21 @@ export default function BusinessPage() {
           <div className="automation-flow">
             <article>
               <small>WHEN</small>
-              <HeroIcon name="chat" />
+              <HeroIcon name="chat" size="xl" />
               <h3>A new Instagram DM asks about pricing</h3>
               <span>Channel · intent · business hours</span>
             </article>
             <HeroIcon name="arrow-right" />
             <article>
               <small>CLAIRE</small>
-              <HeroIcon name="sparkles" />
+              <HeroIcon name="sparkles" size="xl" />
               <h3>Qualifies the request and finds the right plan</h3>
               <span>Approved knowledge only</span>
             </article>
             <HeroIcon name="arrow-right" />
             <article>
               <small>THEN</small>
-              <HeroIcon name="send" />
+              <HeroIcon name="send" size="xl" />
               <h3>Prepares a reply and assigns Sales</h3>
               <span>Auto-send or require approval</span>
             </article>
@@ -295,46 +323,20 @@ export default function BusinessPage() {
             </p>
           </header>
           <div className="channel-matrix">
-            <article className="available">
-              <b>WhatsApp</b>
-              <span>AVAILABLE</span>
-              <p>Cloud or self-hosted bridge</p>
-            </article>
-            <article className="available">
-              <b>Instagram</b>
-              <span>AVAILABLE</span>
-              <p>Desktop-assisted setup</p>
-            </article>
-            <article>
-              <b>LinkedIn</b>
-              <span>PLANNED</span>
-              <p>Business messaging track</p>
-            </article>
-            <article>
-              <b>SMS / RCS</b>
-              <span>PLANNED</span>
-              <p>Provider adapter track</p>
-            </article>
-            <article>
-              <b>Messenger</b>
-              <span>PLANNED</span>
-              <p>Meta bridge track</p>
-            </article>
-            <article>
-              <b>Google Messages</b>
-              <span>PLANNED</span>
-              <p>Paired Android device</p>
-            </article>
-            <article>
-              <b>Telegram</b>
-              <span>CORE AVAILABLE</span>
-              <p>Business routing planned</p>
-            </article>
-            <article>
-              <b>Slack & Teams</b>
-              <span>PLANNED</span>
-              <p>Internal collaboration</p>
-            </article>
+            {channelCards.map((channel) => {
+              const platform = getPlatform(channel.id);
+              if (!platform) return null;
+              return (
+                <article className={'available' in channel && channel.available ? 'available' : undefined} key={channel.id}>
+                  <header>
+                    <PlatformIcon id={channel.id} size="xl" />
+                    <span>{channel.status}</span>
+                  </header>
+                  <b>{'label' in channel ? channel.label : platform.name}</b>
+                  <p>{channel.note}</p>
+                </article>
+              );
+            })}
           </div>
         </section>
         <section className="governance">

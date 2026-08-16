@@ -4,6 +4,7 @@
 import { platformCatalog, type PlatformDefinition } from '@claire/platform-catalog';
 import { useMemo, useState } from 'react';
 import { HeroIcon, type HeroIconName } from '@/components/site/HeroIcon';
+import { PlatformMark } from '@/components/site/PlatformMark';
 
 const supportLabels = {
   available: 'AVAILABLE',
@@ -34,30 +35,6 @@ function matchesFilter(platform: PlatformDefinition, filter: Filter) {
   if (filter === 'planned') return platform.supportStatus === 'planned';
   if (filter === 'desktop') return platform.setupSurface === 'desktop';
   return ['always_on_mac', 'android_phone_online'].includes(platform.deviceDependency);
-}
-
-function PlatformMark({ platform }: { platform: PlatformDefinition }) {
-  const [hasImage, setHasImage] = useState(false);
-
-  return (
-    <span
-      className={`platform-mark ${platform.iconTreatment || 'knockout'}${hasImage ? ' has-image' : ''}`}
-      style={{ ['--platform-accent' as string]: platform.accent }}
-      aria-hidden="true"
-    >
-      {platform.mark}
-      {platform.iconUrl ? (
-        <img
-          alt=""
-          loading="lazy"
-          decoding="async"
-          src={platform.iconUrl}
-          onLoad={() => setHasImage(true)}
-          onError={(event) => event.currentTarget.remove()}
-        />
-      ) : null}
-    </span>
-  );
 }
 
 export function PlatformRail() {

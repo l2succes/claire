@@ -8,7 +8,7 @@
 }
 .security-hero {
   display: flex;
-  align-items: end;
+  align-items: center;
   justify-content: space-between;
   gap: 48px;
   padding-top: 112px;
@@ -24,9 +24,32 @@
   color: var(--claire-lime);
   -webkit-text-stroke: 1.5px var(--claire-ink);
 }
-.security-hero > p {
-  max-width: 355px;
-  margin: 0 0 5px;
+.security-hero-networks {
+  margin-top: 36px;
+}
+.security-hero-networks .platform-cluster {
+  margin-top: 0;
+}
+.security-hero-aside {
+  max-width: 360px;
+}
+.security-hero-mark {
+  display: grid;
+  width: 88px;
+  height: 88px;
+  place-items: center;
+  margin-bottom: 22px;
+  border-radius: 28px;
+  background: var(--claire-lime);
+  color: var(--claire-ink);
+  box-shadow: 8px 8px 0 var(--claire-ink);
+}
+.security-hero-mark .hero-icon {
+  width: 48px;
+  height: 48px;
+}
+.security-hero-aside p {
+  margin: 0;
   color: var(--neutral-600);
   font-size: 16px;
   line-height: 1.55;
@@ -42,16 +65,16 @@
 }
 .security-statement-mark {
   display: grid;
-  width: 60px;
-  height: 60px;
+  width: 76px;
+  height: 76px;
   place-items: center;
-  border-radius: 19px;
+  border-radius: 24px;
   background: var(--claire-lime);
   color: var(--claire-ink);
 }
 .security-statement-mark .hero-icon {
-  width: 30px;
-  height: 30px;
+  width: 40px;
+  height: 40px;
 }
 .security-statement .kicker {
   color: var(--claire-lime);
@@ -119,15 +142,15 @@
 }
 .security-control-grid article > span {
   display: grid;
-  width: 43px;
-  height: 43px;
+  width: 64px;
+  height: 64px;
   place-items: center;
-  border-radius: 13px;
+  border-radius: 18px;
   background: var(--claire-paper);
 }
 .security-control-grid .hero-icon {
-  width: 22px;
-  height: 22px;
+  width: 36px;
+  height: 36px;
 }
 .security-control-grid h3 {
   margin: 44px 0 0;
@@ -159,10 +182,15 @@
 .security-map-step > span {
   font: 500 9px var(--font-mono);
 }
+.security-map-brands {
+  display: flex;
+  gap: 8px;
+  margin-top: 36px;
+}
 .security-map-step > .hero-icon {
-  width: 32px;
-  height: 32px;
-  margin-top: 43px;
+  width: 48px;
+  height: 48px;
+  margin-top: 36px;
 }
 .security-map-step h3 {
   margin: 23px 0 0;

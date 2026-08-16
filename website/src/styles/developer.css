@@ -137,6 +137,12 @@ a {
 .dev-actions svg {
   width: 17px;
 }
+.dev-network-row {
+  margin-top: 36px;
+}
+.dev-network-row .platform-cluster {
+  margin-top: 0;
+}
 .dev-terminal {
   border: 1px solid var(--claire-ink);
   border-radius: 20px;
@@ -218,9 +224,14 @@ a {
   overflow: hidden;
 }
 .vision-model article {
-  min-height: 240px;
+  min-height: 280px;
   padding: 25px;
   border-right: 1px solid var(--neutral-200);
+}
+.vision-model .hero-icon {
+  width: 48px;
+  height: 48px;
+  margin-bottom: 18px;
 }
 .vision-model article:last-child {
   border: 0;
@@ -234,7 +245,7 @@ a {
 }
 .vision-model b {
   display: block;
-  margin: 55px 0 8px;
+  margin: 28px 0 8px;
   font-size: 18px;
 }
 .vision-model p {
@@ -533,8 +544,8 @@ a {
   position: relative;
 }
 .build-grid article > svg {
-  width: 34px;
-  height: 34px;
+  width: 48px;
+  height: 48px;
   margin-top: 45px;
 }
 .build-grid h3 {
