@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Check, ChevronLeft, Mail, MapPin, Phone, RefreshCw, Sparkles } from 'lucide-react-native';
 import { colors, mobileType, radius, space } from '@claire/design-system';
@@ -48,6 +48,7 @@ function Field({ icon, label, value, onChangeText, placeholder, keyboardType = '
 export default function ConversationSettingsScreen() {
   const { chatId, platform, contact_name, chat_name, is_group } = useLocalSearchParams<{ chatId: string; platform?: string; contact_name?: string; chat_name?: string; is_group?: string }>();
   const user = useAuthStore((state) => state.user);
+  const insets = useSafeAreaInsets();
   const { settings, fetchSettings, setCategory, updateProfile, refreshInsights } = useConversationSettingsStore();
   const chatSettings = settings[chatId];
   const isLoading = chatSettings?.isLoading ?? true;
@@ -126,7 +127,7 @@ export default function ConversationSettingsScreen() {
         <View style={{ width: 40 }} />
       </View>
       {isLoading && !chatSettings ? <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator size="large" color={colors.ink} /></View> : (
-        <ScrollView contentContainerStyle={{ padding: space[4], paddingBottom: 132, gap: space[5] }} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={{ padding: space[4], paddingBottom: 132 + insets.bottom, gap: space[5] }} keyboardShouldPersistTaps="handled">
           <View style={{ alignItems: 'center', gap: space[2], paddingVertical: space[2] }}>
             <MobileAvatar name={displayName} size={72} isGroup={is_group === '1'} />
             <Text maxFontSizeMultiplier={1} style={{ ...mobileType.sectionTitle, color: colors.ink }}>{displayName}</Text>
@@ -173,7 +174,7 @@ export default function ConversationSettingsScreen() {
           </View>
         </ScrollView>
       )}
-      {!isLoading || chatSettings ? <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: space[4], paddingVertical: space[3], backgroundColor: colors.cream, borderTopWidth: 1, borderTopColor: colors.neutral[200] }}><Pressable disabled={isSaving} accessibilityRole="button" onPress={() => void save()}><View style={{ minHeight: 50, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space[2], borderRadius: radius.control, backgroundColor: colors.ink, opacity: isSaving ? 0.6 : 1 }}><Check size={18} color={colors.paper} /><Text style={{ ...mobileType.label, color: colors.paper }}>{isSaving ? 'Saving…' : 'Save relationship memory'}</Text></View></Pressable></View> : null}
+      {!isLoading || chatSettings ? <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: space[4], paddingTop: space[3], paddingBottom: Math.max(insets.bottom, space[3]), backgroundColor: colors.cream, borderTopWidth: 1, borderTopColor: colors.neutral[200] }}><Pressable disabled={isSaving} accessibilityRole="button" onPress={() => void save()}><View style={{ minHeight: 50, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space[2], borderRadius: radius.control, backgroundColor: colors.ink, opacity: isSaving ? 0.6 : 1 }}><Check size={18} color={colors.paper} /><Text style={{ ...mobileType.label, color: colors.paper }}>{isSaving ? 'Saving…' : 'Save relationship memory'}</Text></View></Pressable></View> : null}
     </SafeAreaView>
   );
 }
