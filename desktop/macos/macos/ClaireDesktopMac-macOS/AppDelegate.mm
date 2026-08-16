@@ -160,8 +160,10 @@
   NSView *container = closeButton.superview;
   if (container == nil || minimizeButton == nil || zoomButton == nil) return;
 
-  const CGFloat leading = 20.0;
-  const CGFloat gap = 12.0;
+  // Keep Apple's genuine traffic-light controls, but use a compact group so
+  // the collapsed Claire rail need not grow wider than the controls.
+  const CGFloat leading = 14.0;
+  const CGFloat gap = 6.0;
   const CGFloat topInset = 12.0;
   const CGFloat y = NSHeight(container.bounds) - NSHeight(closeButton.frame) - topInset;
   CGFloat x = leading;

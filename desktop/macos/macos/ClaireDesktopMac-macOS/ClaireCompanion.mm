@@ -4,7 +4,13 @@
 #import <Security/Security.h>
 #import <UserNotifications/UserNotifications.h>
 #import <WebKit/WebKit.h>
+#if __has_include(<sqlcipher/sqlite3.h>)
+#import <sqlcipher/sqlite3.h>
+#define CLAIRE_HAS_SQLCIPHER 1
+#else
 #import <sqlite3.h>
+#define CLAIRE_HAS_SQLCIPHER 0
+#endif
 
 @class ClaireCompanion;
 
@@ -250,14 +256,42 @@ static NSString *ClaireDecodeAttributedBody(const void *bytes, int length)
 }
 
 static NSString *const ClaireDeviceKeyTag = @"com.claire.desktop.device-signing-key";
+// Keep credentials with different UX and retention rules in separate Keychain
+// services. Older builds put all three in the companion service, which made a
+// background cache/status read capable of triggering an alarming Keychain
+// prompt on every launch.
 static NSString *const ClaireDeviceCredentialService = @"com.claire.desktop.companion";
+static NSString *const ClaireAppAuthCredentialService = @"com.claire.desktop.auth";
+static NSString *const ClaireCacheKeyService = @"com.claire.desktop.cache";
 
-+ (BOOL)storeKeychainValue:(NSString *)value account:(NSString *)account error:(NSError **)error
+static NSString *ClaireCacheAccount(NSString *userId) { return [@"desktop.cache.key." stringByAppendingString:userId ?: @""]; }
+
+static NSString *ClaireCachePath(NSString *userId)
+{
+  NSURL *directory = [[[NSFileManager defaultManager] URLsForDirectory:NSApplicationSupportDirectory inDomains:NSUserDomainMask] firstObject];
+  directory = [directory URLByAppendingPathComponent:@"Claire/Cache" isDirectory:YES];
+  [[NSFileManager defaultManager] createDirectoryAtURL:directory withIntermediateDirectories:YES attributes:nil error:nil];
+  return [[directory URLByAppendingPathComponent:[NSString stringWithFormat:@"%@.sqlite", userId ?: @""]] path];
+}
+
+static NSString *ClaireRandomDatabaseKey(void)
+{
+  uint8_t bytes[32];
+  if (SecRandomCopyBytes(kSecRandomDefault, sizeof(bytes), bytes) != errSecSuccess) return nil;
+  NSMutableString *result = [NSMutableString stringWithCapacity:64];
+  for (NSUInteger index = 0; index < sizeof(bytes); index += 1) [result appendFormat:@"%02x", bytes[index]];
+  return result;
+}
+
++ (BOOL)storeKeychainValue:(NSString *)value
+                   account:(NSString *)account
+                   service:(NSString *)service
+                     error:(NSError **)error
 {
   NSData *data = [value dataUsingEncoding:NSUTF8StringEncoding];
   NSDictionary *query = @{
     (__bridge id)kSecClass: (__bridge id)kSecClassGenericPassword,
-    (__bridge id)kSecAttrService: ClaireDeviceCredentialService,
+    (__bridge id)kSecAttrService: service,
     (__bridge id)kSecAttrAccount: account,
   };
   OSStatus status = SecItemUpdate((__bridge CFDictionaryRef)query, (__bridge CFDictionaryRef)@{ (__bridge id)kSecValueData: data });
@@ -271,14 +305,21 @@ static NSString *const ClaireDeviceCredentialService = @"com.claire.desktop.comp
   return status == errSecSuccess;
 }
 
-+ (NSString *)keychainValueForAccount:(NSString *)account error:(NSError **)error
++ (NSString *)keychainValueForAccount:(NSString *)account
+                              service:(NSString *)service
+                     allowInteraction:(BOOL)allowInteraction
+                                error:(NSError **)error
 {
-  NSDictionary *query = @{
+  NSMutableDictionary *query = [@{
     (__bridge id)kSecClass: (__bridge id)kSecClassGenericPassword,
-    (__bridge id)kSecAttrService: ClaireDeviceCredentialService,
+    (__bridge id)kSecAttrService: service,
     (__bridge id)kSecAttrAccount: account,
     (__bridge id)kSecReturnData: @YES,
-  };
+  } mutableCopy];
+  // Background startup, sync and cache reads must never put a password dialog
+  // in front of the workspace. A user-initiated companion setup may opt in to
+  // interaction to recover an existing credential instead.
+  if (!allowInteraction) query[(__bridge id)kSecUseAuthenticationUI] = (__bridge id)kSecUseAuthenticationUIFail;
   CFTypeRef value = NULL;
   OSStatus status = SecItemCopyMatching((__bridge CFDictionaryRef)query, &value);
   if (status == errSecItemNotFound) return nil;
@@ -538,8 +579,8 @@ RCT_REMAP_METHOD(getStatus,
   NSString *messagesPath = [NSHomeDirectory() stringByAppendingPathComponent:@"Library/Messages/chat.db"];
   BOOL canReadMessages = [[NSFileManager defaultManager] isReadableFileAtPath:messagesPath];
   NSError *credentialError = nil;
-  NSString *deviceId = [ClaireCompanion keychainValueForAccount:@"companion.device.id" error:&credentialError];
-  NSString *credential = [ClaireCompanion keychainValueForAccount:@"companion.device.credential" error:&credentialError];
+  NSString *deviceId = [ClaireCompanion keychainValueForAccount:@"companion.device.id" service:ClaireDeviceCredentialService allowInteraction:NO error:&credentialError];
+  NSString *credential = [ClaireCompanion keychainValueForAccount:@"companion.device.credential" service:ClaireDeviceCredentialService allowInteraction:NO error:&credentialError];
   BOOL enrolled = deviceId.length > 0 && credential.length > 0;
 
   resolve(@{
@@ -579,6 +620,102 @@ RCT_REMAP_METHOD(setDesktopPreference,
   }
   [[NSUserDefaults standardUserDefaults] setObject:value ?: @"" forKey:[@"com.claire.desktop." stringByAppendingString:key]];
   resolve(@YES);
+}
+
+RCT_REMAP_METHOD(readEncryptedCache,
+                 readEncryptedCacheForUser:(NSString *)userId
+                 resolver:(RCTPromiseResolveBlock)resolve
+                 rejecter:(RCTPromiseRejectBlock)reject)
+{
+#if !CLAIRE_HAS_SQLCIPHER
+  reject(@"encrypted_cache_unavailable", @"This Claire build does not include SQLCipher yet. Run pod install before using the encrypted desktop cache.", nil);
+  return;
+#else
+  if (userId.length == 0) { reject(@"encrypted_cache_invalid_user", @"A signed-in user is required for the encrypted cache.", nil); return; }
+  NSError *keyError = nil;
+  NSString *account = ClaireCacheAccount(userId);
+  NSString *key = [ClaireCompanion keychainValueForAccount:account service:ClaireCacheKeyService allowInteraction:NO error:&keyError];
+  if (key.length == 0 && keyError == nil) { resolve((id)kCFNull); return; }
+  if (keyError != nil) { reject(@"encrypted_cache_key_read_failed", @"Unable to read the desktop cache key.", keyError); return; }
+  sqlite3 *database = NULL;
+  if (sqlite3_open_v2(ClaireCachePath(userId).UTF8String, &database, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, NULL) != SQLITE_OK) { reject(@"encrypted_cache_open_failed", @"Unable to open the encrypted desktop cache.", nil); if (database) sqlite3_close(database); return; }
+  if (sqlite3_key(database, key.UTF8String, (int)key.length) != SQLITE_OK || sqlite3_exec(database, "CREATE TABLE IF NOT EXISTS snapshot (id INTEGER PRIMARY KEY CHECK (id = 1), payload BLOB NOT NULL, updated_at TEXT NOT NULL)", NULL, NULL, NULL) != SQLITE_OK) { sqlite3_close(database); reject(@"encrypted_cache_open_failed", @"Unable to unlock the encrypted desktop cache.", nil); return; }
+  sqlite3_stmt *statement = NULL;
+  NSString *payload = nil;
+  if (sqlite3_prepare_v2(database, "SELECT payload FROM snapshot WHERE id = 1", -1, &statement, NULL) == SQLITE_OK && sqlite3_step(statement) == SQLITE_ROW) {
+    const void *bytes = sqlite3_column_blob(statement, 0);
+    int length = sqlite3_column_bytes(statement, 0);
+    payload = bytes && length > 0 ? [[NSString alloc] initWithBytes:bytes length:(NSUInteger)length encoding:NSUTF8StringEncoding] : nil;
+  }
+  if (statement) sqlite3_finalize(statement);
+  sqlite3_close(database);
+  resolve(payload ?: (id)kCFNull);
+#endif
+}
+
+RCT_REMAP_METHOD(writeEncryptedCache,
+                 writeEncryptedCacheForUser:(NSString *)userId
+                 payload:(NSString *)payload
+                 resolver:(RCTPromiseResolveBlock)resolve
+                 rejecter:(RCTPromiseRejectBlock)reject)
+{
+#if !CLAIRE_HAS_SQLCIPHER
+  reject(@"encrypted_cache_unavailable", @"This Claire build does not include SQLCipher yet. Run pod install before using the encrypted desktop cache.", nil);
+  return;
+#else
+  if (userId.length == 0 || payload.length == 0) { reject(@"encrypted_cache_invalid_payload", @"A cache user and payload are required.", nil); return; }
+  NSError *keyError = nil;
+  NSString *account = ClaireCacheAccount(userId);
+  NSString *key = [ClaireCompanion keychainValueForAccount:account service:ClaireCacheKeyService allowInteraction:NO error:&keyError];
+  if (key.length == 0 && keyError == nil) {
+    key = ClaireRandomDatabaseKey();
+    if (key.length == 0 || ![ClaireCompanion storeKeychainValue:key account:account service:ClaireCacheKeyService error:&keyError]) { reject(@"encrypted_cache_key_write_failed", @"Unable to secure the desktop cache key.", keyError); return; }
+  }
+  if (keyError != nil) { reject(@"encrypted_cache_key_read_failed", @"Unable to read the desktop cache key.", keyError); return; }
+  sqlite3 *database = NULL;
+  if (sqlite3_open_v2(ClaireCachePath(userId).UTF8String, &database, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, NULL) != SQLITE_OK) { reject(@"encrypted_cache_open_failed", @"Unable to open the encrypted desktop cache.", nil); if (database) sqlite3_close(database); return; }
+  int unlock = sqlite3_key(database, key.UTF8String, (int)key.length);
+  int schema = sqlite3_exec(database, "CREATE TABLE IF NOT EXISTS snapshot (id INTEGER PRIMARY KEY CHECK (id = 1), payload BLOB NOT NULL, updated_at TEXT NOT NULL)", NULL, NULL, NULL);
+  sqlite3_stmt *statement = NULL;
+  int prepared = unlock == SQLITE_OK && schema == SQLITE_OK ? sqlite3_prepare_v2(database, "INSERT INTO snapshot(id, payload, updated_at) VALUES(1, ?, datetime('now')) ON CONFLICT(id) DO UPDATE SET payload = excluded.payload, updated_at = excluded.updated_at", -1, &statement, NULL) : SQLITE_ERROR;
+  int written = SQLITE_ERROR;
+  if (prepared == SQLITE_OK) { sqlite3_bind_blob(statement, 1, payload.UTF8String, (int)[payload lengthOfBytesUsingEncoding:NSUTF8StringEncoding], SQLITE_TRANSIENT); written = sqlite3_step(statement); }
+  if (statement) sqlite3_finalize(statement);
+  sqlite3_close(database);
+  if (written != SQLITE_DONE) { reject(@"encrypted_cache_write_failed", @"Unable to write the encrypted desktop cache.", nil); return; }
+  resolve(@YES);
+#endif
+}
+
+RCT_REMAP_METHOD(clearEncryptedCache,
+                 clearEncryptedCacheForUser:(NSString *)userId
+                 resolver:(RCTPromiseResolveBlock)resolve
+                 rejecter:(RCTPromiseRejectBlock)reject)
+{
+  if (userId.length == 0) { resolve(@YES); return; }
+  NSString *cachePath = ClaireCachePath(userId);
+  [[NSFileManager defaultManager] removeItemAtPath:cachePath error:nil];
+  [[NSFileManager defaultManager] removeItemAtPath:[cachePath stringByAppendingString:@"-wal"] error:nil];
+  [[NSFileManager defaultManager] removeItemAtPath:[cachePath stringByAppendingString:@"-shm"] error:nil];
+  NSDictionary *query = @{ (__bridge id)kSecClass: (__bridge id)kSecClassGenericPassword, (__bridge id)kSecAttrService: ClaireCacheKeyService, (__bridge id)kSecAttrAccount: ClaireCacheAccount(userId) };
+  OSStatus status = SecItemDelete((__bridge CFDictionaryRef)query);
+  if (status != errSecSuccess && status != errSecItemNotFound) { reject(@"encrypted_cache_clear_failed", @"Unable to clear the encrypted desktop cache.", nil); return; }
+  resolve(@YES);
+}
+
+RCT_REMAP_METHOD(getEncryptedCacheInfo,
+                 getEncryptedCacheInfoForUser:(NSString *)userId
+                 resolver:(RCTPromiseResolveBlock)resolve
+                 rejecter:(RCTPromiseRejectBlock)reject)
+{
+  NSDictionary *attributes = [[NSFileManager defaultManager] attributesOfItemAtPath:ClaireCachePath(userId) error:nil];
+  NSNumber *bytes = attributes[NSFileSize] ?: @0;
+  NSDate *updatedAt = attributes[NSFileModificationDate];
+  NSString *isoTimestamp = nil;
+  if (updatedAt) {
+    if (@available(macOS 10.12, *)) isoTimestamp = [[NSISO8601DateFormatter new] stringFromDate:updatedAt];
+  }
+  resolve(@{ @"bytes": bytes, @"updatedAt": isoTimestamp ?: (id)kCFNull });
 }
 
 RCT_REMAP_METHOD(openCompactChatWindow,
@@ -678,9 +815,11 @@ RCT_REMAP_METHOD(enrolMacCompanion,
 {
   NSLog(@"[ClaireCompanion] Starting companion enrollment for user %@", userId);
   NSError *existingCredentialError = nil;
-  NSString *existingDeviceId = [ClaireCompanion keychainValueForAccount:@"companion.device.id" error:&existingCredentialError];
-  NSString *existingCredential = [ClaireCompanion keychainValueForAccount:@"companion.device.credential" error:&existingCredentialError];
-  NSString *existingUserId = [ClaireCompanion keychainValueForAccount:@"companion.device.user_id" error:&existingCredentialError];
+  // Enrollment was explicitly selected by the user, so macOS may ask once to
+  // unlock an older companion credential. Normal app startup never does this.
+  NSString *existingDeviceId = [ClaireCompanion keychainValueForAccount:@"companion.device.id" service:ClaireDeviceCredentialService allowInteraction:YES error:&existingCredentialError];
+  NSString *existingCredential = [ClaireCompanion keychainValueForAccount:@"companion.device.credential" service:ClaireDeviceCredentialService allowInteraction:YES error:&existingCredentialError];
+  NSString *existingUserId = [ClaireCompanion keychainValueForAccount:@"companion.device.user_id" service:ClaireDeviceCredentialService allowInteraction:YES error:&existingCredentialError];
   if (existingDeviceId.length > 0 && existingCredential.length > 0 && [existingUserId isEqualToString:userId]) {
     NSLog(@"[ClaireCompanion] Reusing enrolled companion device %@", existingDeviceId);
     resolve(@{ @"deviceId": existingDeviceId });
@@ -713,9 +852,9 @@ RCT_REMAP_METHOD(enrolMacCompanion,
       return;
     }
     NSError *storeError = nil;
-    BOOL stored = [ClaireCompanion storeKeychainValue:deviceId account:@"companion.device.id" error:&storeError]
-      && [ClaireCompanion storeKeychainValue:credential account:@"companion.device.credential" error:&storeError]
-      && [ClaireCompanion storeKeychainValue:userId account:@"companion.device.user_id" error:&storeError];
+    BOOL stored = [ClaireCompanion storeKeychainValue:deviceId account:@"companion.device.id" service:ClaireDeviceCredentialService error:&storeError]
+      && [ClaireCompanion storeKeychainValue:credential account:@"companion.device.credential" service:ClaireDeviceCredentialService error:&storeError]
+      && [ClaireCompanion storeKeychainValue:userId account:@"companion.device.user_id" service:ClaireDeviceCredentialService error:&storeError];
     if (!stored) {
       NSLog(@"[ClaireCompanion] Enrollment succeeded but Keychain storage failed: %@", storeError.localizedDescription);
       reject(@"device_credential_store_failed", @"Unable to store the companion credential in Keychain.", storeError);
@@ -732,8 +871,8 @@ RCT_REMAP_METHOD(heartbeatMacCompanion,
                  rejecter:(RCTPromiseRejectBlock)reject)
 {
   NSError *keychainError = nil;
-  NSString *deviceId = [ClaireCompanion keychainValueForAccount:@"companion.device.id" error:&keychainError];
-  NSString *credential = [ClaireCompanion keychainValueForAccount:@"companion.device.credential" error:&keychainError];
+  NSString *deviceId = [ClaireCompanion keychainValueForAccount:@"companion.device.id" service:ClaireDeviceCredentialService allowInteraction:NO error:&keychainError];
+  NSString *credential = [ClaireCompanion keychainValueForAccount:@"companion.device.credential" service:ClaireDeviceCredentialService allowInteraction:NO error:&keychainError];
   if (deviceId.length == 0 || credential.length == 0) { reject(@"device_not_enrolled", @"This Mac companion must be enrolled again.", keychainError); return; }
   NSDictionary *headers = @{ @"X-Claire-Device-Token": credential };
   [ClaireCompanion requestJSON:[ClaireCompanion apiURL:apiURL path:[NSString stringWithFormat:@"/devices/%@/heartbeat", deviceId]] method:@"POST" headers:headers body:nil completion:^(NSDictionary *payload, NSInteger statusCode, NSError *requestError) {
@@ -782,8 +921,8 @@ RCT_REMAP_METHOD(ingestIMessageEvents,
                  rejecter:(RCTPromiseRejectBlock)reject)
 {
   NSError *keychainError = nil;
-  NSString *deviceId = [ClaireCompanion keychainValueForAccount:@"companion.device.id" error:&keychainError];
-  NSString *credential = [ClaireCompanion keychainValueForAccount:@"companion.device.credential" error:&keychainError];
+  NSString *deviceId = [ClaireCompanion keychainValueForAccount:@"companion.device.id" service:ClaireDeviceCredentialService allowInteraction:NO error:&keychainError];
+  NSString *credential = [ClaireCompanion keychainValueForAccount:@"companion.device.credential" service:ClaireDeviceCredentialService allowInteraction:NO error:&keychainError];
   if (deviceId.length == 0 || credential.length == 0) { reject(@"device_not_enrolled", @"This Mac companion must be enrolled again.", keychainError); return; }
   NSDictionary *headers = @{ @"X-Claire-Device-Token": credential };
   [ClaireCompanion requestJSON:[ClaireCompanion apiURL:apiURL path:[NSString stringWithFormat:@"/devices/%@/events", deviceId]] method:@"POST" headers:headers body:@{ @"messages": messages } completion:^(NSDictionary *payload, NSInteger statusCode, NSError *requestError) {
@@ -880,7 +1019,7 @@ RCT_REMAP_METHOD(getSecureValue,
 {
   if (![ClaireCompanion isJavaScriptAccessibleKeychainAccount:account]) { reject(@"secure_value_restricted", @"That Keychain item is not available to the React Native layer.", nil); return; }
   NSError *keychainError = nil;
-  NSString *value = [ClaireCompanion keychainValueForAccount:account error:&keychainError];
+  NSString *value = [ClaireCompanion keychainValueForAccount:account service:ClaireAppAuthCredentialService allowInteraction:NO error:&keychainError];
   if (keychainError != nil) { reject(@"secure_value_read_failed", @"Unable to read a Keychain value.", keychainError); return; }
   resolve(value ?: [NSNull null]);
 }
@@ -893,7 +1032,7 @@ RCT_REMAP_METHOD(setSecureValue,
 {
   if (![ClaireCompanion isJavaScriptAccessibleKeychainAccount:account]) { reject(@"secure_value_restricted", @"That Keychain item is not available to the React Native layer.", nil); return; }
   NSError *keychainError = nil;
-  if (![ClaireCompanion storeKeychainValue:value account:account error:&keychainError]) { reject(@"secure_value_write_failed", @"Unable to write a Keychain value.", keychainError); return; }
+  if (![ClaireCompanion storeKeychainValue:value account:account service:ClaireAppAuthCredentialService error:&keychainError]) { reject(@"secure_value_write_failed", @"Unable to write a Keychain value.", keychainError); return; }
   resolve(@YES);
 }
 
@@ -905,7 +1044,7 @@ RCT_REMAP_METHOD(removeSecureValue,
   if (![ClaireCompanion isJavaScriptAccessibleKeychainAccount:account]) { reject(@"secure_value_restricted", @"That Keychain item is not available to the React Native layer.", nil); return; }
   NSDictionary *query = @{
     (__bridge id)kSecClass: (__bridge id)kSecClassGenericPassword,
-    (__bridge id)kSecAttrService: ClaireDeviceCredentialService,
+    (__bridge id)kSecAttrService: ClaireAppAuthCredentialService,
     (__bridge id)kSecAttrAccount: account,
   };
   OSStatus status = SecItemDelete((__bridge CFDictionaryRef)query);
@@ -1007,8 +1146,8 @@ RCT_REMAP_METHOD(syncIMessageMedia,
                  rejecter:(RCTPromiseRejectBlock)reject)
 {
   NSError *keychainError = nil;
-  NSString *deviceId = [ClaireCompanion keychainValueForAccount:@"companion.device.id" error:&keychainError];
-  NSString *credential = [ClaireCompanion keychainValueForAccount:@"companion.device.credential" error:&keychainError];
+  NSString *deviceId = [ClaireCompanion keychainValueForAccount:@"companion.device.id" service:ClaireDeviceCredentialService allowInteraction:NO error:&keychainError];
+  NSString *credential = [ClaireCompanion keychainValueForAccount:@"companion.device.credential" service:ClaireDeviceCredentialService allowInteraction:NO error:&keychainError];
   if (deviceId.length == 0 || credential.length == 0) { reject(@"device_not_enrolled", @"This Mac companion must be enrolled again.", keychainError); return; }
   if (!messages.count) { resolve(@0); return; }
 

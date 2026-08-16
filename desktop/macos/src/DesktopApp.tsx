@@ -21,6 +21,7 @@ import {
 import { ClaireAvatar, ClaireButton, ClaireCard, ClaireConversationRow, ClaireField, ClaireIconButton, ClaireMessageBubble, ClaireStatusPill, ClaireText, colors, radius, space } from '@claire/design-system';
 import { companionBridge, type CompanionStatus, type DesktopRuntimeConfig } from './native/CompanionBridge';
 import { ClaireApi, type AssistantAnswer, type AssistantCitation, type AssistantThread, type AssistantTurn, type ConversationAssistantThread, type DesktopAccountProfile, type DesktopChat, type DesktopConversationSettings, type DesktopMessage, type DesktopPlatformDefinition, type DesktopPlatformStatus, type DesktopPreferences, type DesktopPromise } from './services/claire-api';
+import { DesktopCache } from './services/desktop-cache';
 import { createDesktopAuth, exchangeDesktopCallback, signInWithGoogle, type DesktopAuth } from './services/auth';
 import { clampDesktopPaneWidth, destinationForDesktopCommand, type DesktopDestination } from './services/desktop-navigation';
 import { mergeChronologicalMessages } from './services/message-sync';
@@ -164,6 +165,7 @@ export default function DesktopApp({ compactWindow = false, initialConversationI
 function DesktopWorkspace({ auth, compactWindow, initialConversationId, session }: { auth: DesktopAuth; compactWindow: boolean; initialConversationId?: string; session: Session }) {
   const { width } = useWindowDimensions();
   const [destination, setDestination] = useState<Destination>('Inbox');
+  const [visitedDestinations, setVisitedDestinations] = useState<Set<Destination>>(() => new Set(['Inbox']));
   const [compactChatOpen, setCompactChatOpen] = useState(false);
   const [chats, setChats] = useState<DesktopChat[]>([]);
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(initialConversationId || null);
@@ -189,11 +191,14 @@ function DesktopWorkspace({ auth, compactWindow, initialConversationId, session 
   const [navigationCollapsed, setNavigationCollapsed] = useState(false);
   const [peopleSelectionId, setPeopleSelectionId] = useState<string | null>(null);
   const [globalSearchSeed, setGlobalSearchSeed] = useState<string | null>(null);
+  const [cacheHydrated, setCacheHydrated] = useState(false);
+  const [fullHistoryEnabled, setFullHistoryEnabled] = useState(false);
   const syncingIMessageRef = useRef(false);
+  const desktopCacheRef = useRef(new DesktopCache());
+  const syncCursorRef = useRef(0);
   const inspectorPreferenceLoadedRef = useRef(false);
   const selectedConversationIdRef = useRef<string | null>(initialConversationId || null);
   const chatRefreshInFlightRef = useRef<Promise<void> | null>(null);
-  const chatRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const api = useMemo(() => auth.config.apiUrl ? new ClaireApi(auth.config.apiUrl, session.access_token) : null, [auth.config.apiUrl, session.access_token]);
   const conversations = useMemo(() => chats.map(toConversation), [chats]);
   const selected = useMemo(() => conversations.find((item) => item.id === selectedConversationId) ?? conversations[0] ?? null, [conversations, selectedConversationId]);
@@ -218,6 +223,23 @@ function DesktopWorkspace({ auth, compactWindow, initialConversationId, session 
   const clearGlobalSearchSeed = useCallback(() => setGlobalSearchSeed(null), []);
 
   useEffect(() => { selectedConversationIdRef.current = selectedConversationId; }, [selectedConversationId]);
+  useEffect(() => { setVisitedDestinations((current) => current.has(destination) ? current : new Set([...current, destination])); }, [destination]);
+
+  // Render the last encrypted account snapshot before asking the network for
+  // anything. This keeps navigation useful during an offline launch and makes
+  // a warm start independent of bridge/API latency.
+  useEffect(() => {
+    let active = true;
+    desktopCacheRef.current.hydrate(session.user.id).then((snapshot) => {
+      if (!active) return;
+      syncCursorRef.current = snapshot.cursor;
+      setFullHistoryEnabled(snapshot.fullHistoryEnabled);
+      if (snapshot.chats.length) setChats(snapshot.chats);
+      if (!selectedConversationIdRef.current && snapshot.lastChatId) setSelectedConversationId(snapshot.lastChatId);
+      if (snapshot.lastChatId && snapshot.timelines[snapshot.lastChatId]?.length) setMessages(snapshot.timelines[snapshot.lastChatId]);
+    }).finally(() => { if (active) setCacheHydrated(true); });
+    return () => { active = false; };
+  }, [session.user.id]);
 
   useEffect(() => {
     const unreadCount = chats.reduce((total, chat) => total + Math.max(0, chat.unread_count || 0), 0);
@@ -230,7 +252,11 @@ function DesktopWorkspace({ auth, compactWindow, initialConversationId, session 
     const request = (async () => {
       if (showLoading) setLoadingChats(true);
       try {
-        const nextChats = await api.getChats();
+        const bootstrap = await api.getDesktopBootstrap();
+        const nextChats = bootstrap.chats;
+        syncCursorRef.current = bootstrap.cursor;
+        desktopCacheRef.current.update({ chats: nextChats, promises: bootstrap.promises, preferences: bootstrap.preferences, cursor: bootstrap.cursor });
+        desktopCacheRef.current.schedulePersist(session.user.id);
         setChats((current) => reconcileDesktopChats(current, nextChats));
         setSelectedConversationId((current) => current && nextChats.some((chat) => chat.id === current) ? current : (initialConversationId && nextChats.some((chat) => chat.id === initialConversationId) ? initialConversationId : nextChats[0]?.id ?? null));
         if (showLoading) setDataError(null);
@@ -246,26 +272,16 @@ function DesktopWorkspace({ auth, compactWindow, initialConversationId, session 
     } finally {
       if (chatRefreshInFlightRef.current === request) chatRefreshInFlightRef.current = null;
     }
-  }, [api, initialConversationId]);
-
-  const scheduleChatRefresh = useCallback(() => {
-    if (chatRefreshTimerRef.current) return;
-    chatRefreshTimerRef.current = setTimeout(() => {
-      chatRefreshTimerRef.current = null;
-      refreshChats(false).catch(() => undefined);
-    }, 200);
-  }, [refreshChats]);
-
-  useEffect(() => () => {
-    if (chatRefreshTimerRef.current) clearTimeout(chatRefreshTimerRef.current);
-  }, []);
+  }, [api, initialConversationId, session.user.id]);
 
   const refreshVisibleMessages = useCallback(async () => {
     if (!api || !selectedConversationId || highlightedMessageId) return;
     const latest = await api.getMessages(selectedConversationId, 100, 0);
     setMessages((current) => reconcileDesktopMessages(current, latest));
+    desktopCacheRef.current.rememberTimeline(selectedConversationId, latest);
+    desktopCacheRef.current.schedulePersist(session.user.id);
     setHasMoreMessages((current) => current || latest.length === 100);
-  }, [api, highlightedMessageId, selectedConversationId]);
+  }, [api, highlightedMessageId, selectedConversationId, session.user.id]);
 
   const syncIMessageHistory = useCallback(async () => {
     if (!api || syncingIMessageRef.current) return;
@@ -328,63 +344,78 @@ function DesktopWorkspace({ auth, compactWindow, initialConversationId, session 
     loadCompanion().catch(() => setCompanion(null));
   }, []);
 
-  useEffect(() => {
+  // Enrolling a Mac creates a durable device credential. That is a deliberate
+  // privacy boundary, not ordinary app startup work: background enrollment was
+  // the reason macOS could show a Keychain password dialog every launch.
+  const setUpMacCompanion = useCallback(async () => {
     if (!api) return;
+    setCompanionNotice(null);
+    const enrollment = await companionBridge.enrolMacCompanion(auth.config.apiUrl, session.access_token, session.user.id);
+    setNotificationDeviceId(enrollment.deviceId);
+    await companionBridge.heartbeatMacCompanion(auth.config.apiUrl);
+    setCompanion(await companionBridge.getStatus());
+    await syncIMessageHistory();
+  }, [api, auth.config.apiUrl, session.access_token, session.user.id, syncIMessageHistory]);
+
+  useEffect(() => {
+    if (!api || companion?.health !== 'healthy') return;
     let active = true;
-    let enrollmentInFlight = false;
-    const enrollCompanion = async () => {
-      if (enrollmentInFlight) return;
-      enrollmentInFlight = true;
-      try {
-        const enrollment = await companionBridge.enrolMacCompanion(auth.config.apiUrl, session.access_token, session.user.id);
-        if (active) setNotificationDeviceId(enrollment.deviceId);
-        await companionBridge.heartbeatMacCompanion(auth.config.apiUrl);
-        if (active) setCompanion(await companionBridge.getStatus());
-        await syncIMessageHistory();
-        if (active) setCompanionNotice(null);
-      } catch (error) {
-        const detail = error instanceof Error ? error.message : 'Mac companion enrolment needs attention.';
-        if (!/invalid device credential|device not found|not enrolled/i.test(detail)) {
-          if (active) setCompanionNotice(detail);
-          return;
-        }
-        try {
-          await companionBridge.resetMacCompanion();
-          const enrollment = await companionBridge.enrolMacCompanion(auth.config.apiUrl, session.access_token, session.user.id);
-          if (active) setNotificationDeviceId(enrollment.deviceId);
-          await companionBridge.heartbeatMacCompanion(auth.config.apiUrl);
-          if (active) setCompanion(await companionBridge.getStatus());
-          await syncIMessageHistory();
-          if (active) setCompanionNotice('This Mac companion was safely re-enrolled.');
-        } catch (recoveryError) {
-          if (active) setCompanionNotice(recoveryError instanceof Error ? recoveryError.message : detail);
-        }
-      } finally {
-        enrollmentInFlight = false;
-      }
-    };
-    enrollCompanion().catch(() => undefined);
     const keepAliveAndSync = async () => {
-      try {
-        await companionBridge.heartbeatMacCompanion(auth.config.apiUrl);
-        if (active) setCompanion(await companionBridge.getStatus());
-        await syncIMessageHistory();
-      } catch (error) {
-        const detail = error instanceof Error ? error.message : 'iMessage sync needs attention.';
-        if (/invalid device credential|device not found|not enrolled|enrolled again/i.test(detail)) {
-          await enrollCompanion();
-          return;
-        }
-        throw error;
-      }
+      await companionBridge.heartbeatMacCompanion(auth.config.apiUrl);
+      if (active) setCompanion(await companionBridge.getStatus());
+      await syncIMessageHistory();
     };
+    keepAliveAndSync().catch((error) => active && setCompanionNotice(error instanceof Error ? error.message : 'iMessage sync needs attention.'));
     const interval = setInterval(() => {
       keepAliveAndSync().catch((error) => active && setCompanionNotice(error instanceof Error ? error.message : 'iMessage sync needs attention.'));
     }, 30_000);
     return () => { active = false; clearInterval(interval); };
-  }, [api, auth.config.apiUrl, session.access_token, session.user.id, syncIMessageHistory]);
+  }, [api, auth.config.apiUrl, companion?.health, syncIMessageHistory]);
 
-  useEffect(() => { refreshChats().catch(() => undefined); }, [refreshChats]);
+  useEffect(() => { if (cacheHydrated) refreshChats(chats.length === 0).catch(() => undefined); }, [cacheHydrated, chats.length, refreshChats]);
+
+  // Recent-first hydration keeps normal startup bounded: the active timeline
+  // and eight relevant chats get 200 messages each, while the full archive is
+  // explicitly opt-in in Storage & Sync.
+  useEffect(() => {
+    if (!api || !cacheHydrated || !chats.length) return;
+    const ids = [...new Set([
+      selectedConversationId,
+      ...chats.filter((chat) => (chat.unread_count || 0) > 0).map((chat) => chat.id),
+      ...chats.map((chat) => chat.id),
+    ].filter((id): id is string => Boolean(id)))].slice(0, 9);
+    const timer = setTimeout(() => {
+      Promise.all(ids.map(async (chatId) => {
+        const timeline = await api.getMessages(chatId, 200);
+        desktopCacheRef.current.rememberTimeline(chatId, timeline);
+      })).then(() => desktopCacheRef.current.schedulePersist(session.user.id)).catch(() => undefined);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [api, cacheHydrated, chats, selectedConversationId, session.user.id]);
+
+  // The archive intentionally runs only after the normal recent-first cache
+  // is usable. It yields between chats and can resume from the encrypted
+  // snapshot after the app is reopened.
+  useEffect(() => {
+    if (!api || !cacheHydrated || !fullHistoryEnabled || !chats.length) return;
+    let cancelled = false;
+    const archive = async () => {
+      for (const chat of chats) {
+        if (cancelled) return;
+        let before: { timestamp: string; id: string } | undefined;
+        do {
+          const page = await api.getMessages(chat.id, 200, 0, before);
+          if (cancelled || !page.length) break;
+          desktopCacheRef.current.rememberTimeline(chat.id, page);
+          const oldest = page[0];
+          before = page.length === 200 && oldest ? { timestamp: oldest.timestamp, id: oldest.id } : undefined;
+          desktopCacheRef.current.schedulePersist(session.user.id);
+        } while (before && !cancelled && AppState.currentState === 'active');
+      }
+    };
+    const timer = setTimeout(() => { archive().catch(() => undefined); }, 1_000);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [api, cacheHydrated, chats, fullHistoryEnabled, session.user.id]);
 
   useEffect(() => {
     let active = true;
@@ -498,23 +529,60 @@ function DesktopWorkspace({ auth, compactWindow, initialConversationId, session 
     return () => { active = false; };
   }, [api]);
 
+  // Cursor reconciliation is the missed-event/offline fallback. It is much
+  // cheaper than repeatedly replacing every inbox row and timeline.
+  const reconcileDesktopSync = useCallback(async () => {
+    if (!api || !cacheHydrated) return;
+    let cursor = syncCursorRef.current;
+    for (let page = 0; page < 4; page += 1) {
+      const result = await api.syncDesktop(cursor);
+      if (!result.events.length) break;
+      result.events.forEach((event) => {
+        if (event.entity_type === 'chat') {
+          setChats((current) => event.operation === 'delete'
+            ? current.filter((chat) => chat.id !== event.entity_id)
+            : reconcileDesktopChats(current, [event.payload as DesktopChat]));
+        }
+        if (event.entity_type === 'message' && event.payload) {
+          const message = event.payload as DesktopMessage;
+          if (message.chat_id) {
+            desktopCacheRef.current.rememberTimeline(message.chat_id, [message]);
+            if (message.chat_id === selectedConversationIdRef.current) setMessages((current) => reconcileDesktopMessages(current, [message]));
+          }
+        }
+      });
+      cursor = result.cursor;
+      syncCursorRef.current = cursor;
+      desktopCacheRef.current.update({ cursor });
+      if (!result.hasMore) break;
+    }
+    desktopCacheRef.current.schedulePersist(session.user.id);
+  }, [api, cacheHydrated, session.user.id]);
+
   useEffect(() => {
-    if (!api) return;
-    const interval = setInterval(scheduleChatRefresh, 12_000);
-    return () => clearInterval(interval);
-  }, [api, scheduleChatRefresh]);
+    if (!api || !cacheHydrated) return;
+    const reconcile = () => { reconcileDesktopSync().catch(() => undefined); };
+    const appState = AppState.addEventListener('change', (state) => { if (state === 'active') reconcile(); });
+    reconcile();
+    const interval = setInterval(reconcile, 60_000);
+    return () => { clearInterval(interval); appState.remove(); };
+  }, [api, cacheHydrated, reconcileDesktopSync]);
 
   useEffect(() => {
     if (!api || !selectedConversationId) return;
     let active = true;
-    setLoadingMessages(true);
-    setMessages([]);
+    const cached = !highlightedMessageId ? desktopCacheRef.current.snapshot().timelines[selectedConversationId] || [] : [];
+    setLoadingMessages(cached.length === 0);
+    if (cached.length) setMessages(cached);
+    else setMessages([]);
     setHasMoreMessages(false);
     const messageRequest = highlightedMessageId ? api.getMessageContext(highlightedMessageId).then((context) => context.messages) : api.getMessages(selectedConversationId);
     messageRequest
       .then((nextMessages) => {
         if (!active) return;
         setMessages(nextMessages);
+        desktopCacheRef.current.rememberTimeline(selectedConversationId, nextMessages);
+        desktopCacheRef.current.schedulePersist(session.user.id);
         setHasMoreMessages(!highlightedMessageId && nextMessages.length === 100);
         setDataError(null);
         api.markChatRead(selectedConversationId)
@@ -524,20 +592,7 @@ function DesktopWorkspace({ auth, compactWindow, initialConversationId, session 
       .catch((error: Error) => active && setDataError(error.message))
       .finally(() => active && setLoadingMessages(false));
     return () => { active = false; };
-  }, [api, highlightedMessageId, selectedConversationId]);
-
-  useEffect(() => {
-    if (!api || !selectedConversationId || highlightedMessageId) return;
-    const reconcileVisibleMessages = async () => {
-      try {
-        await refreshVisibleMessages();
-      } catch {
-        // Background refresh must not replace a usable conversation with an error state.
-      }
-    };
-    const interval = setInterval(() => { reconcileVisibleMessages().catch(() => undefined); }, 12_000);
-    return () => clearInterval(interval);
-  }, [api, highlightedMessageId, refreshVisibleMessages, selectedConversationId]);
+  }, [api, highlightedMessageId, selectedConversationId, session.user.id]);
 
   useEffect(() => {
     if (!api) return;
@@ -545,32 +600,32 @@ function DesktopWorkspace({ auth, compactWindow, initialConversationId, session 
       .channel(`claire-desktop-${session.user.id}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `user_id=eq.${session.user.id}` }, ({ new: row }) => {
         const message = row as { chat_id?: string; from_me?: boolean; contact_name?: string | null; content?: string | null };
-        scheduleChatRefresh();
+        reconcileDesktopSync().catch(() => undefined);
         if (message.chat_id === selectedConversationIdRef.current) {
-          refreshVisibleMessages().catch(() => undefined);
           if (!message.from_me) api.markChatRead(message.chat_id).catch(() => undefined);
         }
       })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages', filter: `user_id=eq.${session.user.id}` }, ({ new: row }) => {
-        const message = row as { chat_id?: string };
-        scheduleChatRefresh();
-        if (message.chat_id === selectedConversationIdRef.current) refreshVisibleMessages().catch(() => undefined);
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages', filter: `user_id=eq.${session.user.id}` }, () => {
+        reconcileDesktopSync().catch(() => undefined);
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'chats', filter: `user_id=eq.${session.user.id}` }, () => {
-        scheduleChatRefresh();
+        reconcileDesktopSync().catch(() => undefined);
       })
       .subscribe((status) => {
         setRealtimeStatus(status === 'SUBSCRIBED' ? 'live' : 'reconnecting');
       });
     return () => { auth.client.removeChannel(channel); };
-  }, [api, auth.client, refreshVisibleMessages, scheduleChatRefresh, selectedConversationId, session.user.id]);
+  }, [api, auth.client, reconcileDesktopSync, refreshVisibleMessages, session.user.id]);
 
   const loadOlderMessages = async () => {
     if (!api || !selectedConversationId || loadingOlderMessages || !hasMoreMessages) return;
     setLoadingOlderMessages(true);
     try {
-      const older = await api.getMessages(selectedConversationId, 100, messages.length);
+      const oldest = messages[0];
+      const older = await api.getMessages(selectedConversationId, 100, 0, oldest ? { timestamp: oldest.timestamp, id: oldest.id } : undefined);
       setMessages((current) => mergeChronologicalMessages(current, older));
+      desktopCacheRef.current.rememberTimeline(selectedConversationId, older);
+      desktopCacheRef.current.schedulePersist(session.user.id);
       setHasMoreMessages(older.length === 100);
     } catch (error) {
       setDataError(error instanceof Error ? error.message : 'Unable to load older messages.');
@@ -641,12 +696,12 @@ function DesktopWorkspace({ auth, compactWindow, initialConversationId, session 
       <DesktopTitleBar destination={destination} navigationCollapsed={usesCompactNavigation} onOpenSearch={openGlobalSearch} onOpenConnections={() => setDestination('Settings')} onToggleNavigation={() => setNavigationCollapsed((current) => !current)} />
       <View style={styles.appFrame}>
         <NavigationRail compact={usesCompactNavigation} destination={destination} onSelect={(next) => { setDestination(next); if (next === 'Inbox') setCompactChatOpen(false); }} />
-        {destination === 'Home' ? <HomePane api={api} companion={companion} conversations={conversations} onOpenChat={openConversation} onOpenInbox={() => setDestination('Inbox')} /> : null}
-        {destination === 'Promises' ? <PromisesPane api={api} onOpenChat={openConversation} onOpenInbox={() => setDestination('Inbox')} /> : null}
-        {destination === 'People' ? <PeoplePane api={api} conversations={conversations} selectedConversationId={peopleSelectionId} onOpenChat={openConversation} /> : null}
-        {destination === 'Search' ? <AssistantPane api={api} selected={selected} initialQuestion={globalSearchSeed} onInitialQuestionConsumed={clearGlobalSearchSeed} onOpenMessage={(chatId, messageId) => { setSelectedConversationId(chatId); setHighlightedMessageId(messageId); setDestination('Inbox'); }} /> : null}
-        {destination === 'Settings' ? <SettingsPane api={api} companion={companion} companionNotice={companionNotice} apiUrl={auth.config.apiUrl} accessToken={session.access_token} onNotificationPreferenceChange={setNotificationsEnabled} /> : null}
-        {destination === 'Inbox' ? <>{(!usesCompactInbox || !compactChatOpen) ? <ConversationPane compact={usesCompactInbox} width={conversationPaneWidth} selectedId={selectedConversationId} onSelect={openConversation} onOpenSearch={() => openGlobalSearch()} conversations={conversations} loading={loadingChats} error={dataError} onRefresh={() => { refreshChats().catch(() => undefined); }} /> : null}{!usesCompactInbox ? <PaneResizeHandle accessibilityLabel="Resize conversation list" direction={1} initialWidth={conversationPaneWidth} onWidthChange={(next) => setConversationPaneWidth(clampDesktopPaneWidth(next, 'conversation'))} /> : null}{(!usesCompactInbox || compactChatOpen) ? <ChatPane api={api} compact={usesCompactInbox} onBack={usesCompactInbox ? () => setCompactChatOpen(false) : undefined} selected={selected} messages={messages} highlightedMessageId={highlightedMessageId} apiBaseUrl={auth.config.apiUrl} loading={loadingMessages} loadingOlder={loadingOlderMessages} hasMoreMessages={hasMoreMessages} draft={draft} onDraftChange={setDraft} composerFocusRequest={composerFocusRequest} onLoadOlder={() => { loadOlderMessages().catch(() => undefined); }} onSend={() => { sendDraft().catch(() => undefined); }} onAskClaire={() => { if (canShowInspector) { setInspectorMode('assistant'); setInspectorCollapsed(false); } else openGlobalSearch(); }} onOpenPerson={openPerson} assistantPanelAvailable={canShowInspector} assistantPanelVisible={showsInspector} onToggleAssistantPanel={() => setInspectorCollapsed((current) => !current)} error={dataError} /> : null}</> : null}
+        {visitedDestinations.has('Home') ? <View style={{ flex: 1, display: destination === 'Home' ? 'flex' : 'none' }}><HomePane api={api} companion={companion} conversations={conversations} onOpenChat={openConversation} onOpenInbox={() => setDestination('Inbox')} /></View> : null}
+        {visitedDestinations.has('Promises') ? <View style={{ flex: 1, display: destination === 'Promises' ? 'flex' : 'none' }}><PromisesPane api={api} onOpenChat={openConversation} onOpenInbox={() => setDestination('Inbox')} /></View> : null}
+        {visitedDestinations.has('People') ? <View style={{ flex: 1, display: destination === 'People' ? 'flex' : 'none' }}><PeoplePane api={api} conversations={conversations} selectedConversationId={peopleSelectionId} onOpenChat={openConversation} /></View> : null}
+        {visitedDestinations.has('Search') ? <View style={{ flex: 1, display: destination === 'Search' ? 'flex' : 'none' }}><AssistantPane api={api} selected={selected} initialQuestion={globalSearchSeed} onInitialQuestionConsumed={clearGlobalSearchSeed} onOpenMessage={(chatId, messageId) => { setSelectedConversationId(chatId); setHighlightedMessageId(messageId); setDestination('Inbox'); }} /></View> : null}
+        {visitedDestinations.has('Settings') ? <View style={{ flex: 1, display: destination === 'Settings' ? 'flex' : 'none' }}><SettingsPane api={api} companion={companion} companionNotice={companionNotice} apiUrl={auth.config.apiUrl} accessToken={session.access_token} userId={session.user.id} cache={desktopCacheRef.current} fullHistoryEnabled={fullHistoryEnabled} onFullHistoryChange={setFullHistoryEnabled} onNotificationPreferenceChange={setNotificationsEnabled} onSetUpMacCompanion={setUpMacCompanion} /></View> : null}
+        {visitedDestinations.has('Inbox') ? <View style={{ flex: 1, flexDirection: 'row', display: destination === 'Inbox' ? 'flex' : 'none' }}>{(!usesCompactInbox || !compactChatOpen) ? <ConversationPane compact={usesCompactInbox} width={conversationPaneWidth} selectedId={selectedConversationId} onSelect={openConversation} onOpenSearch={() => openGlobalSearch()} conversations={conversations} loading={loadingChats} error={dataError} onRefresh={() => { refreshChats().catch(() => undefined); }} /> : null}{!usesCompactInbox ? <PaneResizeHandle accessibilityLabel="Resize conversation list" direction={1} initialWidth={conversationPaneWidth} onWidthChange={(next) => setConversationPaneWidth(clampDesktopPaneWidth(next, 'conversation'))} /> : null}{(!usesCompactInbox || compactChatOpen) ? <ChatPane api={api} compact={usesCompactInbox} onBack={usesCompactInbox ? () => setCompactChatOpen(false) : undefined} selected={selected} messages={messages} highlightedMessageId={highlightedMessageId} apiBaseUrl={auth.config.apiUrl} loading={loadingMessages} loadingOlder={loadingOlderMessages} hasMoreMessages={hasMoreMessages} draft={draft} onDraftChange={setDraft} composerFocusRequest={composerFocusRequest} onLoadOlder={() => { loadOlderMessages().catch(() => undefined); }} onSend={() => { sendDraft().catch(() => undefined); }} onAskClaire={() => { if (canShowInspector) { setInspectorMode('assistant'); setInspectorCollapsed(false); } else openGlobalSearch(); }} onOpenPerson={openPerson} assistantPanelAvailable={canShowInspector} assistantPanelVisible={showsInspector} onToggleAssistantPanel={() => setInspectorCollapsed((current) => !current)} error={dataError} /> : null}</View> : null}
         {showsInspector ? <><PaneResizeHandle accessibilityLabel="Resize conversation inspector" direction={-1} initialWidth={inspectorPaneWidth} onWidthChange={(next) => setInspectorPaneWidth(clampDesktopPaneWidth(next, 'inspector'))} />{inspectorMode === 'assistant' ? <ConversationAssistantInspector api={api} selected={selected} width={inspectorPaneWidth} onCollapse={() => setInspectorCollapsed(true)} onOpenMessage={(chatId, messageId) => { setSelectedConversationId(chatId); setHighlightedMessageId(messageId); }} /> : <ConversationContactInspector api={api} selected={selected} width={inspectorPaneWidth} onOpenAssistant={() => setInspectorMode('assistant')} onOpenPerson={openPerson} />}</> : null}
       </View>
     </SafeAreaView>
@@ -724,6 +779,7 @@ function ChatPane({ api, compact, onBack, selected, messages, highlightedMessage
   const messageListRef = useRef<ScrollView>(null);
   const composerRef = useRef<TextInput>(null);
   const messageOffsets = useRef<Record<string, number>>({});
+  const initiallyPositionedChatRef = useRef<string | null>(null);
   const [showConversationSettings, setShowConversationSettings] = useState(false);
   const [showContactDetails, setShowContactDetails] = useState(false);
   const latestIncoming = useMemo(() => [...messages].reverse().find((message) => !message.from_me && Boolean(message.content?.trim())) || null, [messages]);
@@ -734,6 +790,16 @@ function ChatPane({ api, compact, onBack, selected, messages, highlightedMessage
     const task = setTimeout(() => messageListRef.current?.scrollTo({ y: Math.max(0, offset - space[4]), animated: true }), 0);
     return () => clearTimeout(task);
   }, [highlightedMessageId, messages]);
+  // A newly selected conversation should open on the current end of its
+  // timeline. Keep this one-shot per chat so polling, realtime inserts, and
+  // loading older history never snap somebody back to the bottom.
+  useEffect(() => {
+    if (!selected?.id || loading || highlightedMessageId || messages.length === 0) return;
+    if (initiallyPositionedChatRef.current === selected.id) return;
+    initiallyPositionedChatRef.current = selected.id;
+    const frame = requestAnimationFrame(() => messageListRef.current?.scrollToEnd({ animated: false }));
+    return () => cancelAnimationFrame(frame);
+  }, [highlightedMessageId, loading, messages.length, selected?.id]);
   useEffect(() => { setShowConversationSettings(false); setShowContactDetails(false); }, [selected?.id]);
   useEffect(() => {
     if (!composerFocusRequest || !selected) return;
@@ -746,7 +812,7 @@ function ChatPane({ api, compact, onBack, selected, messages, highlightedMessage
     <QuickContextRibbon message={latestIncoming} conversationName={selected.name} onAsk={() => assistantPanelAvailable ? onToggleAssistantPanel?.() : onAskClaire()} />
     {showContactDetails ? <ContactDetails conversation={selected} onOpenPerson={onOpenPerson} /> : null}
     {showConversationSettings ? <ConversationSettings api={api} chatId={selected.id} chatName={selected.name} onClose={() => setShowConversationSettings(false)} /> : null}
-    <ScrollView ref={messageListRef} contentContainerStyle={styles.messageList}>{hasMoreMessages ? <ClaireButton variant="quiet" disabled={loadingOlder} onPress={onLoadOlder}>{loadingOlder ? 'Loading older messages…' : 'Load older messages'}</ClaireButton> : null}{loading ? <LoadingRow label="Loading messages…" /> : null}{error ? <ClaireText variant="bodySmall" style={styles.errorText}>{error}</ClaireText> : null}{!loading && !error && messages.length === 0 ? <ClaireText variant="bodySmall" style={styles.muted}>No messages in this conversation yet.</ClaireText> : null}{messages.map((message) => <View key={message.id} onLayout={(event) => { messageOffsets.current[message.id] = event.nativeEvent.layout.y; }} style={[styles.messageWrap, message.from_me && styles.messageWrapMine, message.id === highlightedMessageId && styles.messageWrapHighlighted, message.delivery_state === 'sending' && desktopReplyStyles.sendingMessage, message.delivery_state === 'failed' && desktopReplyStyles.failedMessage]}>{!message.from_me ? <ClaireText variant="label" style={styles.messageSender}>{message.contact_name || selected.name}</ClaireText> : null}<ClaireMessageBubble fromMe={message.from_me}><MediaMessage message={message} apiBaseUrl={apiBaseUrl} /></ClaireMessageBubble><ClaireText variant="bodySmall" style={styles.messageTime}>{message.delivery_state === 'sending' ? 'Sending…' : message.delivery_state === 'failed' ? 'Not sent' : new Date(message.timestamp).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}</ClaireText></View>)}</ScrollView>
+    <ScrollView ref={messageListRef} contentContainerStyle={styles.messageList} showsVerticalScrollIndicator indicatorStyle="black">{hasMoreMessages ? <ClaireButton variant="quiet" disabled={loadingOlder} onPress={onLoadOlder}>{loadingOlder ? 'Loading older messages…' : 'Load older messages'}</ClaireButton> : null}{loading ? <LoadingRow label="Loading messages…" /> : null}{error ? <ClaireText variant="bodySmall" style={styles.errorText}>{error}</ClaireText> : null}{!loading && !error && messages.length === 0 ? <ClaireText variant="bodySmall" style={styles.muted}>No messages in this conversation yet.</ClaireText> : null}{messages.map((message) => <View key={message.id} onLayout={(event) => { messageOffsets.current[message.id] = event.nativeEvent.layout.y; }} style={[styles.messageWrap, message.from_me && styles.messageWrapMine, message.id === highlightedMessageId && styles.messageWrapHighlighted, message.delivery_state === 'sending' && desktopReplyStyles.sendingMessage, message.delivery_state === 'failed' && desktopReplyStyles.failedMessage]}>{!message.from_me ? <ClaireText variant="label" style={styles.messageSender}>{message.contact_name || selected.name}</ClaireText> : null}<ClaireMessageBubble fromMe={message.from_me}><MediaMessage message={message} apiBaseUrl={apiBaseUrl} /></ClaireMessageBubble><ClaireText variant="bodySmall" style={styles.messageTime}>{message.delivery_state === 'sending' ? 'Sending…' : message.delivery_state === 'failed' ? 'Not sent' : new Date(message.timestamp).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}</ClaireText></View>)}</ScrollView>
     <ReplyOptions api={api} target={latestIncoming} chatType={selected.isGroup ? 'group' : 'individual'} onUse={onDraftChange} />
     <View style={styles.composer}><TextInput ref={composerRef} accessibilityLabel={`Message ${selected.name}`} multiline onChangeText={onDraftChange} placeholder={`Message ${selected.name}…`} placeholderTextColor={colors.neutral[400]} style={styles.composerInput} value={draft} /><ClaireButton disabled={!draft.trim()} onPress={onSend} accessibilityLabel="Send message">Send</ClaireButton></View>
   </View>;
@@ -1091,7 +1157,7 @@ const desktopPlatformFallback: DesktopPlatformDefinition[] = [
   { id: 'slack', name: 'Slack', mark: 'S', accent: '#611F69', iconUrl: 'https://api.iconify.design/logos/slack-icon.svg', iconTreatment: 'original', bridge: 'future bridge', supportStatus: 'planned', deliveryWave: 'wave_2', setupSurface: 'desktop', setupLabel: 'Planned', runtimeHost: 'cloud', runtimeLabel: 'Future cloud bridge', deviceDependency: 'none', authSummary: 'Not available yet.', detail: 'Request access to help prioritize this bridge.', capabilities: { desktopSetup: false, persistentDevice: false } },
 ];
 
-function ConnectionsPane({ companion, companionNotice, api, apiUrl, accessToken, embedded = false }: { companion: CompanionStatus | null; companionNotice: string | null; api: ClaireApi | null; apiUrl: string; accessToken: string; embedded?: boolean }) {
+function ConnectionsPane({ companion, companionNotice, api, apiUrl, accessToken, onSetUpMacCompanion, embedded = false }: { companion: CompanionStatus | null; companionNotice: string | null; api: ClaireApi | null; apiUrl: string; accessToken: string; onSetUpMacCompanion: () => Promise<void>; embedded?: boolean }) {
   const [connectingInstagram, setConnectingInstagram] = useState(false);
   const [instagramNotice, setInstagramNotice] = useState<string | null>(null);
   const [whatsAppPhoneNumber, setWhatsAppPhoneNumber] = useState('');
@@ -1192,13 +1258,13 @@ function ConnectionsPane({ companion, companionNotice, api, apiUrl, accessToken,
     {loadingStatuses && !definitions.length ? <LoadingRow label="Loading Claire’s platform catalog…" /> : null}
     {definitions.length ? <><View style={desktopConnectionsStyles.grid}>{activeDefinitions.map((item) => <ConnectionOverviewCard key={item.id} definition={item} selected={item.id === selectedPlatformId} summary={summaryFor(item)} requested={false} onPress={() => { setSelectedPlatformId(item.id); setInterestNotice(null); }} />)}</View>
       {roadmapDefinitions.length ? <View style={desktopConnectionsStyles.roadmap}><View><ClaireText variant="monoLabel" style={styles.contextLabel}>ROADMAP</ClaireText><ClaireText variant="sectionTitle">Request a platform</ClaireText><ClaireText variant="bodySmall" style={styles.muted}>Requests express interest only—Claire never asks for credentials here.</ClaireText></View><View style={desktopConnectionsStyles.grid}>{roadmapDefinitions.map((item) => <ConnectionOverviewCard key={item.id} definition={item} selected={item.id === selectedPlatformId} requested={requestedPlatformIds.includes(item.id)} onPress={() => { setSelectedPlatformId(item.id); setInterestNotice(null); }} />)}</View></View> : null}
-      {selectedPlatform?.id === 'imessage' ? <IMessageSetupGuide companion={companion} onOpenPermissions={() => { companionBridge.openSystemSettings('full_disk_access').catch(() => undefined); }} /> : null}
-      {selectedPlatform ? <View style={desktopConnectionsStyles.detail}><ConnectionDetail definition={selectedPlatform} requested={requestedPlatformIds.includes(selectedPlatform.id)} companion={companion} companionNotice={companionNotice} summary={summaryFor(selectedPlatform)} whatsAppPhoneNumber={whatsAppPhoneNumber} onWhatsAppPhoneNumber={setWhatsAppPhoneNumber} connectingWhatsApp={connectingWhatsApp} pairingCode={pairingCode} whatsAppNotice={whatsAppNotice} onConnectWhatsApp={connectWhatsApp} connectingInstagram={connectingInstagram} instagramNotice={instagramNotice} onConnectInstagram={connectInstagram} onOpenMacPermissions={() => { companionBridge.openSystemSettings('full_disk_access').catch(() => undefined); }} requestingInterest={requestingInterest} interestNotice={interestNotice} onRequestInterest={requestInterest} /></View> : null}
+      {selectedPlatform?.id === 'imessage' ? <IMessageSetupGuide companion={companion} onOpenPermissions={() => { companionBridge.openSystemSettings('full_disk_access').catch(() => undefined); }} onSetUp={onSetUpMacCompanion} /> : null}
+      {selectedPlatform ? <View style={desktopConnectionsStyles.detail}><ConnectionDetail definition={selectedPlatform} requested={requestedPlatformIds.includes(selectedPlatform.id)} companion={companion} companionNotice={companionNotice} summary={summaryFor(selectedPlatform)} whatsAppPhoneNumber={whatsAppPhoneNumber} onWhatsAppPhoneNumber={setWhatsAppPhoneNumber} connectingWhatsApp={connectingWhatsApp} pairingCode={pairingCode} whatsAppNotice={whatsAppNotice} onConnectWhatsApp={connectWhatsApp} connectingInstagram={connectingInstagram} instagramNotice={instagramNotice} onConnectInstagram={connectInstagram} onOpenMacPermissions={() => { companionBridge.openSystemSettings('full_disk_access').catch(() => undefined); }} onSetUpMacCompanion={onSetUpMacCompanion} requestingInterest={requestingInterest} interestNotice={interestNotice} onRequestInterest={requestInterest} /></View> : null}
     </> : null}
   </ScrollView>;
 }
 
-function IMessageSetupGuide({ companion, onOpenPermissions }: { companion: CompanionStatus | null; onOpenPermissions: () => void }) {
+function IMessageSetupGuide({ companion, onOpenPermissions, onSetUp }: { companion: CompanionStatus | null; onOpenPermissions: () => void; onSetUp: () => Promise<void> }) {
   const permissionReady = companion?.iMessagePermissionState === 'ready';
   const syncing = companion?.health === 'healthy';
   const steps = [
@@ -1211,6 +1277,7 @@ function IMessageSetupGuide({ companion, onOpenPermissions }: { companion: Compa
     <ClaireText variant="bodySmall" style={styles.muted}>Claire never asks for your Apple Account password. macOS owns the permission prompt, and you can revoke access at any time in System Settings.</ClaireText>
     <View style={desktopConnectionsStyles.setupSteps}>{steps.map((step, index) => <View key={step.title} style={desktopConnectionsStyles.setupStep}><View style={[desktopConnectionsStyles.setupStepNumber, step.complete && desktopConnectionsStyles.setupStepComplete]}><ClaireText variant="label">{step.complete ? '✓' : String(index + 1)}</ClaireText></View><View style={desktopConnectionsStyles.setupStepCopy}><ClaireText variant="bodySmall" style={styles.conversationName}>{step.title}</ClaireText><ClaireText variant="bodySmall" style={styles.muted}>{step.detail}</ClaireText></View></View>)}</View>
     {!permissionReady ? <ClaireButton variant="secondary" onPress={onOpenPermissions}>Open Full Disk Access</ClaireButton> : null}
+    {permissionReady && !syncing ? <ClaireButton onPress={() => { onSetUp().catch(() => undefined); }}>Set up this Mac</ClaireButton> : null}
   </ClaireCard></View>;
 }
 
@@ -1226,9 +1293,9 @@ function ConnectionOverviewCard({ definition, selected, summary, requested, onPr
   </Pressable>;
 }
 
-function ConnectionDetail({ definition, requested, companion, companionNotice, summary, whatsAppPhoneNumber, onWhatsAppPhoneNumber, connectingWhatsApp, pairingCode, whatsAppNotice, onConnectWhatsApp, connectingInstagram, instagramNotice, onConnectInstagram, onOpenMacPermissions, requestingInterest, interestNotice, onRequestInterest }: { definition: DesktopPlatformDefinition; requested: boolean; companion: CompanionStatus | null; companionNotice: string | null; summary?: { tone: 'success' | 'warning' | 'neutral'; label: string; detail: string }; whatsAppPhoneNumber: string; onWhatsAppPhoneNumber: (value: string) => void; connectingWhatsApp: boolean; pairingCode: string | null; whatsAppNotice: string | null; onConnectWhatsApp: () => Promise<void>; connectingInstagram: boolean; instagramNotice: string | null; onConnectInstagram: () => Promise<void>; onOpenMacPermissions: () => void; requestingInterest: boolean; interestNotice: string | null; onRequestInterest: () => Promise<void> }) {
+function ConnectionDetail({ definition, requested, companion, companionNotice, summary, whatsAppPhoneNumber, onWhatsAppPhoneNumber, connectingWhatsApp, pairingCode, whatsAppNotice, onConnectWhatsApp, connectingInstagram, instagramNotice, onConnectInstagram, onOpenMacPermissions, onSetUpMacCompanion, requestingInterest, interestNotice, onRequestInterest }: { definition: DesktopPlatformDefinition; requested: boolean; companion: CompanionStatus | null; companionNotice: string | null; summary?: { tone: 'success' | 'warning' | 'neutral'; label: string; detail: string }; whatsAppPhoneNumber: string; onWhatsAppPhoneNumber: (value: string) => void; connectingWhatsApp: boolean; pairingCode: string | null; whatsAppNotice: string | null; onConnectWhatsApp: () => Promise<void>; connectingInstagram: boolean; instagramNotice: string | null; onConnectInstagram: () => Promise<void>; onOpenMacPermissions: () => void; onSetUpMacCompanion: () => Promise<void>; requestingInterest: boolean; interestNotice: string | null; onRequestInterest: () => Promise<void> }) {
   const isConnectableHere = definition.id === 'whatsapp' || definition.id === 'instagram' || definition.id === 'imessage';
-  return <ClaireCard tone="paper" style={styles.connectionDetail}><View style={styles.connectionDetailHead}><View style={[styles.platformIcon, { backgroundColor: definition.accent }]}><PlatformGlyph definition={definition} /></View><View style={styles.connectionDetailCopy}><ClaireText variant="sectionTitle">{definition.name}</ClaireText><ClaireText variant="bodySmall" style={styles.muted}>{definition.runtimeLabel}</ClaireText></View></View><ClaireText variant="bodySmall" style={styles.muted}>{definition.detail}</ClaireText><View style={styles.connectionMeta}><ClaireText variant="monoLabel" style={styles.contextLabel}>SETUP</ClaireText><ClaireText variant="bodySmall">{definition.authSummary}</ClaireText></View>{summary ? <ClaireStatusPill tone={summary.tone}>{summary.label}</ClaireStatusPill> : null}{definition.id === 'whatsapp' && summary?.label !== 'Connected' ? <><ClaireField accessibilityLabel="WhatsApp phone number" autoCapitalize="none" keyboardType="phone-pad" onChangeText={onWhatsAppPhoneNumber} placeholder="+15166100494" style={styles.connectionInput} value={whatsAppPhoneNumber} /><ClaireButton disabled={connectingWhatsApp || !whatsAppPhoneNumber.trim()} onPress={() => { onConnectWhatsApp().catch(() => undefined); }}>{connectingWhatsApp ? 'Starting pairing…' : pairingCode ? 'Get a new code' : 'Connect WhatsApp'}</ClaireButton>{pairingCode ? <View style={styles.pairingCode}><ClaireText variant="label" style={styles.pairingCodeLabel}>Pairing code</ClaireText><ClaireText variant="screenTitle" style={styles.pairingCodeText}>{pairingCode}</ClaireText></View> : null}{whatsAppNotice ? <ClaireText variant="bodySmall" style={whatsAppNotice.startsWith('Enter this') || whatsAppNotice.startsWith('Waiting') ? styles.successText : styles.errorText}>{whatsAppNotice}</ClaireText> : null}</> : null}{definition.id === 'instagram' ? <><ClaireText variant="bodySmall" style={styles.muted}>Sign in in Claire’s private Instagram window. Claire never asks you to copy cookies or share a password with us.</ClaireText><ClaireButton disabled={connectingInstagram || summary?.label === 'Connected'} onPress={() => { onConnectInstagram().catch(() => undefined); }}>{connectingInstagram ? 'Waiting for Instagram…' : summary?.label === 'Connected' ? 'Instagram connected' : 'Connect Instagram'}</ClaireButton>{instagramNotice ? <ClaireText variant="bodySmall" style={instagramNotice.startsWith('Instagram connected') ? styles.successText : styles.errorText}>{instagramNotice}</ClaireText> : null}</> : null}{definition.id === 'imessage' ? <><ClaireStatusPill tone={companion?.health === 'healthy' ? 'success' : 'warning'}>{companion?.health === 'healthy' ? 'This Mac is syncing' : 'Local beta setup'}</ClaireStatusPill><ClaireText variant="bodySmall" style={styles.muted}>{companionNotice || companion?.detail || 'Claire needs Messages permissions on this Mac before it can sync.'}</ClaireText><ClaireButton variant="secondary" onPress={onOpenMacPermissions}>Open Mac permissions</ClaireButton></> : null}{!isConnectableHere && definition.supportStatus === 'available' ? <ClaireText variant="bodySmall" style={styles.muted}>This integration is available in Claire, but this desktop build does not yet provide its setup flow. We won’t show a non-working connect button.</ClaireText> : null}{!isConnectableHere && (definition.supportStatus === 'planned' || definition.supportStatus === 'unavailable') ? <><ClaireText variant="bodySmall" style={styles.muted}>Joining the waitlist records only that you want {definition.name}; it does not connect an account or promise a release date.</ClaireText><ClaireButton variant={requested ? 'quiet' : 'secondary'} disabled={requested || requestingInterest} onPress={() => { onRequestInterest().catch(() => undefined); }}>{requested ? 'Requested' : requestingInterest ? 'Saving…' : 'Join waitlist'}</ClaireButton>{interestNotice ? <ClaireText variant="bodySmall" style={interestNotice.startsWith('You’re') ? styles.successText : styles.errorText}>{interestNotice}</ClaireText> : null}</> : null}</ClaireCard>;
+  return <ClaireCard tone="paper" style={styles.connectionDetail}><View style={styles.connectionDetailHead}><View style={[styles.platformIcon, { backgroundColor: definition.accent }]}><PlatformGlyph definition={definition} /></View><View style={styles.connectionDetailCopy}><ClaireText variant="sectionTitle">{definition.name}</ClaireText><ClaireText variant="bodySmall" style={styles.muted}>{definition.runtimeLabel}</ClaireText></View></View><ClaireText variant="bodySmall" style={styles.muted}>{definition.detail}</ClaireText><View style={styles.connectionMeta}><ClaireText variant="monoLabel" style={styles.contextLabel}>SETUP</ClaireText><ClaireText variant="bodySmall">{definition.authSummary}</ClaireText></View>{summary ? <ClaireStatusPill tone={summary.tone}>{summary.label}</ClaireStatusPill> : null}{definition.id === 'whatsapp' && summary?.label !== 'Connected' ? <><ClaireField accessibilityLabel="WhatsApp phone number" autoCapitalize="none" keyboardType="phone-pad" onChangeText={onWhatsAppPhoneNumber} placeholder="+15166100494" style={styles.connectionInput} value={whatsAppPhoneNumber} /><ClaireButton disabled={connectingWhatsApp || !whatsAppPhoneNumber.trim()} onPress={() => { onConnectWhatsApp().catch(() => undefined); }}>{connectingWhatsApp ? 'Starting pairing…' : pairingCode ? 'Get a new code' : 'Connect WhatsApp'}</ClaireButton>{pairingCode ? <View style={styles.pairingCode}><ClaireText variant="label" style={styles.pairingCodeLabel}>Pairing code</ClaireText><ClaireText variant="screenTitle" style={styles.pairingCodeText}>{pairingCode}</ClaireText></View> : null}{whatsAppNotice ? <ClaireText variant="bodySmall" style={whatsAppNotice.startsWith('Enter this') || whatsAppNotice.startsWith('Waiting') ? styles.successText : styles.errorText}>{whatsAppNotice}</ClaireText> : null}</> : null}{definition.id === 'instagram' ? <><ClaireText variant="bodySmall" style={styles.muted}>Sign in in Claire’s private Instagram window. Claire never asks you to copy cookies or share a password with us.</ClaireText><ClaireButton disabled={connectingInstagram || summary?.label === 'Connected'} onPress={() => { onConnectInstagram().catch(() => undefined); }}>{connectingInstagram ? 'Waiting for Instagram…' : summary?.label === 'Connected' ? 'Instagram connected' : 'Connect Instagram'}</ClaireButton>{instagramNotice ? <ClaireText variant="bodySmall" style={instagramNotice.startsWith('Instagram connected') ? styles.successText : styles.errorText}>{instagramNotice}</ClaireText> : null}</> : null}{definition.id === 'imessage' ? <><ClaireStatusPill tone={companion?.health === 'healthy' ? 'success' : 'warning'}>{companion?.health === 'healthy' ? 'This Mac is syncing' : 'Local beta setup'}</ClaireStatusPill><ClaireText variant="bodySmall" style={styles.muted}>{companionNotice || companion?.detail || 'Claire needs Messages permissions on this Mac before it can sync.'}</ClaireText><ClaireButton variant="secondary" onPress={onOpenMacPermissions}>Open Mac permissions</ClaireButton>{companion?.iMessagePermissionState === 'ready' && companion?.health !== 'healthy' ? <ClaireButton onPress={() => { onSetUpMacCompanion().catch(() => undefined); }}>Set up this Mac</ClaireButton> : null}</> : null}{!isConnectableHere && definition.supportStatus === 'available' ? <ClaireText variant="bodySmall" style={styles.muted}>This integration is available in Claire, but this desktop build does not yet provide its setup flow. We won’t show a non-working connect button.</ClaireText> : null}{!isConnectableHere && (definition.supportStatus === 'planned' || definition.supportStatus === 'unavailable') ? <><ClaireText variant="bodySmall" style={styles.muted}>Joining the waitlist records only that you want {definition.name}; it does not connect an account or promise a release date.</ClaireText><ClaireButton variant={requested ? 'quiet' : 'secondary'} disabled={requested || requestingInterest} onPress={() => { onRequestInterest().catch(() => undefined); }}>{requested ? 'Requested' : requestingInterest ? 'Saving…' : 'Join waitlist'}</ClaireButton>{interestNotice ? <ClaireText variant="bodySmall" style={interestNotice.startsWith('You’re') ? styles.successText : styles.errorText}>{interestNotice}</ClaireText> : null}</> : null}</ClaireCard>;
 }
 
 /** Bundled vector marks keep catalog cards legible offline; unknown catalog IDs fall back to their server-provided mark. */
@@ -1256,7 +1323,7 @@ const desktopPlatformBadgeStyles = StyleSheet.create({
   badge: { position: 'absolute', right: -3, bottom: -3, width: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.paper },
 });
 
-function SettingsPane({ api, companion, companionNotice, apiUrl, accessToken, onNotificationPreferenceChange }: { api: ClaireApi | null; companion: CompanionStatus | null; companionNotice: string | null; apiUrl: string; accessToken: string; onNotificationPreferenceChange: (enabled: boolean) => void }) {
+function SettingsPane({ api, companion, companionNotice, apiUrl, accessToken, userId, cache, fullHistoryEnabled, onFullHistoryChange, onNotificationPreferenceChange, onSetUpMacCompanion }: { api: ClaireApi | null; companion: CompanionStatus | null; companionNotice: string | null; apiUrl: string; accessToken: string; userId: string; cache: DesktopCache; fullHistoryEnabled: boolean; onFullHistoryChange: (enabled: boolean) => void; onNotificationPreferenceChange: (enabled: boolean) => void; onSetUpMacCompanion: () => Promise<void> }) {
   const [preferences, setPreferences] = useState<DesktopPreferences | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -1264,6 +1331,7 @@ function SettingsPane({ api, companion, companionNotice, apiUrl, accessToken, on
   const [notificationPermission, setNotificationPermission] = useState<'not_determined' | 'authorized' | 'provisional' | 'denied'>('not_determined');
   const [section, setSection] = useState<'profile' | 'connections' | 'ai' | 'relationships' | 'notifications' | 'appearance' | 'shortcuts' | 'privacy' | 'about'>('connections');
   const [account, setAccount] = useState<DesktopAccountProfile | null>(null);
+  const [cacheInfo, setCacheInfo] = useState<{ bytes: number; updatedAt: string | null }>({ bytes: 0, updatedAt: null });
   useEffect(() => {
     if (!api) return;
     let active = true;
@@ -1282,6 +1350,8 @@ function SettingsPane({ api, companion, companionNotice, apiUrl, accessToken, on
     }).finally(() => active && setLoading(false));
     return () => { active = false; };
   }, [api]);
+  const refreshCacheInfo = useCallback(() => companionBridge.getEncryptedCacheInfo(userId).then(setCacheInfo).catch(() => undefined), [userId]);
+  useEffect(() => { refreshCacheInfo().catch(() => undefined); }, [refreshCacheInfo]);
   const save = async (updates: Partial<DesktopPreferences>) => {
     if (!api || !preferences) return;
     setSaving(true); setError(null);
@@ -1309,7 +1379,9 @@ function SettingsPane({ api, companion, companionNotice, apiUrl, accessToken, on
   const updateAccount = async () => { if (!api || !account) return; setSaving(true); try { setAccount(await api.updateAccountProfile({ name: account.name || '', avatar_url: account.avatar_url || '' })); } catch (saveError) { setError(saveError instanceof Error ? saveError.message : 'Unable to save your profile.'); } finally { setSaving(false); } };
   const shortcutDefaults: Record<string, string> = { Home: '⌘1', Inbox: '⌘2', Promises: '⌘3', People: '⌘4', 'Ask Claire': '⌘K', Search: '⌘⇧F', Settings: '⌘,', 'New message': '⌘N' };
   const shortcuts = { ...shortcutDefaults, ...(extra.desktop_shortcuts || {}) };
-  return <View style={styles.surfacePane} testID="claire-desktop-settings"><View style={desktopSettingsStyles.workspace}><View style={desktopSettingsStyles.sidebar}><ClaireText variant="screenTitle" style={desktopSettingsStyles.sidebarTitle}>Settings</ClaireText>{items.map(([id, label]) => <Pressable key={id} accessibilityRole="button" accessibilityState={{ selected: section === id }} onPress={() => setSection(id)} style={({ pressed }) => [desktopSettingsStyles.sideItem, section === id && desktopSettingsStyles.sideItemActive, pressed && styles.pressed]}><ClaireText variant="body" style={section === id ? desktopSettingsStyles.sideItemTextActive : undefined}>{label}</ClaireText></Pressable>)}</View><ScrollView style={desktopSettingsStyles.main} contentContainerStyle={desktopSettingsStyles.mainContent}>{loading ? <LoadingRow label="Loading settings…" /> : null}{error ? <ClaireText variant="bodySmall" style={styles.errorText}>{error}</ClaireText> : null}{section === 'connections' ? <ConnectionsPane companion={companion} companionNotice={companionNotice} api={api} apiUrl={apiUrl} accessToken={accessToken} embedded /> : null}{section === 'profile' ? <ClaireCard tone="paper" style={styles.settingsCard}><ClaireText variant="screenTitle">Profile</ClaireText><ClaireText variant="bodySmall" style={styles.muted}>{account?.email || 'Your Claire account'}</ClaireText><ClaireField label="Name" value={account?.name || ''} onChangeText={(value) => setAccount((current) => current ? { ...current, name: value } : current)} placeholder="Your name" /><ClaireField label="Avatar URL" value={account?.avatar_url || ''} onChangeText={(value) => setAccount((current) => current ? { ...current, avatar_url: value } : current)} placeholder="https://…" /><ClaireButton disabled={saving || !account} onPress={() => { updateAccount().catch(() => undefined); }}>{saving ? 'Saving…' : 'Save profile'}</ClaireButton></ClaireCard> : null}{section === 'ai' && preferences ? <View style={styles.surfaceSection}><ClaireCard tone="paper" style={styles.settingsCard}><ClaireText variant="screenTitle">AI behavior</ClaireText><ClaireText variant="bodySmall" style={styles.muted}>These defaults guide replies when a conversation does not override them.</ClaireText><View style={styles.settingsActions}><ClaireButton variant="quiet" disabled={saving} onPress={() => { save({ tone: nextTone() }).catch(() => undefined); }}>Tone: {preferences.tone}</ClaireButton><ClaireButton variant="quiet" disabled={saving} onPress={() => { save({ response_style: nextStyle() }).catch(() => undefined); }}>Length: {preferences.response_style}</ClaireButton></View></ClaireCard></View> : null}{section === 'relationships' ? <ClaireCard tone="paper" style={styles.settingsCard}><ClaireText variant="screenTitle">Relationships</ClaireText><ClaireText variant="body" style={styles.muted}>Set context and AI instructions for each person in the People workspace.</ClaireText><ClaireText variant="bodySmall">Open People from the navigation rail to edit relationship memory.</ClaireText></ClaireCard> : null}{section === 'notifications' && preferences ? <ClaireCard tone="paper" style={styles.settingsCard}><ClaireText variant="screenTitle">Notifications</ClaireText><ClaireText variant="bodySmall" style={styles.muted}>macOS permission: {notificationPermission.replace('_', ' ')}.</ClaireText><View style={styles.settingsActions}><ClaireButton variant={preferences.notification_enabled ? 'secondary' : 'quiet'} disabled={saving} onPress={() => { save({ notification_enabled: !preferences.notification_enabled }).catch(() => undefined); }}>{preferences.notification_enabled ? 'Notifications on' : 'Notifications off'}</ClaireButton><ClaireButton variant="quiet" onPress={() => { requestMacNotificationPermission().catch(() => undefined); }}>Manage macOS alerts</ClaireButton></View></ClaireCard> : null}{section === 'appearance' && preferences ? <ClaireCard tone="paper" style={styles.settingsCard}><ClaireText variant="screenTitle">Appearance</ClaireText><ClaireText variant="bodySmall" style={styles.muted}>These settings sync to your Claire desktop workspaces.</ClaireText><View style={styles.settingsActions}>{(['system', 'light', 'dark'] as const).map((theme) => <ClaireButton key={theme} variant={extra.desktop_appearance?.theme === theme || (!extra.desktop_appearance?.theme && theme === 'system') ? 'secondary' : 'quiet'} onPress={() => { saveExtra({ desktop_appearance: { ...extra.desktop_appearance, theme } }).catch(() => undefined); }}>{theme}</ClaireButton>)}</View><View style={styles.settingsActions}>{(['comfortable', 'compact'] as const).map((density) => <ClaireButton key={density} variant={extra.desktop_appearance?.density === density || (!extra.desktop_appearance?.density && density === 'comfortable') ? 'secondary' : 'quiet'} onPress={() => { saveExtra({ desktop_appearance: { ...extra.desktop_appearance, density } }).catch(() => undefined); }}>{density}</ClaireButton>)}</View><View style={styles.settingsActions}>{([0.9, 1, 1.15] as const).map((scale) => <ClaireButton key={scale} variant={extra.desktop_appearance?.scale === scale || (!extra.desktop_appearance?.scale && scale === 1) ? 'secondary' : 'quiet'} onPress={() => { saveExtra({ desktop_appearance: { ...extra.desktop_appearance, scale } }).catch(() => undefined); }}>{Math.round(scale * 100)}%</ClaireButton>)}</View></ClaireCard> : null}{section === 'shortcuts' ? <ClaireCard tone="paper" style={styles.settingsCard}><ClaireText variant="screenTitle">Shortcuts</ClaireText><ClaireText variant="bodySmall" style={styles.muted}>Change workspace shortcuts. Duplicate combinations are rejected before they can be saved.</ClaireText><View style={desktopSettingsStyles.shortcutGrid}>{Object.entries(shortcuts).map(([action, binding]) => <View key={action} style={desktopSettingsStyles.shortcutRow}><ClaireText variant="bodySmall" style={desktopSettingsStyles.shortcutLabel}>{action}</ClaireText><TextInput accessibilityLabel={`${action} shortcut`} value={binding} onChangeText={(value) => { const next = { ...shortcuts, [action]: value }; setPreferences((current) => current ? { ...current, preferences: { ...(current.preferences || {}), desktop_shortcuts: next } } : current); }} onSubmitEditing={() => { saveExtra({ desktop_shortcuts: shortcuts }).catch(() => undefined); }} style={desktopSettingsStyles.shortcutInput} /></View>)}</View><ClaireButton disabled={saving} onPress={() => { saveExtra({ desktop_shortcuts: shortcuts }).catch(() => undefined); }}>Save shortcuts</ClaireButton></ClaireCard> : null}{section === 'privacy' ? <ClaireCard tone="paper" style={styles.settingsCard}><ClaireText variant="screenTitle">Privacy & data</ClaireText><ClaireText variant="bodySmall" style={styles.muted}>Claire stores your device credential in Keychain. Ask Claire is read-only and every answer cites the messages it used.</ClaireText></ClaireCard> : null}{section === 'about' ? <ClaireCard tone="paper" style={styles.settingsCard}><ClaireText variant="screenTitle">About Claire Desktop</ClaireText><ClaireText variant="bodySmall" style={styles.muted}>Desktop companion and unified messaging workspace.</ClaireText></ClaireCard> : null}</ScrollView></View></View>;
+  const isStorageSection = () => section === 'privacy';
+  if (isStorageSection()) return <View style={styles.surfacePane} testID="claire-desktop-storage-settings"><View style={desktopSettingsStyles.workspace}><View style={desktopSettingsStyles.sidebar}><ClaireText variant="screenTitle" style={desktopSettingsStyles.sidebarTitle}>Settings</ClaireText>{items.map(([id, label]) => <Pressable key={id} accessibilityRole="button" accessibilityState={{ selected: section === id }} onPress={() => setSection(id)} style={({ pressed }) => [desktopSettingsStyles.sideItem, section === id && desktopSettingsStyles.sideItemActive, pressed && styles.pressed]}><ClaireText variant="body" style={section === id ? desktopSettingsStyles.sideItemTextActive : undefined}>{label}</ClaireText></Pressable>)}</View><ScrollView style={desktopSettingsStyles.main} contentContainerStyle={desktopSettingsStyles.mainContent}><ClaireCard tone="paper" style={styles.settingsCard}><ClaireText variant="screenTitle">Storage & sync</ClaireText><ClaireText variant="bodySmall" style={styles.muted}>This Mac keeps a per-account encrypted cache. Cache size: {(cacheInfo.bytes / 1024 / 1024).toFixed(1)} MB · last sync {cacheInfo.updatedAt || 'not yet'}.</ClaireText><ClaireText variant="bodySmall" style={styles.muted}>Recent chat history and visible thumbnails are cached. Original media is never downloaded in the background.</ClaireText><View style={styles.settingsActions}><ClaireButton variant={fullHistoryEnabled ? 'secondary' : 'quiet'} onPress={() => { const next = !fullHistoryEnabled; cache.update({ fullHistoryEnabled: next }); cache.schedulePersist(userId); onFullHistoryChange(next); }}>{fullHistoryEnabled ? 'Keeping full text history' : 'Keep full history on this Mac'}</ClaireButton><ClaireButton variant="quiet" onPress={() => { cache.clear(userId).then(() => { onFullHistoryChange(false); return refreshCacheInfo(); }).catch((clearError) => setError(clearError instanceof Error ? clearError.message : 'Unable to clear local data.')); }}>Clear local data</ClaireButton></View></ClaireCard></ScrollView></View></View>;
+  return <View style={styles.surfacePane} testID="claire-desktop-settings"><View style={desktopSettingsStyles.workspace}><View style={desktopSettingsStyles.sidebar}><ClaireText variant="screenTitle" style={desktopSettingsStyles.sidebarTitle}>Settings</ClaireText>{items.map(([id, label]) => <Pressable key={id} accessibilityRole="button" accessibilityState={{ selected: section === id }} onPress={() => setSection(id)} style={({ pressed }) => [desktopSettingsStyles.sideItem, section === id && desktopSettingsStyles.sideItemActive, pressed && styles.pressed]}><ClaireText variant="body" style={section === id ? desktopSettingsStyles.sideItemTextActive : undefined}>{label}</ClaireText></Pressable>)}</View><ScrollView style={desktopSettingsStyles.main} contentContainerStyle={desktopSettingsStyles.mainContent}>{loading ? <LoadingRow label="Loading settings…" /> : null}{error ? <ClaireText variant="bodySmall" style={styles.errorText}>{error}</ClaireText> : null}{section === 'connections' ? <ConnectionsPane companion={companion} companionNotice={companionNotice} api={api} apiUrl={apiUrl} accessToken={accessToken} onSetUpMacCompanion={onSetUpMacCompanion} embedded /> : null}{section === 'profile' ? <ClaireCard tone="paper" style={styles.settingsCard}><ClaireText variant="screenTitle">Profile</ClaireText><ClaireText variant="bodySmall" style={styles.muted}>{account?.email || 'Your Claire account'}</ClaireText><ClaireField label="Name" value={account?.name || ''} onChangeText={(value) => setAccount((current) => current ? { ...current, name: value } : current)} placeholder="Your name" /><ClaireField label="Avatar URL" value={account?.avatar_url || ''} onChangeText={(value) => setAccount((current) => current ? { ...current, avatar_url: value } : current)} placeholder="https://…" /><ClaireButton disabled={saving || !account} onPress={() => { updateAccount().catch(() => undefined); }}>{saving ? 'Saving…' : 'Save profile'}</ClaireButton></ClaireCard> : null}{section === 'ai' && preferences ? <View style={styles.surfaceSection}><ClaireCard tone="paper" style={styles.settingsCard}><ClaireText variant="screenTitle">AI behavior</ClaireText><ClaireText variant="bodySmall" style={styles.muted}>These defaults guide replies when a conversation does not override them.</ClaireText><View style={styles.settingsActions}><ClaireButton variant="quiet" disabled={saving} onPress={() => { save({ tone: nextTone() }).catch(() => undefined); }}>Tone: {preferences.tone}</ClaireButton><ClaireButton variant="quiet" disabled={saving} onPress={() => { save({ response_style: nextStyle() }).catch(() => undefined); }}>Length: {preferences.response_style}</ClaireButton></View></ClaireCard></View> : null}{section === 'relationships' ? <ClaireCard tone="paper" style={styles.settingsCard}><ClaireText variant="screenTitle">Relationships</ClaireText><ClaireText variant="body" style={styles.muted}>Set context and AI instructions for each person in the People workspace.</ClaireText><ClaireText variant="bodySmall">Open People from the navigation rail to edit relationship memory.</ClaireText></ClaireCard> : null}{section === 'notifications' && preferences ? <ClaireCard tone="paper" style={styles.settingsCard}><ClaireText variant="screenTitle">Notifications</ClaireText><ClaireText variant="bodySmall" style={styles.muted}>macOS permission: {notificationPermission.replace('_', ' ')}.</ClaireText><View style={styles.settingsActions}><ClaireButton variant={preferences.notification_enabled ? 'secondary' : 'quiet'} disabled={saving} onPress={() => { save({ notification_enabled: !preferences.notification_enabled }).catch(() => undefined); }}>{preferences.notification_enabled ? 'Notifications on' : 'Notifications off'}</ClaireButton><ClaireButton variant="quiet" onPress={() => { requestMacNotificationPermission().catch(() => undefined); }}>Manage macOS alerts</ClaireButton></View></ClaireCard> : null}{section === 'appearance' && preferences ? <ClaireCard tone="paper" style={styles.settingsCard}><ClaireText variant="screenTitle">Appearance</ClaireText><ClaireText variant="bodySmall" style={styles.muted}>These settings sync to your Claire desktop workspaces.</ClaireText><View style={styles.settingsActions}>{(['system', 'light', 'dark'] as const).map((theme) => <ClaireButton key={theme} variant={extra.desktop_appearance?.theme === theme || (!extra.desktop_appearance?.theme && theme === 'system') ? 'secondary' : 'quiet'} onPress={() => { saveExtra({ desktop_appearance: { ...extra.desktop_appearance, theme } }).catch(() => undefined); }}>{theme}</ClaireButton>)}</View><View style={styles.settingsActions}>{(['comfortable', 'compact'] as const).map((density) => <ClaireButton key={density} variant={extra.desktop_appearance?.density === density || (!extra.desktop_appearance?.density && density === 'comfortable') ? 'secondary' : 'quiet'} onPress={() => { saveExtra({ desktop_appearance: { ...extra.desktop_appearance, density } }).catch(() => undefined); }}>{density}</ClaireButton>)}</View><View style={styles.settingsActions}>{([0.9, 1, 1.15] as const).map((scale) => <ClaireButton key={scale} variant={extra.desktop_appearance?.scale === scale || (!extra.desktop_appearance?.scale && scale === 1) ? 'secondary' : 'quiet'} onPress={() => { saveExtra({ desktop_appearance: { ...extra.desktop_appearance, scale } }).catch(() => undefined); }}>{Math.round(scale * 100)}%</ClaireButton>)}</View></ClaireCard> : null}{section === 'shortcuts' ? <ClaireCard tone="paper" style={styles.settingsCard}><ClaireText variant="screenTitle">Shortcuts</ClaireText><ClaireText variant="bodySmall" style={styles.muted}>Change workspace shortcuts. Duplicate combinations are rejected before they can be saved.</ClaireText><View style={desktopSettingsStyles.shortcutGrid}>{Object.entries(shortcuts).map(([action, binding]) => <View key={action} style={desktopSettingsStyles.shortcutRow}><ClaireText variant="bodySmall" style={desktopSettingsStyles.shortcutLabel}>{action}</ClaireText><TextInput accessibilityLabel={`${action} shortcut`} value={binding} onChangeText={(value) => { const next = { ...shortcuts, [action]: value }; setPreferences((current) => current ? { ...current, preferences: { ...(current.preferences || {}), desktop_shortcuts: next } } : current); }} onSubmitEditing={() => { saveExtra({ desktop_shortcuts: shortcuts }).catch(() => undefined); }} style={desktopSettingsStyles.shortcutInput} /></View>)}</View><ClaireButton disabled={saving} onPress={() => { saveExtra({ desktop_shortcuts: shortcuts }).catch(() => undefined); }}>Save shortcuts</ClaireButton></ClaireCard> : null}{section === 'privacy' ? <ClaireCard tone="paper" style={styles.settingsCard}><ClaireText variant="screenTitle">Privacy & data</ClaireText><ClaireText variant="bodySmall" style={styles.muted}>Claire stores your device credential in Keychain. Ask Claire is read-only and every answer cites the messages it used.</ClaireText></ClaireCard> : null}{section === 'about' ? <ClaireCard tone="paper" style={styles.settingsCard}><ClaireText variant="screenTitle">About Claire Desktop</ClaireText><ClaireText variant="bodySmall" style={styles.muted}>Desktop companion and unified messaging workspace.</ClaireText></ClaireCard> : null}</ScrollView></View></View>;
 }
 
 function LoadingScreen({ label }: { label: string }) {
@@ -1477,11 +1549,10 @@ const styles = Object.assign(StyleSheet.create({
 const desktopShellStyles = StyleSheet.create({
   titleBar: { borderBottomWidth: 0 },
   titleBarSidebarSurface: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 148, backgroundColor: colors.ink },
-  // Match the compact 68pt rail exactly so its black title-bar surface lines
-  // up with the sidebar edge while retaining room for macOS traffic lights.
-  titleBarSidebarSurfaceCollapsed: { width: 68 },
+  // 84pt fits AppKit's native traffic-light group without a wide overhang.
+  titleBarSidebarSurfaceCollapsed: { width: 84 },
   titleBarRailSpacer: { width: 148 },
-  titleBarRailSpacerCollapsed: { width: 68 },
+  titleBarRailSpacerCollapsed: { width: 84 },
   titleBarToggle: { width: 48, paddingLeft: space[2], justifyContent: 'center' },
   titleBarSearchArea: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space[3] },
   titleBarSearch: { width: '56%', minWidth: 240, maxWidth: 560, height: 32, paddingLeft: space[2], paddingRight: 3, borderWidth: 1, borderColor: colors.neutral[200], borderRadius: 10, backgroundColor: colors.neutral[50], flexDirection: 'row', alignItems: 'center', columnGap: space[1] },
@@ -1489,10 +1560,10 @@ const desktopShellStyles = StyleSheet.create({
   titleBarSearchShortcut: { minWidth: 28, height: 24, paddingHorizontal: 5, alignItems: 'center', justifyContent: 'center', borderRadius: 7, backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.neutral[200] },
   titleBarSearchShortcutText: { color: colors.neutral[600], fontSize: 10 },
   titleBarDivider: { position: 'absolute', left: 148, right: 0, bottom: 0, height: 1, backgroundColor: colors.neutral[200] },
-  titleBarDividerCollapsed: { left: 68 },
+  titleBarDividerCollapsed: { left: 84 },
   titleBarIconButton: { width: 32, height: 32, borderRadius: 10 },
   navigationRail: { paddingTop: 40 },
-  navigationRailCompact: { paddingTop: 32 },
+  navigationRailCompact: { width: 84, paddingTop: 32 },
   navButton: { minHeight: 44 },
   navButtonCompact: { width: 46, minHeight: 46, borderRadius: 14 },
   navEntryContent: { flexDirection: 'row', alignItems: 'center', columnGap: 10 },
