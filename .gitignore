@@ -86,3 +86,9 @@ Thumbs.db
 # Claude (ignore local settings/plans, but keep shared project commands tracked)
 .claude/*
 !.claude/commands/
+
+# Leftover local trees after client/ → mobile/ and worktree experiments.
+# Keep the native project in mobile/ios (Xcode + Podfile); never commit Pods.
+/client/
+/wt-96/
+/turbo-fieldfare/
