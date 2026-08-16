@@ -1,5 +1,5 @@
 import { colors, fonts, radius, space, type } from '../../../packages/design-system/src/tokens';
-import { clampDesktopPaneWidth, destinationForDesktopCommand } from '../src/services/desktop-navigation';
+import { clampDesktopPaneWidth, desktopWrapGridMetrics, destinationForDesktopCommand } from '../src/services/desktop-navigation';
 import { mergeChronologicalMessages } from '../src/services/message-sync';
 
 test('desktop consumes the shared Claire design language', () => {
@@ -42,6 +42,13 @@ test('native desktop commands have stable workspace destinations', () => {
   expect(destinationForDesktopCommand('settings')).toBe('Settings');
   expect(destinationForDesktopCommand('compose')).toBe('Inbox');
   expect(destinationForDesktopCommand('compact')).toBe('Inbox');
+});
+
+test('wrap grids use measured columns instead of flexBasis', () => {
+  expect(desktopWrapGridMetrics(0, 4)).toEqual({ columns: 1, itemWidth: 0 });
+  expect(desktopWrapGridMetrics(980, 4, 300, 12)).toEqual({ columns: 3, itemWidth: (980 - 24) / 3 });
+  expect(desktopWrapGridMetrics(640, 4, 300, 12)).toEqual({ columns: 2, itemWidth: (640 - 12) / 2 });
+  expect(desktopWrapGridMetrics(280, 4, 300, 12)).toEqual({ columns: 1, itemWidth: 280 });
 });
 
 test('desktop pane widths are bounded before persisting', () => {
