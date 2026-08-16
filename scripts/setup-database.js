@@ -2,22 +2,24 @@
 /**
  * Setup database tables using Supabase client
  * Run this script to create all necessary tables
+ *
+ * Requires SUPABASE_URL and SUPABASE_SERVICE_KEY in the environment.
+ * Never hardcode production credentials in this script.
  */
 
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
-// Load environment variables
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://khhvrwomoghmwhfxlnky.supabase.co';
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtoaHZyd29tb2dobXdoZnhsbmt5Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NDQ2OTAzMSwiZXhwIjoyMDcwMDQ1MDMxfQ.k9xA43lor8LflNWYnzfErpXkJMkN5t6RNp16DuYxdqw';
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
   console.error('❌ Missing SUPABASE_URL or SUPABASE_SERVICE_KEY environment variables');
+  console.error('   Copy server/.env.example to server/.env and set your own project values.');
   process.exit(1);
 }
 
-// Create Supabase client with service role key (bypasses RLS)
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
   auth: {
     autoRefreshToken: false,
@@ -29,11 +31,9 @@ async function setupDatabase() {
   try {
     console.log('🚀 Setting up database tables...\n');
 
-    // Read the migration file
     const migrationPath = join(process.cwd(), 'supabase/migrations/20250806092049_initial_schema.sql');
     const migrationSQL = readFileSync(migrationPath, 'utf-8');
 
-    // Split the SQL into individual statements (basic split, might need refinement)
     const statements = migrationSQL
       .split(';')
       .map(s => s.trim())
@@ -41,17 +41,14 @@ async function setupDatabase() {
 
     console.log(`📝 Found ${statements.length} SQL statements to execute\n`);
 
-    // Execute each statement
     let successCount = 0;
     let errorCount = 0;
 
     for (let i = 0; i < statements.length; i++) {
       const statement = statements[i] + ';';
-      
-      // Skip if it's just a comment
+
       if (statement.trim().startsWith('--')) continue;
 
-      // Extract a description of what we're doing
       let description = 'SQL statement';
       if (statement.includes('CREATE TABLE')) {
         const match = statement.match(/CREATE TABLE (?:IF NOT EXISTS )?(?:public\.)?(\w+)/i);
@@ -80,9 +77,8 @@ async function setupDatabase() {
       }).single();
 
       if (error) {
-        // Try direct execution as alternative
         const { error: directError } = await supabase.from('_sql').select(statement);
-        
+
         if (directError) {
           console.log('❌');
           console.error(`   Error: ${directError.message}`);
@@ -114,10 +110,8 @@ async function setupDatabase() {
   } catch (error) {
     console.error('❌ Failed to setup database:', error);
     console.log('\n💡 Alternative: Copy the contents of supabase/migrations/20250806092049_initial_schema.sql');
-    console.log('   and run it in the Supabase SQL Editor at:');
-    console.log('   https://supabase.com/dashboard/project/khhvrwomoghmwhfxlnky/sql');
+    console.log('   and run it in your Supabase project SQL Editor.');
   }
 }
 
-// Run the setup
 setupDatabase();

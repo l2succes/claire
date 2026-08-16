@@ -1,103 +1,72 @@
 # Setting Up the Database
 
-## Quick Setup via Supabase Dashboard
+Claire’s schema lives in `supabase/migrations/`. Use the local Docker stack for development. Cloud projects should apply the same migrations through the Supabase CLI or SQL Editor.
 
-Since the CLI is having authentication issues, let's use the Supabase Dashboard directly:
-
-### Step 1: Run the Migration
-
-1. Go to your Supabase Dashboard: https://supabase.com/dashboard/project/khhvrwomoghmwhfxlnky/sql
-2. Click on "SQL Editor" in the left sidebar
-3. Click "New Query"
-4. Copy ALL the contents from: `supabase/migrations/20250806092049_initial_schema.sql`
-5. Paste it in the SQL Editor
-6. Click "Run" (or press Cmd/Ctrl + Enter)
-
-You should see a success message saying the tables were created.
-
-### Step 2: Verify Tables Were Created
-
-1. Go to "Table Editor" in the left sidebar
-2. You should see these tables:
-   - `users`
-   - `whatsapp_sessions`
-   - `contacts`
-   - `chats`
-   - `messages`
-   - `ai_suggestions`
-   - `promises`
-   - `contact_inferences`
-   - `user_preferences`
-   - `auto_reply_rules`
-
-### Step 3: Test the Server Connection
-
-Now your server should be able to connect without the "table not found" error:
+## Local development (recommended)
 
 ```bash
-cd server
-bun run dev
+bun run docker:supabase
+# Then apply migrations with your local connection string from server/.env
+psql "$DATABASE_URL" -f supabase/migrations/20250806092049_initial_schema.sql
 ```
 
-## Alternative: Using psql directly
+Local defaults from the Docker stack:
 
-If you prefer command line, you can use psql:
+- API: `http://localhost:8000`
+- Database: `postgresql://postgres:postgres@localhost:54322/postgres`
+- Studio: `http://localhost:8000` (Kong) or the Studio port published by the compose file
+
+## Cloud or self-hosted Supabase
+
+1. Copy `server/.env.example` to `server/.env` and set `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, and `DATABASE_URL` from your project.
+2. Open the SQL Editor in your Supabase dashboard.
+3. Paste and run `supabase/migrations/20250806092049_initial_schema.sql`.
+4. Repeat for later files in `supabase/migrations/` in timestamp order.
+
+Or use the CLI:
 
 ```bash
-# Use the connection string from your .env file
-psql "postgresql://postgres:ZKE!juj!cnq5bzk8fqv@db.khhvrwomoghmwhfxlnky.supabase.co:5432/postgres" -f supabase/migrations/20250806092049_initial_schema.sql
+bunx supabase login
+bunx supabase link --project-ref <your-project-ref>
+bunx supabase db push
 ```
+
+## Scripted setup
+
+```bash
+export SUPABASE_URL="https://<your-project-ref>.supabase.co"
+export SUPABASE_SERVICE_KEY="<your-service-role-key>"
+bun run scripts/setup-database.js
+```
+
+The script requires both environment variables. It has no hardcoded project URL or service-role fallback.
+
+## Verify tables
+
+You should see at least:
+
+- `users`
+- `whatsapp_sessions`
+- `contacts`
+- `chats`
+- `messages`
+- `ai_suggestions`
+- `promises`
+- `contact_inferences`
+- `user_preferences`
+- `auto_reply_rules`
 
 ## Troubleshooting
 
-### If you get "extension does not exist" errors:
+If extensions are missing, enable `uuid-ossp` and `pg_trgm` in Database → Extensions.
 
-1. Go to Database > Extensions in Supabase Dashboard
-2. Enable these extensions:
-   - `uuid-ossp`
-   - `pg_trgm`
-
-### If you get "auth.users does not exist" error:
-
-This shouldn't happen as Supabase Auth is enabled by default, but if it does:
-1. Make sure Authentication is enabled in your project
-2. The auth schema should already exist
-
-### To reset and start fresh:
-
-If you need to drop all tables and start over:
+To reset a **local** database only:
 
 ```sql
--- BE CAREFUL: This will delete all data!
 DROP SCHEMA public CASCADE;
 CREATE SCHEMA public;
 GRANT ALL ON SCHEMA public TO postgres;
 GRANT ALL ON SCHEMA public TO public;
 ```
 
-Then run the migration again.
-
-## Next Steps
-
-Once the database is set up:
-
-1. The server should connect without errors
-2. You can start developing the frontend
-3. Consider adding test data using the seed file (optional)
-
-## For Local Development
-
-If you want to run Supabase locally for development:
-
-```bash
-# Install Supabase CLI globally
-npm install -g supabase
-
-# Start local Supabase
-supabase start
-
-# Your local Supabase will be available at:
-# - API: http://localhost:54321
-# - Database: postgresql://postgres:postgres@localhost:54322/postgres
-# - Studio: http://localhost:54323
-```
+Do not run that against a shared or production database.

@@ -31,7 +31,7 @@ whereas React Native Windows provides supported 0.83 and 0.84 release lines.
 Each desktop host must therefore pin its own supported React Native pair.
 
 Do **not** add `react-native-macos` or `react-native-windows` directly to
-`client/`. Start with separate native hosts and share source packages that
+`mobile/`. Start with separate native hosts and share source packages that
 remain inside a deliberately conservative React and React Native compatibility
 envelope. The macOS and Windows hosts are one product release train, but they
 are not required to share one lockfile or one exact React Native version.
@@ -53,7 +53,7 @@ Primary references:
 
 ```text
 claire/
-├── client/                         # existing Expo iOS/Android/web application
+├── mobile/                         # existing Expo iOS/Android/web application
 ├── desktop/
 │   ├── macos/                      # RN macOS host: Xcode, Swift/AppKit modules
 │   ├── windows/                    # RN Windows host: Visual Studio, C++/WinRT modules

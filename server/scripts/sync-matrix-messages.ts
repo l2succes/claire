@@ -9,20 +9,25 @@
  */
 
 // ─── Config ──────────────────────────────────────────────────────────────────
+// Local Docker defaults only. Tokens and user IDs must come from the environment.
 
-const MATRIX_URL = 'http://localhost:8008';
-const MATRIX_TOKEN = 'syt_Y2xhaXJlX2JvdA_ccXdYKTFDgHGatrAhBDC_1yP5E0';
-const SUPABASE_URL = 'http://localhost:8000';
-// Service key bypasses RLS so we can write on behalf of the user
-const SUPABASE_SERVICE_KEY =
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU';
+const MATRIX_URL = process.env.MATRIX_HOMESERVER_URL || 'http://localhost:8008';
+const MATRIX_TOKEN = process.env.MATRIX_ADMIN_TOKEN;
+const SUPABASE_URL = process.env.SUPABASE_URL || 'http://localhost:8000';
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
+const USER_ID = process.env.CLAIRE_USER_ID;
 
-const USER_ID = 'eaf43eb8-0b0e-4a8c-8a18-1b633be012f3';
-const BOT_USER_ID = '@claire_bot:claire.local';
-const BRIDGE_BOT_ID = '@whatsappbot:claire.local';
+if (!MATRIX_TOKEN || !SUPABASE_SERVICE_KEY || !USER_ID) {
+  throw new Error(
+    'Missing MATRIX_ADMIN_TOKEN, SUPABASE_SERVICE_KEY, or CLAIRE_USER_ID. Copy server/.env.example and set local values.',
+  );
+}
+
+const BOT_USER_ID = process.env.MATRIX_BOT_USER_ID || '@claire_bot:claire.local';
+const BRIDGE_BOT_ID = process.env.WHATSAPP_BRIDGE_BOT_ID || '@whatsappbot:claire.local';
 const PLATFORM = 'whatsapp';
 const GHOST_PREFIX = 'whatsapp_';
-const SERVER_NAME = 'claire.local';
+const SERVER_NAME = process.env.MATRIX_SERVER_NAME || 'claire.local';
 
 // How many messages to paginate per room (increase for deeper history)
 const MAX_MESSAGES_PER_ROOM = 500;

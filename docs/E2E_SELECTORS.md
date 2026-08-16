@@ -173,4 +173,4 @@ All stable `testID` values (rendered as `data-testid` on web via React Native We
 - Selectors prefixed with a platform name (e.g. `platform-selector-whatsapp`) use the platform's lowercase `Platform` enum value.
 - Dynamic selectors using `<id>` use the DB UUID of the entity.
 - Selectors marked "(added by #N)" are placeholders for upcoming issues and will be wired in those tickets.
-- The web build is required for Playwright (`bunx expo start --web`); see `client/playwright.config.mjs`.
+- The web build is required for Playwright (`bunx expo start --web`); see `mobile/playwright.config.mjs`.

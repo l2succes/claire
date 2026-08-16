@@ -50,7 +50,7 @@ jobs:
       NODE_ENV: test
       PUPPETEER_SKIP_DOWNLOAD: 'true'
       PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: 'true'
-      # Client
+      # Mobile
       EXPO_PUBLIC_SUPABASE_URL: http://localhost:8000
       EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ env.ANON_KEY }}
       EXPO_PUBLIC_API_URL: http://localhost:3001
@@ -66,7 +66,7 @@ jobs:
       - name: Install dependencies
         run: |
           cd server && bun install
-          cd ../client && bun install
+          cd ../mobile && bun install
 
       # ------------------------------------------------------------------
       # Boot Supabase stack (DB + Kong + GoTrue + PostgREST + Realtime)
@@ -163,11 +163,11 @@ jobs:
       # Install Playwright browsers and run e2e against the Expo web build
       # ------------------------------------------------------------------
       - name: Install Playwright browsers
-        working-directory: ./client
+        working-directory: ./mobile
         run: bunx playwright install chromium --with-deps
 
       - name: Run Playwright e2e (mock-bridge, real Supabase)
-        working-directory: ./client
+        working-directory: ./mobile
         env:
           MOCK_BRIDGE: 'true'
           # Override the client to talk to the real (local) Supabase
@@ -184,7 +184,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report-nightly
-          path: client/playwright-report/
+          path: mobile/playwright-report/
           retention-days: 7
 
       - name: Upload Playwright trace
@@ -192,7 +192,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: playwright-trace-nightly
-          path: client/test-results/
+          path: mobile/test-results/
           retention-days: 7
 
       # ------------------------------------------------------------------

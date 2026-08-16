@@ -42,47 +42,47 @@
 - `server/src/routes/messages.ts` - Message API routes (to be created)
 - `server/src/routes/promises.ts` - Promise API routes (to be created)
 - `server/src/routes/settings.ts` - Settings API routes (to be created)
-### Client Files
-- `client/package.json` - Client dependencies and scripts
-- `client/tsconfig.json` - TypeScript configuration for client
-- `client/jest.config.js` - Jest testing configuration
-- `client/app.json` - Expo configuration
-- `client/babel.config.js` - Babel configuration
-- `client/metro.config.js` - Metro bundler configuration
-- `client/tailwind.config.js` - Tailwind CSS configuration
-- `client/global.css` - Global CSS with Tailwind directives
-- `client/nativewind.d.ts` - NativeWind TypeScript declarations
-- `client/App.tsx` - Main Expo application entry point
-- `client/app/_layout.tsx` - Root layout with providers
-- `client/app/(tabs)/_layout.tsx` - Tab navigation layout
-- `client/app/(tabs)/dashboard.tsx` - Message dashboard screen
-- `client/app/(tabs)/promises.tsx` - Promise tracking screen
-- `client/app/(tabs)/settings.tsx` - Settings screen
-- `client/app/(auth)/_layout.tsx` - Auth layout
-- `client/app/(auth)/login.tsx` - QR code login screen
-- `client/components/ui/Button.tsx` - Button component
-- `client/components/ui/Card.tsx` - Card component
-- `client/stores/authStore.ts` - Authentication state management
-- `client/services/supabase.ts` - Supabase client configuration
-- `client/services/notifications.ts` - Push notification handling
-- `client/utils/cn.ts` - Class name utility
-- `client/tests/setup.ts` - Test setup and mocks
-- `client/tests/example.test.tsx` - Example test file
-- `client/components/MessageCard.tsx` - Message display component (to be created)
-- `client/components/ResponseSuggestion.tsx` - AI response component (to be created)
-- `client/components/ContactClarification.tsx` - Contact clarification UI (to be created)
-- `client/eas.json` - EAS Build configuration (to be created)
+### Mobile Files
+- `mobile/package.json` - Client dependencies and scripts
+- `mobile/tsconfig.json` - TypeScript configuration for client
+- `mobile/jest.config.js` - Jest testing configuration
+- `mobile/app.json` - Expo configuration
+- `mobile/babel.config.js` - Babel configuration
+- `mobile/metro.config.js` - Metro bundler configuration
+- `mobile/tailwind.config.js` - Tailwind CSS configuration
+- `mobile/global.css` - Global CSS with Tailwind directives
+- `mobile/nativewind.d.ts` - NativeWind TypeScript declarations
+- `mobile/App.tsx` - Main Expo application entry point
+- `mobile/app/_layout.tsx` - Root layout with providers
+- `mobile/app/(tabs)/_layout.tsx` - Tab navigation layout
+- `mobile/app/(tabs)/dashboard.tsx` - Message dashboard screen
+- `mobile/app/(tabs)/promises.tsx` - Promise tracking screen
+- `mobile/app/(tabs)/settings.tsx` - Settings screen
+- `mobile/app/(auth)/_layout.tsx` - Auth layout
+- `mobile/app/(auth)/login.tsx` - QR code login screen
+- `mobile/components/ui/Button.tsx` - Button component
+- `mobile/components/ui/Card.tsx` - Card component
+- `mobile/stores/authStore.ts` - Authentication state management
+- `mobile/services/supabase.ts` - Supabase client configuration
+- `mobile/services/notifications.ts` - Push notification handling
+- `mobile/utils/cn.ts` - Class name utility
+- `mobile/tests/setup.ts` - Test setup and mocks
+- `mobile/tests/example.test.tsx` - Example test file
+- `mobile/components/MessageCard.tsx` - Message display component (to be created)
+- `mobile/components/ResponseSuggestion.tsx` - AI response component (to be created)
+- `mobile/components/ContactClarification.tsx` - Contact clarification UI (to be created)
+- `mobile/eas.json` - EAS Build configuration (to be created)
 - `server/tests/auth/whatsapp-auth.test.ts` - Unit tests for WhatsApp authentication
 - `server/tests/services/message-ingestion.test.ts` - Unit tests for message ingestion
 - `server/tests/services/ai-processor.test.ts` - Unit tests for AI processor
 - `server/tests/services/memory-system.test.ts` - Unit tests for memory system
 - `server/tests/services/promise-detector.test.ts` - Unit tests for promise detection
 - `server/tests/services/contact-inference.test.ts` - Unit tests for contact inference
-- `client/tests/app/dashboard.test.tsx` - Unit tests for dashboard screen
-- `client/tests/app/promises.test.tsx` - Unit tests for promises screen
-- `client/tests/components/MessageCard.test.tsx` - Unit tests for message card
-- `client/tests/components/ResponseSuggestion.test.tsx` - Unit tests for response suggestion
-- `client/tests/components/ContactClarification.test.tsx` - Unit tests for contact clarification
+- `mobile/tests/app/dashboard.test.tsx` - Unit tests for dashboard screen
+- `mobile/tests/app/promises.test.tsx` - Unit tests for promises screen
+- `mobile/tests/components/MessageCard.test.tsx` - Unit tests for message card
+- `mobile/tests/components/ResponseSuggestion.test.tsx` - Unit tests for response suggestion
+- `mobile/tests/components/ContactClarification.test.tsx` - Unit tests for contact clarification
 - `supabase/migrations/001_initial_schema.sql` - Initial database schema
 - `supabase/functions/` - Supabase Edge Functions directory
 - `docker-compose.yml` - Docker configuration for services
@@ -133,7 +133,7 @@
 ## Tasks
 
 - [x] 1.0 Set Up Project Infrastructure and Development Environment
-  - [x] 1.1 Initialize monorepo structure with server/ and client/ directories
+  - [x] 1.1 Initialize monorepo structure with server/ and mobile/ directories
   - [x] 1.2 Set up Supabase project and configure database connection
   - [x] 1.3 Initialize Expo app with TypeScript and configure Expo Router
   - [x] 1.4 Install and configure Gluestack UI v2 with NativeWind

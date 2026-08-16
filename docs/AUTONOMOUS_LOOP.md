@@ -51,7 +51,7 @@ The backlog is created (idempotently) by `scripts/loop-init.sh` via `/claire-loo
 5. **Gate locally** — all must pass:
    ```bash
    (cd server && bun run lint && bun run typecheck && bun test)
-   (cd client && bun run lint && bun run typecheck && bun test && MOCK_BRIDGE=true bunx playwright test)
+   (cd mobile && bun run lint && bun run typecheck && bun test && MOCK_BRIDGE=true bunx playwright test)
    ```
    Red → fix in-loop (**max 2 retries**). Still red → label `blocked`, comment the failure, drop `ready`, move on.
 6. **PR** — `gh pr create --base main` with `Closes #<num>`, the risk tier, and how it was verified.
@@ -105,10 +105,10 @@ CI must be green either way: lint + typecheck + jest + web build + **mock Playwr
 ## Reuse map (don't rebuild what exists)
 
 - Promises: `server/src/services/promise-detector.ts`, table in `supabase/migrations/20250806092049_initial_schema.sql`; wire from `server/src/index.ts` (handler near the `aiProcessor.generateAndStore` call).
-- AI: `server/src/services/{ai-processor,context-builder,prompt-templates,response-safety,response-cache}.ts`, routes in `server/src/routes/ai.ts`; client `client/components/ResponseSuggestion.tsx`.
-- Smart cards / inference: `server/src/services/{smart-card-generator,contact-inference}.ts`, `server/src/routes/conversations.ts`, `client/components/{SmartCard,SmartCardList,ChatSmartCardTray,NudgeCard,MorningBrief,UrgentCard}.tsx`.
+- AI: `server/src/services/{ai-processor,context-builder,prompt-templates,response-safety,response-cache}.ts`, routes in `server/src/routes/ai.ts`; client `mobile/components/ResponseSuggestion.tsx`.
+- Smart cards / inference: `server/src/services/{smart-card-generator,contact-inference}.ts`, `server/src/routes/conversations.ts`, `mobile/components/{SmartCard,SmartCardList,ChatSmartCardTray,NudgeCard,MorningBrief,UrgentCard}.tsx`.
 - Jobs/queue: `server/src/services/message-queue.ts` (Bull/Redis) for the reminder scheduler.
-- E2E: `client/playwright.config.mjs`, `client/e2e/*`.
+- E2E: `mobile/playwright.config.mjs`, `mobile/e2e/*`.
 
 ---
 
@@ -116,8 +116,8 @@ CI must be green either way: lint + typecheck + jest + web build + **mock Playwr
 
 1. `git clone https://github.com/l2succes/claire.git && cd claire`
 2. Install **Bun**, **Claude Code**, and **gh**; then `gh auth login` (scopes: `repo`, plus PR/issue access).
-3. `cd server && bun install && cd ../client && bun install`
-4. Copy env files: `server/.env`, `client/.env`. The mock-bridge loop needs **no** Docker and **no** real WhatsApp/Matrix — Docker is only for the real-stack nightly run.
+3. `cd server && bun install && cd ../mobile && bun install`
+4. Copy env files: `server/.env`, `mobile/.env`. The mock-bridge loop needs **no** Docker and **no** real WhatsApp/Matrix — Docker is only for the real-stack nightly run.
 5. **First time only:** `/claire-loop-init` to populate the backlog. Skip if another machine already created it (issues are shared server-side).
 6. Run the loop, either way:
    - **Interactive (in a Claude Code session):** `/claire-loop until-green`.
