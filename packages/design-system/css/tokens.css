@@ -20,8 +20,8 @@
   --warning: #b75d00;
   --danger: #c83a3a;
   --focus: #3c68ff;
-  --font-sans: Inter, 'Avenir Next', Avenir, Helvetica, Arial, sans-serif;
-  --font-mono: 'DM Mono', 'SFMono-Regular', Consolas, monospace;
+  --font-sans: var(--font-inter), Inter, 'Avenir Next', Avenir, Helvetica, Arial, sans-serif;
+  --font-mono: var(--font-dm-mono), 'DM Mono', 'SFMono-Regular', Consolas, monospace;
   --text-xs: 0.75rem;
   --text-sm: 0.875rem;
   --text-base: 1rem;

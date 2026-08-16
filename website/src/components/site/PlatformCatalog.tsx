@@ -37,15 +37,24 @@ function matchesFilter(platform: PlatformDefinition, filter: Filter) {
 }
 
 function PlatformMark({ platform }: { platform: PlatformDefinition }) {
+  const [hasImage, setHasImage] = useState(false);
+
   return (
     <span
-      className={`platform-mark ${platform.iconTreatment || 'knockout'}`}
+      className={`platform-mark ${platform.iconTreatment || 'knockout'}${hasImage ? ' has-image' : ''}`}
       style={{ ['--platform-accent' as string]: platform.accent }}
       aria-hidden="true"
     >
       {platform.mark}
       {platform.iconUrl ? (
-        <img alt="" loading="lazy" decoding="async" src={platform.iconUrl} />
+        <img
+          alt=""
+          loading="lazy"
+          decoding="async"
+          src={platform.iconUrl}
+          onLoad={() => setHasImage(true)}
+          onError={(event) => event.currentTarget.remove()}
+        />
       ) : null}
     </span>
   );

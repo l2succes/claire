@@ -42,6 +42,8 @@
 }
 
 :root {
+  --font-sans: var(--font-inter), Inter, 'Avenir Next', Avenir, Helvetica, Arial, sans-serif;
+  --font-mono: var(--font-dm-mono), 'DM Mono', 'SFMono-Regular', Consolas, monospace;
   --color-fd-background: var(--claire-cream);
   --color-fd-foreground: var(--claire-ink);
   --color-fd-muted: var(--neutral-100);
@@ -81,6 +83,7 @@ summary:focus-visible {
 
 .claire-underline {
   position: relative;
+  isolation: isolate;
   z-index: 0;
 }
 

@@ -1,6 +1,13 @@
 * {
   box-sizing: border-box;
 }
+/* Tailwind preflight sets heading weight to inherit (400). The original
+   landing HTML used the browser default of bold for h1–h3. */
+h1,
+h2,
+h3 {
+  font-weight: 700;
+}
 html {
   scroll-behavior: smooth;
 }
@@ -204,6 +211,7 @@ button {
 }
 .hero h1 span {
   position: relative;
+  isolation: isolate;
   z-index: 0;
 }
 .hero h1 span:after {
@@ -754,10 +762,14 @@ button {
 .platform-mark img {
   width: 59%;
   height: 59%;
+  max-width: none;
   object-fit: contain;
   position: absolute;
   inset: 0;
   margin: auto;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
 }
 .platform-mark.has-image {
   color: transparent;
@@ -775,8 +787,11 @@ button {
 .platform img {
   width: 58%;
   height: 58%;
+  max-width: none;
   object-fit: contain;
   display: block;
+  background: transparent;
+  border: 0;
 }
 .claire-ai {
   background: var(--claire-lime) !important;
@@ -810,8 +825,14 @@ button {
   line-height: 0.98;
   letter-spacing: -0.06em;
 }
+.connections-heading h2,
+.guide-heading h2,
+.hosting-heading h2 {
+  font-weight: 700;
+}
 .connections-heading h2 span {
   position: relative;
+  isolation: isolate;
   z-index: 0;
 }
 .connections-heading h2 span:after {
@@ -966,6 +987,7 @@ button {
 .platform-card h3 {
   margin: 0 0 3px;
   font-size: 18px;
+  font-weight: 700;
   letter-spacing: -0.035em;
 }
 .platform-bridge {
