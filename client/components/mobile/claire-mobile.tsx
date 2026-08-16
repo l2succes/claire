@@ -3,6 +3,7 @@ import { Pressable, ScrollView, Text, TextInput, View, type StyleProp, type Text
 import { Image } from 'expo-image';
 import { AlertCircle, Inbox, UserRound } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { colors, mobileType, radius, space } from '@claire/design-system';
 
 export const mobileColors = colors;
@@ -54,6 +55,8 @@ export function MobileHeader({ title, eyebrow, subtitle, leading, actions, profi
 }
 
 export function MobileIconButton({ children, label, onPress, selected = false, testID }: { children: ReactNode; label: string; onPress: () => void; selected?: boolean; testID?: string }) {
+  const scale = useSharedValue(1);
+  const press = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
   return (
     <Pressable
       testID={testID}
@@ -61,19 +64,24 @@ export function MobileIconButton({ children, label, onPress, selected = false, t
       accessibilityLabel={label}
       accessibilityState={{ selected }}
       onPress={onPress}
-      style={{
-        width: 40,
-        height: 40,
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderRadius: 13,
-        borderCurve: 'continuous',
-        borderWidth: 1,
-        borderColor: selected ? colors.ink : colors.neutral[200],
-        backgroundColor: selected ? colors.lime : colors.paper,
-      }}
+      onPressIn={() => { scale.value = withTiming(0.92, { duration: 80 }); }}
+      onPressOut={() => { scale.value = withTiming(1, { duration: 160 }); }}
     >
-      {children}
+      <Animated.View
+        style={[{
+          width: 40,
+          height: 40,
+          alignItems: 'center',
+          justifyContent: 'center',
+          borderRadius: 13,
+          borderCurve: 'continuous',
+          borderWidth: 1,
+          borderColor: selected ? colors.ink : colors.neutral[200],
+          backgroundColor: selected ? colors.lime : colors.paper,
+        }, press]}
+      >
+        {children}
+      </Animated.View>
     </Pressable>
   );
 }

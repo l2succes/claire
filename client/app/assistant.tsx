@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import Animated, { Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { ChevronLeft, Plus, X } from 'lucide-react-native';
@@ -7,6 +8,7 @@ import { colors, mobileType, radius, space } from '@claire/design-system';
 import { MobileIconButton, SectionLabel } from '../components/mobile/claire-mobile';
 import { AskComposer, AskToolGrid } from '../components/claire/composer';
 import { ClaireMark } from '../components/claire/mark';
+import { AskClaireSkeleton } from '../components/claire/skeleton';
 import { useChromeStore } from '../stores/chromeStore';
 import {
   AssistantCitation,
@@ -57,6 +59,20 @@ function Sources({ citations }: { citations: AssistantCitation[] }) {
       ))}
       {citations.length > 3 ? <Pressable onPress={() => setShowAll((current) => !current)} testID="assistant-sources-toggle"><Text style={{ ...mobileType.label, color: colors.ink }}>{showAll ? 'Show less' : `View ${citations.length - 3} more`}</Text></Pressable> : null}
     </View>
+  );
+}
+
+function SearchingStatus() {
+  const opacity = useSharedValue(0.55);
+  useEffect(() => {
+    opacity.value = withRepeat(withTiming(1, { duration: 720, easing: Easing.inOut(Easing.quad) }), -1, true);
+  }, [opacity]);
+  const pulse = useAnimatedStyle(() => ({ opacity: opacity.value }));
+  return (
+    <Animated.View style={[{ flexDirection: 'row', alignItems: 'center', gap: space[2], padding: space[3] }, pulse]}>
+      <ClaireMark size={16} />
+      <Text style={{ ...mobileType.bodySmall, color: colors.neutral[800] }}>Claire is searching your conversations…</Text>
+    </Animated.View>
   );
 }
 
@@ -260,7 +276,7 @@ export function AssistantScreen({ inTab = false }: { inTab?: boolean }) {
       </View>
       <IndexStatusBanner status={indexStatus} />
       {loading ? (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator color={colors.ink} /></View>
+        <AskClaireSkeleton />
       ) : inThread ? (
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <ScrollView contentContainerStyle={{ paddingHorizontal: space[4], paddingTop: space[2], paddingBottom: space[4], gap: space[4] }} keyboardShouldPersistTaps="handled" testID="assistant-turn-list">
@@ -276,12 +292,7 @@ export function AssistantScreen({ inTab = false }: { inTab?: boolean }) {
                 {turn.role === 'assistant' ? <Sources citations={turn.citations || []} /> : null}
               </View>
             ))}
-            {asking ? (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2], padding: space[3] }}>
-                <ClaireMark size={16} />
-                <Text style={{ ...mobileType.bodySmall, color: colors.neutral[800] }}>Claire is searching your conversations…</Text>
-              </View>
-            ) : null}
+            {asking ? <SearchingStatus /> : null}
           </ScrollView>
           {error ? <Text testID="assistant-error" style={{ ...mobileType.bodySmall, color: colors.danger, paddingHorizontal: space[4], paddingBottom: space[2] }}>{error}</Text> : null}
           <View style={{ paddingHorizontal: space[4], paddingTop: space[2], paddingBottom: Math.max(insets.bottom, space[3]), backgroundColor: colors.sky }}>

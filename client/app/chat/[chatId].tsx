@@ -6,7 +6,7 @@ import {
 import { ImageIcon, Volume2, Video, FileText, AlertCircle, Link2, MoreHorizontal, Sparkles, X, ChevronLeft } from 'lucide-react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react';
 import { supabase } from '../../services/supabase';
 import { platformsApi, API_BASE_URL } from '../../services/platforms';
 import { useAuthStore } from '../../stores/authStore';
@@ -14,12 +14,14 @@ import { usePlatformStore } from '../../stores/platformStore';
 import { useChatPreferencesStore } from '../../stores/chatPreferencesStore';
 import { ResponseSuggestion } from '../../components/ResponseSuggestion';
 import { ChatComposer } from '../../components/claire/composer';
+import { ChatSkeleton } from '../../components/claire/skeleton';
 import { useConversationSettingsStore } from '../../stores/conversationSettingsStore';
 import { GroupChatSummary } from '../../components/GroupChatSummary';
-import { Platform, resolvePlatform } from '../../types/platform';
-import { PlatformBadge, PlatformName } from '../../components/PlatformIcon';
+import { Platform } from '../../types/platform';
+import { PlatformName } from '../../components/PlatformIcon';
 import { setActiveNotificationChat, syncNotificationBadge, updateNotificationPresence } from '../../services/notifications';
 import { colors, mobileType, radius, space } from '@claire/design-system';
+import Animated, { FadeInDown, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { MobileAvatar, MobileIconButton } from '../../components/mobile/claire-mobile';
 import { cacheTimeline, cachedTimeline, usesNativeMobileCache } from '../../services/mobile-cache';
 
@@ -33,6 +35,84 @@ interface ChatMessage {
   content_type?: string;
   media_url?: string;
   media_mime_type?: string;
+  platform_message_id?: string;
+}
+
+function isLocalSend(id: string) {
+  return id.startsWith('optimistic-') || id.startsWith('local-');
+}
+
+function mergeChatMessage(prev: ChatMessage[], incoming: ChatMessage): ChatMessage[] {
+  if (prev.some((message) => message.id === incoming.id)) {
+    return prev.map((message) => message.id === incoming.id ? { ...message, ...incoming } : message);
+  }
+  if (incoming.from_me) {
+    const localIndex = prev.findIndex((message) => isLocalSend(message.id) && message.content === incoming.content);
+    if (localIndex >= 0) {
+      const next = [...prev];
+      next[localIndex] = { ...prev[localIndex], ...incoming, id: incoming.id };
+      return next;
+    }
+  }
+  return [...prev, incoming];
+}
+
+function keepPendingSends(serverMessages: ChatMessage[], current: ChatMessage[]) {
+  const pending = current.filter((message) => (
+    isLocalSend(message.id)
+    && !serverMessages.some((row) => row.id === message.id || (row.from_me && row.content === message.content))
+  ));
+  return [...serverMessages, ...pending].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+}
+
+function chatMessageFromSend(payload: unknown, fallback: ChatMessage): ChatMessage {
+  if (!payload || typeof payload !== 'object') return fallback;
+  const raw = payload as Record<string, unknown>;
+  const platformMessageId = typeof raw.platformMessageId === 'string'
+    ? raw.platformMessageId
+    : typeof raw.platform_message_id === 'string'
+      ? raw.platform_message_id
+      : undefined;
+  const timestampValue = raw.timestamp;
+  const timestamp = typeof timestampValue === 'string'
+    ? new Date(timestampValue).toISOString()
+    : timestampValue instanceof Date
+      ? timestampValue.toISOString()
+      : fallback.timestamp;
+  return {
+    ...fallback,
+    id: fallback.id,
+    content: typeof raw.content === 'string' ? raw.content : fallback.content,
+    timestamp,
+    from_me: true,
+    ...(platformMessageId ? { platform_message_id: platformMessageId } : {}),
+  };
+}
+
+function InjectedBubble({
+  animate,
+  style,
+  testID,
+  children,
+}: {
+  animate: boolean;
+  style: object;
+  testID?: string;
+  children: ReactNode;
+}) {
+  const progress = useSharedValue(animate ? 0 : 1);
+  useEffect(() => {
+    if (!animate) return;
+    progress.value = withSpring(1, { damping: 14, stiffness: 240, mass: 0.62 });
+  }, [animate, progress]);
+  const motion = useAnimatedStyle(() => ({
+    opacity: progress.value,
+    transform: [
+      { translateY: (1 - progress.value) * 16 },
+      { scale: 0.82 + 0.18 * progress.value },
+    ],
+  }));
+  return <Animated.View testID={testID} style={[style, motion]}>{children}</Animated.View>;
 }
 
 // An installed development client can lag behind the JavaScript bundle after a
@@ -153,7 +233,6 @@ export default function ChatScreen() {
   const displayName = is_group === '1'
     ? (chat_name || contact_name || 'Group')
     : (contact_name || chat_name || 'Unknown');
-  const resolvedPlatform = resolvePlatform(platform);
   const activeSession = connectedSessions.find(session => session.platform === (platform as Platform) && session.status === 'connected');
   const isConnected = !!activeSession;
   const contextCard = smartCards[0];
@@ -170,7 +249,7 @@ export default function ChatScreen() {
       if (usesNativeMobileCache()) {
         const cached = await cachedTimeline(user.id, chatId, 200);
         if (cached.length) {
-          setMessages(cached as unknown as ChatMessage[]);
+          setMessages((current) => keepPendingSends(cached as unknown as ChatMessage[], current));
           setLoading(false);
         }
       }
@@ -198,7 +277,7 @@ export default function ChatScreen() {
       }
       const deduplicated = [...new Map(loadedMessages.map(message => [message.id, message])).values()]
         .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-      setMessages(deduplicated);
+      setMessages((current) => keepPendingSends(deduplicated, current));
       if (usesNativeMobileCache()) void cacheTimeline(user.id, chatId, deduplicated).catch(() => undefined);
     } catch (err) {
       console.error('Failed to fetch messages:', err);
@@ -269,16 +348,15 @@ export default function ChatScreen() {
         (payload) => {
           const inserted = payload.new as ChatMessage;
           if (usesNativeMobileCache() && user?.id) void cacheTimeline(user.id, chatId, [{ ...inserted, chat_id: chatId }]).catch(() => undefined);
-          setMessages((prev) => {
-            // Avoid duplicates (e.g. optimistic message already in list)
-            if (prev.some((m) => m.id === inserted.id)) return prev;
-            return [...prev, inserted];
-          });
+          setMessages((prev) => mergeChatMessage(prev, inserted));
           if (!inserted.from_me) void markConversationRead();
         }
       )
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages', filter: `chat_id=eq.${chatId}` },
-        () => fetchMessages()
+        (payload) => {
+          const updated = payload.new as ChatMessage;
+          setMessages((prev) => mergeChatMessage(prev, updated));
+        }
       )
       .on('postgres_changes', {
         event: '*',
@@ -308,6 +386,9 @@ export default function ChatScreen() {
 
   const listData = useMemo(() => [...messages].reverse(), [messages]);
   const lastInbound = useMemo(() => [...messages].reverse().find(message => !message.from_me), [messages]);
+  const latestInjectedId = useMemo(() => (
+    [...messages].reverse().find((message) => message.from_me && isLocalSend(message.id))?.id ?? null
+  ), [messages]);
 
   useEffect(() => {
     if (!highlightMessageId || hasScrolledToHighlight.current) return;
@@ -359,11 +440,25 @@ export default function ChatScreen() {
       from_me: true,
     };
     setMessages((prev) => [...prev, optimistic]);
+    if (user?.id && chatId) {
+      void cacheTimeline(user.id, chatId, [{ ...optimistic, chat_id: chatId }]).catch(() => undefined);
+    }
     setInputText('');
+    requestAnimationFrame(() => {
+      listRef.current?.scrollToOffset({ offset: 0, animated: true });
+    });
 
     setSending(true);
     try {
-      await platformsApi.sendMessage(platform as Platform, session.id, platformChatId, text);
+      const sent = await platformsApi.sendMessage(platform as Platform, session.id, platformChatId, text);
+      const confirmed = chatMessageFromSend(sent.message, optimistic);
+      setMessages((prev) => mergeChatMessage(prev, confirmed));
+      if (user?.id && chatId) {
+        void cacheTimeline(user.id, chatId, [{ ...confirmed, chat_id: chatId }]).catch(() => undefined);
+      }
+      requestAnimationFrame(() => {
+        listRef.current?.scrollToOffset({ offset: 0, animated: true });
+      });
     } catch (err) {
       console.error('Send failed:', err);
 
@@ -380,7 +475,7 @@ export default function ChatScreen() {
     } finally {
       setSending(false);
     }
-  }, [fetchChatInfo, inputText, platform, connectedSessions]);
+  }, [chatId, fetchChatInfo, inputText, platform, connectedSessions, user?.id]);
 
   const isBridgeFailure = (content: string) =>
     content.startsWith('* Failed to bridge media') ||
@@ -484,23 +579,30 @@ export default function ChatScreen() {
     const isHighlighted = item.id === highlightMessageId;
     const subtextColor = colors.neutral[600];
     return (
-      <View style={{
-        flexDirection: 'row',
-        justifyContent: isMe ? 'flex-end' : 'flex-start',
-        paddingHorizontal: space[3],
-        paddingVertical: 3,
-      }} testID={`message-row-${item.id}-${isMe ? 'outgoing' : 'incoming'}`}>
-        <View style={{
-          maxWidth: '78%',
-          backgroundColor: isMe ? colors.lime : colors.paper,
-          borderWidth: isHighlighted ? 2 : 1,
-          borderColor: isHighlighted ? colors.focus : colors.neutral[200],
-          borderRadius: radius.card,
-          borderBottomRightRadius: isMe ? 6 : radius.card,
-          borderBottomLeftRadius: isMe ? radius.card : 6,
+      <View
+        style={{
+          flexDirection: 'row',
+          justifyContent: isMe ? 'flex-end' : 'flex-start',
           paddingHorizontal: space[3],
-          paddingVertical: space[2],
-        }} testID={`message-bubble-${item.id}-${isMe ? 'outgoing' : 'incoming'}`} accessibilityState={{ selected: isHighlighted }}>
+          paddingVertical: 3,
+        }}
+        testID={`message-row-${item.id}-${isMe ? 'outgoing' : 'incoming'}`}
+      >
+        <InjectedBubble
+          animate={item.id === latestInjectedId}
+          testID={`message-bubble-${item.id}-${isMe ? 'outgoing' : 'incoming'}`}
+          style={{
+            maxWidth: '78%',
+            backgroundColor: isMe ? colors.lime : colors.paper,
+            borderWidth: isHighlighted ? 2 : 1,
+            borderColor: isHighlighted ? colors.focus : colors.neutral[200],
+            borderRadius: radius.card,
+            borderBottomRightRadius: isMe ? 6 : radius.card,
+            borderBottomLeftRadius: isMe ? radius.card : 6,
+            paddingHorizontal: space[3],
+            paddingVertical: space[2],
+          }}
+        >
           {!isMe && is_group === '1' && item.contact_name && (
             <Text style={{ ...mobileType.label, color: colors.neutral[600], marginBottom: 2 }}>
               {item.contact_name}
@@ -510,7 +612,7 @@ export default function ChatScreen() {
           <Text style={{ ...mobileType.label, fontSize: 10, color: subtextColor, marginTop: 3, textAlign: isMe ? 'right' : 'left' }}>
             {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </Text>
-        </View>
+        </InjectedBubble>
       </View>
     );
   };
@@ -518,7 +620,7 @@ export default function ChatScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.cream }} edges={['top']} testID="chat-screen">
       {/* Header */}
-      <View style={{
+      <Animated.View entering={FadeInDown.duration(240).springify().damping(20)} style={{
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: space[3],
@@ -534,11 +636,6 @@ export default function ChatScreen() {
           name={displayName}
           size={40}
           isGroup={is_group === '1'}
-          badge={resolvedPlatform ? (
-            <View style={{ padding: 1, borderRadius: 10, borderWidth: 2, borderColor: colors.cream, backgroundColor: colors.paper }}>
-              <PlatformBadge platform={resolvedPlatform} size={14} />
-            </View>
-          ) : undefined}
         />
         <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
           <Text style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }} numberOfLines={1}>
@@ -553,7 +650,7 @@ export default function ChatScreen() {
             params: { chatId: chatId!, platform, contact_name, chat_name, is_group },
           })}
         ><MoreHorizontal size={21} color={colors.ink} /></MobileIconButton>
-      </View>
+      </Animated.View>
 
       {showQuickContext ? <View style={{ marginHorizontal: space[3], marginTop: space[2], padding: space[3], flexDirection: 'row', alignItems: 'center', gap: space[2], borderRadius: radius.control, borderWidth: 1, borderColor: colors.ink, backgroundColor: colors.sky }} testID="chat-quick-context">
         <View style={{ width: 28, height: 28, borderRadius: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.lime }}><Sparkles size={15} color={colors.ink} /></View>
@@ -573,19 +670,19 @@ export default function ChatScreen() {
         )}
 
         {loading ? (
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }} testID="chat-loading">
-            <ActivityIndicator size="large" color={colors.ink} />
-          </View>
+          <ChatSkeleton testID="chat-loading" />
         ) : (
           <FlatList
             ref={listRef}
             data={listData}
             inverted
+            extraData={`${listData[0]?.id}:${latestInjectedId}`}
             renderItem={renderMessage}
             keyExtractor={(item) => item.id}
             testID="chat-message-list"
             contentContainerStyle={{ paddingVertical: space[3] }}
             keyboardShouldPersistTaps="handled"
+            maintainVisibleContentPosition={{ minIndexForVisible: 0, autoscrollToTopThreshold: 80 }}
             onScrollToIndexFailed={({ index, averageItemLength }) => {
               listRef.current?.scrollToOffset({ offset: Math.max(0, index * averageItemLength), animated: false });
               setTimeout(() => listRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.45 }), 100);

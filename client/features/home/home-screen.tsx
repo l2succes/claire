@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { AlertCircle, ArrowUpRight, CheckCircle2, MessageCircle, Settings, Sparkles } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
@@ -13,6 +13,7 @@ import { API_BASE_URL } from '../../services/platforms';
 import { resolvePlatform, platformLabel } from '../../types/platform';
 import { formatInboxTimestamp } from '../../utils/messageTimestamp';
 import { computeUrgencyScore } from '../../utils/urgency';
+import { HomeSkeleton } from '../../components/claire/skeleton';
 
 interface UrgentMessage {
   id: string;
@@ -121,7 +122,7 @@ export function HomeScreen() {
     ...openPromises.slice(0, Math.max(0, 4 - Math.min(urgent.length, 3))).map(promise => ({
       key: `promise-${promise.id}`,
       title: promise.content,
-      subtitle: `Promise · ${promise.deadline ? `due ${new Date(promise.deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}` : 'open'}`,
+      subtitle: `Loop · ${promise.deadline ? `due ${new Date(promise.deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}` : 'open'}`,
       platform: undefined,
       time: promise.deadline ? formatInboxTimestamp(promise.deadline) : 'Now',
       kind: 'promise' as const,
@@ -160,6 +161,10 @@ export function HomeScreen() {
       />
 
       <View style={{ paddingHorizontal: space[4], gap: space[4] }}>
+        {(brief.isLoading && inbox.loading) || promises.isLoading ? (
+          <HomeSkeleton />
+        ) : (
+          <>
         <Pressable
           testID="home-needs-reply"
           accessibilityRole="button"
@@ -177,10 +182,8 @@ export function HomeScreen() {
         </Pressable>
 
         <SectionLabel title="Your day" detail={`${dayItems.length} items`} />
-        {(brief.isLoading && inbox.loading) || promises.isLoading ? (
-          <View style={{ paddingVertical: 56 }}><ActivityIndicator color={colors.ink} /></View>
-        ) : dayItems.length === 0 ? (
-          <MobileState title="A calm day" message="New messages and promises that need attention will appear here." />
+        {dayItems.length === 0 ? (
+          <MobileState title="A calm day" message="New messages and open loops that need attention will appear here." />
         ) : (
           <View>
             {dayItems.map(item => (
@@ -211,6 +214,8 @@ export function HomeScreen() {
           </View>
           <MobileIconButton label="Open settings" onPress={() => router.push('/settings')}><Settings size={18} color={colors.ink} /></MobileIconButton>
         </View>
+          </>
+        )}
       </View>
     </ScrollView>
   );

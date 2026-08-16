@@ -1,5 +1,6 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Pressable, Text, TextInput, View, type StyleProp, type TextInputProps, type ViewStyle } from 'react-native';
+import Animated, { FadeInDown, FadeOutUp, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { AtSign, Filter, List, MessageCircle, Plus, Search, SendHorizonal, Smile, Sparkles, Trash2, ArrowUpRight } from 'lucide-react-native';
 import { colors, mobileType, radius, space } from '@claire/design-system';
 import type { ChatPlusDefault } from '../../stores/chatPreferencesStore';
@@ -8,7 +9,7 @@ const CONTROL = 36;
 
 export const ASK_TOOLS = [
   { id: 'catch-me-up', label: 'Catch me up', description: 'Summarize recent conversations.', prompt: 'Catch me up on the conversations that need my attention.' },
-  { id: 'open-loops', label: 'Find open loops', description: 'Promises and questions.', prompt: 'What promises, questions, or plans are still unresolved?' },
+  { id: 'open-loops', label: 'Find open loops', description: 'Open loops and questions.', prompt: 'What promises, questions, or plans are still unresolved?' },
   { id: 'tone', label: 'Check the tone', description: 'Warm, direct, or playful.', prompt: 'What patterns do you notice in the tone of my recent conversations? Distinguish observations from inference.' },
   { id: 'find', label: 'Find something', description: 'Search messages and plans.', prompt: 'Help me find something I remember saying or receiving.' },
 ] as const;
@@ -32,7 +33,7 @@ type ComposerAction = {
 
 function ComposerMenu({ items, testID }: { items: ComposerAction[]; testID?: string }) {
   return (
-    <View testID={testID} style={{ marginBottom: space[2], overflow: 'hidden', borderRadius: radius.card, borderWidth: 1, borderColor: colors.ink, backgroundColor: colors.paper }}>
+    <Animated.View entering={FadeInDown.duration(180).springify().damping(18)} exiting={FadeOutUp.duration(120)} testID={testID} style={{ marginBottom: space[2], overflow: 'hidden', borderRadius: radius.card, borderWidth: 1, borderColor: colors.ink, backgroundColor: colors.paper }}>
       {items.map((item, index) => (
         <Pressable
           key={item.id}
@@ -50,7 +51,20 @@ function ComposerMenu({ items, testID }: { items: ComposerAction[]; testID?: str
           </View>
         </Pressable>
       ))}
-    </View>
+    </Animated.View>
+  );
+}
+
+function PlusToggle({ open }: { open: boolean }) {
+  const rotation = useSharedValue(0);
+  useEffect(() => {
+    rotation.value = withTiming(open ? 45 : 0, { duration: 180 });
+  }, [open, rotation]);
+  const spin = useAnimatedStyle(() => ({ transform: [{ rotate: `${rotation.value}deg` }] }));
+  return (
+    <Animated.View style={spin}>
+      <Plus size={18} color={colors.ink} strokeWidth={2.2} />
+    </Animated.View>
   );
 }
 
@@ -66,6 +80,7 @@ function ComposerBar({
   sendIcon,
   addAccessibilityLabel,
   addTestID,
+  addActive,
   chips,
   menu,
   inputTestID,
@@ -82,6 +97,7 @@ function ComposerBar({
   sendIcon: ReactNode;
   addAccessibilityLabel: string;
   addTestID?: string;
+  addActive?: boolean;
   chips?: ReactNode;
   menu?: ReactNode;
   inputTestID?: string;
@@ -102,7 +118,7 @@ function ComposerBar({
           onLongPress={onAddLongPress}
           delayLongPress={320}
           testID={addTestID}
-          style={{ width: CONTROL, height: CONTROL, borderRadius: 12, backgroundColor: colors.neutral[100], alignItems: 'center', justifyContent: 'center' }}
+          style={{ width: CONTROL, height: CONTROL, borderRadius: 12, backgroundColor: addActive ? colors.lime : colors.neutral[100], alignItems: 'center', justifyContent: 'center' }}
         >
           {addIcon}
         </Pressable>
@@ -206,10 +222,11 @@ export function ChatComposer({
       sending={sending}
       onAddPress={onAddPress}
       onAddLongPress={onAddLongPress}
-      addIcon={<Plus size={18} color={colors.ink} strokeWidth={2.2} />}
+      addIcon={<PlusToggle open={menuOpen} />}
       sendIcon={<SendHorizonal size={18} color={armed ? colors.lime : colors.neutral[400]} strokeWidth={2.2} />}
       addAccessibilityLabel={plusDefault === 'menu' ? 'Chat actions' : 'Reply options'}
       addTestID="chat-composer-add"
+      addActive={menuOpen}
       menu={menuOpen ? <ComposerMenu items={actions} testID="chat-composer-menu" /> : null}
       inputTestID="chat-input"
       sendTestID="chat-send-button"
@@ -258,7 +275,7 @@ export function AskComposer({
     { id: 'tag', label: 'Tag a person', description: 'Focus Claire on someone with @.', icon: <AtSign size={13} color={colors.ink} />, onPress: () => close(onTagPerson) },
     { id: 'platform', label: 'Filter by platform', description: 'WhatsApp, Telegram, Instagram, or all.', icon: <Filter size={13} color={colors.ink} />, onPress: () => close(onFilterPlatform) },
     { id: 'focus', label: 'Focus a chat', description: 'Stay inside one conversation.', icon: <MessageCircle size={13} color={colors.ink} />, onPress: () => close(onFocusChat) },
-    { id: 'loops', label: 'Find open loops', description: 'Promises, questions, and plans.', icon: <ArrowUpRight size={13} color={colors.ink} />, onPress: () => close(onFindLoops) },
+    { id: 'loops', label: 'Find open loops', description: 'Open loops, questions, and plans.', icon: <ArrowUpRight size={13} color={colors.ink} />, onPress: () => close(onFindLoops) },
     { id: 'tone', label: 'Check the tone', description: 'Observation, then a matching line.', icon: <Smile size={13} color={colors.ink} />, onPress: () => close(onCheckTone) },
     { id: 'find', label: 'Find something', description: 'Search messages and plans.', icon: <Search size={13} color={colors.ink} />, onPress: () => close(onFindSomething) },
     { id: 'clear', label: 'Clear this conversation', description: 'Wipe turns. Keep the thread.', icon: <List size={13} color={colors.ink} />, onPress: () => close(onClear) },
@@ -283,9 +300,10 @@ export function AskComposer({
       onSend={() => { setMenuOpen(false); onSend(); }}
       sending={sending}
       onAddPress={() => setMenuOpen((open) => !open)}
-      addIcon={<Plus size={18} color={colors.ink} strokeWidth={2.2} />}
+      addIcon={<PlusToggle open={menuOpen} />}
       sendIcon={<SendHorizonal size={18} color={value?.toString().trim() && !sending ? colors.lime : colors.neutral[400]} strokeWidth={2.2} />}
       addAccessibilityLabel="Claire chat actions"
+      addActive={menuOpen}
       chips={chips}
       menu={menuOpen ? <ComposerMenu items={actions} testID="ask-composer-menu" /> : null}
       inputTestID={inputProps.testID || 'assistant-input'}

@@ -37,6 +37,22 @@ export interface PlatformDefinition {
   detail: string;
 }
 
+/** Used when the signed-in API predates GET /platforms/definitions. */
+export const FALLBACK_PLATFORM_DEFINITIONS: PlatformDefinition[] = [
+  { id: 'whatsapp', name: 'WhatsApp', mark: 'WA', accent: '#25D366', iconUrl: 'https://cdn.simpleicons.org/whatsapp/ffffff', supportStatus: 'available', setupSurface: 'phone', setupLabel: 'Pair from your phone', runtimeLabel: 'Cloud or self-hosted', authSummary: 'Scan a QR code or enter a pairing code from WhatsApp Linked Devices.', detail: 'After pairing, Claire keeps the bridge online.' },
+  { id: 'telegram', name: 'Telegram', mark: 'TG', accent: '#229ED9', iconUrl: 'https://cdn.simpleicons.org/telegram/ffffff', supportStatus: 'available', setupSurface: 'phone', setupLabel: 'Approve from your phone', runtimeLabel: 'Cloud or self-hosted', authSummary: 'Approve a QR login or enter the code sent to Telegram.', detail: 'Once approved, the bridge runs independently of Claire Desktop.' },
+  { id: 'instagram', name: 'Instagram', mark: 'IG', accent: '#D62976', iconUrl: 'https://cdn.simpleicons.org/instagram/ffffff', supportStatus: 'available', setupSurface: 'desktop', setupLabel: 'Claire Desktop setup', runtimeLabel: 'Desktop may close after setup', authSummary: 'Authorize Instagram in Claire Desktop.', detail: 'Sign in on the Mac companion. After handoff, the cloud bridge can keep syncing.' },
+  { id: 'imessage', name: 'iMessage', mark: 'IM', accent: '#34C759', iconUrl: 'https://cdn.simpleicons.org/imessage/ffffff', supportStatus: 'beta', setupSurface: 'mac', setupLabel: 'Set up on a Mac', runtimeLabel: 'Mac must remain available', authSummary: 'Grant Claire Desktop access to Messages on a Mac.', detail: 'iMessage stays local to that Mac while Claire Desktop and Messages are running.' },
+  { id: 'messenger', name: 'Messenger', mark: 'MS', accent: '#0866FF', iconUrl: 'https://cdn.simpleicons.org/messenger/ffffff', supportStatus: 'planned', setupSurface: 'desktop', setupLabel: 'Planned', runtimeLabel: 'Future cloud bridge', authSummary: 'Not available yet.', detail: 'Request access to help prioritize this bridge.' },
+  { id: 'signal', name: 'Signal', mark: 'SI', accent: '#3A76F0', iconUrl: 'https://cdn.simpleicons.org/signal/ffffff', supportStatus: 'planned', setupSurface: 'phone', setupLabel: 'Planned', runtimeLabel: 'Future cloud bridge', authSummary: 'Not available yet.', detail: 'Request access to help prioritize this bridge.' },
+  { id: 'discord', name: 'Discord', mark: 'DC', accent: '#5865F2', iconUrl: 'https://cdn.simpleicons.org/discord/ffffff', supportStatus: 'planned', setupSurface: 'phone', setupLabel: 'Planned', runtimeLabel: 'Future cloud bridge', authSummary: 'Not available yet.', detail: 'Request access to help prioritize this bridge.' },
+  { id: 'slack', name: 'Slack', mark: 'SL', accent: '#611F69', iconUrl: 'https://api.iconify.design/logos/slack-icon.svg', supportStatus: 'planned', setupSurface: 'desktop', setupLabel: 'Planned', runtimeLabel: 'Future cloud bridge', authSummary: 'Not available yet.', detail: 'Request access to help prioritize this bridge.' },
+];
+
+function isMissingRoute(error: unknown) {
+  return error instanceof Error && /route not found/i.test(error.message);
+}
+
 // Create axios instance with default config
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -73,13 +89,23 @@ api.interceptors.response.use(
  */
 export const platformsApi = {
   async getPlatformDefinitions(): Promise<PlatformDefinition[]> {
-    const response = await api.get<{ success: boolean; platforms: PlatformDefinition[] }>('/platforms/definitions');
-    return response.data.platforms;
+    try {
+      const response = await api.get<{ success: boolean; platforms: PlatformDefinition[] }>('/platforms/definitions');
+      return response.data.platforms;
+    } catch (error) {
+      if (isMissingRoute(error)) return FALLBACK_PLATFORM_DEFINITIONS;
+      throw error;
+    }
   },
 
   async getPlatformInterests(): Promise<string[]> {
-    const response = await api.get<{ success: boolean; platformIds: string[] }>('/platforms/interests');
-    return response.data.platformIds;
+    try {
+      const response = await api.get<{ success: boolean; platformIds: string[] }>('/platforms/interests');
+      return response.data.platformIds;
+    } catch (error) {
+      if (isMissingRoute(error)) return [];
+      throw error;
+    }
   },
 
   async requestPlatformInterest(platformId: string): Promise<void> {
