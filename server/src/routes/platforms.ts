@@ -146,7 +146,7 @@ function resolveInstagramCookies(body: {
 
 // Apply auth to all routes except GET / (platform listing)
 router.use((req, res, next) => {
-  if (req.method === 'GET' && req.path === '/') return next();
+  if (req.method === 'GET' && (req.path === '/' || req.path === '/definitions')) return next();
   return requireAuth(req, res, next);
 });
 
