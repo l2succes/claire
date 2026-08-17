@@ -20,6 +20,8 @@
     "test:plugins": "bun test examples/plugins",
     "landing": "bunx serve landing",
     "catalog:generate": "bun run scripts/generate-platform-catalog.ts",
+    "emails:build": "cd packages/emails && bun run build",
+    "emails:preview": "cd packages/emails && bun run dev",
     "dev:prod": "concurrently \"bun run dev:server\" \"bun run mobile:prod\"",
     "mobile:prod": "cd apps/client && bun run start:prod",
     "mobile:prod:local": "cd apps/client && bun run start:prod:local",
