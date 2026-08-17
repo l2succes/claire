@@ -99,8 +99,8 @@ export default function ContactsScreen() {
         </ScrollView>
         {isDesktop ? (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space[2] }}>
-            <MobileChip label="All platforms" active={platform === 'all'} onPress={() => setPlatform('all')} />
-            {platformOptions.map((option) => <MobileChip key={option} label={platformLabel(option)} active={platform === option} onPress={() => setPlatform(option)} />)}
+            <MobileChip label="All platforms" active={platform === 'all'} onPress={() => setPlatform('all')} testID="people-platform-all" />
+            {platformOptions.map((option) => <MobileChip key={option} label={platformLabel(option)} active={platform === option} onPress={() => setPlatform(option)} testID={`people-platform-${option}`} />)}
           </ScrollView>
         ) : null}
       </View>

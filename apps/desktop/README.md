@@ -4,8 +4,7 @@ An Electron shell that hosts the Claire client's React Native Web build. One UI 
 Android, the browser, and the desktop; this app supplies the native capabilities the browser
 cannot.
 
-It is intended to replace `desktop/macos` (the React Native macOS host) on macOS, Windows, and
-Linux. `desktop/macos` stays in the repository, frozen, until the parity table below is green.
+It is the supported desktop app on macOS, Windows, and Linux.
 
 ## How it loads the UI
 
@@ -86,22 +85,18 @@ The renderer runs with `contextIsolation: true`, `nodeIntegration: false`, and `
 Its entire privileged surface is the `window.claireDesktop` object defined in `src/preload.ts`,
 typed by `src/shared/ipc.ts`.
 
-**Electron main is the new native module.** Credentials, and eventually the iMessage database and
-attachment bytes, live in main and never reach the renderer — exactly as they never reach the
-React Native layer in `desktop/macos` today. `src/preferences.ts` holds only non-sensitive UI
+**Electron main is the native module.** Credentials, and eventually the iMessage database and
+attachment bytes, live in main and never reach the renderer. `src/preferences.ts` holds only non-sensitive UI
 state (window bounds, pane widths); secrets belong in `safeStorage`.
 
 External links go to the user's real browser via `shell.openExternal`. The one exception is the
 Supabase OAuth popup, which must stay in-app to complete sign-in.
 
-## Feature parity with `desktop/macos`
+## Desktop capability status
 
-`desktop/macos/README.md` is the checklist. `desktop/macos` is deleted only when every row is
-done.
-
-| RN-macOS feature | Electron equivalent | Lives in | Status |
+| Capability | Electron implementation | Lives in | Status |
 |---|---|---|---|
-| Password + Google sign-in, session survives relaunch | Supabase session over the `claire-app://` secure origin | renderer | ✅ verified |
+| Passwordless email + Google sign-in, session survives relaunch | Supabase session over the `claire-app://` secure origin | renderer | ✅ verified |
 | Keychain-backed credential storage | `safeStorage` (Keychain / DPAPI / libsecret), `src/secure-store.ts` | main | ✅ verified |
 | Native notifications | Electron `Notification`, click routes to the chat | main | ✅ wired |
 | Dock badge mirroring unified unread | `app.setBadgeCount` ← `useUnreadBadge` | main | ✅ wired |

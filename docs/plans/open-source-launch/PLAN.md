@@ -28,7 +28,7 @@ claire/
     └── mautrix-docs/        # Optional upstream documentation submodule
 ```
 
-`client/` becomes `mobile/`. `desktop/` remains the desktop boundary, preserving `desktop/macos/` for future desktop platforms. `landing/` is removed only after every useful design, mockup, asset, and interaction has been ported into `website/`.
+`client/` becomes `mobile/`. The supported desktop application lives in `apps/desktop/`. `landing/` is removed only after every useful design, mockup, asset, and interaction has been ported into `website/`.
 
 ## 1. Secure and license the repository
 
@@ -82,7 +82,7 @@ bun run typecheck
 bun run check
 ```
 
-Add explicit Bun workspaces for `mobile`, `desktop/macos`, `website`, `server`, `packages/*`, and `examples/*`. Keep native CocoaPods/Bundler lockfiles. Consolidate JavaScript dependency management only after clean-install parity is proven.
+Add explicit Bun workspaces for `apps/*`, `packages/*`, and `examples/*`. Consolidate JavaScript dependency management only after clean-install parity is proven.
 
 Move the mautrix documentation submodule from `docs/mautrix` to `vendor/mautrix-docs`; make it optional for normal contributors and required only for bridge work.
 
@@ -271,7 +271,7 @@ Acceptance criteria:
 ## Assumptions
 
 - Top-level names are `mobile`, `desktop`, `website`, and `server`; no `apps/` wrapper is introduced.
-- `desktop/macos/` remains nested for future desktop platforms.
+- The desktop application is `apps/desktop/`.
 - `landing/` is authoritative until fully ported.
 - Root `docs/` is the canonical Markdown source consumed by Fumadocs.
 - Old plans are consolidated or deleted after their durable decisions are preserved.

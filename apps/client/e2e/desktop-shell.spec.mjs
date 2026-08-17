@@ -88,4 +88,22 @@ test.describe('Claire desktop shell', () => {
     await expect(page).toHaveURL(/contacts/);
     await expect(page.getByLabel('Back', { exact: true })).toHaveCount(0);
   });
+
+  test('People filters by platform and searches names on desktop', async ({ page }) => {
+    await page.setViewportSize(EXPANDED);
+    await signIn(page);
+
+    await page.getByTestId('desktop-nav-people').click();
+    await expect(page.getByText('Alice', { exact: true })).toBeVisible();
+    await expect(page.getByText('Carol', { exact: true })).toBeVisible();
+
+    await page.getByTestId('people-platform-instagram').click();
+    await expect(page.getByText('Carol', { exact: true })).toBeVisible();
+    await expect(page.getByText('Alice', { exact: true })).toHaveCount(0);
+
+    await page.getByTestId('people-platform-all').click();
+    await page.getByTestId('contacts-search-input').fill('alice');
+    await expect(page.getByText('Alice', { exact: true })).toBeVisible();
+    await expect(page.getByText('Carol', { exact: true })).toHaveCount(0);
+  });
 });

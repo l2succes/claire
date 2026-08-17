@@ -1,16 +1,17 @@
 ---
 title: Desktop development
-description: Work on the macOS desktop app and native companion.
+description: Work on the Electron desktop app.
 status: current
 audience: contributors
 owner: maintainers
-keywords: desktop, macos
+keywords: desktop, electron
 last-reviewed: 2026-08-15
 ---
 
 # Desktop development
 
-Desktop code stays under `desktop/macos/` so future platforms can be added beside it.
+Desktop code lives in `apps/desktop/`. It hosts the shared Expo web client in Electron for macOS,
+Windows, and Linux.
 
 ```bash
 bun run dev:desktop
