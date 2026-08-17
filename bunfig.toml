@@ -5,6 +5,14 @@
 # This allows for better compatibility with packages that have native dependencies
 native = true
 
+# Expo/Metro/Babel resolve presets and transformers by walking node_modules from
+# the project root, so they cannot see packages that only exist in bun's
+# isolated store (node_modules/.bun/**). Bun 1.3 picks the isolated linker by
+# default for workspaces, which leaves babel-preset-expo unresolvable and every
+# bundle request failing with "Cannot find module 'babel-preset-expo'". Pin the
+# hoisted layout so the mobile app keeps bundling after a plain `bun install`.
+linker = "hoisted"
+
 # Lockfile settings
 [install.lockfile]
 # Save the lockfile after every install
