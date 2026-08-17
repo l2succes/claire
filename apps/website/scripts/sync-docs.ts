@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const websiteRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
-const repoDocs = join(websiteRoot, '..', 'docs');
+const repoDocs = join(websiteRoot, '..', '..', 'docs');
 const destRoot = join(websiteRoot, 'content', 'docs');
 
 const pages = [
@@ -81,7 +81,7 @@ async function main() {
       {
         title: 'Claire Docs',
         source: 'canonical',
-        website: 'website/content/docs',
+        website: 'apps/website/content/docs',
         pages: pages.map(([path]) => path),
       },
       null,
@@ -89,7 +89,7 @@ async function main() {
     )}\n`,
   );
 
-  console.log(`Synced ${pages.length} docs pages into website/content/docs`);
+  console.log(`Synced ${pages.length} docs pages into apps/website/content/docs`);
 }
 
 await main();
