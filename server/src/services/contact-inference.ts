@@ -1,5 +1,5 @@
 import { logger } from '../utils/logger';
-import { supabase } from './supabase';
+import { supabase, type DbRow } from './supabase';
 
 interface ContactInference {
   contactId: string;
@@ -57,7 +57,7 @@ class ContactInferenceService {
         .limit(50);
 
       // Analyze all messages for patterns
-      const allContent = messages?.map(m => m.content).join(' ') + ' ' + messageContent;
+      const allContent = messages?.map((m: DbRow) => m.content).join(' ') + ' ' + messageContent;
       
       // Infer name
       const inferredName = this.inferName(allContent, contact?.phone_number);

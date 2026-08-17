@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 export const primaryNavigation = [
   { href: '/#product', label: 'Product' },
-  { href: '/#pricing', label: 'Pricing' },
+  { href: '/pricing', label: 'Pricing' },
   { href: '/security', label: 'Security' },
   { href: '/developers', label: 'Developers' },
 ] as const;
@@ -23,6 +23,7 @@ export const downloadOptions = [
 export const footerLinks = [
   { href: 'https://github.com/l2succes/claire', label: 'GitHub' },
   { href: '/docs', label: 'Docs' },
+  { href: '/pricing', label: 'Pricing' },
   { href: '/security', label: 'Security' },
   { href: '/business', label: 'Business' },
   { href: '/developers', label: 'Developers' },

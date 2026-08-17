@@ -1,13 +1,22 @@
 // SPDX-License-Identifier: Apache-2.0
 import type { Metadata } from 'next';
-import { DM_Mono, Inter } from 'next/font/google';
+import { DM_Mono, Inter, Public_Sans } from 'next/font/google';
 import type { ReactNode } from 'react';
 import { RootProvider } from 'fumadocs-ui/provider/next';
 import './globals.css';
 
-const inter = Inter({
+// Body, UI, labels — everything at section-title size and below.
+const publicSans = Public_Sans({
   subsets: ['latin'],
   weight: ['400', '500', '600', '700'],
+  variable: '--font-public-sans',
+  display: 'swap',
+});
+
+// Big titles only. See --font-display in the design-system tokens.
+const inter = Inter({
+  subsets: ['latin'],
+  weight: ['600', '700'],
   variable: '--font-inter',
   display: 'swap',
 });
@@ -33,7 +42,7 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${dmMono.variable} ${inter.className}`}
+      className={`${publicSans.variable} ${inter.variable} ${dmMono.variable} ${publicSans.className}`}
       suppressHydrationWarning
     >
       <body className="flex min-h-screen flex-col">

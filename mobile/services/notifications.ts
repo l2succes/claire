@@ -5,7 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'expo-crypto';
 import { Platform } from 'react-native';
 import { platformCapabilities } from '../utils/platformCapabilities';
-import { supabase } from './supabase';
+import { supabase, type DbRow } from './supabase';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001';
 const DEVICE_ID_KEY = 'claire.notification.device-id';
@@ -181,7 +181,7 @@ export function addPushTokenRotationListener(accessToken: string) {
 export async function syncNotificationBadge(): Promise<void> {
   if (!platformCapabilities.supportsNativeNotifications) return;
   const { data } = await supabase.from('chats').select('unread_count');
-  const unread = (data || []).reduce((sum, chat) => sum + Math.max(0, chat.unread_count || 0), 0);
+  const unread = (data || []).reduce((sum: number, chat: DbRow) => sum + Math.max(0, chat.unread_count || 0), 0);
   await Notifications.setBadgeCountAsync(unread);
 }
 

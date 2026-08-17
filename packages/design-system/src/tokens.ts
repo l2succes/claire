@@ -34,10 +34,12 @@ export const space = { 1: 4, 2: 8, 3: 12, 4: 16, 5: 20, 6: 24, 8: 32, 10: 40 } a
 export const radius = { control: 12, card: 20, panel: 28, pill: 999 } as const;
 // These family names intentionally match the bundled desktop/web font assets.
 // Native platforms fall back gracefully until the app's font loader is ready.
-export const fonts = { sans: 'Inter', mono: 'DM Mono' } as const;
+// `display` carries the big titles; `sans` carries body, UI, and everything
+// at section-title size and below.
+export const fonts = { sans: 'Public Sans', display: 'Inter', mono: 'DM Mono' } as const;
 export const type = {
-  display: { fontFamily: fonts.sans, fontSize: 46, lineHeight: 48, fontWeight: '700' as const, letterSpacing: -1.6 },
-  screenTitle: { fontFamily: fonts.sans, fontSize: 30, lineHeight: 34, fontWeight: '700' as const, letterSpacing: -0.8 },
+  display: { fontFamily: fonts.display, fontSize: 46, lineHeight: 48, fontWeight: '700' as const, letterSpacing: -1.6 },
+  screenTitle: { fontFamily: fonts.display, fontSize: 30, lineHeight: 34, fontWeight: '700' as const, letterSpacing: -0.8 },
   sectionTitle: { fontFamily: fonts.sans, fontSize: 20, lineHeight: 25, fontWeight: '700' as const, letterSpacing: -0.3 },
   body: { fontFamily: fonts.sans, fontSize: 15, lineHeight: 22, fontWeight: '400' as const },
   bodySmall: { fontFamily: fonts.sans, fontSize: 13, lineHeight: 18, fontWeight: '400' as const },
@@ -47,8 +49,8 @@ export const type = {
 export type ClaireTextVariant = keyof typeof type;
 
 export const mobileType = {
-  display: { fontFamily: fonts.sans, fontSize: 42, lineHeight: 44, fontWeight: '700' as const, letterSpacing: -1.4 },
-  screenTitle: { fontFamily: fonts.sans, fontSize: 31, lineHeight: 34, fontWeight: '700' as const, letterSpacing: -0.8 },
+  display: { fontFamily: fonts.display, fontSize: 42, lineHeight: 44, fontWeight: '700' as const, letterSpacing: -1.4 },
+  screenTitle: { fontFamily: fonts.display, fontSize: 31, lineHeight: 34, fontWeight: '700' as const, letterSpacing: -0.8 },
   sectionTitle: { fontFamily: fonts.sans, fontSize: 20, lineHeight: 24, fontWeight: '700' as const, letterSpacing: -0.25 },
   body: { fontFamily: fonts.sans, fontSize: 15, lineHeight: 22, fontWeight: '400' as const },
   bodySmall: { fontFamily: fonts.sans, fontSize: 13, lineHeight: 18, fontWeight: '400' as const },

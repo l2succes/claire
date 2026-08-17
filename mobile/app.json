@@ -46,7 +46,21 @@
           "color": "#ffffff"
         }
       ],
-      "expo-font",
+      [
+        "expo-font",
+        {
+          "fonts": [
+            "./assets/fonts/PublicSans-Regular.ttf",
+            "./assets/fonts/PublicSans-Medium.ttf",
+            "./assets/fonts/PublicSans-SemiBold.ttf",
+            "./assets/fonts/PublicSans-Bold.ttf",
+            "./assets/fonts/Inter-SemiBold.ttf",
+            "./assets/fonts/Inter-Bold.ttf",
+            "./assets/fonts/DMMono-Regular.ttf",
+            "./assets/fonts/DMMono-Medium.ttf"
+          ]
+        }
+      ],
       "expo-web-browser",
       "expo-video"
     ],

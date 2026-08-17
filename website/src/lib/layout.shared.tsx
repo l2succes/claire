@@ -15,6 +15,7 @@ export function baseOptions(): BaseLayoutProps {
     githubUrl: 'https://github.com/l2succes/claire',
     links: [
       { text: 'Product', url: '/' },
+      { text: 'Pricing', url: '/pricing' },
       { text: 'Security', url: '/security' },
       { text: 'Developers', url: '/developers' },
       { text: 'FAQ', url: '/faq' },

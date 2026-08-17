@@ -14,7 +14,7 @@ interface PendingLogin {
   page: Page;
   username: string;
   expiresAt: number;
-  timeout: NodeJS.Timeout;
+  timeout: ReturnType<typeof setTimeout>;
 }
 
 const pendingLogins = new Map<string, PendingLogin>();

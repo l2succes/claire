@@ -11,7 +11,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@600;700&family=Public+Sans:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="./tokens.css" />
@@ -22,86 +22,193 @@
   </head>
   <body>
     <header class="doc-header">
-      <a class="brand" href="/" target="_top"><img class="plugin-brand-mark" src="/assets/brand/claire-app-icon-lime.svg" alt="" />claire <span>/ plugins</span></a>
-      <nav>
-        <a href="/mockups/mobile" target="_top">Mobile</a><a href="/mockups/desktop" target="_top">Desktop</a
-        ><a href="/developers" target="_top">Components</a
-        ><a class="active" href="/mockups/plugins" target="_top">Plugins</a>
+      <a class="brand" href="/" target="_top">
+        <img class="brand-mark" src="/assets/brand/claire-app-icon-lime.svg" alt="" />
+        claire <span>/ plugins</span>
+      </a>
+      <nav aria-label="Product references">
+        <a href="/mockups/mobile" target="_top">Mobile</a>
+        <a href="/mockups/desktop" target="_top">Desktop</a>
+        <a class="active" href="/mockups/plugins" target="_top">Plugins</a>
       </nav>
+      <a class="doc-header-cta" href="/developers" target="_top">
+        Developer hub <i data-heroicon="arrow-right"></i>
+      </a>
     </header>
+
     <main>
+      <!-- ------------------------------------------------ hero -->
       <section class="hero">
-        <div>
-          <div class="kicker">PLUGIN PRODUCT SYSTEM / CONCEPT 01</div>
-          <h1>Conversation in.<br /><span>Useful action out.</span></h1>
+        <div class="hero-copy">
+          <div class="eyebrow"><span class="dot"></span>Plugin product system · concept 01</div>
+          <h1>Conversation in.<br /><span class="underline">Useful action out.</span></h1>
           <p>
             Claire plugins connect the meaning inside a conversation to the tools where life and
             work happen. They can suggest, prepare, or complete an action—but only within
             permissions the user understands and controls.
           </p>
           <div class="hero-actions">
-            <a href="#library">Explore the library <i data-heroicon="arrow-right"></i></a
-            ><a class="quiet" href="../docs/CLAIRE_PLUGIN_SYSTEM_SPEC.md"
-              >Read the implementation spec</a
-            >
+            <a class="button" href="#library">Explore the library <i data-heroicon="arrow-right"></i></a>
+            <a class="text-link" href="/docs/guides/plugins" target="_top">
+              Read the plugin guide <i data-heroicon="arrow-right"></i>
+            </a>
           </div>
+          <ul class="hero-stack" aria-label="What a plugin declares">
+            <li>typed actions</li>
+            <li>scoped context</li>
+            <li>declared risk</li>
+            <li>reversible results</li>
+          </ul>
         </div>
-        <aside class="principle">
-          <div class="kicker">THE SAFETY CONTRACT</div>
-          <h3>Detection is not permission.</h3>
-          <div class="principle-row"><b>01</b><span>Claire identifies a useful moment.</span></div>
-          <div class="principle-row"><b>02</b><span>The plugin drafts a typed action.</span></div>
-          <div class="principle-row"><b>03</b><span>The user reviews sensitive writes.</span></div>
-          <div class="principle-row">
-            <b>04</b><span>Every result stays visible and reversible.</span>
-          </div>
-        </aside>
+
+        <div class="hero-art">
+          <span class="blob" aria-hidden="true"></span>
+          <span class="orbit" aria-hidden="true"></span>
+          <article class="pipeline" aria-label="How one message becomes an approved action">
+            <header>
+              <b>ONE MESSAGE, ONE ACTION</b>
+              <span>live trace</span>
+            </header>
+            <ol>
+              <li class="pipe-message">
+                <i>01</i>
+                <div>
+                  <small>WHATSAPP · MAYA KIM</small>
+                  <p>“Tuesday at 10 works for me. Let’s do 45 minutes.”</p>
+                </div>
+              </li>
+              <li class="pipe-detect">
+                <i>02</i>
+                <div>
+                  <small><b data-heroicon-inline><i data-heroicon="sparkles"></i></b> CLAIRE DETECTED</small>
+                  <p>A confirmed time · confidence 94%</p>
+                </div>
+              </li>
+              <li class="pipe-draft">
+                <i>03</i>
+                <div>
+                  <small>CALENDAR · DRAFT ACTION</small>
+                  <p><b>Launch review with Maya</b></p>
+                  <span class="pipe-meta">Tue, Aug 18 · 10:00–10:45 · Luc / Work</span>
+                  <span class="pipe-risk">risk: low_write · reversible</span>
+                </div>
+              </li>
+              <li class="pipe-approve">
+                <i>04</i>
+                <div>
+                  <small>YOU APPROVED · 10:04</small>
+                  <p>Event created · receipt written</p>
+                </div>
+                <b class="pipe-undo">Undo</b>
+              </li>
+            </ol>
+            <footer>
+              <span class="pipe-scope">
+                <i data-heroicon="people"></i>
+                <b>Scope: this chat only</b>
+              </span>
+              <span>No other conversation was read</span>
+            </footer>
+          </article>
+        </div>
       </section>
 
-      <section class="architecture">
-        <div class="kicker">PRODUCT MODEL</div>
-        <h2>More than a marketplace.</h2>
-        <div class="architecture-grid">
-          <article>
-            <span>DISCOVER</span>
+      <!-- ------------------------------------------------ safety contract -->
+      <section class="contract">
+        <div class="contract-inner">
+          <div class="contract-head">
+            <div class="kicker">THE SAFETY CONTRACT</div>
+            <h2>Detection is not permission.</h2>
+            <p>
+              Claire may notice a useful moment in any conversation you connect. Noticing it never
+              grants the right to act on it.
+            </p>
+          </div>
+          <ol class="contract-steps">
+            <li>
+              <b>01</b>
+              <div>
+                <strong>Claire identifies a useful moment</strong>
+                <span>Signal detection runs on the conversations you selected—nothing more.</span>
+              </div>
+            </li>
+            <li>
+              <b>02</b>
+              <div>
+                <strong>The plugin drafts a typed action</strong>
+                <span>Inputs, destination, and schema are fixed before anything is shown.</span>
+              </div>
+            </li>
+            <li>
+              <b>03</b>
+              <div>
+                <strong>You review sensitive writes</strong>
+                <span>Anything another person can see waits for an explicit yes.</span>
+              </div>
+            </li>
+            <li>
+              <b>04</b>
+              <div>
+                <strong>Every result stays visible</strong>
+                <span>A receipt records source, actor, inputs, result, and the undo path.</span>
+              </div>
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <!-- ------------------------------------------------ product model -->
+      <section class="model">
+        <div class="section-head">
+          <div>
+            <div class="kicker">PRODUCT MODEL</div>
+            <h2>More than a marketplace.</h2>
+          </div>
+          <p>
+            A plugin is five surfaces, not one listing. Each stage is a place where the user can see
+            what is happening and stop it.
+          </p>
+        </div>
+        <div class="model-grid">
+          <article class="model-card tint-lime">
+            <div class="model-top"><span>01</span><i data-heroicon="search"></i></div>
+            <b>DISCOVER</b>
             <h3>Plugin library</h3>
             <p>Curated integrations grouped by what they help accomplish, not by API vocabulary.</p>
           </article>
-          <article>
-            <span>CONNECT</span>
+          <article class="model-card tint-sky">
+            <div class="model-top"><span>02</span><i data-heroicon="people"></i></div>
+            <b>CONNECT</b>
             <h3>Scoped access</h3>
             <p>Account authorization is separate from access to Claire conversations.</p>
           </article>
-          <article>
-            <span>CONFIGURE</span>
+          <article class="model-card tint-blush">
+            <div class="model-top"><span>03</span><i data-heroicon="settings"></i></div>
+            <b>CONFIGURE</b>
             <h3>Conversation rules</h3>
             <p>Choose the people, chats, signals, and approval level for each automation.</p>
           </article>
-          <article>
-            <span>CONTROL</span>
+          <article class="model-card tint-lavender">
+            <div class="model-top"><span>04</span><i data-heroicon="inbox"></i></div>
+            <b>CONTROL</b>
             <h3>Approval inbox</h3>
             <p>Review action, source messages, destination, and exact data before execution.</p>
           </article>
-          <article>
-            <span>AUDIT</span>
-            <h3>Activity & receipts</h3>
+          <article class="model-card tint-mint">
+            <div class="model-top"><span>05</span><i data-heroicon="check-circle"></i></div>
+            <b>AUDIT</b>
+            <h3>Activity &amp; receipts</h3>
             <p>See what ran, why it ran, what changed, and how to undo or disconnect it.</p>
           </article>
         </div>
       </section>
 
-      <nav class="filters" aria-label="Filter plugin mockups">
-        <button class="active" data-plugin-filter="all">All screens</button
-        ><button data-plugin-filter="library">Library</button
-        ><button data-plugin-filter="automation">Automations</button
-        ><button data-plugin-filter="approval">Approval & trust</button>
-      </nav>
-
+      <!-- ------------------------------------------------ desktop gallery -->
       <section class="gallery" id="library">
         <div class="section-head">
           <div>
             <div class="kicker">DESKTOP REFERENCE</div>
-            <h2>Library and automation control center.</h2>
+            <h2>Library and automation<br />control center.</h2>
           </div>
           <p>
             The desktop client owns browsing, configuration, account management, and detailed audit.
@@ -109,7 +216,14 @@
           </p>
         </div>
 
-        <article class="mock-case" data-kind="library">
+        <nav class="filters" aria-label="Filter plugin mockups">
+          <button class="active" data-plugin-filter="all">All screens</button>
+          <button data-plugin-filter="library">Library</button>
+          <button data-plugin-filter="automation">Automations</button>
+          <button data-plugin-filter="approval">Approval &amp; trust</button>
+        </nav>
+
+        <article class="mock-case stage-sky" data-kind="library">
           <div class="mock-label"><b>01 / PLUGIN LIBRARY</b><span>DESKTOP · DISCOVERY</span></div>
           <div class="window">
             <div class="titlebar">
@@ -201,7 +315,7 @@
           </p>
         </article>
 
-        <article class="mock-case" data-kind="library">
+        <article class="mock-case stage-cream" data-kind="library">
           <div class="mock-label">
             <b>02 / PLUGIN DETAIL</b><span>DESKTOP · PERMISSIONS BEFORE INSTALL</span>
           </div>
@@ -235,6 +349,7 @@
                     ><b>Find availability</b
                     ><small>Reads calendar free/busy only when you ask.</small></span
                   >
+                  <em class="risk risk-read">read</em>
                 </div>
                 <div>
                   <i data-heroicon="plus"></i
@@ -242,6 +357,7 @@
                     ><b>Create and update events</b
                     ><small>Always asks before inviting another person.</small></span
                   >
+                  <em class="risk risk-write">external_write</em>
                 </div>
                 <div>
                   <i data-heroicon="sparkles"></i
@@ -249,6 +365,7 @@
                     ><b>Suggest from conversation context</b
                     ><small>Only in chats you select after installation.</small></span
                   >
+                  <em class="risk risk-read">read</em>
                 </div>
               </div>
             </div>
@@ -262,12 +379,12 @@
                 Installation adds capabilities. You connect accounts and choose chats in a separate
                 step.
               </p>
-              <a>Privacy & data handling <i data-heroicon="external"></i></a>
+              <a>Privacy &amp; data handling <i data-heroicon="external"></i></a>
             </aside>
           </div>
         </article>
 
-        <article class="mock-case" data-kind="automation">
+        <article class="mock-case stage-lavender" data-kind="automation">
           <div class="mock-label">
             <b>03 / AUTOMATION BUILDER</b><span>DESKTOP · TRIGGER → ACTION → APPROVAL</span>
           </div>
@@ -332,7 +449,7 @@
                   <p><b>Maya</b> Tuesday at 10?</p>
                   <p class="mine">Perfect. Let’s do 45 minutes.</p>
                 </div>
-                <div class="preview-arrow">↓</div>
+                <div class="preview-arrow" aria-hidden="true"></div>
                 <div class="event-card">
                   <small>CALENDAR · NEEDS APPROVAL</small><b>Launch review with Maya</b>
                   <p>Tue, Aug 18 · 10:00–10:45</p>
@@ -346,9 +463,9 @@
           </div>
         </article>
 
-        <article class="mock-case" data-kind="approval">
+        <article class="mock-case stage-mint" data-kind="approval">
           <div class="mock-label">
-            <b>04 / ACTIVITY & TRUST</b><span>DESKTOP · AUDITABLE BY DEFAULT</span>
+            <b>04 / ACTIVITY &amp; TRUST</b><span>DESKTOP · AUDITABLE BY DEFAULT</span>
           </div>
           <div class="activity">
             <aside>
@@ -406,11 +523,12 @@
         </article>
       </section>
 
+      <!-- ------------------------------------------------ mobile gallery -->
       <section class="gallery mobile-gallery">
-        <div class="section-head">
+        <div class="section-head inverse">
           <div>
             <div class="kicker">MOBILE REFERENCE</div>
-            <h2>Plugins appear where decisions happen.</h2>
+            <h2>Plugins appear where<br />decisions happen.</h2>
           </div>
           <p>
             Mobile favors contextual action, short review, and immediate control. Complex automation
@@ -519,6 +637,7 @@
         </div>
       </section>
 
+      <!-- ------------------------------------------------ components -->
       <section class="components">
         <div class="section-head">
           <div>
@@ -540,8 +659,8 @@
             <p>Vendor identity never substitutes for permission or trust status.</p>
           </article>
           <article>
-            <small>RISK & APPROVAL</small>
-            <div class="pills">
+            <small>RISK &amp; APPROVAL</small>
+            <div class="component-demo pills">
               <span>READ ONLY</span><span class="warning">ASK EVERY TIME</span
               ><span class="success">AUTO-RUN</span>
             </div>
@@ -549,7 +668,7 @@
           </article>
           <article>
             <small>ACTION RECEIPT</small>
-            <div class="receipt">
+            <div class="component-demo receipt">
               <i data-heroicon="check-circle"></i
               ><span><b>Event created</b><small>Approved by you · 10:04</small></span
               ><button>Undo</button>
@@ -558,7 +677,7 @@
           </article>
           <article>
             <small>CONTEXT SCOPE</small>
-            <div class="scope">
+            <div class="component-demo scope">
               <button class="active">This chat</button><button>Selected people</button
               ><button>No messages</button>
             </div>
@@ -566,6 +685,55 @@
           </article>
         </div>
       </section>
+
+      <!-- ------------------------------------------------ closing -->
+      <section class="outro">
+        <div>
+          <div class="kicker">BUILD ONE</div>
+          <h2>Every plugin is a promise<br />the user can revoke.</h2>
+          <p>
+            The SDK forces the shape: a manifest declaring capabilities, risk, and approval; a
+            handler that returns a receipt. If an action has no handler, Claire refuses to load it.
+          </p>
+          <div class="outro-actions">
+            <a class="button" href="/docs/guides/plugins" target="_top">
+              Read the plugin guide <i data-heroicon="arrow-right"></i>
+            </a>
+            <a class="text-link" href="/developers" target="_top">
+              Developer hub <i data-heroicon="arrow-right"></i>
+            </a>
+          </div>
+        </div>
+        <aside class="outro-code">
+          <header><b>plugin.ts</b><span>@claire/plugin-sdk</span></header>
+          <pre><code><span class="tk">export const</span> plugin = <span class="tf">definePlugin</span>({
+  manifest: {
+    id: <span class="ts">'com.acme.calendar'</span>,
+    capabilities: [{
+      id: <span class="ts">'calendar.events.create'</span>,
+      risk: <span class="ts">'low_write'</span>,
+      approval: <span class="ts">'always'</span>,
+      reversible: <span class="tk">true</span>,
+    }],
+  },
+  handlers: { <span class="tc">/* returns a receipt */</span> },
+});</code></pre>
+        </aside>
+      </section>
     </main>
+
+    <footer class="doc-footer">
+      <a class="brand" href="/" target="_top">
+        <img class="brand-mark" src="/assets/brand/claire-app-icon-lime.svg" alt="" />
+        claire <span>/ plugins</span>
+      </a>
+      <p>Product reference · concepts, not shipped screens.</p>
+      <nav>
+        <a href="/mockups/mobile" target="_top">Mobile</a>
+        <a href="/mockups/desktop" target="_top">Desktop</a>
+        <a href="/developers" target="_top">Developers</a>
+        <a href="/docs/guides/plugins" target="_top">Plugin guide</a>
+      </nav>
+    </footer>
   </body>
 </html>

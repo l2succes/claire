@@ -2,7 +2,7 @@ import { createHash } from 'crypto';
 import OpenAI from 'openai';
 import { openaiConfig } from '../config';
 import { logger } from '../utils/logger';
-import { supabase } from './supabase';
+import { supabase, type DbRow } from './supabase';
 
 export interface VoiceProfile {
   language: string;
@@ -36,7 +36,7 @@ class VoiceProfileService {
       .eq('user_id', userId)
       .order('language');
     if (error) throw error;
-    return (data || []).map(row => ({
+    return (data || []).map((row: DbRow) => ({
       language: row.language,
       profile: row.profile,
       sourceMessageCount: row.source_message_count,

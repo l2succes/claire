@@ -679,3 +679,9 @@ textarea {
     animation: none;
   }
 }
+
+/* Big titles keep the display face; body and UI are Public Sans. */
+h1,
+h2 {
+  font-family: var(--font-display);
+}

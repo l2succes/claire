@@ -2,6 +2,19 @@ import { createClient } from '@supabase/supabase-js';
 import { supabaseConfig } from '../config';
 import { logger } from '../utils/logger';
 
+/**
+ * A row from an untyped Supabase query.
+ *
+ * Claire has no generated `Database` type, so `supabase.from(...).select()`
+ * resolves `data` to `any` rather than an array. Callbacks passed to
+ * `data.map(...)` therefore get no contextual type and trip `noImplicitAny`,
+ * so row callbacks annotate their parameter with this alias.
+ *
+ * Generate a `Database` type and thread it through `createClient` to replace
+ * this — the call sites will then type-check for real.
+ */
+export type DbRow = Record<string, any>;
+
 // Initialize Supabase client with service role key for server-side operations
 export const supabase = createClient(
   supabaseConfig.url,
