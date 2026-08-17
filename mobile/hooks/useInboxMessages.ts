@@ -23,6 +23,9 @@ export interface InboxMessage {
   platform?: Platform;
   snoozed_until?: string | null;
   is_pinned?: boolean;
+  content_type?: string;
+  media_url?: string;
+  sender_name?: string;
 }
 
 export interface InboxCursor {
@@ -55,14 +58,17 @@ interface RawMessage {
 
 type InboxQueryData = InfiniteData<MessagePage, InboxCursor | null>;
 
-export function inboxQueryKey(userId?: string, search = '') {
-  return ['messages-feed', userId, search] as const;
+export type InboxServerFilter = 'all' | 'unread' | 'needs_reply' | 'groups';
+
+export function inboxQueryKey(userId?: string, search = '', filter: InboxServerFilter = 'all', platform = 'all') {
+  return ['messages-feed', userId, search, filter, platform] as const;
 }
 
 /**
- * Prefix matching every search variant of a user's feed. Invalidation must use
- * this: inboxQueryKey(userId) is the *unsearched* feed, and TanStack matches
- * keys by prefix, so it would leave an active search stale.
+ * Prefix matching every search and filter variant of a user's feed. Realtime
+ * patches and invalidation must use this: inboxQueryKey(userId) is only the
+ * unfiltered, unsearched feed, so an exact match would leave an active search
+ * or filter stale.
  */
 export function inboxQueryPrefix(userId?: string) {
   return ['messages-feed', userId] as const;
@@ -134,6 +140,9 @@ function conversationRowToInboxMessage(row: DbRow): InboxMessage {
     has_ai_response: row.last_message_has_ai_response === true,
     snoozed_until: (row.last_message_snoozed_until as string) ?? null,
     is_pinned: row.is_pinned === true,
+    content_type: (row.last_message_content_type as string) || 'text',
+    media_url: (row.last_message_media_url as string) || undefined,
+    sender_name: (row.last_message_sender_name as string) || undefined,
   };
 }
 
@@ -151,6 +160,28 @@ function sortMessages(messages: InboxMessage[]) {
 
 export type InboxRealtimeRow = Partial<RawMessage> & { id: string; content?: string; timestamp?: string };
 
+/**
+ * Apply a realtime patch to every cached variant of the feed — the unfiltered
+ * list plus any active search/filter combinations — instead of only the default
+ * key, which would leave a filtered inbox frozen until it refetched.
+ *
+ * `canInsert` is true only for the unfiltered feed: a conversation that is not
+ * already present must not be spliced into a filtered result set, since we
+ * cannot know from the row alone whether it satisfies that filter.
+ */
+function updateInboxQueries(
+  queryClient: QueryClient,
+  userId: string | undefined,
+  updater: (old: InboxQueryData | undefined, canInsert: boolean) => InboxQueryData | undefined,
+) {
+  const queries = queryClient.getQueryCache().findAll({ queryKey: inboxQueryPrefix(userId) });
+  for (const query of queries) {
+    const [, , search, filter, platform] = query.queryKey as ReturnType<typeof inboxQueryKey>;
+    const canInsert = !search && filter === 'all' && platform === 'all';
+    queryClient.setQueryData<InboxQueryData>(query.queryKey, (old) => updater(old, canInsert));
+  }
+}
+
 export function patchInboxRealtimeMessage(
   queryClient: QueryClient,
   userId: string | undefined,
@@ -162,7 +193,7 @@ export function patchInboxRealtimeMessage(
   if (usesNativeMobileCache() && userId && row.chat_id && row.timestamp) {
     void cacheTimeline(userId, row.chat_id, [row as RawMessage & { id: string; chat_id: string; timestamp: string }]).catch(() => undefined);
   }
-  queryClient.setQueryData<InboxQueryData>(inboxQueryKey(userId), (old) => {
+  updateInboxQueries(queryClient, userId, (old, canInsert) => {
     if (!old) return old;
     let found = false;
     const pages = old.pages.map((page) => {
@@ -188,6 +219,8 @@ export function patchInboxRealtimeMessage(
       return messages === page.messages ? page : { ...page, messages: sortMessages(messages) };
     });
     if (found) return { ...old, pages };
+    // Unknown conversation: only the unfiltered feed can safely gain a row.
+    if (!canInsert) return old;
     const newMessage: InboxMessage = {
       id: row.id,
       conversation_key: key,
@@ -218,7 +251,7 @@ export function patchInboxChat(
   chat: { id: string; platform?: Platform; unread_count?: number; is_pinned?: boolean },
 ) {
   const key = conversationKey(chat.id, chat.platform || Platform.WHATSAPP);
-  queryClient.setQueryData<InboxQueryData>(inboxQueryKey(userId), (old) => {
+  updateInboxQueries(queryClient, userId, (old) => {
     if (!old) return old;
     let changed = false;
     const pages = old.pages.map((page) => ({
@@ -234,7 +267,7 @@ export function patchInboxChat(
 }
 
 export function markInboxAiResponse(queryClient: QueryClient, userId: string | undefined, messageId: string) {
-  queryClient.setQueryData<InboxQueryData>(inboxQueryKey(userId), (old) => {
+  updateInboxQueries(queryClient, userId, (old) => {
     if (!old) return old;
     let changed = false;
     const pages = old.pages.map((page) => {
@@ -275,13 +308,21 @@ function cachedInboxMessages(chats: CachedChat[]): InboxMessage[] {
   }));
 }
 
-export function useInboxMessages(userId?: string, options: { search?: string } = {}) {
+export function useInboxMessages(
+  userId?: string,
+  options: { search?: string; filter?: InboxServerFilter; platform?: Platform | 'all' } = {},
+) {
   const search = options.search?.trim() ?? '';
+  const filter = options.filter ?? 'all';
+  const platformFilter = options.platform ?? 'all';
   const queryClient = useQueryClient();
-  // The search term is part of the identity of this feed: filtering happens in
-  // the database, so results for different terms are different result sets and
-  // must not share a cache entry.
-  const queryKey = useMemo(() => inboxQueryKey(userId, search), [userId, search]);
+  // Search and filters are part of the identity of this feed: they are applied
+  // in the database, so each combination is a different result set and must not
+  // share a cache entry.
+  const queryKey = useMemo(
+    () => inboxQueryKey(userId, search, filter, platformFilter),
+    [userId, search, filter, platformFilter],
+  );
   const [cacheReady, setCacheReady] = useState(!usesNativeMobileCache());
 
   useEffect(() => {
@@ -311,7 +352,7 @@ export function useInboxMessages(userId?: string, options: { search?: string } =
       const pageSize = 20;
       const now = new Date().toISOString();
       const userTraceId = userId.slice(0, 8);
-      inboxTrace('fetch:start', { pageSize, user: userTraceId, cursor: !!pageParam, search: !!search });
+      inboxTrace('fetch:start', { pageSize, user: userTraceId, cursor: !!pageParam, search: !!search, filter, platform: platformFilter });
 
       // One row per conversation. Paginating `messages` and collapsing them
       // here yielded only a handful of conversations per page, so an old but
@@ -329,6 +370,14 @@ export function useInboxMessages(userId?: string, options: { search?: string } =
         .order('last_activity_at', { ascending: false })
         .order('chat_id', { ascending: false })
         .limit(pageSize + 1);
+
+      // Filters run in the database for the same reason search does: applying
+      // them to the loaded pages only would filter the ~20 conversations in
+      // memory rather than every conversation the account has.
+      if (platformFilter !== 'all') feed = feed.eq('platform', platformFilter);
+      if (filter === 'unread') feed = feed.gt('unread_count', 0);
+      if (filter === 'groups') feed = feed.eq('is_group', true);
+      if (filter === 'needs_reply') feed = feed.eq('last_message_from_me', false);
 
       // Keyset, not offset: a new message reorders the feed between pages, so
       // offsets would make the list repeat and skip conversations.

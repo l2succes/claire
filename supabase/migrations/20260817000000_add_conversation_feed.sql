@@ -71,7 +71,14 @@ SELECT
   -- path and can lag or be null for a chat that has never received a message;
   -- fall back so a conversation never sorts to the bottom for lack of a value.
   COALESCE(m.timestamp, c.last_message_at, c.updated_at, c.created_at)
-                              AS last_activity_at
+                              AS last_activity_at,
+  -- Appended rather than grouped with the other last_message_* columns:
+  -- CREATE OR REPLACE VIEW only accepts new columns at the end, so keeping
+  -- them here lets this file be re-run against an existing view.
+  -- The inbox shows a thumbnail beside a media conversation's preview line, so
+  -- it needs the attachment itself, not just the content type.
+  m.media_url                 AS last_message_media_url,
+  m.media_mime_type           AS last_message_media_mime_type
 FROM public.chats c
 LEFT JOIN public.contacts ct
   ON ct.id = c.contact_id
@@ -80,6 +87,8 @@ LEFT JOIN LATERAL (
     msg.id,
     msg.content,
     msg.content_type,
+    msg.media_url,
+    msg.media_mime_type,
     msg.from_me,
     msg.status,
     msg.snoozed_until,
