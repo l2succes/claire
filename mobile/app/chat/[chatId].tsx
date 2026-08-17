@@ -343,7 +343,7 @@ export default function ChatScreen() {
     if (chatId) fetchConvSettings(chatId);
 
     const subscription = supabase
-      .channel(`chat-${chatId}-${user?.id ?? 'anonymous'}`)
+      .channel(`chat-${chatId}-${user?.id ?? 'anonymous'}-${Math.random().toString(36).slice(2, 10)}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `chat_id=eq.${chatId}` },
         (payload) => {
           const inserted = payload.new as ChatMessage;

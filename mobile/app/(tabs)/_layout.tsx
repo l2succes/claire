@@ -29,13 +29,13 @@ function useOpenPromiseCount() {
 
     void fetch();
     const subscription = supabase
-      .channel(`promises-badge-${user.id}`)
+      .channel(`promises-badge-${user.id}-${Math.random().toString(36).slice(2, 10)}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'promises', filter: `user_id=eq.${user.id}` }, () => void fetch())
       .subscribe();
 
     return () => {
       cancelled = true;
-      subscription.unsubscribe();
+      void supabase.removeChannel(subscription);
     };
   }, [user?.id]);
 

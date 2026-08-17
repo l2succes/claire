@@ -18,6 +18,7 @@ import {
 } from '../services/notifications';
 import { bootstrapMobileCache, reconcileMobileCache } from '../services/mobile-sync';
 import { LaunchReveal } from '../components/LaunchReveal';
+import { useInboxRealtime } from '../hooks/useInboxRealtime';
 import '../global.css';
 
 const SENTRY_DSN = process.env.EXPO_PUBLIC_SENTRY_DSN;
@@ -38,6 +39,13 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+function InboxRealtimeBridge() {
+  const userId = useAuthStore((state) => state.user?.id);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  useInboxRealtime(isAuthenticated ? userId : undefined);
+  return null;
+}
 
 export default function RootLayout() {
   const [appReady, setAppReady] = useState(false);
@@ -134,6 +142,7 @@ export default function RootLayout() {
         <SafeAreaProvider>
           <ClaireThemeProvider surface="mobile">
           <QueryClientProvider client={queryClient}>
+            <InboxRealtimeBridge />
             <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#F4F1EA' } }}>
               <Stack.Screen name="(tabs)" />
               <Stack.Screen name="(auth)" />
