@@ -1,0 +1,35 @@
+{
+  "name": "@claire/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "_comment:productName": "Electron derives app.getName() and the userData path from this; without it the scoped package name becomes a literal '@claire/desktop' directory.",
+  "productName": "Claire",
+  "license": "Apache-2.0",
+  "description": "Claire Desktop \u2014 Electron shell hosting the Claire client's web build.",
+  "main": "dist-main/main.js",
+  "scripts": {
+    "build": "bun run build:main && bun run build:preload",
+    "build:main": "tsc -p tsconfig.json",
+    "_comment:build:preload": "A sandboxed preload cannot require() relative modules, so it must ship as one bundled file.",
+    "build:preload": "bun build src/preload.ts --target=node --format=cjs --external electron --outfile dist-main/preload.js",
+    "dev": "bun run build && CLAIRE_DEV_SERVER_URL=http://localhost:8081 electron .",
+    "start": "bun run build && electron .",
+    "bundle:renderer": "cd ../client && bunx expo export -p web --output-dir ../desktop/renderer",
+    "package": "bun run bundle:renderer && bun run build && electron-builder",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "rm -rf dist-main renderer release"
+  },
+  "devDependencies": {
+    "electron": "43.4.0",
+    "electron-builder": "^26.15.3",
+    "typescript": "^5.3.3",
+    "@types/node": "^22.10.0"
+  },
+  "nx": {
+    "tags": [
+      "scope:client",
+      "type:app"
+    ]
+  },
+  "author": "Claire contributors"
+}

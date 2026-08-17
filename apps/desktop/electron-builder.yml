@@ -1,0 +1,40 @@
+appId: com.claire.desktop
+productName: Claire
+copyright: Copyright © Claire contributors
+
+directories:
+  output: release
+  buildResources: build
+
+# `dist-main` is the compiled main/preload; `renderer` is the
+# `expo export -p web` output produced by `bun run bundle:renderer`.
+files:
+  - dist-main/**/*
+  - renderer/**/*
+  - package.json
+
+mac:
+  category: public.app-category.social-networking
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+    - target: zip
+      arch: [arm64, x64]
+  # Unsigned for the spike. Signing and notarization are a separate step.
+  identity: null
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+
+linux:
+  category: Network
+  target:
+    - target: AppImage
+      arch: [x64]
+
+# `claire://` is the Expo deep-link scheme, reserved here for OAuth callbacks.
+protocols:
+  - name: Claire
+    schemes: [claire]
