@@ -69,6 +69,10 @@ bunx eas build --profile preview --platform ios
 bunx eas build --profile production --platform ios
 ```
 
+Remote notifications require a coordinated database, API, provider, and client
+rollout. Follow [Notification rollout and acceptance](./NOTIFICATION_ROLLOUT.md)
+before treating a successful build as notification-ready.
+
 ## Operator notes
 
 Database passwords, Railway project IDs, proxy hosts, and incident runbooks must stay in private ops docs. If you find a live credential or hostname in this repository, treat it as exposed: rotate it and open a security issue.

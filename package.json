@@ -22,6 +22,7 @@
     "test:plugins": "bun test examples/plugins",
     "landing": "bunx serve landing",
     "catalog:generate": "bun run scripts/generate-platform-catalog.ts",
+    "notifications:check": "bash scripts/check-notification-readiness.sh",
     "dev:prod": "concurrently \"bun run dev:server\" \"bun run mobile:prod\"",
     "mobile:prod": "cd mobile && bun run start:prod",
     "mobile:prod:local": "cd mobile && bun run start:prod:local",
