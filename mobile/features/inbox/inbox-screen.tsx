@@ -104,8 +104,15 @@ export function InboxScreen() {
   const params = useLocalSearchParams<{ filter?: string }>();
   const user = useAuthStore(state => state.user);
   const connectedSessions = usePlatformStore(state => state.connectedSessions);
-  const inbox = useInboxMessages(user?.id);
   const [query, setQuery] = useState('');
+  // Search runs in the database now, so debounce the term rather than issuing a
+  // request per keystroke.
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(query.trim()), 250);
+    return () => clearTimeout(timer);
+  }, [query]);
+  const inbox = useInboxMessages(user?.id, { search: debouncedQuery });
   const [filter, setFilter] = useState<InboxFilter>(params.filter === 'needs_reply' ? 'needs_reply' : 'all');
   const [platform, setPlatform] = useState<PlatformFilter>('all');
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -134,10 +141,11 @@ export function InboxScreen() {
     if (filter === 'unread' && !message.unread_count) return false;
     if (filter === 'needs_reply' && message.from_me) return false;
     if (filter === 'groups' && !message.is_group) return false;
-    const normalizedQuery = query.trim().toLowerCase();
-    if (!normalizedQuery) return true;
-    return [message.chat_name, message.contact_name, message.contact_phone, message.content].some(value => value?.toLowerCase().includes(normalizedQuery));
-  }), [filter, inbox.messages, locallySnoozed, platform, query]);
+    // No text filter here: the query already searched every conversation in the
+    // database. Re-filtering in memory would drop rows that matched on a field
+    // this list does not carry.
+    return true;
+  }), [filter, inbox.messages, locallySnoozed, platform]);
 
   const openChat = useCallback((message: InboxMessage) => router.push({
     pathname: '/chat/[chatId]',
@@ -243,7 +251,9 @@ export function InboxScreen() {
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{ paddingBottom: 156 }}
         onEndReached={() => {
-          if (searching || !displayedMessages.length || !inbox.hasMore || inbox.loadingMore) return;
+          // Search results paginate too — the feed is filtered in the database,
+          // so there can be more matches beyond the first page.
+          if (!displayedMessages.length || !inbox.hasMore || inbox.loadingMore) return;
           void inbox.fetchNextMessages();
         }}
         onEndReachedThreshold={0.4}

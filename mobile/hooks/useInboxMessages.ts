@@ -25,9 +25,15 @@ export interface InboxMessage {
   is_pinned?: boolean;
 }
 
+export interface InboxCursor {
+  lastActivityAt: string;
+  chatId: string;
+}
+
 interface MessagePage {
   messages: InboxMessage[];
   hasMore: boolean;
+  nextCursor: InboxCursor | null;
 }
 
 interface RawMessage {
@@ -47,9 +53,18 @@ interface RawMessage {
   ai_suggestions?: Array<{ id: string; confidence?: number }>;
 }
 
-type InboxQueryData = InfiniteData<MessagePage, number>;
+type InboxQueryData = InfiniteData<MessagePage, InboxCursor | null>;
 
-export function inboxQueryKey(userId?: string) {
+export function inboxQueryKey(userId?: string, search = '') {
+  return ['messages-feed', userId, search] as const;
+}
+
+/**
+ * Prefix matching every search variant of a user's feed. Invalidation must use
+ * this: inboxQueryKey(userId) is the *unsearched* feed, and TanStack matches
+ * keys by prefix, so it would leave an active search stale.
+ */
+export function inboxQueryPrefix(userId?: string) {
   return ['messages-feed', userId] as const;
 }
 
@@ -86,55 +101,40 @@ function conversationKey(chatId: string, platform?: Platform) {
   return `${platform || Platform.WHATSAPP}:${chatId}`;
 }
 
-function isStatusBroadcast(row: RawMessage) {
-  return row.chats?.platform_chat_id === 'status@broadcast' || row.chats?.name === 'WhatsApp Status Broadcast';
-}
-
-function normalizeRows(rows: RawMessage[]) {
-  const byConversation = new Map<string, InboxMessage>();
-
-  for (const row of rows) {
-    if (isStatusBroadcast(row)) continue;
-    const chatId = row.chat_id || row.id;
-    const platform = row.platform || Platform.WHATSAPP;
-    const key = conversationKey(chatId, platform);
-    const current = byConversation.get(key);
-    if (current && new Date(current.timestamp) >= new Date(row.timestamp)) continue;
-    const conversationName = row.chats?.name || (!row.from_me ? row.contact_name : undefined);
-
-    byConversation.set(key, {
-      id: row.id,
-      conversation_key: key,
-      // In a DM, the chat name is the other participant. The latest message's
-      // sender name may be our own profile, so never use it as the route/display
-      // contact. Group rows retain the latest remote sender separately.
-      contact_name: row.is_group ? row.contact_name : conversationName,
-      contact_avatar: row.contacts?.avatar_url || undefined,
-      chat_name: conversationName,
-      content: row.content,
-      timestamp: row.timestamp,
-      from_me: row.from_me,
-      is_group: row.is_group,
-      status: row.status,
-      chat_id: chatId,
-      contact_phone: row.contact_phone,
-      has_ai_response: (row.ai_suggestions?.length ?? 0) > 0,
-      unread_count: row.chats?.unread_count ?? 0,
-      platform,
-      snoozed_until: row.snoozed_until ?? null,
-      is_pinned: row.chats?.is_pinned ?? false,
-    });
-  }
-
-  const seen = new Set<string>();
-  return [...byConversation.values()]
-    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-    .filter((message) => {
-      const key = `${message.platform}:${message.chat_name || message.contact_phone || message.chat_id}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
+/**
+ * A `conversation_feed` row already is a conversation, so unlike the old
+ * message rows it needs no collapsing — only renaming onto the shape the
+ * inbox, home screen and realtime patch helpers already consume.
+ */
+function conversationRowToInboxMessage(row: DbRow): InboxMessage {
+  const chatId = String(row.chat_id);
+  const platform = (row.platform as Platform) || Platform.WHATSAPP;
+  const isGroup = row.is_group === true;
+  const displayName = (row.chat_name as string)
+    || (row.contact_name as string)
+    || (row.contact_inferred_name as string)
+    || undefined;
+  return {
+    id: (row.last_message_id as string) || chatId,
+    conversation_key: conversationKey(chatId, platform),
+    // In a group the latest sender is not the conversation's identity; keep the
+    // conversation name for display and the sender separate.
+    contact_name: isGroup ? (row.last_message_sender_name as string) || displayName : displayName,
+    contact_avatar: (row.contact_avatar_url as string) || undefined,
+    chat_name: displayName,
+    content: (row.last_message_content as string) ?? '',
+    timestamp: String(row.last_activity_at),
+    from_me: row.last_message_from_me === true,
+    is_group: isGroup,
+    status: row.last_message_status as InboxMessage['status'],
+    chat_id: chatId,
+    contact_phone: (row.contact_phone as string) || undefined,
+    platform,
+    unread_count: typeof row.unread_count === 'number' ? row.unread_count : 0,
+    has_ai_response: row.last_message_has_ai_response === true,
+    snoozed_until: (row.last_message_snoozed_until as string) ?? null,
+    is_pinned: row.is_pinned === true,
+  };
 }
 
 function sameMessage(a: InboxMessage, b: InboxMessage) {
@@ -207,7 +207,7 @@ export function patchInboxRealtimeMessage(
       is_pinned: false,
     };
     const first = old.pages[0];
-    if (!first) return { ...old, pages: [{ messages: [newMessage], hasMore: false }] };
+    if (!first) return { ...old, pages: [{ messages: [newMessage], hasMore: false, nextCursor: null }] };
     return { ...old, pages: [{ ...first, messages: sortMessages([newMessage, ...first.messages]) }, ...old.pages.slice(1)] };
   });
 }
@@ -275,9 +275,13 @@ function cachedInboxMessages(chats: CachedChat[]): InboxMessage[] {
   }));
 }
 
-export function useInboxMessages(userId?: string) {
+export function useInboxMessages(userId?: string, options: { search?: string } = {}) {
+  const search = options.search?.trim() ?? '';
   const queryClient = useQueryClient();
-  const queryKey = useMemo(() => inboxQueryKey(userId), [userId]);
+  // The search term is part of the identity of this feed: filtering happens in
+  // the database, so results for different terms are different result sets and
+  // must not share a cache entry.
+  const queryKey = useMemo(() => inboxQueryKey(userId, search), [userId, search]);
   const [cacheReady, setCacheReady] = useState(!usesNativeMobileCache());
 
   useEffect(() => {
@@ -287,89 +291,87 @@ export function useInboxMessages(userId?: string) {
     void hydrateMobileCache(userId).then((snapshot) => {
       if (!active) return;
       const messages = cachedInboxMessages(snapshot.chats);
-      if (messages.length) queryClient.setQueryData<InboxQueryData>(queryKey, { pages: [{ messages, hasMore: false }], pageParams: [0] });
+      // The offline snapshot seeds page one only; the network fetch that
+      // follows supplies the real cursor.
+      if (messages.length) queryClient.setQueryData<InboxQueryData>(queryKey, { pages: [{ messages, hasMore: false, nextCursor: null }], pageParams: [null] });
     }).catch(() => undefined).finally(() => { if (active) setCacheReady(true); });
     return () => { active = false; };
   }, [queryClient, queryKey, userId]);
 
-  const query = useInfiniteQuery<MessagePage, Error, InboxQueryData, typeof queryKey, number>({
+  const query = useInfiniteQuery<MessagePage, Error, InboxQueryData, typeof queryKey, InboxCursor | null>({
     queryKey,
     enabled: !!userId && cacheReady,
-    initialPageParam: 0,
+    initialPageParam: null,
     staleTime: 60_000,
     gcTime: 30 * 60_000,
     refetchOnWindowFocus: false,
     refetchOnReconnect: true,
     queryFn: async ({ pageParam }) => {
-      if (!userId) return { messages: [], hasMore: false };
+      if (!userId) return { messages: [], hasMore: false, nextCursor: null };
       const pageSize = 20;
-      const from = pageParam * pageSize;
       const now = new Date().toISOString();
       const userTraceId = userId.slice(0, 8);
-      inboxTrace('fetch:start', { page: pageParam, pageSize, user: userTraceId });
-      let messageResult = await supabase
-        .from('messages')
-        .select(`id, content, timestamp, from_me, is_group, status, platform,
-          chat_id, contact_phone, contact_name, snoozed_until,
-          chats!messages_chat_id_fkey (name, platform_chat_id, unread_count, is_pinned), ai_suggestions (id, confidence)`, { count: 'exact' })
+      inboxTrace('fetch:start', { pageSize, user: userTraceId, cursor: !!pageParam, search: !!search });
+
+      // One row per conversation. Paginating `messages` and collapsing them
+      // here yielded only a handful of conversations per page, so an old but
+      // quiet conversation sat hundreds of pages down and was unreachable.
+      let feed = supabase
+        .from('conversation_feed')
+        .select('*')
         .eq('user_id', userId)
-        .or(`snoozed_until.is.null,snoozed_until.lte.${now}`)
-        .order('timestamp', { ascending: false })
-        .range(from, from + pageSize - 1);
-      // A rolling deploy can briefly leave a mobile client ahead of the
-      // database migration that adds chat pinning. Do not let that optional
-      // feature blank the entire inbox; retry the identical feed without it.
-      if (messageResult.error?.code === '42703') {
-        inboxTrace('fetch:pinning-unavailable', { page: pageParam, user: userTraceId });
-        messageResult = await supabase
-          .from('messages')
-          .select(`id, content, timestamp, from_me, is_group, status, platform,
-            chat_id, contact_phone, contact_name, snoozed_until,
-            chats!messages_chat_id_fkey (name, platform_chat_id, unread_count), ai_suggestions (id, confidence)`, { count: 'exact' })
-          .eq('user_id', userId)
-          .or(`snoozed_until.is.null,snoozed_until.lte.${now}`)
-          .order('timestamp', { ascending: false })
-          .range(from, from + pageSize - 1) as typeof messageResult;
+        .eq('is_archived', false)
+        // WhatsApp's status broadcast is a pseudo-chat, not a conversation.
+        // Older rows carry no platform_chat_id, so match the name too.
+        .not('platform_chat_id', 'eq', 'status@broadcast')
+        .not('chat_name', 'eq', 'WhatsApp Status Broadcast')
+        .or(`last_message_snoozed_until.is.null,last_message_snoozed_until.lte.${now}`)
+        .order('last_activity_at', { ascending: false })
+        .order('chat_id', { ascending: false })
+        .limit(pageSize + 1);
+
+      // Keyset, not offset: a new message reorders the feed between pages, so
+      // offsets would make the list repeat and skip conversations.
+      if (pageParam) {
+        feed = feed.or(
+          `last_activity_at.lt.${pageParam.lastActivityAt},` +
+          `and(last_activity_at.eq.${pageParam.lastActivityAt},chat_id.lt.${pageParam.chatId})`,
+        );
       }
-      const { data, error, count } = messageResult;
+      if (search) {
+        // Search the whole feed in the database. Filtering the loaded pages in
+        // memory only ever searched the conversations already on screen.
+        const pattern = `%${search.replace(/[,()]/g, ' ')}%`;
+        feed = feed.or(
+          `chat_name.ilike.${pattern},` +
+          `contact_name.ilike.${pattern},` +
+          `contact_inferred_name.ilike.${pattern},` +
+          `contact_phone.ilike.${pattern},` +
+          `last_message_content.ilike.${pattern}`,
+        );
+      }
+
+      const { data, error } = await feed;
       if (error) {
-        inboxError('fetch:messages-failed', error, { page: pageParam, user: userTraceId });
+        inboxError('fetch:conversations-failed', error, { user: userTraceId });
         throw error;
       }
-      const { data: contacts, error: contactsError } = await supabase
-        .from('contacts')
-        .select('platform, platform_contact_id, avatar_url')
-        .eq('user_id', userId)
-        .not('avatar_url', 'is', null);
-      if (contactsError) {
-        inboxError('fetch:contacts-failed', contactsError, { page: pageParam, user: userTraceId });
-        throw contactsError;
-      }
-      const avatars = new Map(
-        (contacts || []).map((contact: DbRow) => [
-          `${contact.platform}:${contact.platform_contact_id}`,
-          contact.avatar_url,
-        ]),
-      );
-      const rows = (data ?? []).map((row: DbRow) => ({
-        ...row,
-        contacts: {
-          avatar_url: avatars.get(`${row.platform || Platform.WHATSAPP}:${row.contact_phone || ''}`) || null,
-        },
-      })) as RawMessage[];
-      if (usesNativeMobileCache()) {
-        const byChat = new Map<string, RawMessage[]>();
-        for (const row of rows) {
-          const key = row.chat_id || row.id;
-          byChat.set(key, [...(byChat.get(key) || []), row]);
-        }
-        void Promise.all([...byChat.entries()].map(([chatId, messages]) => cacheTimeline(userId, chatId, messages as Array<RawMessage & { id: string; chat_id: string; timestamp: string }>))).catch(() => undefined);
-      }
-      const messages = normalizeRows(rows);
-      inboxTrace('fetch:success', { page: pageParam, rows: rows.length, conversations: messages.length, total: count ?? null });
-      return { messages, hasMore: count ? from + pageSize < count : false };
+
+      const rows = (data ?? []) as DbRow[];
+      const hasMore = rows.length > pageSize;
+      const page = hasMore ? rows.slice(0, pageSize) : rows;
+      const messages = page.map(conversationRowToInboxMessage);
+      const last = page[page.length - 1];
+      inboxTrace('fetch:success', { conversations: messages.length, hasMore });
+      return {
+        messages,
+        hasMore,
+        nextCursor: hasMore && last
+          ? { lastActivityAt: String(last.last_activity_at), chatId: String(last.chat_id) }
+          : null,
+      };
     },
-    getNextPageParam: (lastPage, allPages) => lastPage.hasMore ? allPages.length : undefined,
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
   });
 
   const messages = useMemo(() => {
