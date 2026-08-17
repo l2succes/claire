@@ -2178,6 +2178,131 @@ code {
   letter-spacing: -0.06em;
 }
 /* The price itself is an object in the plan card, not outlined display type. */
+/* Home only shows the ladder; /pricing carries the detail. */
+.pricing-teaser-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 14px;
+}
+.pricing-teaser-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 28px;
+  border: 1px solid var(--neutral-200);
+  border-radius: var(--radius-lg);
+  background: var(--claire-paper);
+}
+.pricing-teaser-card.is-featured {
+  border-color: var(--claire-ink);
+  background: var(--claire-lime);
+  box-shadow: 8px 8px 0 var(--claire-ink);
+}
+.pricing-teaser-card.is-business {
+  border-color: var(--claire-ink);
+  background: var(--claire-ink);
+  color: var(--claire-paper);
+}
+.pricing-teaser-flag {
+  position: absolute;
+  top: -13px;
+  left: 28px;
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  background: var(--claire-ink);
+  color: var(--claire-lime);
+  font: 500 9.5px var(--font-mono);
+  letter-spacing: 0.12em;
+}
+.pricing-teaser-card > small {
+  font: 500 10px var(--font-mono);
+  letter-spacing: 0.12em;
+}
+.pricing-teaser-card.is-business > small {
+  color: var(--claire-lime);
+}
+.pricing-teaser-card > strong {
+  margin: 14px 0 20px;
+  font-family: var(--font-display);
+  font-size: clamp(2.1rem, 3vw, 2.9rem);
+  line-height: 0.9;
+  letter-spacing: -0.075em;
+}
+.pricing-teaser-card > strong em {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+.pricing-teaser-card > b {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 11px 13px;
+  border: 1px solid var(--claire-ink);
+  border-radius: var(--radius-md);
+  background: var(--claire-sky);
+  color: var(--claire-ink);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.pricing-teaser-card.is-featured > b {
+  background: var(--claire-paper);
+}
+.pricing-teaser-card.is-business > b {
+  border-color: var(--claire-lime);
+  background: var(--claire-lime);
+}
+.pricing-teaser-card > b .hero-icon {
+  width: 17px;
+  height: 17px;
+  flex: none;
+}
+.pricing-teaser-card > p {
+  margin: 16px 0 0;
+  color: var(--neutral-600);
+  font-size: 13px;
+  line-height: 1.55;
+}
+.pricing-teaser-card.is-featured > p {
+  color: rgb(16 18 15 / 68%);
+}
+.pricing-teaser-card.is-business > p {
+  color: #a7ab9f;
+}
+.pricing-teaser-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 40px;
+  margin-top: 34px;
+}
+.pricing-teaser-foot p {
+  max-width: 520px;
+  margin: 0;
+  color: var(--neutral-600);
+  font-size: 13px;
+  line-height: 1.55;
+}
+@media (max-width: 1000px) {
+  .pricing-teaser-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 26px;
+  }
+  .pricing-teaser-foot {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 24px;
+  }
+}
+@media (max-width: 700px) {
+  .pricing-teaser-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 .pricing-split {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

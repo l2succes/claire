@@ -7,37 +7,21 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		0BDBB00F92A14844A2CD40DA /* Inter-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 17776E88D2A14E2DAF2BE3CB /* Inter-Bold.ttf */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
 		151E42576DDB807B983FDA1E /* libPods-Claire.a in Frameworks */ = {isa = PBXBuildFile; fileRef = FC58F05B908AD3769C3BC5B1 /* libPods-Claire.a */; };
-		2345470FF15C414C932692B7 /* PublicSans-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 13ABC2F6D13C43368690D07D /* PublicSans-Medium.ttf */; };
-		2974AF96A1634880ABF4991C /* PublicSans-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 4D5F3ADA66B64857AAC7E44C /* PublicSans-SemiBold.ttf */; };
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
 		3ED5155B75C3248AA9EEFB30 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF4D6864267087115C1A101C /* ExpoModulesProvider.swift */; };
-		42DA60172F514DD295192C7B /* DMMono-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 047268E6FBF648A186BA6002 /* DMMono-Regular.ttf */; };
-		469444BD8F414553B45A5347 /* DMMono-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = DCBE80FABD2248E9A42E02D1 /* DMMono-Medium.ttf */; };
 		AE2C663CE7DF97FB0DB8E974 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = DF017CDB7A47AA191DE56EC8 /* PrivacyInfo.xcprivacy */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
-		C99D021FA5D74507A45F7FC6 /* PublicSans-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = D7983C7AB4D84BE18BD134DE /* PublicSans-Bold.ttf */; };
-		CF8E53CA098D470D8F7B259E /* PublicSans-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = A1F2511AE0AA4146B2FA081D /* PublicSans-Regular.ttf */; };
-		DBBAB7DD08F5405CB3CB3E58 /* Inter-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 7F104642079245C6924AADF0 /* Inter-SemiBold.ttf */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		047268E6FBF648A186BA6002 /* DMMono-Regular.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = "DMMono-Regular.ttf"; path = "../assets/fonts/DMMono-Regular.ttf"; sourceTree = "<group>"; };
-		13ABC2F6D13C43368690D07D /* PublicSans-Medium.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = "PublicSans-Medium.ttf"; path = "../assets/fonts/PublicSans-Medium.ttf"; sourceTree = "<group>"; };
 		13B07F961A680F5B00A75B9A /* Claire.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Claire.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = Claire/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = Claire/Info.plist; sourceTree = "<group>"; };
-		17776E88D2A14E2DAF2BE3CB /* Inter-Bold.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = "Inter-Bold.ttf"; path = "../assets/fonts/Inter-Bold.ttf"; sourceTree = "<group>"; };
-		4D5F3ADA66B64857AAC7E44C /* PublicSans-SemiBold.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = "PublicSans-SemiBold.ttf"; path = "../assets/fonts/PublicSans-SemiBold.ttf"; sourceTree = "<group>"; };
-		7F104642079245C6924AADF0 /* Inter-SemiBold.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = "Inter-SemiBold.ttf"; path = "../assets/fonts/Inter-SemiBold.ttf"; sourceTree = "<group>"; };
-		A1F2511AE0AA4146B2FA081D /* PublicSans-Regular.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = "PublicSans-Regular.ttf"; path = "../assets/fonts/PublicSans-Regular.ttf"; sourceTree = "<group>"; };
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = Claire/SplashScreen.storyboard; sourceTree = "<group>"; };
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
-		D7983C7AB4D84BE18BD134DE /* PublicSans-Bold.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = "PublicSans-Bold.ttf"; path = "../assets/fonts/PublicSans-Bold.ttf"; sourceTree = "<group>"; };
-		DCBE80FABD2248E9A42E02D1 /* DMMono-Medium.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = "DMMono-Medium.ttf"; path = "../assets/fonts/DMMono-Medium.ttf"; sourceTree = "<group>"; };
 		DF017CDB7A47AA191DE56EC8 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = Claire/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		DF4D6864267087115C1A101C /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-Claire/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
 		ECE37A3E762E70F2B57DE717 /* Pods-Claire.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Claire.debug.xcconfig"; path = "Target Support Files/Pods-Claire/Pods-Claire.debug.xcconfig"; sourceTree = "<group>"; };
@@ -107,7 +91,6 @@
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
 				B42E7935A0C8854CF453F9AC /* Pods */,
 				4BB298AE35B0D310BC7AD443 /* ExpoModulesProviders */,
-				D907BC6D53264971AC2C7AFD /* Resources */,
 			);
 			indentWidth = 2;
 			sourceTree = "<group>";
@@ -147,22 +130,6 @@
 				DF4D6864267087115C1A101C /* ExpoModulesProvider.swift */,
 			);
 			name = Claire;
-			sourceTree = "<group>";
-		};
-		D907BC6D53264971AC2C7AFD /* Resources */ = {
-			isa = PBXGroup;
-			children = (
-				A1F2511AE0AA4146B2FA081D /* PublicSans-Regular.ttf */,
-				13ABC2F6D13C43368690D07D /* PublicSans-Medium.ttf */,
-				4D5F3ADA66B64857AAC7E44C /* PublicSans-SemiBold.ttf */,
-				D7983C7AB4D84BE18BD134DE /* PublicSans-Bold.ttf */,
-				7F104642079245C6924AADF0 /* Inter-SemiBold.ttf */,
-				17776E88D2A14E2DAF2BE3CB /* Inter-Bold.ttf */,
-				047268E6FBF648A186BA6002 /* DMMono-Regular.ttf */,
-				DCBE80FABD2248E9A42E02D1 /* DMMono-Medium.ttf */,
-			);
-			name = Resources;
-			path = "";
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -231,14 +198,6 @@
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */,
 				AE2C663CE7DF97FB0DB8E974 /* PrivacyInfo.xcprivacy in Resources */,
-				CF8E53CA098D470D8F7B259E /* PublicSans-Regular.ttf in Resources */,
-				2345470FF15C414C932692B7 /* PublicSans-Medium.ttf in Resources */,
-				2974AF96A1634880ABF4991C /* PublicSans-SemiBold.ttf in Resources */,
-				C99D021FA5D74507A45F7FC6 /* PublicSans-Bold.ttf in Resources */,
-				DBBAB7DD08F5405CB3CB3E58 /* Inter-SemiBold.ttf in Resources */,
-				0BDBB00F92A14844A2CD40DA /* Inter-Bold.ttf in Resources */,
-				42DA60172F514DD295192C7B /* DMMono-Regular.ttf in Resources */,
-				469444BD8F414553B45A5347 /* DMMono-Medium.ttf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -326,6 +285,7 @@
 				"${PODS_CONFIGURATION_BUILD_DIR}/React-Core/React-Core_privacy.bundle",
 				"${PODS_CONFIGURATION_BUILD_DIR}/React-cxxreact/React-cxxreact_privacy.bundle",
 				"${PODS_CONFIGURATION_BUILD_DIR}/SDWebImage/SDWebImage.bundle",
+				"${PODS_CONFIGURATION_BUILD_DIR}/Sentry/Sentry.bundle",
 				"${PODS_CONFIGURATION_BUILD_DIR}/expo-dev-launcher/EXDevLauncher.bundle",
 				"${PODS_CONFIGURATION_BUILD_DIR}/expo-dev-menu/EXDevMenu.bundle",
 			);
@@ -342,6 +302,7 @@
 				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/React-Core_privacy.bundle",
 				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/React-cxxreact_privacy.bundle",
 				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/SDWebImage.bundle",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Sentry.bundle",
 				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/EXDevLauncher.bundle",
 				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/EXDevMenu.bundle",
 			);
@@ -526,7 +487,7 @@
 				ONLY_ACTIVE_ARCH = YES;
 				OTHER_CFLAGS = "$(inherited)";
 				OTHER_CPLUSPLUSFLAGS = "$(inherited)";
-				REACT_NATIVE_PATH = "${PODS_ROOT}/../../../node_modules/.bun/react-native@0.83.4+c9626e3ab33ceb4f/node_modules/react-native";
+				REACT_NATIVE_PATH = "${PODS_ROOT}/../../node_modules/react-native";
 				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DEBUG";
 				SWIFT_ENABLE_EXPLICIT_MODULES = NO;
@@ -583,7 +544,7 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				OTHER_CFLAGS = "$(inherited)";
 				OTHER_CPLUSPLUSFLAGS = "$(inherited)";
-				REACT_NATIVE_PATH = "${PODS_ROOT}/../../../node_modules/.bun/react-native@0.83.4+c9626e3ab33ceb4f/node_modules/react-native";
+				REACT_NATIVE_PATH = "${PODS_ROOT}/../../node_modules/react-native";
 				SDKROOT = iphoneos;
 				SWIFT_ENABLE_EXPLICIT_MODULES = NO;
 				USE_HERMES = true;

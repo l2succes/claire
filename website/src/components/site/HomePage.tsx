@@ -771,166 +771,65 @@ export function HomePage() {
             <div>
               <div className="kicker">ONE ACCOUNT. CLEAR COSTS.</div>
               <h2>
-                One plan for
+                Three plans.
                 <br />
-                <span className="claire-underline">the whole product.</span>
+                <span className="claire-underline">One Loop.</span>
               </h2>
             </div>
             <p>
-              One personal plan for people who want every chat, connection, and AI helper to stay
-              available—without operating the infrastructure themselves.
+              Claire’s Loop reads every connected conversation and tells you what is still open. Your
+              plan decides how often it runs.
             </p>
           </div>
-          <div className="pricing-surface">
-            <div className="pricing-plan">
-              <div className="pricing-plan-copy">
-                <div className="pricing-plan-top">
-                  <span className="pricing-icon">
-                    <HeroIcon name="cloud" />
-                  </span>
-                  <span className="status-pill available">CLAIRE CLOUD</span>
-                </div>
-                <h3>Managed messaging infrastructure.</h3>
-                <p>
-                  One personal subscription covers Claire’s hosted API, database, search, Matrix
-                  services, bridge operations, backups, upgrades, and support.
-                </p>
-                <ul className="pricing-includes">
-                  <li>
-                    <HeroIcon name="check-circle" />
-                    Cloud bridges stay online after desktop setup
-                  </li>
-                  <li>
-                    <HeroIcon name="check-circle" />
-                    Desktop-required networks clearly show device availability
-                  </li>
-                  <li>
-                    <HeroIcon name="check-circle" />
-                    Mobile, desktop, and web clients for the account
-                  </li>
-                </ul>
-              </div>
-              <aside className="price-card">
-                <small>CLAIRE PLUS · PERSONAL PLAN</small>
-                <div className="price-amount">
-                  <strong>$10</strong>
-                  <span>USD / month</span>
-                </div>
-                <p>AI use is deliberately metered separately, so model costs never become a surprise.</p>
-                <a className="button button-dark" href="mailto:hello@claire.app?subject=Claire%20Plus">
-                  Get Claire Plus <HeroIcon name="arrow-right" />
-                </a>
-                <span className="price-note">Monthly billing · personal account · no automatic AI overage</span>
-              </aside>
-            </div>
-            <div className="pricing-split">
-              <article className="pricing-covered">
-                <small>WHAT THE $10 COVERS</small>
-                <ul>
-                  <li>Hosted API, database, and cross-network search</li>
-                  <li>Matrix services and managed bridge operations</li>
-                  <li>Backups, upgrades, monitoring, and support</li>
-                  <li>Mobile, desktop, and web clients on one account</li>
-                </ul>
-              </article>
-              <article className="pricing-excluded">
-                <small>WHAT IT DELIBERATELY DOES NOT COVER</small>
-                <ul>
-                  <li>Model usage — metered separately, never bundled</li>
-                  <li>Your own provider key, if you bring one</li>
-                  <li>Networks that need a device you keep awake</li>
-                  <li>Anything we have not actually shipped yet</li>
-                </ul>
-              </article>
-            </div>
-            <div className="pricing-usage">
-              <div className="pricing-usage-head">
-                <div>
-                  <small>HOW AI IS BILLED</small>
-                  <h3>Choose who pays for the model.</h3>
-                </div>
-                <p>
-                  Messages remain usable when an AI allowance is empty. Claire will never silently
-                  bill an unlimited model balance.
-                </p>
-              </div>
-              <div className="usage-grid">
-                <article className="usage-card usage-managed">
-                  <span className="usage-icon">
-                    <HeroIcon name="sparkles" />
-                  </span>
-                  <h4>Claire AI credits</h4>
-                  <p>
-                    Use Claire-managed models for replies, Ask Claire, summaries, and search. The
-                    account gets a visible monthly credit balance, warnings, and a hard cap.
-                  </p>
-                  <div className="credit-meter" aria-hidden="true">
-                    <div className="credit-bar">
-                      <span style={{ width: '62%' }} />
-                    </div>
-                    <div className="credit-legend">
-                      <b>62% used</b>
-                      <span>hard cap · no overage</span>
-                    </div>
-                  </div>
-                  <small>Credits settle against actual model usage—not a made-up “one request” unit.</small>
-                </article>
-                <article className="usage-card">
-                  <span className="usage-icon">
-                    <HeroIcon name="server" />
-                  </span>
-                  <h4>Bring your own key</h4>
-                  <p>
-                    Add an OpenAI, Anthropic, or compatible provider key. Claire Cloud still runs the
-                    product; your provider bills model usage directly.
-                  </p>
-                  <small>Your Claire AI credit balance is not used.</small>
-                </article>
-                <article className="usage-card">
-                  <span className="usage-icon">
-                    <HeroIcon name="desktop" />
-                  </span>
-                  <h4>Run models yourself</h4>
-                  <p>
-                    Self-hosted teams can use Ollama, LM Studio, or another compatible endpoint on
-                    infrastructure they control.
-                  </p>
-                  <small>Available only when the model host stays reachable.</small>
-                </article>
-              </div>
-            </div>
+          <div className="pricing-teaser-grid">
+            <article className="pricing-teaser-card">
+              <small>FREE</small>
+              <strong>$0</strong>
+              <b>
+                <HeroIcon name="sparkles" />1 Loop run per week
+              </b>
+              <p>Up to five networks in one inbox, with search and reminders.</p>
+            </article>
+            <article className="pricing-teaser-card is-featured">
+              <div className="pricing-teaser-flag">MOST POPULAR</div>
+              <small>PLUS</small>
+              <strong>
+                $10<em>/mo</em>
+              </strong>
+              <b>
+                <HeroIcon name="sparkles" />
+                Up to 3 Loop runs per day
+              </b>
+              <p>Every network, the full AI, and a monthly Claire AI credit allowance.</p>
+            </article>
+            <article className="pricing-teaser-card">
+              <small>PRO</small>
+              <strong>
+                $20<em>/mo</em>
+              </strong>
+              <b>
+                <HeroIcon name="sparkles" />A Loop every morning
+              </b>
+              <p>Claire runs the Loop for you, on the best model tier, without being asked.</p>
+            </article>
+            <article className="pricing-teaser-card is-business">
+              <small>ULTIMATE</small>
+              <strong>Business</strong>
+              <b>
+                <HeroIcon name="sparkles" />
+                Continuous Loop, with agents
+              </b>
+              <p>Plugins that act on what customers say—calendar, CRM, payments, and more.</p>
+            </article>
           </div>
-          <div className="pricing-faq">
-            <details>
-              <summary>
-                What happens when our Claire AI credits run out? <HeroIcon name="plus" />
-              </summary>
-              <p>
-                Messaging, search, and connections continue to work. AI actions pause until you add
-                prepaid credits, switch to your provider key, or wait for the next monthly allowance
-                period.
-              </p>
-            </details>
-            <details>
-              <summary>
-                Can we use our own OpenAI or Anthropic account? <HeroIcon name="plus" />
-              </summary>
-              <p>
-                When bring-your-own-key support launches, its provider credential will be held behind
-                an encrypted secret boundary and used only for your account’s AI requests. You pay
-                that provider directly, and Claire Cloud will not deduct managed credits for those
-                requests.
-              </p>
-            </details>
-            <details>
-              <summary>
-                Is $10 the price for each person? <HeroIcon name="plus" />
-              </summary>
-              <p>
-                Claire Plus is $10 per month for one personal Claire account. A separate Claire
-                Business product may come later; it is not part of this launch.
-              </p>
-            </details>
+          <div className="pricing-teaser-foot">
+            <p>
+              AI use is metered separately from the subscription, with a visible balance and a hard
+              cap. Model costs never become a surprise.
+            </p>
+            <Link className="button button-dark" href="/pricing">
+              Compare all plans <HeroIcon name="arrow-right" />
+            </Link>
           </div>
         </section>
 
@@ -997,8 +896,8 @@ export function HomePage() {
               one intelligent home.
             </h2>
             <p>A multi-chat client with an AI that helps you remember, reply, and follow through.</p>
-            <Link className="button button-dark" href="#pricing">
-              See Claire Cloud <HeroIcon name="arrow-right" />
+            <Link className="button button-dark" href="/pricing">
+              See the plans <HeroIcon name="arrow-right" />
             </Link>
           </div>
         </section>
