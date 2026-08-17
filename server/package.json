@@ -33,7 +33,7 @@
     "jsonwebtoken": "^9.0.2",
     "matrix-js-sdk": "^40.2.0-rc.0",
     "morgan": "^1.10.0",
-    "openai": "^4.24.1",
+    "openai": "^7.4.0",
     "postgres": "^3.4.7",
     "puppeteer": "^21.6.1",
     "qrcode": "^1.5.3",
