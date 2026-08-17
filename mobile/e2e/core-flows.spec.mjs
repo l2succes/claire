@@ -10,7 +10,7 @@
  *   3. Chat → open a chat and messages render
  *   4. Send → type and send a message
  *   5. AI suggestion → suggestion strip appears in chat
- *   6. Promises tab → promises screen renders
+ *   6. Loops tab → loops screen renders
  *   7. Platform connection screen renders
  */
 
@@ -176,13 +176,13 @@ const MOCK_AI_SUGGESTIONS = [
   },
 ];
 
-const MOCK_PROMISES = [
+const MOCK_LOOPS = [
   {
-    id: 'promise-1',
+    id: 'loop-1',
     user_id: MOCK_USER_ID,
     message_id: 'chatmsg-1',
     chat_id: 'mock-chat-wa-alice',
-    promise_text: "I'll send you the report by Friday",
+    content: "I'll send you the report by Friday",
     due_date: new Date(Date.now() + 86400_000 * 3).toISOString(),
     status: 'open',
     platform: 'whatsapp',
@@ -190,7 +190,7 @@ const MOCK_PROMISES = [
   },
 ];
 
-// Represents the source-message fallback used for legacy promise rows that
+// Represents the source-message fallback used for legacy loop rows that
 // were stored before chat/contact IDs were captured by the detector.
 const MOCK_PROMISE_SOURCE_MESSAGES = [
   {
@@ -402,16 +402,16 @@ async function mockBackend(page) {
           body: JSON.stringify(MOCK_AI_SUGGESTIONS),
         });
       }
-    } else if (url.includes('/promises')) {
+    } else if (url.includes('/loops')) {
       if (method === 'PATCH' || method === 'POST') {
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
-          body: JSON.stringify([{ ...MOCK_PROMISES[0], status: 'completed' }]),
+          body: JSON.stringify([{ ...MOCK_LOOPS[0], status: 'completed' }]),
         });
       } else if (method === 'HEAD') {
         // Supabase count query (head: true) — return Content-Range with count
-        const openCount = MOCK_PROMISES.filter((p) => p.status === 'open' || p.status === 'pending').length;
+        const openCount = MOCK_LOOPS.filter((p) => p.status === 'open' || p.status === 'pending').length;
         await route.fulfill({
           status: 200,
           headers: { 'Content-Range': `0-${openCount - 1}/${openCount}` },
@@ -421,7 +421,7 @@ async function mockBackend(page) {
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
-          body: JSON.stringify(MOCK_PROMISES),
+          body: JSON.stringify(MOCK_LOOPS),
         });
       }
     } else if (url.includes('/chats')) {
@@ -574,7 +574,7 @@ async function mockBackend(page) {
             quiet_hours_start: '22:00',
             quiet_hours_end: '08:00',
             notify_messages: true,
-            notify_promises: true,
+            notify_loops: true,
             notify_ai_suggestions: false,
           },
         },
@@ -1071,69 +1071,69 @@ test.describe('Core loop — mock backend', () => {
     await expect(page.getByTestId('assistant-turn-list')).toContainText('Scoped Alice answer.');
   });
 
-  // 6. Promises tab — renders the promises screen
-  test('Promises tab renders the promises screen', async ({ page }) => {
+  // 6. Loops tab — renders the loops screen
+  test('Loops tab renders the loops screen', async ({ page }) => {
     await signIn(page);
 
-    // Click Promises tab
-    await page.getByTestId('tab-promises').click();
+    // Click Loops tab
+    await page.getByTestId('tab-loops').click();
 
-    // Confirm the route loaded — the promises screen container is present
-    await expect(page.getByTestId('promises-screen')).toBeVisible({ timeout: 10_000 });
+    // Confirm the route loaded — the loops screen container is present
+    await expect(page.getByTestId('loops-screen')).toBeVisible({ timeout: 10_000 });
   });
 
-  // 6b. Promises screen — seeded promise item appears in the list
-  test('Promises screen shows seeded promise item', async ({ page }) => {
+  // 6b. Loops screen — seeded loop item appears in the list
+  test('Loops screen shows seeded loop item', async ({ page }) => {
     await signIn(page);
 
-    await page.getByTestId('tab-promises').click();
-    await expect(page.getByTestId('promises-screen')).toBeVisible({ timeout: 10_000 });
+    await page.getByTestId('tab-loops').click();
+    await expect(page.getByTestId('loops-screen')).toBeVisible({ timeout: 10_000 });
 
-    // The promises list should be visible
-    await expect(page.getByTestId('promises-list')).toBeVisible({ timeout: 8_000 });
+    // The loops list should be visible
+    await expect(page.getByTestId('loops-list')).toBeVisible({ timeout: 8_000 });
 
-    // The seeded promise item should appear
+    // The seeded loop item should appear
     await expect(
-      page.locator('[data-testid^="promise-item-"]').first()
+      page.locator('[data-testid^="loop-item-"]').first()
     ).toBeVisible({ timeout: 8_000 });
   });
 
-  // 6c. Promises screen — tab switching works
-  test('Promises screen tab switching renders correct tab', async ({ page }) => {
+  // 6c. Loops screen — tab switching works
+  test('Loops screen tab switching renders correct tab', async ({ page }) => {
     await signIn(page);
 
-    await page.getByTestId('tab-promises').click();
-    await expect(page.getByTestId('promises-screen')).toBeVisible({ timeout: 10_000 });
+    await page.getByTestId('tab-loops').click();
+    await expect(page.getByTestId('loops-screen')).toBeVisible({ timeout: 10_000 });
 
     // Switch to Done tab
-    await page.getByTestId('promises-tab-done').click();
+    await page.getByTestId('loops-tab-done').click();
     // Done tab is now active — either empty state or items show
-    await expect(page.getByTestId('promises-list')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId('loops-list')).toBeVisible({ timeout: 5_000 });
 
     // Switch to Overdue tab
-    await page.getByTestId('promises-tab-overdue').click();
-    await expect(page.getByTestId('promises-list')).toBeVisible({ timeout: 5_000 });
+    await page.getByTestId('loops-tab-waiting').click();
+    await expect(page.getByTestId('loops-list')).toBeVisible({ timeout: 5_000 });
 
     // Switch back to Open
-    await page.getByTestId('promises-tab-open').click();
-    await expect(page.getByTestId('promises-list')).toBeVisible({ timeout: 5_000 });
+    await page.getByTestId('loops-tab-open').click();
+    await expect(page.getByTestId('loops-list')).toBeVisible({ timeout: 5_000 });
   });
 
-  // 6d. Promises are conversation-first: tapping a card opens its chat to reply.
-  test('Promises screen opens the linked conversation from a promise card', async ({ page }) => {
+  // 6d. Loops are conversation-first: tapping a card opens its chat to reply.
+  test('Loops screen opens the linked conversation from a loop card', async ({ page }) => {
     await signIn(page);
 
-    await page.getByTestId('tab-promises').click();
-    await expect(page.getByTestId('promises-screen')).toBeVisible({ timeout: 10_000 });
+    await page.getByTestId('tab-loops').click();
+    await expect(page.getByTestId('loops-screen')).toBeVisible({ timeout: 10_000 });
 
-    // Wait for the promise item to appear
+    // Wait for the loop item to appear
     await expect(
-      page.locator('[data-testid^="promise-item-"]').first()
+      page.locator('[data-testid^="loop-item-"]').first()
     ).toBeVisible({ timeout: 8_000 });
 
-    await expect(page.getByTestId('promise-contact-name-promise-1')).toHaveText('Alice (WA)');
-    await expect(page.getByTestId('promise-contact-avatar-promise-1')).toBeVisible();
-    await page.getByTestId('promise-item-promise-1').click();
+    await expect(page.getByTestId('loop-contact-name-loop-1')).toHaveText('Alice (WA)');
+    await expect(page.getByTestId('loop-contact-avatar-loop-1')).toBeVisible();
+    await page.getByTestId('loop-item-loop-1').click();
     await expect(page.getByTestId('chat-screen')).toBeVisible({ timeout: 8_000 });
     await expect(page).toHaveURL(/chat\/mock-chat-wa-alice/);
   });
@@ -1164,7 +1164,7 @@ test.describe('Core loop — mock backend', () => {
     // All three per-type toggles should be present
     await expect(page.getByTestId('notif-toggle-enabled')).toBeVisible();
     await expect(page.getByTestId('notif-toggle-messages')).toBeVisible();
-    await expect(page.getByTestId('notif-toggle-promises')).toBeVisible();
+    await expect(page.getByTestId('notif-toggle-loops')).toBeVisible();
     await expect(page.getByTestId('notif-toggle-ai-suggestions')).toBeVisible();
     await expect(page.getByTestId('notif-toggle-quiet-hours')).toBeVisible();
   });
@@ -1206,39 +1206,39 @@ test.describe('Core loop — mock backend', () => {
   });
 
   // 10. Promise badge — tab badge count matches open fixtures (#19)
-  test('Promises tab badge count matches open fixture count', async ({ page }) => {
+  test('Loops tab badge count matches open fixture count', async ({ page }) => {
     await signIn(page);
 
     // Verify we're on the messages screen (inbox).
     await expect(page.getByTestId('messages-screen')).toBeVisible({ timeout: 10_000 });
 
-    // Navigate to Promises tab (same approach as existing test 6)
-    await page.getByTestId('tab-promises').click();
-    await expect(page.getByTestId('promises-screen')).toBeVisible({ timeout: 10_000 });
+    // Navigate to Loops tab (same approach as existing test 6)
+    await page.getByTestId('tab-loops').click();
+    await expect(page.getByTestId('loops-screen')).toBeVisible({ timeout: 10_000 });
 
-    // Verify 1 open promise item is present (matching the fixture count of 1 open promise)
+    // Verify 1 open loop item is present (matching the fixture count of 1 open loop)
     await expect(
-      page.locator('[data-testid^="promise-item-"]')
+      page.locator('[data-testid^="loop-item-"]')
     ).toHaveCount(1, { timeout: 8_000 });
   });
 
-  // 10b. Promise badge — inbox card highlight for chat with open promise (#19)
-  test('inbox shows promise badge on message card with open promise', async ({ page }) => {
+  // 10b. Promise badge — inbox card highlight for chat with open loop (#19)
+  test('inbox shows loop badge on message card with open loop', async ({ page }) => {
     await signIn(page);
 
-    // MOCK_PROMISES[0] is linked to mock-chat-wa-alice, which is the first inbox entry.
-    // The first message card should have the promise badge.
+    // MOCK_LOOPS[0] is linked to mock-chat-wa-alice, which is the first inbox entry.
+    // The first message card should have the loop badge.
     await expect(page.getByTestId('messages-screen')).toBeVisible({ timeout: 10_000 });
     await expect(page.getByTestId('messages-list')).toBeVisible({ timeout: 8_000 });
 
-    // The message card for Alice (WA) is id=msg-wa-1 — the promise badge should appear on it.
+    // The message card for Alice (WA) is id=msg-wa-1 — the loop badge should appear on it.
     await expect(
-      page.getByTestId('message-card-promise-badge-msg-wa-1')
+      page.getByTestId('message-card-loop-badge-msg-wa-1')
     ).toBeVisible({ timeout: 8_000 });
 
-    // Bob (TG) has no promise — his card should NOT have a promise badge.
+    // Bob (TG) has no loop — his card should NOT have a loop badge.
     await expect(
-      page.getByTestId('message-card-promise-badge-msg-tg-1')
+      page.getByTestId('message-card-loop-badge-msg-tg-1')
     ).not.toBeVisible();
   });
 

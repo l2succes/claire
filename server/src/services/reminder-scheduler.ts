@@ -5,7 +5,7 @@ import { supabase } from './supabase';
 import { pushNotificationService } from './push-notification';
 
 interface ReminderJob {
-  promiseId: string;
+  loopId: string;
   userId: string;
   content: string;
   deadline: string;
@@ -13,7 +13,7 @@ interface ReminderJob {
 }
 
 /**
- * How often (ms) the scheduler polls for due promises.
+ * How often (ms) the scheduler polls for due loops.
  * Defaults to 60 s; override via REMINDER_POLL_INTERVAL_MS env var.
  */
 const POLL_INTERVAL_MS = parseInt(process.env.REMINDER_POLL_INTERVAL_MS ?? '60000', 10);
@@ -45,7 +45,7 @@ class ReminderScheduler {
     this.started = true;
 
     if (!this.queue) {
-      const bull = new Bull<ReminderJob>('promise-reminders', {
+      const bull = new Bull<ReminderJob>('loop-reminders', {
         redis: {
           host: redisConfig.host,
           port: redisConfig.port,
@@ -60,10 +60,10 @@ class ReminderScheduler {
       }) as unknown as ReminderQueue;
 
       bull.on('completed', (job: any) => {
-        logger.info(`[reminder] job ${job.id} completed for promise ${job.data?.promiseId}`);
+        logger.info(`[reminder] job ${job.id} completed for loop ${job.data?.loopId}`);
       });
       bull.on('failed', (job: any, err: Error) => {
-        logger.error(`[reminder] job ${job.id} failed for promise ${job.data?.promiseId}:`, err.message);
+        logger.error(`[reminder] job ${job.id} failed for loop ${job.data?.loopId}:`, err.message);
       });
 
       bull.process(this.processReminderJob.bind(this));
@@ -93,7 +93,7 @@ class ReminderScheduler {
   }
 
   /**
-   * Poll Supabase for promises whose deadline is within the next 24 hours
+   * Poll Supabase for loops whose deadline is within the next 24 hours
    * and that haven't already had a reminder sent.  Enqueue a job for each.
    */
   async enqueueDeadlineReminders(): Promise<void> {
@@ -101,29 +101,37 @@ class ReminderScheduler {
       const now = new Date();
       const horizon = new Date(now.getTime() + 24 * 60 * 60 * 1000); // +24h
 
-      const { data: promises, error } = await supabase
-        .from('promises')
-        .select('id, user_id, content, deadline, priority')
-        .lte('deadline', horizon.toISOString())
-        .gte('deadline', now.toISOString())
-        .eq('status', 'pending')
-        .is('reminder_sent_at', null);
+      // A loop is due at COALESCE(snoozed_until, deadline): snoozing pushes the
+      // reminder out without touching the date the user committed to. PostgREST
+      // has no COALESCE in filters, so the two cases are spelled out — an
+      // un-snoozed loop reaching its deadline, or a snooze expiring.
+      const from = now.toISOString();
+      const to = horizon.toISOString();
+      const { data: loops, error } = await supabase
+        .from('loops')
+        .select('id, user_id, content, title, deadline, snoozed_until, priority')
+        .in('status', ['open', 'waiting', 'snoozed'])
+        .is('reminder_sent_at', null)
+        .or(
+          `and(snoozed_until.is.null,deadline.gte.${from},deadline.lte.${to}),` +
+          `and(snoozed_until.gte.${from},snoozed_until.lte.${to})`,
+        );
 
       if (error) {
-        logger.error('[reminder] failed to query promises:', error.message);
+        logger.error('[reminder] failed to query loops:', error.message);
         return;
       }
 
-      if (!promises || promises.length === 0) {
-        logger.debug('[reminder] no due promises found');
+      if (!loops || loops.length === 0) {
+        logger.debug('[reminder] no due loops found');
         return;
       }
 
-      logger.info(`[reminder] enqueuing ${promises.length} reminder(s)`);
+      logger.info(`[reminder] enqueuing ${loops.length} reminder(s)`);
 
-      for (const p of promises) {
+      for (const p of loops) {
         await this.enqueueReminder({
-          promiseId: p.id,
+          loopId: p.id,
           userId: p.user_id,
           content: p.content,
           deadline: p.deadline,
@@ -141,29 +149,29 @@ class ReminderScheduler {
       logger.warn('[reminder] queue not initialised — skipping enqueue');
       return;
     }
-    // Use the promise ID as jobId to prevent duplicates on repeated polls.
-    await this.queue.add(data, { jobId: `reminder-${data.promiseId}` });
-    logger.debug(`[reminder] enqueued job for promise ${data.promiseId}`);
+    // Use the loop ID as jobId to prevent duplicates on repeated polls.
+    await this.queue.add(data, { jobId: `reminder-${data.loopId}` });
+    logger.debug(`[reminder] enqueued job for loop ${data.loopId}`);
   }
 
-  /** Bull job processor: send push and mark promise as reminded. */
+  /** Bull job processor: send push and mark loop as reminded. */
   private async processReminderJob(job: { data: ReminderJob }): Promise<{ sent: boolean }> {
-    const { promiseId, userId, content } = job.data;
+    const { loopId, userId, content } = job.data;
 
     await pushNotificationService.sendToUser(userId, {
-      title: 'Promise reminder',
+      title: 'Loop reminder',
       body: content,
       sound: 'default',
-      data: { type: 'promise-reminder', promiseId },
+      data: { type: 'loop-reminder', loopId },
     });
 
     const { error } = await supabase
-      .from('promises')
+      .from('loops')
       .update({ reminder_sent_at: new Date().toISOString() })
-      .eq('id', promiseId);
+      .eq('id', loopId);
 
     if (error) {
-      logger.error(`[reminder] failed to update reminder_sent_at for ${promiseId}:`, error.message);
+      logger.error(`[reminder] failed to update reminder_sent_at for ${loopId}:`, error.message);
       throw new Error(error.message);
     }
 
@@ -171,24 +179,24 @@ class ReminderScheduler {
   }
 
   /** Exposed for testing: directly process a reminder without going through Bull. */
-  async triggerReminderForPromise(promiseId: string): Promise<{ sent: boolean }> {
-    const { data: promise, error } = await supabase
-      .from('promises')
+  async triggerReminderForLoop(loopId: string): Promise<{ sent: boolean }> {
+    const { data: loop, error } = await supabase
+      .from('loops')
       .select('id, user_id, content, deadline, priority')
-      .eq('id', promiseId)
+      .eq('id', loopId)
       .single();
 
-    if (error || !promise) {
-      throw new Error(`Promise not found: ${promiseId}`);
+    if (error || !loop) {
+      throw new Error(`Loop not found: ${loopId}`);
     }
 
     return this.processReminderJob({
       data: {
-        promiseId: promise.id,
-        userId: promise.user_id,
-        content: promise.content,
-        deadline: promise.deadline,
-        priority: promise.priority ?? 'medium',
+        loopId: loop.id,
+        userId: loop.user_id,
+        content: loop.content,
+        deadline: loop.deadline,
+        priority: loop.priority ?? 'medium',
       },
     });
   }

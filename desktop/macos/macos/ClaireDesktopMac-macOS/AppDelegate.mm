@@ -198,7 +198,7 @@
   NSArray<NSArray<NSString *> *> *commands = @[
     @[ @"Home", @"home", @"1" ],
     @[ @"Inbox", @"inbox", @"2" ],
-    @[ @"Promises", @"promises", @"3" ],
+    @[ @"Loops", @"loops", @"3" ],
     @[ @"People", @"people", @"4" ],
     @[ @"Ask Claire", @"search", @"k" ],
     @[ @"New message", @"compose", @"n" ],

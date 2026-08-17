@@ -1,11 +1,11 @@
-export type DesktopCommand = 'home' | 'inbox' | 'promises' | 'people' | 'search' | 'settings' | 'compose' | 'compact';
+export type DesktopCommand = 'home' | 'inbox' | 'loops' | 'people' | 'search' | 'settings' | 'compose' | 'compact';
 
-export type DesktopDestination = 'Home' | 'Inbox' | 'Promises' | 'People' | 'Search' | 'Settings';
+export type DesktopDestination = 'Home' | 'Inbox' | 'Loops' | 'People' | 'Search' | 'Settings';
 
 const destinationByCommand: Record<DesktopCommand, DesktopDestination> = {
   home: 'Home',
   inbox: 'Inbox',
-  promises: 'Promises',
+  loops: 'Loops',
   people: 'People',
   search: 'Search',
   settings: 'Settings',
@@ -15,6 +15,10 @@ const destinationByCommand: Record<DesktopCommand, DesktopDestination> = {
 
 /** The stable bridge contract between native macOS shortcuts and the RN workspace. */
 export function destinationForDesktopCommand(command: DesktopCommand): DesktopDestination {
+  // A native binary built before the loops rename still sends "promises" for
+  // ⌘3. The native and JS halves can update independently, so accept the old
+  // string rather than letting the shortcut resolve to undefined.
+  if ((command as string) === 'promises') return 'Loops';
   return destinationByCommand[command];
 }
 

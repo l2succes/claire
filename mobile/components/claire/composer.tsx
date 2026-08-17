@@ -9,7 +9,7 @@ const CONTROL = 36;
 
 export const ASK_TOOLS = [
   { id: 'catch-me-up', label: 'Catch me up', description: 'Summarize recent conversations.', prompt: 'Catch me up on the conversations that need my attention.' },
-  { id: 'open-loops', label: 'Find open loops', description: 'Open loops and questions.', prompt: 'What promises, questions, or plans are still unresolved?' },
+  { id: 'open-loops', label: 'Find open loops', description: 'Open loops and questions.', prompt: 'What commitments, questions, or plans are still unresolved?' },
   { id: 'tone', label: 'Check the tone', description: 'Warm, direct, or playful.', prompt: 'What patterns do you notice in the tone of my recent conversations? Distinguish observations from inference.' },
   { id: 'find', label: 'Find something', description: 'Search messages and plans.', prompt: 'Help me find something I remember saying or receiving.' },
 ] as const;

@@ -105,7 +105,7 @@ export type DesktopPreferences = {
     quiet_hours_start?: string;
     quiet_hours_end?: string;
     notify_messages?: boolean;
-    notify_promises?: boolean;
+    notify_loops?: boolean;
     notify_ai_suggestions?: boolean;
     desktop_appearance?: { theme?: 'system' | 'light' | 'dark'; density?: 'comfortable' | 'compact'; scale?: number };
     desktop_shortcuts?: Record<string, string>;
@@ -144,12 +144,12 @@ export type DesktopPlatformConnect = {
   } | null;
 };
 
-export type DesktopPromise = {
+export type DesktopLoop = {
   id: string;
   content: string;
   deadline?: string | null;
   priority: 'low' | 'medium' | 'high';
-  status: 'pending' | 'completed' | 'cancelled' | 'overdue';
+  status: 'open' | 'waiting' | 'snoozed' | 'done' | 'dropped' | 'superseded';
   chat_id?: string | null;
   contact_name?: string | null;
   platform?: string | null;
@@ -157,8 +157,8 @@ export type DesktopPromise = {
   chat?: { name?: string | null; is_group?: boolean | null; platform?: string | null; contact?: { name?: string | null; inferred_name?: string | null; avatar_url?: string | null } | null } | null;
 };
 
-export type DesktopBootstrap = { cursor: number; chats: DesktopChat[]; promises: DesktopPromise[]; preferences: DesktopPreferences | null };
-export type DesktopSyncEvent = { cursor: number; entity_type: 'chat' | 'message' | 'promise' | 'contact' | 'preference'; entity_id: string; operation: 'upsert' | 'delete'; payload: Record<string, unknown> | null; created_at: string };
+export type DesktopBootstrap = { cursor: number; chats: DesktopChat[]; loops: DesktopLoop[]; preferences: DesktopPreferences | null };
+export type DesktopSyncEvent = { cursor: number; entity_type: 'chat' | 'message' | 'loop' | 'contact' | 'preference'; entity_id: string; operation: 'upsert' | 'delete'; payload: Record<string, unknown> | null; created_at: string };
 export type DesktopSyncResult = { events: DesktopSyncEvent[]; cursor: number; hasMore: boolean };
 
 export class ClaireApi {
@@ -232,21 +232,21 @@ export class ClaireApi {
     await this.request(`/notification-devices/${encodeURIComponent(deviceId)}`, { method: 'DELETE' });
   }
 
-  async getPromises(): Promise<DesktopPromise[]> {
-    const response = await this.request<{ data: DesktopPromise[] }>('/promises?limit=200');
+  async getLoops(): Promise<DesktopLoop[]> {
+    const response = await this.request<{ data: DesktopLoop[] }>('/loops?limit=200');
     return response.data;
   }
 
-  async updatePromise(id: string, updates: Pick<DesktopPromise, 'status'> | Partial<Pick<DesktopPromise, 'deadline' | 'priority'>>): Promise<DesktopPromise> {
-    const response = await this.request<{ data: DesktopPromise }>(`/promises/${encodeURIComponent(id)}`, {
+  async updateLoop(id: string, updates: Pick<DesktopLoop, 'status'> | Partial<Pick<DesktopLoop, 'deadline' | 'priority'>>): Promise<DesktopLoop> {
+    const response = await this.request<{ data: DesktopLoop }>(`/loops/${encodeURIComponent(id)}`, {
       method: 'PATCH',
       body: JSON.stringify(updates),
     });
     return response.data;
   }
 
-  async snoozePromise(id: string, snoozeUntil: string): Promise<DesktopPromise> {
-    const response = await this.request<{ data: DesktopPromise }>(`/promises/${encodeURIComponent(id)}/snooze`, {
+  async snoozeLoop(id: string, snoozeUntil: string): Promise<DesktopLoop> {
+    const response = await this.request<{ data: DesktopLoop }>(`/loops/${encodeURIComponent(id)}/snooze`, {
       method: 'POST',
       body: JSON.stringify({ snooze_until: snoozeUntil }),
     });

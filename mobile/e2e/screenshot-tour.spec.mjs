@@ -65,8 +65,8 @@ const MOCK_AI_SUGGESTIONS = [
   { id: 'sug-2', message_id: 'chatmsg-1', response_text: 'Perfect, thank you for the update.', confidence: 0.81, is_selected: false, feedback: null },
 ];
 
-const MOCK_PROMISES = [
-  { id: 'promise-1', user_id: MOCK_USER_ID, message_id: 'chatmsg-1', chat_id: 'mock-chat-wa-alice', promise_text: "I'll send you the report by Friday", due_date: new Date(Date.now() + 86400_000 * 3).toISOString(), status: 'open', platform: 'whatsapp', contact_name: 'Alice (WA)', created_at: new Date(Date.now() - 3700_000).toISOString() },
+const MOCK_LOOPS = [
+  { id: 'loop-1', user_id: MOCK_USER_ID, message_id: 'chatmsg-1', chat_id: 'mock-chat-wa-alice', content: "I'll send you the report by Friday", due_date: new Date(Date.now() + 86400_000 * 3).toISOString(), status: 'open', platform: 'whatsapp', contact_name: 'Alice (WA)', created_at: new Date(Date.now() - 3700_000).toISOString() },
 ];
 
 const MOCK_SMART_CARDS = [
@@ -96,9 +96,9 @@ async function mockBackend(page) {
     } else if (url.includes('/ai_suggestions')) {
       if (method === 'PATCH') await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
       else await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_AI_SUGGESTIONS) });
-    } else if (url.includes('/promises')) {
+    } else if (url.includes('/loops')) {
       if (method === 'HEAD') await route.fulfill({ status: 200, headers: { 'Content-Range': '0-0/1' }, body: '' });
-      else await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_PROMISES) });
+      else await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_LOOPS) });
     } else if (url.includes('/chats')) {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_CHATS[0]) });
     } else if (url.includes('/platform_sessions')) {
@@ -115,7 +115,7 @@ async function mockBackend(page) {
   await page.route('**/platforms/**', r => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ sessions: MOCK_PLATFORM_SESSIONS }) }));
   await page.route('**/messages/send**', r => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true }) }));
   await page.route('**/messages/*/snooze**', r => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true }) }));
-  await page.route('**/preferences**', r => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data: { tone: 'friendly', response_style: 'concise', language: 'en', notification_enabled: true, preferences: { quiet_hours_enabled: false, quiet_hours_start: '22:00', quiet_hours_end: '08:00', notify_messages: true, notify_promises: true, notify_ai_suggestions: false } } }) }));
+  await page.route('**/preferences**', r => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data: { tone: 'friendly', response_style: 'concise', language: 'en', notification_enabled: true, preferences: { quiet_hours_enabled: false, quiet_hours_start: '22:00', quiet_hours_end: '08:00', notify_messages: true, notify_loops: true, notify_ai_suggestions: false } } }) }));
   await page.route('**/ai/morning-brief**', r => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data: MOCK_MORNING_BRIEF }) }));
   await page.route('**/ai/group-summary/**', r => r.fulfill({ status: 200, contentType: 'application/json', body: '{}' }));
   await page.route('**/ai/responses/**', r => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true }) }));
@@ -204,7 +204,7 @@ test.describe('Visual tour', () => {
     await page.screenshot({ path: `${SCREENSHOTS_DIR}/06-chat-composer-filled.png` });
   });
 
-  test('07 — promises screen', async ({ page }) => {
+  test('07 — loops screen', async ({ page }) => {
     await signIn(page);
     await expect(page.getByTestId('messages-screen')).toBeVisible({ timeout: 10_000 });
     // Disable pointer-events on the error-toast overlay so tab clicks go through
@@ -212,10 +212,10 @@ test.describe('Visual tour', () => {
       const el = document.getElementById('error-toast');
       if (el) el.style.pointerEvents = 'none';
     });
-    await page.getByTestId('tab-promises').click();
-    await expect(page.getByTestId('promises-screen')).toBeVisible({ timeout: 10_000 });
+    await page.getByTestId('tab-loops').click();
+    await expect(page.getByTestId('loops-screen')).toBeVisible({ timeout: 10_000 });
     await page.waitForTimeout(500);
-    await page.screenshot({ path: `${SCREENSHOTS_DIR}/07-promises.png` });
+    await page.screenshot({ path: `${SCREENSHOTS_DIR}/07-loops.png` });
   });
 
   test('08 — settings screen', async ({ page }) => {

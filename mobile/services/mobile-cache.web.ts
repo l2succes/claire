@@ -17,7 +17,7 @@ export type CachedMessage = {
 export type MobileCacheSnapshot = {
   chats: CachedChat[];
   messages: CachedMessage[];
-  promises: Record<string, unknown>[];
+  loops: Record<string, unknown>[];
   preferences: Record<string, unknown> | null;
   cursor: number | null;
   fullHistoryEnabled: boolean;
@@ -27,7 +27,7 @@ export type MobileCacheSnapshot = {
 const emptySnapshot = (): MobileCacheSnapshot => ({
   chats: [],
   messages: [],
-  promises: [],
+  loops: [],
   preferences: null,
   cursor: null,
   fullHistoryEnabled: false,
@@ -52,7 +52,7 @@ export async function oldestCachedMessage(_userId: string, _chatId: string): Pro
   return null;
 }
 
-export async function cacheBootstrap(_userId: string, _bootstrap: { cursor: number; chats: CachedChat[]; promises: Record<string, unknown>[]; preferences: Record<string, unknown> | null }): Promise<void> {}
+export async function cacheBootstrap(_userId: string, _bootstrap: { cursor: number; chats: CachedChat[]; loops: Record<string, unknown>[]; preferences: Record<string, unknown> | null }): Promise<void> {}
 
 export async function applyMobileSyncEvents(_userId: string, _events: unknown[], _cursor: number): Promise<void> {}
 

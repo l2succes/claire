@@ -10,7 +10,7 @@ import { supabase } from '../../services/supabase';
 // 'custom' = floating Claire bar. 'liquid-glass' = system NativeTabs on iOS.
 export const TAB_BAR_STYLE: 'custom' | 'liquid-glass' = 'custom';
 
-function useOpenPromiseCount() {
+function useOpenLoopCount() {
   const user = useAuthStore((state) => state.user);
   const [count, setCount] = useState<number | undefined>(undefined);
 
@@ -20,7 +20,7 @@ function useOpenPromiseCount() {
 
     const fetch = async () => {
       const { count: nextCount } = await supabase
-        .from('promises')
+        .from('loops')
         .select('id', { count: 'exact', head: true })
         .eq('user_id', user.id)
         .in('status', ['pending', 'open']);
@@ -29,8 +29,8 @@ function useOpenPromiseCount() {
 
     void fetch();
     const subscription = supabase
-      .channel(`promises-badge-${user.id}-${Math.random().toString(36).slice(2, 10)}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'promises', filter: `user_id=eq.${user.id}` }, () => void fetch())
+      .channel(`loops-badge-${user.id}-${Math.random().toString(36).slice(2, 10)}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'loops', filter: `user_id=eq.${user.id}` }, () => void fetch())
       .subscribe();
 
     return () => {
@@ -44,14 +44,14 @@ function useOpenPromiseCount() {
 
 export default function TabLayout() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  const openPromiseCount = useOpenPromiseCount();
+  const openLoopCount = useOpenLoopCount();
 
   if (!isAuthenticated) {
     return <Redirect href="/(auth)/login" />;
   }
 
   if (TAB_BAR_STYLE === 'liquid-glass' && Platform.OS === 'ios') {
-    return <LiquidGlassTabs promiseCount={openPromiseCount} />;
+    return <LiquidGlassTabs loopCount={openLoopCount} />;
   }
 
   return (
@@ -69,10 +69,10 @@ export default function TabLayout() {
       <Tabs.Screen name="contacts" options={{ href: null }} />
       <Tabs.Screen name="ask-claire" options={{ title: 'Ask Claire' }} />
       <Tabs.Screen
-        name="promises"
+        name="loops"
         options={{
           title: 'Loops',
-          tabBarBadge: openPromiseCount && openPromiseCount > 0 ? (openPromiseCount > 99 ? '99+' : openPromiseCount) : undefined,
+          tabBarBadge: openLoopCount && openLoopCount > 0 ? (openLoopCount > 99 ? '99+' : openLoopCount) : undefined,
         }}
       />
       <Tabs.Screen name="search" options={{ href: null }} />

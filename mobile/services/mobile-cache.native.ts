@@ -5,7 +5,7 @@ export type CachedMessage = { id: string; chat_id: string; timestamp: string; [k
 export type MobileCacheSnapshot = {
   cursor: number;
   chats: CachedChat[];
-  promises: Record<string, unknown>[];
+  loops: Record<string, unknown>[];
   preferences: Record<string, unknown> | null;
   lastSyncAt: string | null;
   fullHistoryEnabled: boolean;
@@ -13,7 +13,7 @@ export type MobileCacheSnapshot = {
 
 type SyncEvent = {
   cursor: number;
-  entity_type: 'chat' | 'message' | 'promise' | 'contact' | 'preference';
+  entity_type: 'chat' | 'message' | 'loop' | 'contact' | 'preference';
   entity_id: string;
   operation: 'upsert' | 'delete';
   payload: Record<string, unknown> | null;
@@ -26,7 +26,7 @@ const databases = new Map<string, any>();
 const emptySnapshot = (): MobileCacheSnapshot => ({
   cursor: 0,
   chats: [],
-  promises: [],
+  loops: [],
   preferences: null,
   lastSyncAt: null,
   fullHistoryEnabled: false,
@@ -85,7 +85,7 @@ async function database(userId: string): Promise<any | null> {
       CREATE TABLE IF NOT EXISTS cache_messages (id TEXT PRIMARY KEY NOT NULL, chat_id TEXT NOT NULL, timestamp TEXT NOT NULL, payload TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS idx_cache_messages_chat_timestamp ON cache_messages(chat_id, timestamp DESC, id DESC);
       CREATE TABLE IF NOT EXISTS cache_contacts (id TEXT PRIMARY KEY NOT NULL, payload TEXT NOT NULL, updated_at TEXT NOT NULL);
-      CREATE TABLE IF NOT EXISTS cache_promises (id TEXT PRIMARY KEY NOT NULL, payload TEXT NOT NULL, updated_at TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS cache_loops (id TEXT PRIMARY KEY NOT NULL, payload TEXT NOT NULL, updated_at TEXT NOT NULL);
     `);
     return db;
   };
@@ -147,16 +147,16 @@ export async function hydrateMobileCache(userId: string): Promise<MobileCacheSna
   if (!isNativeMobile) return memory.get(userId) || emptySnapshot();
   const db = await database(userId);
   if (!db) return emptySnapshot();
-  const [cursor, fullHistory, lastSyncAt, chats, promises, preferences] = await Promise.all([
+  const [cursor, fullHistory, lastSyncAt, chats, loops, preferences] = await Promise.all([
     meta(db, 'cursor', '0'), meta(db, 'full_history_enabled', 'false'), meta(db, 'last_sync_at', ''),
     db.getAllAsync('SELECT payload FROM cache_chats ORDER BY json_extract(payload, "$.last_message_at") DESC') as Promise<Array<{ payload: string }>>,
-    db.getAllAsync('SELECT payload FROM cache_promises') as Promise<Array<{ payload: string }>>,
+    db.getAllAsync('SELECT payload FROM cache_loops') as Promise<Array<{ payload: string }>>,
     db.getFirstAsync('SELECT value FROM cache_meta WHERE key = "preferences"') as Promise<{ value: string } | null>,
   ]);
   const snapshot: MobileCacheSnapshot = {
     cursor: Number(cursor) || 0,
     chats: chats.map(row => JSON.parse(row.payload) as CachedChat),
-    promises: promises.map(row => JSON.parse(row.payload) as Record<string, unknown>),
+    loops: loops.map(row => JSON.parse(row.payload) as Record<string, unknown>),
     preferences: preferences?.value ? JSON.parse(preferences.value) as Record<string, unknown> : null,
     lastSyncAt: lastSyncAt || null,
     fullHistoryEnabled: fullHistory === 'true',
@@ -189,7 +189,7 @@ export async function oldestCachedMessage(userId: string, chatId: string): Promi
   return (await db.getFirstAsync('SELECT timestamp, id FROM cache_messages WHERE chat_id = ? ORDER BY timestamp ASC, id ASC LIMIT 1', chatId) as { timestamp: string; id: string } | null) || null;
 }
 
-export async function cacheBootstrap(userId: string, bootstrap: { cursor: number; chats: CachedChat[]; promises: Record<string, unknown>[]; preferences: Record<string, unknown> | null }): Promise<void> {
+export async function cacheBootstrap(userId: string, bootstrap: { cursor: number; chats: CachedChat[]; loops: Record<string, unknown>[]; preferences: Record<string, unknown> | null }): Promise<void> {
   if (!isNativeMobile) return;
   const db = await database(userId);
   if (!db) return;
@@ -198,7 +198,7 @@ export async function cacheBootstrap(userId: string, bootstrap: { cursor: number
     const latest = chat.latest_message;
     if (latest && typeof latest.id === 'string') await upsert(db, 'cache_messages', { ...latest, chat_id: latest.chat_id || chat.id });
   }
-  for (const promise of bootstrap.promises) await upsert(db, 'cache_promises', promise);
+  for (const loop of bootstrap.loops) await upsert(db, 'cache_loops', loop);
   await setMeta(db, 'cursor', String(bootstrap.cursor));
   await setMeta(db, 'last_sync_at', new Date().toISOString());
   await setMeta(db, 'preferences', JSON.stringify(bootstrap.preferences));
@@ -212,7 +212,7 @@ export async function applyMobileSyncEvents(userId: string, events: SyncEvent[],
   for (const event of events) {
     const table = event.entity_type === 'chat' ? 'cache_chats'
       : event.entity_type === 'message' ? 'cache_messages'
-        : event.entity_type === 'promise' ? 'cache_promises'
+        : event.entity_type === 'loop' ? 'cache_loops'
           : event.entity_type === 'contact' ? 'cache_contacts' : null;
     if (event.entity_type === 'preference' && event.operation === 'upsert') {
       await setMeta(db, 'preferences', JSON.stringify(event.payload));

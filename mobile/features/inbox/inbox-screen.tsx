@@ -71,7 +71,7 @@ function InboxConversationRow({ message, pinned, onPress, onLongPress }: { messa
 
 function HighlightCard({ message, onPress }: { message: InboxMessage; onPress: () => void }) {
   const name = message.chat_name || message.contact_name || 'Unknown conversation';
-  const reason = message.has_open_promise
+  const reason = message.has_open_loop
     ? 'Open loop'
     : message.has_ai_response
       ? 'Reply ready'
@@ -116,13 +116,12 @@ export function InboxScreen() {
     if (params.filter === 'needs_reply') setFilter('needs_reply');
   }, [params.filter]);
 
-  const promiseChats = useQuery({
-    queryKey: ['inbox-open-promises', user?.id],
+  const loopChats = useQuery({
+    queryKey: ['inbox-open-loops', user?.id],
     enabled: !!user?.id,
     staleTime: 60_000,
     queryFn: async () => {
-      // 'overdue' is a valid stored status; 'open' never has been.
-      const { data, error } = await supabase.from('promises').select('chat_id').eq('user_id', user!.id).in('status', ['pending', 'overdue']).not('chat_id', 'is', null);
+      const { data, error } = await supabase.from('loops').select('chat_id').eq('user_id', user!.id).in('status', ['open', 'waiting', 'snoozed']).not('chat_id', 'is', null);
       if (error) throw error;
       return new Set((data || []).map((row: DbRow) => row.chat_id as string));
     },
@@ -194,14 +193,14 @@ export function InboxScreen() {
   ];
   const platformFilters = platformFilterOptions.filter((entry, index, rows) => rows.findIndex(candidate => candidate.value === entry.value) === index);
   const inboxRows = useMemo(
-    () => visibleMessages.map(message => ({ ...message, has_open_promise: promiseChats.data?.has(message.chat_id) || message.has_open_promise })),
-    [promiseChats.data, visibleMessages],
+    () => visibleMessages.map(message => ({ ...message, has_open_loop: loopChats.data?.has(message.chat_id) || message.has_open_loop })),
+    [loopChats.data, visibleMessages],
   );
   const searching = query.trim().length > 0;
   const highlights = useMemo(() => searching ? [] : [...inboxRows]
     .map(message => ({
       message,
-      score: (message.has_open_promise ? 8 : 0) + (message.has_ai_response ? 5 : 0) + (message.unread_count ? Math.min(message.unread_count, 4) : 0) + (!message.from_me ? 1 : 0),
+      score: (message.has_open_loop ? 8 : 0) + (message.has_ai_response ? 5 : 0) + (message.unread_count ? Math.min(message.unread_count, 4) : 0) + (!message.from_me ? 1 : 0),
     }))
     .filter(candidate => candidate.score > 0)
     .sort((a, b) => b.score - a.score || new Date(b.message.timestamp).getTime() - new Date(a.message.timestamp).getTime())
@@ -211,11 +210,11 @@ export function InboxScreen() {
   const refresh = useCallback(async () => {
     setIsRefreshing(true);
     try {
-      await Promise.all([inbox.fetchMessages(), promiseChats.refetch()]);
+      await Promise.all([inbox.fetchMessages(), loopChats.refetch()]);
     } finally {
       setIsRefreshing(false);
     }
-  }, [inbox.fetchMessages, promiseChats]);
+  }, [inbox.fetchMessages, loopChats]);
 
   return (
     <View testID="messages-screen" style={{ flex: 1, backgroundColor: colors.paper }}>

@@ -15,11 +15,11 @@ import { ClaireMark } from './mark';
 const ICONS = {
   dashboard: HomeIcon,
   messages: ChatBubbleLeftRightIcon,
-  promises: CheckBadgeIcon,
+  loops: CheckBadgeIcon,
   more: EllipsisHorizontalIcon,
 } as const;
 
-const TAB_ORDER = ['dashboard', 'messages', 'ask-claire', 'promises', 'more'] as const;
+const TAB_ORDER = ['dashboard', 'messages', 'ask-claire', 'loops', 'more'] as const;
 
 export function ClaireTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const hidden = useChromeStore((current) => current.tabBarHidden);

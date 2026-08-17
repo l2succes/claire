@@ -304,7 +304,7 @@ export function AssistantScreen({ inTab = false }: { inTab?: boolean }) {
               onTagPerson={() => onQuestionChange(`${question}${question.endsWith('@') || question.endsWith('@ ') ? '' : question ? ' @' : '@'}`)}
               onFilterPlatform={() => void ask('Only use messages from one platform if the question names it. Otherwise say which platforms you searched.')}
               onFocusChat={() => onQuestionChange(`${question}${question.includes('@') ? '' : ' @'}`)}
-              onFindLoops={() => void ask('What promises, questions, or plans are still unresolved?')}
+              onFindLoops={() => void ask('What commitments, questions, or plans are still unresolved?')}
               onCheckTone={() => void ask('What patterns do you notice in the tone of my recent conversations? Distinguish observations from inference.')}
               onFindSomething={() => void ask('Help me find something I remember saying or receiving.')}
               onClear={() => setTurns([])}

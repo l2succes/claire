@@ -317,15 +317,23 @@ class PromiseDetector {
         user_id: userId,
         ...sourceContext,
         type: p.type,
+        // `kind` supersedes `type`; both are written until the legacy column is
+        // dropped so the API can read one field regardless of row age.
+        kind: p.type,
         content: p.text,
+        title: p.text.slice(0, 140),
+        state_summary: p.text,
         deadline: p.deadline ?? null,
+        deadline_precision: p.deadline ? 'day' : 'none',
         priority: p.priority,
         confidence: p.confidence,
         from_me: fromMe,
-        status: 'pending',
+        owner: fromMe ? 'me' : 'them',
+        status: 'open',
+        detector_version: 'legacy-single-message',
         created_at: new Date().toISOString(),
       }));
-      await supabase.from('promises').insert(records);
+      await supabase.from('loops').insert(records);
       logger.info(`Stored ${promises.length} promise(s) for message ${messageId}`);
     } catch (error) {
       logger.error('Error storing promises:', error);

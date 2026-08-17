@@ -24,7 +24,7 @@ import preferencesRoutes from './routes/preferences';
 import autoReplyRoutes from './routes/auto-reply';
 import { aiRateLimit, authRateLimit } from './middleware/rate-limit';
 import seedRoutes from './routes/seed';
-import promiseRoutes from './routes/promises';
+import loopRoutes from './routes/loops';
 import pushTokenRoutes from './routes/push-tokens';
 import notificationDeviceRoutes from './routes/notification-devices';
 import contactRoutes from './routes/contacts';
@@ -103,7 +103,7 @@ app.use('/conversations', conversationRoutes);
 app.use('/preferences', preferencesRoutes);
 // Seed/reset route — only functional when MOCK_BRIDGE=true (guarded inside route)
 app.use('/seed', seedRoutes);
-app.use('/promises', promiseRoutes);
+app.use('/loops', loopRoutes);
 app.use('/push-tokens', pushTokenRoutes);
 app.use('/notification-devices', notificationDeviceRoutes);
 app.use('/contacts', contactRoutes);
@@ -524,12 +524,12 @@ async function initializePlatforms() {
             .catch((err) => logger.debug('Voice profile refresh skipped:', (err as Error).message));
         }
 
-        // Detect and persist promises (fire-and-forget, both inbound and outbound).
+        // Detect and persist loops (fire-and-forget, both inbound and outbound).
         // Backfill is excluded: history replays would re-run detection over every
         // archived message, which is both expensive and produces stale loops.
         if (savedMsg?.id && !isBackfill && message.content?.trim()) {
           promiseDetector.detectPromises(savedMsg.id, message.content, message.userId, message.isFromMe)
-            .catch((err) => logger.debug('Promise detection skipped:', (err as Error).message));
+            .catch((err) => logger.debug('Loop detection skipped:', (err as Error).message));
         }
 
         // Evaluate auto-reply rules for incoming messages (fire-and-forget)
@@ -588,7 +588,7 @@ const serverReady = ensureCompanionSchema().then(() => app.listen(PORT, async ()
   // Start session monitor
   sessionMonitor.start();
 
-  // Start promise reminder scheduler
+  // Start loop reminder scheduler
   reminderScheduler.start();
 
   // Initialize platforms

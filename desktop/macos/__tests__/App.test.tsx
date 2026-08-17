@@ -36,7 +36,9 @@ test('background message refreshes preserve loaded history and replace stale row
 test('native desktop commands have stable workspace destinations', () => {
   expect(destinationForDesktopCommand('home')).toBe('Home');
   expect(destinationForDesktopCommand('inbox')).toBe('Inbox');
-  expect(destinationForDesktopCommand('promises')).toBe('Promises');
+  expect(destinationForDesktopCommand('loops')).toBe('Loops');
+  // A native binary built before the rename still sends the old command.
+  expect(destinationForDesktopCommand('promises' as never)).toBe('Loops');
   expect(destinationForDesktopCommand('people')).toBe('People');
   expect(destinationForDesktopCommand('search')).toBe('Search');
   expect(destinationForDesktopCommand('settings')).toBe('Settings');

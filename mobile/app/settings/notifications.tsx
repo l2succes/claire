@@ -25,7 +25,7 @@ interface NotificationPrefs {
   quiet_hours_start: string; // 'HH:MM'
   quiet_hours_end: string;   // 'HH:MM'
   notify_messages: boolean;
-  notify_promises: boolean;
+  notify_loops: boolean;
   notify_ai_suggestions: boolean;
 }
 
@@ -35,7 +35,7 @@ const DEFAULTS: NotificationPrefs = {
   quiet_hours_start: '22:00',
   quiet_hours_end: '08:00',
   notify_messages: true,
-  notify_promises: true,
+  notify_loops: true,
   notify_ai_suggestions: false,
 };
 
@@ -66,7 +66,7 @@ async function fetchNotificationPrefs(token: string): Promise<NotificationPrefs>
   if (typeof extra.quiet_hours_start === 'string') prefs.quiet_hours_start = extra.quiet_hours_start;
   if (typeof extra.quiet_hours_end === 'string') prefs.quiet_hours_end = extra.quiet_hours_end;
   if (typeof extra.notify_messages === 'boolean') prefs.notify_messages = extra.notify_messages;
-  if (typeof extra.notify_promises === 'boolean') prefs.notify_promises = extra.notify_promises;
+  if (typeof extra.notify_loops === 'boolean') prefs.notify_loops = extra.notify_loops;
   if (typeof extra.notify_ai_suggestions === 'boolean') prefs.notify_ai_suggestions = extra.notify_ai_suggestions;
   return { ...DEFAULTS, ...prefs };
 }
@@ -85,7 +85,7 @@ async function saveNotificationPrefs(token: string, prefs: NotificationPrefs): P
         quiet_hours_start: prefs.quiet_hours_start,
         quiet_hours_end: prefs.quiet_hours_end,
         notify_messages: prefs.notify_messages,
-        notify_promises: prefs.notify_promises,
+        notify_loops: prefs.notify_loops,
         notify_ai_suggestions: prefs.notify_ai_suggestions,
       },
     }),
@@ -321,9 +321,9 @@ export default function NotificationsSettingsScreen() {
         )}
         <ToggleRow
           label="Loop reminders"
-          value={prefs.notify_promises}
-          onValueChange={(v) => update({ notify_promises: v })}
-          testID="notif-toggle-promises"
+          value={prefs.notify_loops}
+          onValueChange={(v) => update({ notify_loops: v })}
+          testID="notif-toggle-loops"
           disabled={dndActive}
         />
         <ToggleRow

@@ -537,7 +537,7 @@ RCT_EXPORT_MODULE(ClaireCompanion)
       NSString *command = nil;
       if ([key isEqualToString:@"1"]) command = @"home";
       else if ([key isEqualToString:@"2"]) command = @"inbox";
-      else if ([key isEqualToString:@"3"]) command = @"promises";
+      else if ([key isEqualToString:@"3"]) command = @"loops";
       else if ([key isEqualToString:@"4"]) command = @"people";
       else if ([key isEqualToString:@"k"]) command = @"search";
       else if ([key isEqualToString:@"n"]) command = @"compose";

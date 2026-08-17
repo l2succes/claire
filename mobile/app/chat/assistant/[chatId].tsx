@@ -19,7 +19,7 @@ type QuickAction = {
 
 const quickActions: QuickAction[] = [
   { label: 'Catch me up', description: 'Summarize the conversation.', icon: List, prompt: 'Catch me up on this conversation. Keep it concise and cite the important moments.' },
-  { label: 'Find open loops', description: 'Open loops and questions.', icon: ArrowUpRight, prompt: 'What promises, questions, or open loops are still unresolved in this conversation?' },
+  { label: 'Find open loops', description: 'Open loops and questions.', icon: ArrowUpRight, prompt: 'What commitments, questions, or open loops are still unresolved in this conversation?' },
   { label: 'Check the tone', description: 'Warm, direct, or playful.', icon: Smile, prompt: 'What is the tone of this conversation lately? Separate observations from inference and suggest a constructive next step.' },
   { label: 'Find something', description: 'Search just this chat.', icon: Search },
 ];

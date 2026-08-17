@@ -1,11 +1,11 @@
-import type { DesktopChat, DesktopMessage, DesktopPreferences, DesktopPromise } from './claire-api';
+import type { DesktopChat, DesktopMessage, DesktopPreferences, DesktopLoop } from './claire-api';
 import { companionBridge } from '../native/CompanionBridge';
 
 export type DesktopCacheSnapshot = {
-  version: 1;
+  version: 2;
   cursor: number;
   chats: DesktopChat[];
-  promises: DesktopPromise[];
+  loops: DesktopLoop[];
   preferences: DesktopPreferences | null;
   timelines: Record<string, DesktopMessage[]>;
   lastChatId: string | null;
@@ -13,7 +13,7 @@ export type DesktopCacheSnapshot = {
   savedAt: string;
 };
 
-const emptySnapshot = (): DesktopCacheSnapshot => ({ version: 1, cursor: 0, chats: [], promises: [], preferences: null, timelines: {}, lastChatId: null, fullHistoryEnabled: false, savedAt: new Date(0).toISOString() });
+const emptySnapshot = (): DesktopCacheSnapshot => ({ version: 2, cursor: 0, chats: [], loops: [], preferences: null, timelines: {}, lastChatId: null, fullHistoryEnabled: false, savedAt: new Date(0).toISOString() });
 
 /**
  * The native bridge stores this one snapshot in SQLCipher. Keeping the
@@ -29,7 +29,11 @@ export class DesktopCache {
       const raw = await companionBridge.readEncryptedCache(userId);
       if (!raw) return this.memory;
       const parsed = JSON.parse(raw) as Partial<DesktopCacheSnapshot>;
-      if (parsed.version !== 1 || !Array.isArray(parsed.chats) || !parsed.timelines) return this.memory;
+      // Bumped to 2 with the loops rename. A v1 snapshot uses the old key name
+      // and status vocabulary, so it is discarded rather than migrated —
+      // without this an existing install renders an empty Loops pane against
+      // stale data and reports no error.
+      if (parsed.version !== 2 || !Array.isArray(parsed.chats) || !parsed.timelines) return this.memory;
       this.memory = { ...emptySnapshot(), ...parsed, timelines: parsed.timelines || {} };
     } catch {
       // The first debug build before pod install deliberately remains memory

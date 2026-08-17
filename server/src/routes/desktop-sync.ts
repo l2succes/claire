@@ -21,14 +21,14 @@ const syncSchema = z.object({
 router.get('/bootstrap', requireAuth, async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id as string;
-    const [chatsResult, promisesResult, preferencesResult, cursorResult] = await Promise.all([
+    const [chatsResult, loopsResult, preferencesResult, cursorResult] = await Promise.all([
       supabase.from('chats').select('*, contact:contacts(*)').eq('user_id', userId).order('last_message_at', { ascending: false, nullsFirst: false }),
-      supabase.from('promises').select('*, contact:contacts(*), chat:chats(*)').eq('user_id', userId).in('status', ['pending', 'overdue']).order('updated_at', { ascending: false }).limit(200),
+      supabase.from('loops').select('*, contact:contacts(*), chat:chats(*)').eq('user_id', userId).in('status', ['open', 'waiting', 'snoozed']).order('updated_at', { ascending: false }).limit(200),
       supabase.from('user_preferences').select('*').eq('user_id', userId).maybeSingle(),
       supabase.from('desktop_sync_events').select('cursor').eq('user_id', userId).order('cursor', { ascending: false }).limit(1).maybeSingle(),
     ]);
     if (chatsResult.error) throw chatsResult.error;
-    if (promisesResult.error) throw promisesResult.error;
+    if (loopsResult.error) throw loopsResult.error;
     if (preferencesResult.error) throw preferencesResult.error;
     if (cursorResult.error) throw cursorResult.error;
 
@@ -49,7 +49,7 @@ router.get('/bootstrap', requireAuth, async (req: Request, res: Response) => {
     res.json({
       cursor: cursorResult.data?.cursor || 0,
       chats: chats.map((chat: DbRow) => ({ ...chat, latest_message: latestByChat.get(chat.id) || null })),
-      promises: promisesResult.data || [],
+      loops: loopsResult.data || [],
       preferences: preferencesResult.data || null,
     });
   } catch (error) {

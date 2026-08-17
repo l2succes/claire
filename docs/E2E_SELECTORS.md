@@ -71,23 +71,26 @@ All stable `testID` values (rendered as `data-testid` on web via React Native We
 | `contacts-list` | Contacts `FlatList` |
 | `contacts-empty` | Empty state `View` |
 
-### Promises (`/(tabs)/promises`)
+### Loops (`/(tabs)/loops`)
+
+Verified against `mobile/features/loops/loops-screen.tsx`.
 
 | Selector | Element |
 |---|---|
-| `promises-screen` | Root `ScrollView` |
-| `promises-empty` | Empty state `View` (shown when no promises exist) |
-| `promises-list` | Promises list (added by #18) |
-| `promise-item-<id>` | Individual promise row (added by #18) |
-| `promise-complete-<id>` | Mark-complete button (added by #18) |
-| `promise-snooze-<id>` | Snooze button (added by #18) |
-| `promise-source-<id>` | Source chat link button (added by #18) |
+| `loops-screen` | Root `View` |
+| `loops-list` | Loops `FlatList` |
+| `loops-add` | Add-loop button in the header |
+| `loops-tab-open` | "Open" filter chip |
+| `loops-tab-done` | "Completed" filter chip |
+| `loops-tab-waiting` | "I'm waiting" filter chip |
+| `loop-item-<id>` | Individual loop row |
+| `loop-toggle-<id>` | Complete/reopen checkbox on a loop row |
 
-### Messages / Inbox — promise badge (#19)
+### Messages / Inbox — loop badge
 
 | Selector | Element |
 |---|---|
-| `message-card-promise-badge-<id>` | Amber "Promise" badge on a `MessageCard` row when the chat has ≥1 open promise |
+| `message-card-loop-badge-<id>` | "OPEN LOOP" badge on a `MessageCard` row when the chat has at least one open loop |
 
 ### Settings (`/(tabs)/settings`)
 

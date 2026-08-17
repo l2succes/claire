@@ -17,7 +17,7 @@ export interface InboxMessage {
   status?: 'sent' | 'delivered' | 'read' | 'pending';
   unread_count?: number;
   has_ai_response?: boolean;
-  has_open_promise?: boolean;
+  has_open_loop?: boolean;
   chat_id: string;
   contact_phone?: string;
   platform?: Platform;

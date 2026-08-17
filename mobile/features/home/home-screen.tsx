@@ -31,7 +31,7 @@ interface MorningBriefData {
   urgent_messages: UrgentMessage[];
 }
 
-interface BriefPromise {
+interface BriefLoop {
   id: string;
   content: string;
   deadline?: string | null;
@@ -68,13 +68,13 @@ export function HomeScreen() {
     staleTime: 60_000,
     queryFn: () => authJson<MorningBriefData>('/ai/morning-brief'),
   });
-  const promises = useQuery({
-    queryKey: ['mobile-home-promises', user?.id],
+  const loops = useQuery({
+    queryKey: ['mobile-home-loops', user?.id],
     enabled: !!user?.id,
     staleTime: 60_000,
     // The Home brief includes overdue commitments too. The previous pending-only
     // request made a real overdue queue disappear from this screen.
-    queryFn: () => authJson<BriefPromise[]>('/promises?limit=20'),
+    queryFn: () => authJson<BriefLoop[]>('/loops?limit=20'),
   });
 
   const firstName = user?.name?.trim().split(/\s+/)[0] || user?.email?.split('@')[0] || 'there';
@@ -100,8 +100,8 @@ export function HomeScreen() {
   // canonical on-device. Falling back here keeps Home useful during a deploy,
   // while offline after cached data loads, or when AI is unavailable.
   const urgent = brief.data?.urgent_messages?.length ? brief.data.urgent_messages : inboxUrgent;
-  const openPromises = (promises.data ?? []).filter(promise => ['pending', 'overdue'].includes(promise.status));
-  const actionCount = urgent.length + openPromises.length;
+  const openLoops = (loops.data ?? []).filter(loop => ['open', 'waiting', 'snoozed'].includes(loop.status));
+  const actionCount = urgent.length + openLoops.length;
   const defaultBrief = actionCount
     ? `${actionCount} item${actionCount === 1 ? '' : 's'} need${actionCount === 1 ? 's' : ''} your attention${urgent[0] ? ` — starting with ${urgent[0].contact_name || urgent[0].chat_name || 'a conversation'}.` : '.'}`
     : 'Your priorities will settle here as conversations sync.';
@@ -119,26 +119,26 @@ export function HomeScreen() {
       urgent: 'score' in message && typeof message.score === 'number' && message.score >= 70,
       onPress: () => router.push({ pathname: '/chat/[chatId]', params: { chatId: message.chat_id, contact_name: message.contact_name || '', chat_name: message.chat_name || '', platform: message.platform || '', is_group: message.is_group ? '1' : '0', highlightMessageId: message.id } }),
     }; }),
-    ...openPromises.slice(0, Math.max(0, 4 - Math.min(urgent.length, 3))).map(promise => ({
-      key: `promise-${promise.id}`,
-      title: promise.content,
-      subtitle: `Loop · ${promise.deadline ? `due ${new Date(promise.deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}` : 'open'}`,
+    ...openLoops.slice(0, Math.max(0, 4 - Math.min(urgent.length, 3))).map(loop => ({
+      key: `loop-${loop.id}`,
+      title: loop.content,
+      subtitle: `Loop · ${loop.deadline ? `due ${new Date(loop.deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}` : 'open'}`,
       platform: undefined,
-      time: promise.deadline ? formatInboxTimestamp(promise.deadline) : 'Now',
-      kind: 'promise' as const,
+      time: loop.deadline ? formatInboxTimestamp(loop.deadline) : 'Now',
+      kind: 'loop' as const,
       urgent: false,
-      onPress: () => promise.chat_id ? router.push({ pathname: '/chat/[chatId]', params: { chatId: promise.chat_id, chat_name: promise.chat?.name || '', platform: promise.chat?.platform || '', is_group: promise.chat?.is_group ? '1' : '0' } }) : router.push('/(tabs)/promises'),
+      onPress: () => loop.chat_id ? router.push({ pathname: '/chat/[chatId]', params: { chatId: loop.chat_id, chat_name: loop.chat?.name || '', platform: loop.chat?.platform || '', is_group: loop.chat?.is_group ? '1' : '0' } }) : router.push('/(tabs)/loops'),
     })),
-  ].slice(0, 3), [openPromises, urgent]);
+  ].slice(0, 3), [openLoops, urgent]);
 
   const refresh = useCallback(async () => {
     setIsRefreshing(true);
     try {
-      await Promise.all([brief.refetch(), promises.refetch(), inbox.fetchMessages()]);
+      await Promise.all([brief.refetch(), loops.refetch(), inbox.fetchMessages()]);
     } finally {
       setIsRefreshing(false);
     }
-  }, [brief, inbox, promises]);
+  }, [brief, inbox, loops]);
 
   return (
     <ScrollView
@@ -161,7 +161,7 @@ export function HomeScreen() {
       />
 
       <View style={{ paddingHorizontal: space[4], gap: space[4] }}>
-        {(brief.isLoading && inbox.loading) || promises.isLoading ? (
+        {(brief.isLoading && inbox.loading) || loops.isLoading ? (
           <HomeSkeleton />
         ) : (
           <>
@@ -189,8 +189,8 @@ export function HomeScreen() {
             {dayItems.map(item => (
               <Pressable key={item.key} onPress={item.onPress} style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1 })}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[3], minHeight: 82, paddingVertical: space[3], borderBottomWidth: 1, borderBottomColor: colors.neutral[200] }}>
-                  <View style={{ width: 48, height: 48, flexShrink: 0, borderRadius: 16, backgroundColor: item.kind === 'promise' ? colors.sky : item.urgent ? colors.blush : colors.sky, alignItems: 'center', justifyContent: 'center' }}>
-                    {item.kind === 'promise' ? <CheckCircle2 size={23} color={colors.ink} /> : item.urgent ? <AlertCircle size={23} color={colors.ink} /> : <MessageCircle size={22} color={colors.ink} />}
+                  <View style={{ width: 48, height: 48, flexShrink: 0, borderRadius: 16, backgroundColor: item.kind === 'loop' ? colors.sky : item.urgent ? colors.blush : colors.sky, alignItems: 'center', justifyContent: 'center' }}>
+                    {item.kind === 'loop' ? <CheckCircle2 size={23} color={colors.ink} /> : item.urgent ? <AlertCircle size={23} color={colors.ink} /> : <MessageCircle size={22} color={colors.ink} />}
                   </View>
                   <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
                     <Text selectable numberOfLines={1} style={{ ...mobileType.body, fontWeight: '800', color: colors.ink }}>{item.title}</Text>

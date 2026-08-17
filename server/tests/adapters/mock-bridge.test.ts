@@ -13,7 +13,7 @@ import {
   MOCK_CHATS,
   MOCK_CONTACTS,
   MOCK_CHAT_IDS,
-  PROMISE_MESSAGE_TEXT,
+  LOOP_MESSAGE_TEXT,
   FIXTURE_SUMMARY,
 } from '../../src/mock-fixtures';
 import { Platform, PlatformStatus, MessageContentType } from '../../src/adapters/types';
@@ -48,13 +48,13 @@ describe('mock-fixtures', () => {
   });
 
   it('has a promise-bearing message containing "Friday"', () => {
-    expect(PROMISE_MESSAGE_TEXT).toContain('Friday');
-    const promiseMsg = MOCK_MESSAGES.find(
+    expect(LOOP_MESSAGE_TEXT).toContain('Friday');
+    const loopMsg = MOCK_MESSAGES.find(
       (m) => m.platformMessageId === FIXTURE_SUMMARY.promiseMessageId
     );
-    expect(promiseMsg).toBeDefined();
-    expect(promiseMsg!.content).toBe(PROMISE_MESSAGE_TEXT);
-    expect(promiseMsg!.isFromMe).toBe(true);
+    expect(loopMsg).toBeDefined();
+    expect(loopMsg!.content).toBe(LOOP_MESSAGE_TEXT);
+    expect(loopMsg!.isFromMe).toBe(true);
   });
 
   it('has messages on all 3 platforms', () => {
