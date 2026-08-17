@@ -29,6 +29,7 @@
     "e2e:web": "bunx playwright test"
   },
   "dependencies": {
+    "@babel/runtime": "^7.28.0",
     "@claire/design-system": "file:../packages/design-system",
     "@expo/vector-icons": "^15.0.2",
     "@gluestack-ui/nativewind-utils": "^1.0.0",
@@ -46,6 +47,7 @@
     "clsx": "^2.1.0",
     "date-fns": "^4.1.0",
     "expo": "~55.0.0",
+    "expo-audio": "~55.0.16",
     "expo-auth-session": "~55.0.10",
     "expo-constants": "~55.0.9",
     "expo-crypto": "~55.0.10",
@@ -53,6 +55,8 @@
     "expo-device": "~55.0.10",
     "expo-font": "~55.0.4",
     "expo-image": "~55.0.6",
+    "expo-image-manipulator": "~55.0.19",
+    "expo-image-picker": "~55.0.22",
     "expo-linking": "~55.0.9",
     "expo-notifications": "~55.0.14",
     "expo-router": "~55.0.8",

@@ -19,6 +19,11 @@ import { Platform } from '../../types/platform';
 import { setActiveNotificationChat, syncNotificationBadge, updateNotificationPresence } from '../../services/notifications';
 import { colors, mobileType, radius, space } from '@claire/design-system';
 import { MobileAvatar, MobileIconButton } from '../../components/mobile/claire-mobile';
+import * as ImagePicker from 'expo-image-picker';
+import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
+import { Camera, Mic, Trash2 } from 'lucide-react-native';
+import { ChatAudioPlayer, VoiceRecorderPanel } from '../../components/chat-media';
+import type { OutgoingMediaUpload } from '../../services/platforms';
 
 interface ChatMessage {
   id: string;
@@ -30,7 +35,11 @@ interface ChatMessage {
   content_type?: string;
   media_url?: string;
   media_mime_type?: string;
+  platform_message_id?: string;
+  delivery_state?: 'sending' | 'failed';
 }
+
+const MAX_MEDIA_BYTES = 25 * 1024 * 1024;
 
 // An installed development client can lag behind the JavaScript bundle after a
 // new Expo native module is added. Keep the chat route loadable in that window:
@@ -134,6 +143,9 @@ export default function ChatScreen() {
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [inputText, setInputText] = useState('');
+  const [pendingMedia, setPendingMedia] = useState<OutgoingMediaUpload | null>(null);
+  const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
+  const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
   const [suggestionRefreshKey, setSuggestionRefreshKey] = useState(0);
   const [connectionRefreshing, setConnectionRefreshing] = useState(false);
   const platformChatIdRef = useRef<string | null>(null);
@@ -162,7 +174,7 @@ export default function ChatScreen() {
     try {
       const { data, error } = await supabase
         .from('messages')
-        .select('id, content, timestamp, from_me, contact_name, contact_phone, content_type, media_url, media_mime_type')
+        .select('id, content, timestamp, from_me, contact_name, contact_phone, content_type, media_url, media_mime_type, platform_message_id')
         .eq('chat_id', chatId)
         .eq('user_id', user.id)
         .order('timestamp', { ascending: true })
@@ -174,7 +186,7 @@ export default function ChatScreen() {
       if (highlightMessageId && !loadedMessages.some(message => message.id === highlightMessageId)) {
         const { data: highlightedMessage, error: highlightError } = await supabase
           .from('messages')
-          .select('id, content, timestamp, from_me, contact_name, contact_phone, content_type, media_url, media_mime_type')
+          .select('id, content, timestamp, from_me, contact_name, contact_phone, content_type, media_url, media_mime_type, platform_message_id')
           .eq('id', highlightMessageId)
           .eq('chat_id', chatId)
           .eq('user_id', user.id)
@@ -253,6 +265,14 @@ export default function ChatScreen() {
         (payload) => {
           const inserted = payload.new as ChatMessage;
           setMessages((prev) => {
+            const optimisticIndex = inserted.platform_message_id
+              ? prev.findIndex((message) => message.platform_message_id === inserted.platform_message_id)
+              : -1;
+            if (optimisticIndex >= 0) {
+              const next = [...prev];
+              next[optimisticIndex] = inserted;
+              return next;
+            }
             // Avoid duplicates (e.g. optimistic message already in list)
             if (prev.some((m) => m.id === inserted.id)) return prev;
             return [...prev, inserted];
@@ -304,9 +324,65 @@ export default function ChatScreen() {
     }
   }, [inputText, sendError]);
 
+  const preparePickedAsset = useCallback(async (asset: ImagePicker.ImagePickerAsset) => {
+    if (asset.fileSize && asset.fileSize > MAX_MEDIA_BYTES) {
+      throw new Error('Choose a photo or video that is 25 MiB or smaller.');
+    }
+    const isVideo = asset.type === 'video';
+    let uri = asset.uri;
+    let width = asset.width;
+    let height = asset.height;
+    let mimeType = asset.mimeType || (isVideo ? 'video/mp4' : 'image/jpeg');
+    let fileName = asset.fileName || `${isVideo ? 'video' : 'photo'}-${Date.now()}.${isVideo ? 'mp4' : 'jpg'}`;
+    let file = asset.file;
+
+    if (!isVideo && Math.max(width || 0, height || 0) > 4096) {
+      const scale = 4096 / Math.max(width, height);
+      const result = await manipulateAsync(uri, [{ resize: { width: Math.round(width * scale), height: Math.round(height * scale) } }], { compress: 0.85, format: SaveFormat.JPEG });
+      uri = result.uri;
+      width = result.width;
+      height = result.height;
+      mimeType = 'image/jpeg';
+      fileName = `photo-${Date.now()}.jpg`;
+      file = undefined;
+    }
+
+    setPendingMedia({
+      uri,
+      file,
+      fileName,
+      mimeType,
+      kind: isVideo ? 'video' : 'image',
+      width,
+      height,
+      durationMs: asset.duration || undefined,
+    });
+    setShowAttachmentMenu(false);
+    setShowVoiceRecorder(false);
+    setSendError(null);
+  }, []);
+
+  const pickMedia = useCallback(async (source: 'camera' | 'library') => {
+    try {
+      if (source === 'camera') {
+        const permission = await ImagePicker.requestCameraPermissionsAsync();
+        if (!permission.granted) throw new Error('Camera access is required to take a photo or video.');
+      } else {
+        const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!permission.granted) throw new Error('Photo library access is required to choose media.');
+      }
+      const result = source === 'camera'
+        ? await ImagePicker.launchCameraAsync({ mediaTypes: ['images', 'videos'], allowsEditing: false, quality: 0.85, videoExportPreset: ImagePicker.VideoExportPreset.Passthrough })
+        : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images', 'videos'], allowsMultipleSelection: false, allowsEditing: false, quality: 0.85, videoExportPreset: ImagePicker.VideoExportPreset.Passthrough });
+      if (!result.canceled && result.assets[0]) await preparePickedAsset(result.assets[0]);
+    } catch (error) {
+      setSendError(error instanceof Error ? error.message : 'Unable to choose media.');
+    }
+  }, [preparePickedAsset]);
+
   const handleSend = useCallback(async () => {
     const text = inputText.trim();
-    if (!text || !platform) {
+    if ((!text && !pendingMedia) || !platform) {
       setSendError('Unable to determine platform');
       return;
     }
@@ -329,19 +405,40 @@ export default function ChatScreen() {
     setSendError(null);
 
     // Optimistic update
+    const mediaToSend = pendingMedia;
     const optimistic: ChatMessage = {
       id: `optimistic-${Date.now()}`,
-      content: text,
+      content: mediaToSend?.kind === 'voice' ? 'Voice message' : text,
       timestamp: new Date().toISOString(),
       from_me: true,
+      content_type: mediaToSend?.kind === 'voice' ? 'audio' : mediaToSend?.kind,
+      media_url: mediaToSend?.uri,
+      media_mime_type: mediaToSend?.mimeType,
+      delivery_state: 'sending',
     };
     setMessages((prev) => [...prev, optimistic]);
-    setInputText('');
+    if (!mediaToSend || mediaToSend.kind !== 'voice') setInputText('');
+    setPendingMedia(null);
     setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
 
     setSending(true);
     try {
-      await platformsApi.sendMessage(platform as Platform, session.id, platformChatId, text);
+      if (mediaToSend) {
+        const response = await platformsApi.sendMedia(
+          platform as Platform,
+          session.id,
+          platformChatId,
+          mediaToSend,
+          mediaToSend.kind === 'voice' ? '' : text,
+        );
+        setMessages((prev) => prev.map((message) => message.id === optimistic.id ? {
+          ...message,
+          platform_message_id: response.message.platformMessageId,
+          delivery_state: undefined,
+        } : message));
+      } else {
+        await platformsApi.sendMessage(platform as Platform, session.id, platformChatId, text);
+      }
     } catch (err) {
       console.error('Send failed:', err);
 
@@ -354,11 +451,12 @@ export default function ChatScreen() {
 
       // Remove optimistic message and restore input
       setMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
-      setInputText(text);
+      if (!mediaToSend || mediaToSend.kind !== 'voice') setInputText(text);
+      setPendingMedia(mediaToSend);
     } finally {
       setSending(false);
     }
-  }, [fetchChatInfo, inputText, platform, connectedSessions]);
+  }, [fetchChatInfo, inputText, pendingMedia, platform, connectedSessions]);
 
   const isBridgeFailure = (content: string) =>
     content.startsWith('* Failed to bridge media') ||
@@ -404,7 +502,12 @@ export default function ChatScreen() {
       );
     }
 
-    if (type === 'audio') {
+    if ((type === 'audio' || type === 'voice') && item.media_url) {
+      const audioUri = normalizeMediaUrl(item.media_url);
+      if (audioUri) return <ChatAudioPlayer uri={audioUri} messageId={item.id} />;
+    }
+
+    if (type === 'audio' || type === 'voice') {
       return (
         <View testID={`media-audio-${item.id}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <Volume2 size={16} color={iconColor} />
@@ -600,11 +703,23 @@ export default function ChatScreen() {
         )}
 
         <View style={{ paddingHorizontal: space[3], paddingTop: space[2], paddingBottom: Math.max(insets.bottom, space[2]), borderTopWidth: 1, borderTopColor: colors.neutral[200], backgroundColor: colors.cream }}>
-          {!isConnected && platform ? <Pressable testID="chat-reconnect" accessibilityRole="button" onPress={() => router.push('/connections')} style={({ pressed }) => ({ minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space[2], borderRadius: 16, borderWidth: 1, borderColor: colors.warning, backgroundColor: pressed ? colors.warningSurface : colors.paper, opacity: connectionRefreshing ? 0.65 : 1 })}><Link2 size={18} color={colors.warning} /><Text maxFontSizeMultiplier={1} style={{ ...mobileType.bodySmall, fontWeight: '700', color: colors.warning }}>{connectionRefreshing ? 'Checking connection…' : `Reconnect ${platform}`}</Text></Pressable> : <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: space[2], padding: 7, borderWidth: 1, borderColor: colors.neutral[200], borderRadius: 18, backgroundColor: colors.paper, boxShadow: '0 5px 15px rgba(16,18,15,0.08)' }}>
-            <Pressable disabled accessibilityRole="button" accessibilityLabel="Attachments coming soon" style={{ width: 38, height: 38, alignItems: 'center', justifyContent: 'center', borderRadius: 12, backgroundColor: colors.neutral[100], opacity: 0.6 }}><Plus size={19} color={colors.neutral[400]} /></Pressable>
+          {!isConnected && platform ? <Pressable testID="chat-reconnect" accessibilityRole="button" onPress={() => router.push('/connections')} style={({ pressed }) => ({ minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space[2], borderRadius: 16, borderWidth: 1, borderColor: colors.warning, backgroundColor: pressed ? colors.warningSurface : colors.paper, opacity: connectionRefreshing ? 0.65 : 1 })}><Link2 size={18} color={colors.warning} /><Text maxFontSizeMultiplier={1} style={{ ...mobileType.bodySmall, fontWeight: '700', color: colors.warning }}>{connectionRefreshing ? 'Checking connection…' : `Reconnect ${platform}`}</Text></Pressable> : <View style={{ gap: space[2] }}>
+            {showAttachmentMenu ? <View testID="chat-attachment-menu" style={{ flexDirection: 'row', gap: space[2], padding: space[2], borderWidth: 1, borderColor: colors.neutral[200], borderRadius: radius.control, backgroundColor: colors.paper }}>
+              <Pressable accessibilityRole="button" accessibilityLabel="Take photo or video" onPress={() => void pickMedia('camera')} style={{ flex: 1, minHeight: 50, alignItems: 'center', justifyContent: 'center', gap: 4, borderRadius: radius.control, backgroundColor: colors.neutral[100] }}><Camera size={18} color={colors.ink} /><Text style={{ ...mobileType.label, color: colors.ink }}>Camera</Text></Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel="Choose photo or video" onPress={() => void pickMedia('library')} style={{ flex: 1, minHeight: 50, alignItems: 'center', justifyContent: 'center', gap: 4, borderRadius: radius.control, backgroundColor: colors.neutral[100] }}><ImageIcon size={18} color={colors.ink} /><Text style={{ ...mobileType.label, color: colors.ink }}>Library</Text></Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel="Record voice message" onPress={() => { setShowVoiceRecorder(true); setShowAttachmentMenu(false); }} style={{ flex: 1, minHeight: 50, alignItems: 'center', justifyContent: 'center', gap: 4, borderRadius: radius.control, backgroundColor: colors.neutral[100] }}><Mic size={18} color={colors.ink} /><Text style={{ ...mobileType.label, color: colors.ink }}>Voice</Text></Pressable>
+            </View> : null}
+            {showVoiceRecorder ? <VoiceRecorderPanel onCancel={() => setShowVoiceRecorder(false)} onReady={(media) => { setPendingMedia(media); setShowVoiceRecorder(false); }} /> : null}
+            {pendingMedia ? <View testID="chat-media-preview" style={{ minHeight: 70, flexDirection: 'row', alignItems: 'center', gap: space[3], padding: space[2], borderWidth: 1, borderColor: colors.ink, borderRadius: radius.control, backgroundColor: colors.sky }}>
+              {pendingMedia.kind === 'image' ? <Image source={{ uri: pendingMedia.uri }} style={{ width: 58, height: 58, borderRadius: 10 }} resizeMode="cover" /> : pendingMedia.kind === 'voice' ? <View style={{ flex: 1 }}><ChatAudioPlayer uri={pendingMedia.uri} messageId="pending-voice" /></View> : <View style={{ width: 58, height: 58, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.ink }}><Video size={22} color={colors.lime} /></View>}
+              {pendingMedia.kind !== 'voice' ? <View style={{ flex: 1, gap: 2 }}><Text numberOfLines={1} style={{ ...mobileType.bodySmall, fontWeight: '700', color: colors.ink }}>{pendingMedia.fileName}</Text><Text style={{ ...mobileType.label, color: colors.neutral[600] }}>{pendingMedia.kind === 'image' ? 'Photo' : 'Video'} ready to send</Text></View> : null}
+              <Pressable accessibilityRole="button" accessibilityLabel="Remove attachment" onPress={() => setPendingMedia(null)} style={{ width: 34, height: 34, alignItems: 'center', justifyContent: 'center' }}><Trash2 size={17} color={colors.neutral[600]} /></Pressable>
+            </View> : null}
+            <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: space[2], padding: 7, borderWidth: 1, borderColor: colors.neutral[200], borderRadius: 18, backgroundColor: colors.paper, boxShadow: '0 5px 15px rgba(16,18,15,0.08)' }}>
+            <Pressable disabled={sending || Boolean(pendingMedia)} onPress={() => setShowAttachmentMenu((shown) => !shown)} accessibilityRole="button" accessibilityLabel="Add attachment" style={{ width: 38, height: 38, alignItems: 'center', justifyContent: 'center', borderRadius: 12, backgroundColor: showAttachmentMenu ? colors.sky : colors.neutral[100], opacity: sending || pendingMedia ? 0.5 : 1 }}><Plus size={19} color={colors.ink} /></Pressable>
             <TextInput maxFontSizeMultiplier={1} style={{ flex: 1, minHeight: 40, maxHeight: 110, paddingHorizontal: space[2], paddingVertical: 9, ...mobileType.body, color: colors.ink }} placeholder="Write a message…" placeholderTextColor={colors.neutral[400]} value={inputText} onChangeText={setInputText} multiline blurOnSubmit={false} testID="chat-input" />
-            <Pressable onPress={() => void handleSend()} disabled={!inputText.trim() || sending} testID="chat-send-button" accessibilityRole="button" accessibilityLabel="Send message" style={({ pressed }) => ({ width: 40, height: 40, borderRadius: 13, justifyContent: 'center', alignItems: 'center', backgroundColor: inputText.trim() && !sending ? colors.ink : colors.neutral[200], opacity: pressed ? 0.72 : 1 })}>{sending ? <ActivityIndicator size="small" color={colors.lime} /> : <SendHorizonal size={18} color={inputText.trim() ? colors.lime : colors.neutral[400]} />}</Pressable>
-          </View>}
+            <Pressable onPress={() => void handleSend()} disabled={(!inputText.trim() && !pendingMedia) || sending} testID="chat-send-button" accessibilityRole="button" accessibilityLabel="Send message" style={({ pressed }) => ({ width: 40, height: 40, borderRadius: 13, justifyContent: 'center', alignItems: 'center', backgroundColor: (inputText.trim() || pendingMedia) && !sending ? colors.ink : colors.neutral[200], opacity: pressed ? 0.72 : 1 })}>{sending ? <ActivityIndicator size="small" color={colors.lime} /> : <SendHorizonal size={18} color={inputText.trim() || pendingMedia ? colors.lime : colors.neutral[400]} />}</Pressable>
+          </View></View>}
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>

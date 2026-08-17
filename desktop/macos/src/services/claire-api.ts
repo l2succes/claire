@@ -1,3 +1,5 @@
+import { companionBridge, type NativeOutgoingMedia } from '../native/CompanionBridge';
+
 export type DesktopChat = {
   id: string;
   name: string | null;
@@ -20,6 +22,7 @@ export type DesktopMessage = {
   media_url?: string | null;
   media_mime_type?: string | null;
   content_type?: string | null;
+  platform_message_id?: string | null;
   /** Desktop-only state for a message displayed before bridge sync confirms it. */
   delivery_state?: 'sending' | 'failed';
 };
@@ -380,6 +383,10 @@ export class ClaireApi {
       method: 'POST',
       body: JSON.stringify({ sessionId, chatId, content: message }),
     });
+  }
+
+  async sendMedia(platform: string, sessionId: string, chatId: string, media: NativeOutgoingMedia, caption = ''): Promise<{ platformMessageId?: string }> {
+    return companionBridge.uploadOutgoingMedia(this.baseUrl, this.accessToken, platform, sessionId, chatId, media.kind === 'voice' ? '' : caption.trim(), media);
   }
 
 }

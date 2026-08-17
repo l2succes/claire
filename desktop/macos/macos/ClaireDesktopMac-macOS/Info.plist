@@ -58,6 +58,8 @@
 	<string>Main</string>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>Claire sends messages you explicitly choose to send through Messages.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Claire uses the microphone when you record a voice message.</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 	<key>NSSupportsAutomaticTermination</key>

@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
+import { Readable } from 'node:stream';
 import * as Sentry from '@sentry/node';
 import { config, platformConfig, matrixConfig, mockBridgeConfig, serverConfig } from './config';
 import { initSentry } from './utils/sentry';
@@ -154,19 +155,31 @@ app.get('/media/:server/:mediaId', async (req, res) => {
   const { server, mediaId } = req.params;
   const url = `${matrixConfig.homeserverUrl}/_matrix/client/v1/media/download/${server}/${mediaId}`;
   try {
+    const range = req.header('range');
     const upstream = await fetch(url, {
-      headers: { Authorization: `Bearer ${matrixConfig.adminToken}` },
+      method: req.method === 'HEAD' ? 'HEAD' : 'GET',
+      headers: {
+        Authorization: `Bearer ${matrixConfig.adminToken}`,
+        ...(range ? { Range: range } : {}),
+      },
     });
     if (!upstream.ok) {
       return res.status(upstream.status).json({ error: 'Media not found' });
     }
-    const contentType = upstream.headers.get('content-type') || 'application/octet-stream';
-    res.setHeader('Content-Type', contentType);
+    res.status(upstream.status);
+    const forwardedHeaders = ['content-type', 'content-length', 'content-range', 'accept-ranges', 'etag', 'last-modified'];
+    for (const header of forwardedHeaders) {
+      const value = upstream.headers.get(header);
+      if (value) res.setHeader(header, value);
+    }
+    if (!upstream.headers.get('content-type')) res.setHeader('Content-Type', 'application/octet-stream');
+    if (!upstream.headers.get('accept-ranges')) res.setHeader('Accept-Ranges', 'bytes');
     // Matrix media IDs are immutable. Cache aggressively so scrolling an
     // inbox or reopening a chat does not re-download every attachment.
     res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-    const buffer = await upstream.arrayBuffer();
-    return res.send(Buffer.from(buffer));
+    if (req.method === 'HEAD' || !upstream.body) return res.end();
+    Readable.fromWeb(upstream.body as import('node:stream/web').ReadableStream).pipe(res);
+    return;
   } catch (err) {
     logger.error('Media proxy error:', err);
     return res.status(500).json({ error: 'Failed to fetch media' });

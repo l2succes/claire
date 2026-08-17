@@ -6,6 +6,7 @@
  */
 
 import axios, { AxiosError } from 'axios';
+import { fetch as expoFetch } from 'expo/fetch';
 import { supabase } from './supabase';
 import {
   Platform,
@@ -35,6 +36,17 @@ export interface PlatformDefinition {
   runtimeLabel: string;
   authSummary: string;
   detail: string;
+}
+
+export interface OutgoingMediaUpload {
+  uri: string;
+  file?: File;
+  fileName: string;
+  mimeType: string;
+  kind: 'image' | 'video' | 'voice';
+  width?: number;
+  height?: number;
+  durationMs?: number;
 }
 
 // Create axios instance with default config
@@ -207,6 +219,48 @@ export const platformsApi = {
       { sessionId, chatId, content, replyToMessageId }
     );
     return response.data;
+  },
+
+  async sendMedia(
+    platform: Platform,
+    sessionId: string,
+    chatId: string,
+    media: OutgoingMediaUpload,
+    content = '',
+    replyToMessageId?: string
+  ): Promise<{ success: boolean; message: { platformMessageId?: string; platformMetadata?: { mediaUrl?: string } } }> {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) throw new Error('You must be signed in to send media');
+
+    const form = new FormData();
+    form.append('sessionId', sessionId);
+    form.append('chatId', chatId);
+    form.append('mediaKind', media.kind);
+    if (content.trim()) form.append('content', content.trim());
+    if (replyToMessageId) form.append('replyToMessageId', replyToMessageId);
+    if (media.width !== undefined) form.append('width', String(media.width));
+    if (media.height !== undefined) form.append('height', String(media.height));
+    if (media.durationMs !== undefined) form.append('durationMs', String(media.durationMs));
+    if (media.file) {
+      form.append('media', media.file, media.fileName);
+    } else {
+      form.append('media', {
+        uri: media.uri,
+        name: media.fileName,
+        type: media.mimeType,
+      } as unknown as Blob);
+    }
+
+    const response = await expoFetch(`${API_BASE_URL}/platforms/${encodeURIComponent(platform)}/send`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${session.access_token}` },
+      body: form,
+    });
+    const payload = await response.json() as { success?: boolean; message?: { platformMessageId?: string; platformMetadata?: { mediaUrl?: string } }; error?: string };
+    if (!response.ok || !payload.success || !payload.message) {
+      throw new Error(payload.error || `Media send failed (${response.status})`);
+    }
+    return { success: true, message: payload.message };
   },
 
   /** Persist Claire's read cursor and mirror it to Matrix when possible. */

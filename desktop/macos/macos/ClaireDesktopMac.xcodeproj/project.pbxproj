@@ -17,6 +17,9 @@
 		A10C1A0F0000000000000004 /* libsqlite3.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = A10C1A0F0000000000000005 /* libsqlite3.tbd */; };
 		A10C1A0F0000000000000006 /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A10C1A0F0000000000000007 /* WebKit.framework */; };
 		A10C1A0F0000000000000008 /* UserNotifications.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A10C1A0F0000000000000009 /* UserNotifications.framework */; };
+		A10C1A0F0000000000000010 /* ClaireMediaPlayer.mm in Sources */ = {isa = PBXBuildFile; fileRef = A10C1A0F0000000000000011 /* ClaireMediaPlayer.mm */; };
+		A10C1A0F0000000000000012 /* AVKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A10C1A0F0000000000000013 /* AVKit.framework */; };
+		A10C1A0F0000000000000014 /* AVFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A10C1A0F0000000000000015 /* AVFoundation.framework */; };
 		CFC50FDC78A70EC2120CDB2C /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 14038C574C122C035567B7F4 /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
 
@@ -38,6 +41,9 @@
 		A10C1A0F0000000000000005 /* libsqlite3.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libsqlite3.tbd; path = usr/lib/libsqlite3.tbd; sourceTree = SDKROOT; };
 		A10C1A0F0000000000000007 /* WebKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebKit.framework; path = System/Library/Frameworks/WebKit.framework; sourceTree = SDKROOT; };
 		A10C1A0F0000000000000009 /* UserNotifications.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UserNotifications.framework; path = System/Library/Frameworks/UserNotifications.framework; sourceTree = SDKROOT; };
+		A10C1A0F0000000000000011 /* ClaireMediaPlayer.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = ClaireMediaPlayer.mm; sourceTree = "<group>"; };
+		A10C1A0F0000000000000013 /* AVKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVKit.framework; path = System/Library/Frameworks/AVKit.framework; sourceTree = SDKROOT; };
+		A10C1A0F0000000000000015 /* AVFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFoundation.framework; path = System/Library/Frameworks/AVFoundation.framework; sourceTree = SDKROOT; };
 		B5F140E0277C5FA946EFA885 /* Pods-ClaireDesktopMac-macOS.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-ClaireDesktopMac-macOS.release.xcconfig"; path = "Target Support Files/Pods-ClaireDesktopMac-macOS/Pods-ClaireDesktopMac-macOS.release.xcconfig"; sourceTree = "<group>"; };
 		C1A1DE5B0000000000000101 /* ClaireDesktop.debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = ClaireDesktop.debug.xcconfig; sourceTree = "<group>"; };
 		C1A1DE5B0000000000000102 /* ClaireDesktop.release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = ClaireDesktop.release.xcconfig; sourceTree = "<group>"; };
@@ -60,6 +66,8 @@
 				A10C1A0F0000000000000004 /* libsqlite3.tbd in Frameworks */,
 				A10C1A0F0000000000000006 /* WebKit.framework in Frameworks */,
 				A10C1A0F0000000000000008 /* UserNotifications.framework in Frameworks */,
+				A10C1A0F0000000000000012 /* AVKit.framework in Frameworks */,
+				A10C1A0F0000000000000014 /* AVFoundation.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -83,6 +91,8 @@
 				A10C1A0F0000000000000005 /* libsqlite3.tbd */,
 				A10C1A0F0000000000000007 /* WebKit.framework */,
 				A10C1A0F0000000000000009 /* UserNotifications.framework */,
+				A10C1A0F0000000000000013 /* AVKit.framework */,
+				A10C1A0F0000000000000015 /* AVFoundation.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -94,6 +104,7 @@
 				5142014C2437B4B30078DB4F /* AppDelegate.mm */,
 				A10C1A0F0000000000000002 /* ClaireCompanion.h */,
 				A10C1A0F0000000000000003 /* ClaireCompanion.mm */,
+				A10C1A0F0000000000000011 /* ClaireMediaPlayer.mm */,
 				514201512437B4B40078DB4F /* Assets.xcassets */,
 				514201532437B4B40078DB4F /* Main.storyboard */,
 				514201562437B4B40078DB4F /* Info.plist */,
@@ -354,6 +365,7 @@
 				514201582437B4B40078DB4F /* main.m in Sources */,
 				5142014D2437B4B30078DB4F /* AppDelegate.mm in Sources */,
 				A10C1A0F0000000000000001 /* ClaireCompanion.mm in Sources */,
+				A10C1A0F0000000000000010 /* ClaireMediaPlayer.mm in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

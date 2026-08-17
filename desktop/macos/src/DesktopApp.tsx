@@ -19,7 +19,8 @@ import {
   UserGroupIcon as Users,
 } from 'react-native-heroicons/outline';
 import { ClaireAvatar, ClaireButton, ClaireCard, ClaireConversationRow, ClaireField, ClaireIconButton, ClaireMessageBubble, ClaireStatusPill, ClaireText, colors, radius, space } from '@claire/design-system';
-import { companionBridge, type CompanionStatus, type DesktopRuntimeConfig } from './native/CompanionBridge';
+import { companionBridge, type CompanionStatus, type DesktopRuntimeConfig, type NativeOutgoingMedia } from './native/CompanionBridge';
+import { MacMediaPlayer } from './native/media-player';
 import { ClaireApi, type AssistantAnswer, type AssistantCitation, type AssistantThread, type AssistantTurn, type ConversationAssistantThread, type DesktopAccountProfile, type DesktopChat, type DesktopConversationSettings, type DesktopMessage, type DesktopPlatformDefinition, type DesktopPlatformStatus, type DesktopPreferences, type DesktopPromise } from './services/claire-api';
 import { createDesktopAuth, exchangeDesktopCallback, signInWithGoogle, type DesktopAuth } from './services/auth';
 import { clampDesktopPaneWidth, destinationForDesktopCommand, type DesktopDestination } from './services/desktop-navigation';
@@ -50,6 +51,7 @@ function toConversation(chat: DesktopChat, index: number): Conversation {
 }
 
 function sameOutgoingMessage(left: DesktopMessage, right: DesktopMessage) {
+  if (left.platform_message_id && right.platform_message_id) return left.platform_message_id === right.platform_message_id;
   if (!left.from_me || !right.from_me || left.content !== right.content) return false;
   return Math.abs(Date.parse(left.timestamp) - Date.parse(right.timestamp)) < 120_000;
 }
@@ -631,8 +633,34 @@ function DesktopWorkspace({ auth, compactWindow, initialConversationId, session 
     }
   };
 
+  const sendMedia = async (media: NativeOutgoingMedia, caption: string) => {
+    if (!api || !selected || selected.platform === 'imessage') throw new Error('Media sending is available for WhatsApp, Telegram, and Instagram.');
+    const optimistic: DesktopMessage = {
+      id: `local-media-${selected.platform}-${Date.now()}`,
+      chat_id: selected.id,
+      content: media.kind === 'voice' ? 'Voice message' : caption.trim(),
+      timestamp: new Date().toISOString(),
+      from_me: true,
+      content_type: media.kind === 'voice' ? 'audio' : media.kind,
+      media_url: media.uri,
+      media_mime_type: media.mimeType,
+      delivery_state: 'sending',
+    };
+    setMessages((current) => mergeChronologicalMessages(current, [optimistic]));
+    try {
+      const sessionId = await api.getPlatformSession(selected.platform);
+      if (!sessionId) throw new Error(`${selected.platform} is not connected on this account.`);
+      const response = await api.sendMedia(selected.platform, sessionId, selected.platformChatId, media, caption);
+      setMessages((current) => current.map((message) => message.id === optimistic.id ? { ...message, platform_message_id: response.platformMessageId } : message));
+      setTimeout(() => { api.getMessages(selected.id).then((saved) => setMessages((current) => reconcileDesktopMessages(current, saved))).catch(() => undefined); }, 750);
+    } catch (error) {
+      setMessages((current) => current.map((message) => message.id === optimistic.id ? { ...message, delivery_state: 'failed' } : message));
+      throw error;
+    }
+  };
+
   if (compactWindow) {
-    return <SafeAreaView style={styles.safeArea} testID="claire-desktop-compact-chat"><StatusBar barStyle="dark-content" /><ChatPane api={api} compact selected={selected} messages={messages} highlightedMessageId={highlightedMessageId} apiBaseUrl={auth.config.apiUrl} loading={loadingMessages} loadingOlder={loadingOlderMessages} hasMoreMessages={hasMoreMessages} draft={draft} onDraftChange={setDraft} composerFocusRequest={composerFocusRequest} onLoadOlder={() => { loadOlderMessages().catch(() => undefined); }} onSend={() => { sendDraft().catch(() => undefined); }} onAskClaire={() => openGlobalSearch()} onOpenPerson={openPerson} error={dataError} /></SafeAreaView>;
+    return <SafeAreaView style={styles.safeArea} testID="claire-desktop-compact-chat"><StatusBar barStyle="dark-content" /><ChatPane api={api} compact selected={selected} messages={messages} highlightedMessageId={highlightedMessageId} apiBaseUrl={auth.config.apiUrl} loading={loadingMessages} loadingOlder={loadingOlderMessages} hasMoreMessages={hasMoreMessages} draft={draft} onDraftChange={setDraft} composerFocusRequest={composerFocusRequest} onLoadOlder={() => { loadOlderMessages().catch(() => undefined); }} onSend={() => { sendDraft().catch(() => undefined); }} onSendMedia={sendMedia} onAskClaire={() => openGlobalSearch()} onOpenPerson={openPerson} error={dataError} /></SafeAreaView>;
   }
 
   return (
@@ -646,7 +674,7 @@ function DesktopWorkspace({ auth, compactWindow, initialConversationId, session 
         {destination === 'People' ? <PeoplePane api={api} conversations={conversations} selectedConversationId={peopleSelectionId} onOpenChat={openConversation} /> : null}
         {destination === 'Search' ? <AssistantPane api={api} selected={selected} initialQuestion={globalSearchSeed} onInitialQuestionConsumed={clearGlobalSearchSeed} onOpenMessage={(chatId, messageId) => { setSelectedConversationId(chatId); setHighlightedMessageId(messageId); setDestination('Inbox'); }} /> : null}
         {destination === 'Settings' ? <SettingsPane api={api} companion={companion} companionNotice={companionNotice} apiUrl={auth.config.apiUrl} accessToken={session.access_token} onNotificationPreferenceChange={setNotificationsEnabled} /> : null}
-        {destination === 'Inbox' ? <>{(!usesCompactInbox || !compactChatOpen) ? <ConversationPane compact={usesCompactInbox} width={conversationPaneWidth} selectedId={selectedConversationId} onSelect={openConversation} onOpenSearch={() => openGlobalSearch()} conversations={conversations} loading={loadingChats} error={dataError} onRefresh={() => { refreshChats().catch(() => undefined); }} /> : null}{!usesCompactInbox ? <PaneResizeHandle accessibilityLabel="Resize conversation list" direction={1} initialWidth={conversationPaneWidth} onWidthChange={(next) => setConversationPaneWidth(clampDesktopPaneWidth(next, 'conversation'))} /> : null}{(!usesCompactInbox || compactChatOpen) ? <ChatPane api={api} compact={usesCompactInbox} onBack={usesCompactInbox ? () => setCompactChatOpen(false) : undefined} selected={selected} messages={messages} highlightedMessageId={highlightedMessageId} apiBaseUrl={auth.config.apiUrl} loading={loadingMessages} loadingOlder={loadingOlderMessages} hasMoreMessages={hasMoreMessages} draft={draft} onDraftChange={setDraft} composerFocusRequest={composerFocusRequest} onLoadOlder={() => { loadOlderMessages().catch(() => undefined); }} onSend={() => { sendDraft().catch(() => undefined); }} onAskClaire={() => { if (canShowInspector) { setInspectorMode('assistant'); setInspectorCollapsed(false); } else openGlobalSearch(); }} onOpenPerson={openPerson} assistantPanelAvailable={canShowInspector} assistantPanelVisible={showsInspector} onToggleAssistantPanel={() => setInspectorCollapsed((current) => !current)} error={dataError} /> : null}</> : null}
+        {destination === 'Inbox' ? <>{(!usesCompactInbox || !compactChatOpen) ? <ConversationPane compact={usesCompactInbox} width={conversationPaneWidth} selectedId={selectedConversationId} onSelect={openConversation} onOpenSearch={() => openGlobalSearch()} conversations={conversations} loading={loadingChats} error={dataError} onRefresh={() => { refreshChats().catch(() => undefined); }} /> : null}{!usesCompactInbox ? <PaneResizeHandle accessibilityLabel="Resize conversation list" direction={1} initialWidth={conversationPaneWidth} onWidthChange={(next) => setConversationPaneWidth(clampDesktopPaneWidth(next, 'conversation'))} /> : null}{(!usesCompactInbox || compactChatOpen) ? <ChatPane api={api} compact={usesCompactInbox} onBack={usesCompactInbox ? () => setCompactChatOpen(false) : undefined} selected={selected} messages={messages} highlightedMessageId={highlightedMessageId} apiBaseUrl={auth.config.apiUrl} loading={loadingMessages} loadingOlder={loadingOlderMessages} hasMoreMessages={hasMoreMessages} draft={draft} onDraftChange={setDraft} composerFocusRequest={composerFocusRequest} onLoadOlder={() => { loadOlderMessages().catch(() => undefined); }} onSend={() => { sendDraft().catch(() => undefined); }} onSendMedia={sendMedia} onAskClaire={() => { if (canShowInspector) { setInspectorMode('assistant'); setInspectorCollapsed(false); } else openGlobalSearch(); }} onOpenPerson={openPerson} assistantPanelAvailable={canShowInspector} assistantPanelVisible={showsInspector} onToggleAssistantPanel={() => setInspectorCollapsed((current) => !current)} error={dataError} /> : null}</> : null}
         {showsInspector ? <><PaneResizeHandle accessibilityLabel="Resize conversation inspector" direction={-1} initialWidth={inspectorPaneWidth} onWidthChange={(next) => setInspectorPaneWidth(clampDesktopPaneWidth(next, 'inspector'))} />{inspectorMode === 'assistant' ? <ConversationAssistantInspector api={api} selected={selected} width={inspectorPaneWidth} onCollapse={() => setInspectorCollapsed(true)} onOpenMessage={(chatId, messageId) => { setSelectedConversationId(chatId); setHighlightedMessageId(messageId); }} /> : <ConversationContactInspector api={api} selected={selected} width={inspectorPaneWidth} onOpenAssistant={() => setInspectorMode('assistant')} onOpenPerson={openPerson} />}</> : null}
       </View>
     </SafeAreaView>
@@ -720,12 +748,19 @@ function ConversationPane({ compact, width, selectedId, onSelect, onOpenSearch, 
   </View>;
 }
 
-function ChatPane({ api, compact, onBack, selected, messages, highlightedMessageId, apiBaseUrl, loading, loadingOlder, hasMoreMessages, draft, onDraftChange, composerFocusRequest, onLoadOlder, onSend, onAskClaire, onOpenPerson, assistantPanelAvailable = false, assistantPanelVisible = false, onToggleAssistantPanel, error }: { api: ClaireApi | null; compact: boolean; onBack?: () => void; selected: Conversation | null; messages: DesktopMessage[]; highlightedMessageId: string | null; apiBaseUrl: string; loading: boolean; loadingOlder: boolean; hasMoreMessages: boolean; draft: string; onDraftChange: (value: string) => void; composerFocusRequest: number; onLoadOlder: () => void; onSend: () => void; onAskClaire: () => void; onOpenPerson: (chatId: string) => void; assistantPanelAvailable?: boolean; assistantPanelVisible?: boolean; onToggleAssistantPanel?: () => void; error: string | null }) {
+function ChatPane({ api, compact, onBack, selected, messages, highlightedMessageId, apiBaseUrl, loading, loadingOlder, hasMoreMessages, draft, onDraftChange, composerFocusRequest, onLoadOlder, onSend, onSendMedia, onAskClaire, onOpenPerson, assistantPanelAvailable = false, assistantPanelVisible = false, onToggleAssistantPanel, error }: { api: ClaireApi | null; compact: boolean; onBack?: () => void; selected: Conversation | null; messages: DesktopMessage[]; highlightedMessageId: string | null; apiBaseUrl: string; loading: boolean; loadingOlder: boolean; hasMoreMessages: boolean; draft: string; onDraftChange: (value: string) => void; composerFocusRequest: number; onLoadOlder: () => void; onSend: () => void; onSendMedia: (media: NativeOutgoingMedia, caption: string) => Promise<void>; onAskClaire: () => void; onOpenPerson: (chatId: string) => void; assistantPanelAvailable?: boolean; assistantPanelVisible?: boolean; onToggleAssistantPanel?: () => void; error: string | null }) {
   const messageListRef = useRef<ScrollView>(null);
   const composerRef = useRef<TextInput>(null);
   const messageOffsets = useRef<Record<string, number>>({});
   const [showConversationSettings, setShowConversationSettings] = useState(false);
   const [showContactDetails, setShowContactDetails] = useState(false);
+  const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
+  const [pendingMedia, setPendingMedia] = useState<NativeOutgoingMedia | null>(null);
+  const [recording, setRecording] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [sendingMedia, setSendingMedia] = useState(false);
+  const [mediaUploadProgress, setMediaUploadProgress] = useState(0);
+  const [mediaError, setMediaError] = useState<string | null>(null);
   const latestIncoming = useMemo(() => [...messages].reverse().find((message) => !message.from_me && Boolean(message.content?.trim())) || null, [messages]);
   useEffect(() => {
     if (!highlightedMessageId) return;
@@ -734,12 +769,68 @@ function ChatPane({ api, compact, onBack, selected, messages, highlightedMessage
     const task = setTimeout(() => messageListRef.current?.scrollTo({ y: Math.max(0, offset - space[4]), animated: true }), 0);
     return () => clearTimeout(task);
   }, [highlightedMessageId, messages]);
-  useEffect(() => { setShowConversationSettings(false); setShowContactDetails(false); }, [selected?.id]);
+  useEffect(() => { setShowConversationSettings(false); setShowContactDetails(false); setShowAttachmentMenu(false); setPendingMedia(null); setMediaError(null); }, [selected?.id]);
+  useEffect(() => {
+    if (!recording) return;
+    const timer = setInterval(() => setRecordingSeconds((seconds) => seconds + 1), 1000);
+    return () => clearInterval(timer);
+  }, [recording]);
+  useEffect(() => companionBridge.subscribeMediaUploadProgress(setMediaUploadProgress), []);
   useEffect(() => {
     if (!composerFocusRequest || !selected) return;
     const task = setTimeout(() => composerRef.current?.focus(), 0);
     return () => clearTimeout(task);
   }, [composerFocusRequest, selected]);
+  const pickMedia = async () => {
+    try {
+      setMediaError(null);
+      const media = await companionBridge.pickOutgoingMedia();
+      if (media) setPendingMedia(media);
+      setShowAttachmentMenu(false);
+    } catch (pickError) {
+      setMediaError(pickError instanceof Error ? pickError.message : 'Unable to choose media.');
+    }
+  };
+  const toggleRecording = async () => {
+    try {
+      setMediaError(null);
+      if (!recording) {
+        await companionBridge.startVoiceRecording();
+        setRecordingSeconds(0);
+        setRecording(true);
+      } else {
+        const media = await companionBridge.stopVoiceRecording();
+        setRecording(false);
+        setPendingMedia(media);
+      }
+      setShowAttachmentMenu(false);
+    } catch (recordError) {
+      setRecording(false);
+      setMediaError(recordError instanceof Error ? recordError.message : 'Unable to record a voice message.');
+    }
+  };
+  const discardMedia = async () => {
+    if (recording) await companionBridge.cancelVoiceRecording();
+    setRecording(false);
+    setPendingMedia(null);
+    setRecordingSeconds(0);
+  };
+  const submitMedia = async () => {
+    if (!pendingMedia) return;
+    setSendingMedia(true);
+    setMediaUploadProgress(0);
+    setMediaError(null);
+    try {
+      await onSendMedia(pendingMedia, draft);
+      if (pendingMedia.kind !== 'voice') onDraftChange('');
+      setPendingMedia(null);
+    } catch (sendError) {
+      setMediaError(sendError instanceof Error ? sendError.message : 'Unable to send media.');
+    } finally {
+      setSendingMedia(false);
+      setMediaUploadProgress(0);
+    }
+  };
   if (!selected) return <View style={[styles.chatPane, compact && styles.chatPaneCompact, styles.emptyPane]}><ClaireText variant="sectionTitle">Select a conversation</ClaireText><ClaireText variant="bodySmall" style={styles.muted}>Your synced chats will appear here.</ClaireText></View>;
   return <View style={[styles.chatPane, compact && styles.chatPaneCompact]}>
     <View style={styles.chatHeader}><View style={styles.contactHeader}>{onBack ? <ClaireButton variant="quiet" onPress={onBack}>Back</ClaireButton> : null}<ClaireAvatar initials={selected.initials} source={selected.avatarUrl ? { uri: selected.avatarUrl } : undefined} size={40} tone={selected.tone} /><View><ClaireText variant="sectionTitle">{selected.name}</ClaireText><ClaireText variant="bodySmall" style={styles.muted}>{selected.platform} · Active now</ClaireText></View></View><View style={styles.chatActions}><ClaireIconButton accessibilityLabel="Show contact details" onPress={() => setShowContactDetails((current) => !current)}><Users size={18} color={colors.ink} /></ClaireIconButton><ClaireIconButton accessibilityLabel="Chat settings" onPress={() => setShowConversationSettings((current) => !current)}><SlidersHorizontal size={17} color={colors.ink} /></ClaireIconButton><ClaireIconButton accessibilityLabel="Open Ask Claire" onPress={onAskClaire}><Sparkles size={17} color={colors.focus} /></ClaireIconButton>{assistantPanelAvailable ? <ClaireIconButton accessibilityLabel={assistantPanelVisible ? 'Collapse conversation assistant' : 'Show conversation assistant'} onPress={onToggleAssistantPanel}>{assistantPanelVisible ? <PanelRightClose size={17} color={colors.ink} /> : <PanelRightOpen size={17} color={colors.ink} />}</ClaireIconButton> : null}</View></View>
@@ -748,7 +839,13 @@ function ChatPane({ api, compact, onBack, selected, messages, highlightedMessage
     {showConversationSettings ? <ConversationSettings api={api} chatId={selected.id} chatName={selected.name} onClose={() => setShowConversationSettings(false)} /> : null}
     <ScrollView ref={messageListRef} contentContainerStyle={styles.messageList}>{hasMoreMessages ? <ClaireButton variant="quiet" disabled={loadingOlder} onPress={onLoadOlder}>{loadingOlder ? 'Loading older messages…' : 'Load older messages'}</ClaireButton> : null}{loading ? <LoadingRow label="Loading messages…" /> : null}{error ? <ClaireText variant="bodySmall" style={styles.errorText}>{error}</ClaireText> : null}{!loading && !error && messages.length === 0 ? <ClaireText variant="bodySmall" style={styles.muted}>No messages in this conversation yet.</ClaireText> : null}{messages.map((message) => <View key={message.id} onLayout={(event) => { messageOffsets.current[message.id] = event.nativeEvent.layout.y; }} style={[styles.messageWrap, message.from_me && styles.messageWrapMine, message.id === highlightedMessageId && styles.messageWrapHighlighted, message.delivery_state === 'sending' && desktopReplyStyles.sendingMessage, message.delivery_state === 'failed' && desktopReplyStyles.failedMessage]}>{!message.from_me ? <ClaireText variant="label" style={styles.messageSender}>{message.contact_name || selected.name}</ClaireText> : null}<ClaireMessageBubble fromMe={message.from_me}><MediaMessage message={message} apiBaseUrl={apiBaseUrl} /></ClaireMessageBubble><ClaireText variant="bodySmall" style={styles.messageTime}>{message.delivery_state === 'sending' ? 'Sending…' : message.delivery_state === 'failed' ? 'Not sent' : new Date(message.timestamp).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}</ClaireText></View>)}</ScrollView>
     <ReplyOptions api={api} target={latestIncoming} chatType={selected.isGroup ? 'group' : 'individual'} onUse={onDraftChange} />
-    <View style={styles.composer}><TextInput ref={composerRef} accessibilityLabel={`Message ${selected.name}`} multiline onChangeText={onDraftChange} placeholder={`Message ${selected.name}…`} placeholderTextColor={colors.neutral[400]} style={styles.composerInput} value={draft} /><ClaireButton disabled={!draft.trim()} onPress={onSend} accessibilityLabel="Send message">Send</ClaireButton></View>
+    <View style={desktopMediaStyles.composerStack}>
+      {showAttachmentMenu ? <View style={desktopMediaStyles.attachmentMenu}><ClaireButton variant="quiet" onPress={() => { pickMedia().catch(() => undefined); }}>Choose image/video</ClaireButton><ClaireButton variant="quiet" onPress={() => { toggleRecording().catch(() => undefined); }}>Record voice</ClaireButton></View> : null}
+      {recording ? <View style={desktopMediaStyles.recordingPanel}><View style={desktopMediaStyles.recordingDot} /><ClaireText variant="bodySmall" style={desktopMediaStyles.recordingTime}>Recording {Math.floor(recordingSeconds / 60)}:{String(recordingSeconds % 60).padStart(2, '0')}</ClaireText><ClaireButton variant="quiet" onPress={() => { discardMedia().catch(() => undefined); }}>Discard</ClaireButton><ClaireButton onPress={() => { toggleRecording().catch(() => undefined); }}>Stop</ClaireButton></View> : null}
+      {pendingMedia ? <View style={desktopMediaStyles.previewPanel}>{pendingMedia.kind === 'image' ? <Image source={{ uri: pendingMedia.uri }} style={desktopMediaStyles.previewImage} /> : <MacMediaPlayer source={pendingMedia.uri} audio={pendingMedia.kind === 'voice'} />}<View style={desktopMediaStyles.previewCopy}><ClaireText variant="bodySmall" numberOfLines={1}>{pendingMedia.fileName}</ClaireText><ClaireText variant="bodySmall" style={styles.muted}>{sendingMedia ? `Uploading ${Math.round(mediaUploadProgress * 100)}%` : pendingMedia.kind === 'voice' ? 'Voice message' : pendingMedia.kind === 'video' ? 'Video ready to send' : 'Image ready to send'}</ClaireText></View><ClaireButton variant="quiet" disabled={sendingMedia} onPress={() => { discardMedia().catch(() => undefined); }}>Remove</ClaireButton><ClaireButton disabled={sendingMedia} onPress={() => { submitMedia().catch(() => undefined); }}>{sendingMedia ? 'Sending…' : 'Send'}</ClaireButton></View> : null}
+      {mediaError ? <ClaireText variant="bodySmall" style={styles.errorText}>{mediaError}</ClaireText> : null}
+      <View style={styles.composer}><ClaireIconButton accessibilityLabel="Add image, video, or voice message" disabled={selected.platform === 'imessage' || Boolean(pendingMedia) || recording} onPress={() => setShowAttachmentMenu((shown) => !shown)}><Plus size={17} color={colors.ink} /></ClaireIconButton><TextInput ref={composerRef} accessibilityLabel={`Message ${selected.name}`} multiline onChangeText={onDraftChange} placeholder={`Message ${selected.name}…`} placeholderTextColor={colors.neutral[400]} style={styles.composerInput} value={draft} /><ClaireButton disabled={!draft.trim() || Boolean(pendingMedia)} onPress={onSend} accessibilityLabel="Send message">Send</ClaireButton></View>
+    </View>
   </View>;
 }
 
@@ -826,7 +923,11 @@ function MediaMessage({ message, apiBaseUrl }: { message: DesktopMessage; apiBas
   const url = message.media_url ? mediaUrl(message.media_url, apiBaseUrl) : null;
   const source = useMemo(() => url ? { uri: url } : undefined, [url]);
   const isImage = Boolean(url && (message.media_mime_type?.startsWith('image/') || message.content_type === 'image'));
+  const isVideo = Boolean(url && (message.media_mime_type?.startsWith('video/') || message.content_type === 'video'));
+  const isAudio = Boolean(url && (message.media_mime_type?.startsWith('audio/') || message.content_type === 'audio' || message.content_type === 'voice'));
   if (isImage && !failed && source) return <Image accessibilityLabel="Message image" source={source} onError={() => setFailed(true)} style={styles.mediaImage} />;
+  if (isVideo && url) return <View><MacMediaPlayer source={url} />{message.content ? <ClaireText variant="bodySmall">{message.content}</ClaireText> : null}</View>;
+  if (isAudio && url) return <MacMediaPlayer source={url} audio />;
   if (url && failed) return <ClaireText variant="bodySmall" style={styles.muted}>Media unavailable</ClaireText>;
   if (url) return <ClaireText variant="bodySmall">{message.content || 'Media message'}</ClaireText>;
   return <ClaireText variant="body">{message.content || 'Message unavailable'}</ClaireText>;
@@ -1688,6 +1789,17 @@ const desktopHomeStyles = StyleSheet.create({
   platformMark: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   platformMarkText: { color: colors.paper, fontWeight: '800' },
   platformName: { fontWeight: '700', color: colors.ink },
+});
+
+const desktopMediaStyles = StyleSheet.create({
+  composerStack: { backgroundColor: colors.paper, borderTopWidth: 1, borderColor: colors.neutral[200] },
+  attachmentMenu: { flexDirection: 'row', columnGap: space[2], paddingHorizontal: space[5], paddingTop: space[3] },
+  recordingPanel: { flexDirection: 'row', alignItems: 'center', columnGap: space[3], paddingHorizontal: space[5], paddingTop: space[3] },
+  recordingDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.danger },
+  recordingTime: { flex: 1, fontVariant: ['tabular-nums'] },
+  previewPanel: { flexDirection: 'row', alignItems: 'center', columnGap: space[3], paddingHorizontal: space[5], paddingTop: space[3] },
+  previewImage: { width: 72, height: 58, borderRadius: radius.control, resizeMode: 'cover' },
+  previewCopy: { flex: 1, minWidth: 0 },
 });
 
 const desktopPromisesStyles = StyleSheet.create({

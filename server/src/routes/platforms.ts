@@ -18,6 +18,9 @@ import { BridgeHttpClient } from '../adapters/matrix/bridge-http-client';
 import { loginWithCredentials, submitTwoFactorCode } from '../services/instagram-login';
 import { platformCatalog, platformCatalogVersion } from '../platform-catalog';
 import { supabase } from '../services/supabase';
+import multer, { MulterError } from 'multer';
+import { fileTypeFromBuffer } from 'file-type';
+import { MessageContentType } from '../adapters/types';
 
 // Railway services cannot reach each other through localhost. Railway does not
 // inject NODE_ENV by default, so its public-domain marker is also used to
@@ -68,6 +71,44 @@ const whatsappBridgeClient = new BridgeHttpClient(
 );
 
 const router = Router();
+const MAX_OUTGOING_MEDIA_BYTES = 25 * 1024 * 1024;
+const mediaUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { files: 1, fileSize: MAX_OUTGOING_MEDIA_BYTES, fields: 12 },
+});
+const acceptedMediaMimes = new Set([
+  'image/jpeg', 'image/png', 'image/webp', 'image/gif',
+  'video/mp4', 'video/quicktime', 'video/webm',
+  'audio/mp4', 'audio/aac', 'audio/mpeg', 'audio/ogg', 'audio/opus', 'audio/webm',
+]);
+
+const acceptOutgoingMedia: import('express').RequestHandler = (req, res, next) => {
+  mediaUpload.single('media')(req, res, (error?: unknown) => {
+    if (!error) return next();
+    if (error instanceof MulterError && error.code === 'LIMIT_FILE_SIZE') {
+      res.status(413).json({ success: false, error: 'Media must be 25 MiB or smaller' });
+      return;
+    }
+    if (error instanceof MulterError) {
+      res.status(400).json({ success: false, error: error.message });
+      return;
+    }
+    next(error);
+  });
+};
+
+function mediaContentType(kind: string): MessageContentType | null {
+  if (kind === 'image') return MessageContentType.IMAGE;
+  if (kind === 'video') return MessageContentType.VIDEO;
+  if (kind === 'voice') return MessageContentType.VOICE;
+  return null;
+}
+
+function optionalPositiveNumber(value: unknown): number | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined;
+}
 const INSTAGRAM_LOGIN_URL = 'https://www.instagram.com/accounts/login/';
 const REQUIRED_INSTAGRAM_COOKIES = ['sessionid', 'csrftoken', 'mid', 'ig_did', 'ds_user_id'];
 
@@ -953,10 +994,13 @@ router.get('/:platform/chats/:sessionId', async (req: Request, res: Response) =>
  * POST /platforms/:platform/send
  * Send a message via a platform
  */
-router.post('/:platform/send', async (req: Request, res: Response) => {
+router.post('/:platform/send', acceptOutgoingMedia, async (req: Request, res: Response) => {
   try {
     const { platform } = req.params;
-    const { sessionId, chatId, content, replyToMessageId } = req.body;
+    const { sessionId, chatId, replyToMessageId } = req.body;
+    const content = typeof req.body.content === 'string' ? req.body.content.trim() : '';
+    const mediaFile = req.file;
+    const requestedMediaType = mediaContentType(String(req.body.mediaKind || ''));
     const userId = req.user?.id;
 
     if (!userId) {
@@ -966,11 +1010,18 @@ router.post('/:platform/send', async (req: Request, res: Response) => {
       });
     }
 
-    if (!sessionId || !chatId || !content) {
+    if (!sessionId || !chatId || (!content && !mediaFile)) {
       return res.status(400).json({
         success: false,
-        error: 'Session ID, chat ID, and content are required',
+        error: 'Session ID, chat ID, and message content or media are required',
       });
+    }
+
+    if (mediaFile && !requestedMediaType) {
+      return res.status(400).json({ success: false, error: 'mediaKind must be image, video, or voice' });
+    }
+    if (requestedMediaType === MessageContentType.VOICE && content) {
+      return res.status(400).json({ success: false, error: 'Voice notes cannot include a caption' });
     }
 
     const adapter = platformManager.getAdapter(platform as Platform);
@@ -997,16 +1048,52 @@ router.post('/:platform/send', async (req: Request, res: Response) => {
       });
     }
 
-    if (!adapter.capabilities.canSendText) {
+    if (!mediaFile && !adapter.capabilities.canSendText) {
       return res.status(400).json({
         success: false,
         error: 'Platform does not support sending messages',
       });
     }
 
+    if (mediaFile && (!adapter.capabilities.canSendMedia || !requestedMediaType
+      || !adapter.capabilities.supportedMediaTypes.includes(requestedMediaType))) {
+      return res.status(400).json({ success: false, error: 'Platform does not support this media type' });
+    }
+
+    let verifiedMimeType: string | undefined;
+    if (mediaFile && requestedMediaType) {
+      const detected = await fileTypeFromBuffer(mediaFile.buffer);
+      const declared = mediaFile.mimetype.toLowerCase();
+      if (!detected) {
+        return res.status(415).json({ success: false, error: 'Media signature could not be verified' });
+      }
+      const candidateMimeType = detected.mime;
+      verifiedMimeType = candidateMimeType;
+      const expectedFamily = requestedMediaType === MessageContentType.IMAGE
+        ? 'image/' : requestedMediaType === MessageContentType.VIDEO ? 'video/' : 'audio/';
+      const webmVoice = requestedMediaType === MessageContentType.VOICE
+        && candidateMimeType === 'video/webm' && declared === 'audio/webm';
+      if (!acceptedMediaMimes.has(candidateMimeType) || (!candidateMimeType.startsWith(expectedFamily) && !webmVoice)) {
+        return res.status(415).json({ success: false, error: 'Unsupported or mismatched media format' });
+      }
+      if (webmVoice) verifiedMimeType = 'audio/webm';
+    }
+
     const message = await adapter.sendMessage(sessionId, chatId, {
       content,
       replyToMessageId,
+      contentType: requestedMediaType || MessageContentType.TEXT,
+      media: mediaFile && requestedMediaType ? [{
+        type: requestedMediaType,
+        data: mediaFile.buffer,
+        mimeType: verifiedMimeType,
+        fileName: mediaFile.originalname || `attachment.${verifiedMimeType?.split('/')[1] || 'bin'}`,
+        fileSize: mediaFile.size,
+        width: optionalPositiveNumber(req.body.width),
+        height: optionalPositiveNumber(req.body.height),
+        durationMs: optionalPositiveNumber(req.body.durationMs),
+        isVoice: requestedMediaType === MessageContentType.VOICE,
+      }] : undefined,
     });
 
     return res.json({

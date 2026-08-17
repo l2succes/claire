@@ -7,5 +7,8 @@
   "peerDependencies": {
     "react": ">=19.1.0 <20",
     "react-native": ">=0.81.0 <1"
+  },
+  "dependencies": {
+    "@babel/runtime": "^7.28.0"
   }
 }

@@ -230,6 +230,11 @@ export interface OutgoingMedia {
   data: Buffer | string;
   mimeType?: string;
   fileName?: string;
+  fileSize?: number;
+  width?: number;
+  height?: number;
+  durationMs?: number;
+  isVoice?: boolean;
 }
 
 /**

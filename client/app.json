@@ -18,7 +18,9 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.claire.app",
       "infoPlist": {
-        "NSCameraUsageDescription": "This app uses the camera to scan QR codes for WhatsApp login."
+        "NSCameraUsageDescription": "Claire uses the camera to connect messaging accounts and let you share photos and videos.",
+        "NSPhotoLibraryUsageDescription": "Claire accesses photos and videos you choose to send.",
+        "NSMicrophoneUsageDescription": "Claire uses the microphone when you record a voice message."
       },
       "appleTeamId": "T74H9G4334"
     },
@@ -48,7 +50,23 @@
       ],
       "expo-font",
       "expo-web-browser",
-      "expo-video"
+      "expo-video",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Allow Claire to record voice messages.",
+          "enableBackgroundPlayback": false,
+          "enableBackgroundRecording": false
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Claire to access photos and videos you choose to send.",
+          "cameraPermission": "Allow Claire to take photos and videos you choose to send.",
+          "microphonePermission": false
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

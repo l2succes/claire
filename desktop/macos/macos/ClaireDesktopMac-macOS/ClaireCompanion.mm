@@ -1,7 +1,9 @@
 #import "ClaireCompanion.h"
 
 #import <AppKit/AppKit.h>
+#import <AVFoundation/AVFoundation.h>
 #import <Security/Security.h>
+#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 #import <UserNotifications/UserNotifications.h>
 #import <WebKit/WebKit.h>
 #import <sqlite3.h>
@@ -247,10 +249,154 @@ static NSString *ClaireDecodeAttributedBody(const void *bytes, int length)
   id _notificationResponseObserver;
   id _notificationTokenObserver;
   BOOL _hasDesktopShortcutListeners;
+  AVAudioRecorder *_voiceRecorder;
+  NSURL *_voiceRecordingURL;
 }
 
 static NSString *const ClaireDeviceKeyTag = @"com.claire.desktop.device-signing-key";
 static NSString *const ClaireDeviceCredentialService = @"com.claire.desktop.companion";
+
+RCT_REMAP_METHOD(pickOutgoingMedia,
+                 pickOutgoingMediaWithResolver:(RCTPromiseResolveBlock)resolve
+                 rejecter:(RCTPromiseRejectBlock)reject)
+{
+  dispatch_async(dispatch_get_main_queue(), ^{
+    NSOpenPanel *panel = [NSOpenPanel openPanel];
+    panel.canChooseFiles = YES;
+    panel.canChooseDirectories = NO;
+    panel.allowsMultipleSelection = NO;
+    panel.allowedContentTypes = @[UTTypeImage, UTTypeMovie];
+    if ([panel runModal] != NSModalResponseOK || panel.URL == nil) { resolve((id)kCFNull); return; }
+
+    NSURL *source = panel.URL;
+    NSNumber *fileSize = nil;
+    [source getResourceValue:&fileSize forKey:NSURLFileSizeKey error:nil];
+    if (fileSize.unsignedLongLongValue > 25ull * 1024ull * 1024ull) {
+      reject(@"media_too_large", @"Choose an image or video that is 25 MiB or smaller.", nil);
+      return;
+    }
+    NSString *extension = source.pathExtension.length ? source.pathExtension : @"bin";
+    NSURL *cache = [[[NSFileManager defaultManager] URLsForDirectory:NSCachesDirectory inDomains:NSUserDomainMask] firstObject];
+    NSURL *destination = [cache URLByAppendingPathComponent:[NSString stringWithFormat:@"claire-media-%@.%@", NSUUID.UUID.UUIDString, extension]];
+    NSError *copyError = nil;
+    if (![[NSFileManager defaultManager] copyItemAtURL:source toURL:destination error:&copyError]) {
+      reject(@"media_copy_failed", @"Claire could not prepare that file for sending.", copyError);
+      return;
+    }
+    UTType *type = [UTType typeWithFilenameExtension:extension];
+    NSString *mimeType = type.preferredMIMEType ?: @"application/octet-stream";
+    NSString *kind = [type conformsToType:UTTypeMovie] ? @"video" : @"image";
+    resolve(@{ @"uri": destination.absoluteString, @"fileName": source.lastPathComponent ?: destination.lastPathComponent, @"mimeType": mimeType, @"kind": kind, @"fileSize": fileSize ?: @0 });
+  });
+}
+
+RCT_REMAP_METHOD(startVoiceRecording,
+                 startVoiceRecordingWithResolver:(RCTPromiseResolveBlock)resolve
+                 rejecter:(RCTPromiseRejectBlock)reject)
+{
+  [AVCaptureDevice requestAccessForMediaType:AVMediaTypeAudio completionHandler:^(BOOL granted) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+      if (!granted) { reject(@"microphone_denied", @"Microphone access is required to record a voice message.", nil); return; }
+      NSURL *cache = [[[NSFileManager defaultManager] URLsForDirectory:NSCachesDirectory inDomains:NSUserDomainMask] firstObject];
+      self->_voiceRecordingURL = [cache URLByAppendingPathComponent:[NSString stringWithFormat:@"claire-voice-%@.m4a", NSUUID.UUID.UUIDString]];
+      NSDictionary *settings = @{ AVFormatIDKey: @(kAudioFormatMPEG4AAC), AVSampleRateKey: @44100, AVNumberOfChannelsKey: @1, AVEncoderAudioQualityKey: @(AVAudioQualityHigh) };
+      NSError *recordError = nil;
+      self->_voiceRecorder = [[AVAudioRecorder alloc] initWithURL:self->_voiceRecordingURL settings:settings error:&recordError];
+      if (!self->_voiceRecorder || ![self->_voiceRecorder prepareToRecord] || ![self->_voiceRecorder record]) {
+        reject(@"voice_record_failed", @"Claire could not start recording.", recordError);
+        return;
+      }
+      resolve(@YES);
+    });
+  }];
+}
+
+RCT_REMAP_METHOD(stopVoiceRecording,
+                 stopVoiceRecordingWithResolver:(RCTPromiseResolveBlock)resolve
+                 rejecter:(RCTPromiseRejectBlock)reject)
+{
+  if (!_voiceRecorder.isRecording || !_voiceRecordingURL) { reject(@"voice_not_recording", @"No voice message is being recorded.", nil); return; }
+  NSTimeInterval duration = _voiceRecorder.currentTime;
+  [_voiceRecorder stop];
+  NSNumber *fileSize = nil;
+  [_voiceRecordingURL getResourceValue:&fileSize forKey:NSURLFileSizeKey error:nil];
+  resolve(@{ @"uri": _voiceRecordingURL.absoluteString, @"fileName": _voiceRecordingURL.lastPathComponent, @"mimeType": @"audio/mp4", @"kind": @"voice", @"fileSize": fileSize ?: @0, @"durationMs": @(duration * 1000.0) });
+  _voiceRecorder = nil;
+  _voiceRecordingURL = nil;
+}
+
+RCT_REMAP_METHOD(cancelVoiceRecording,
+                 cancelVoiceRecordingWithResolver:(RCTPromiseResolveBlock)resolve
+                 rejecter:(__unused RCTPromiseRejectBlock)reject)
+{
+  [_voiceRecorder stop];
+  if (_voiceRecordingURL) [[NSFileManager defaultManager] removeItemAtURL:_voiceRecordingURL error:nil];
+  _voiceRecorder = nil;
+  _voiceRecordingURL = nil;
+  resolve(@YES);
+}
+
+RCT_REMAP_METHOD(uploadOutgoingMedia,
+                 uploadOutgoingMediaTo:(NSString *)apiURL
+                 accessToken:(NSString *)accessToken
+                 platform:(NSString *)platform
+                 sessionId:(NSString *)sessionId
+                 chatId:(NSString *)chatId
+                 content:(NSString *)content
+                 media:(NSDictionary *)media
+                 resolver:(RCTPromiseResolveBlock)resolve
+                 rejecter:(RCTPromiseRejectBlock)reject)
+{
+  NSURL *fileURL = [NSURL URLWithString:media[@"uri"] ?: @""];
+  NSData *fileData = fileURL.isFileURL ? [NSData dataWithContentsOfURL:fileURL] : nil;
+  if (!fileData) { reject(@"media_read_failed", @"Claire could not read the selected media.", nil); return; }
+  if (fileData.length > 25ull * 1024ull * 1024ull) { reject(@"media_too_large", @"Media must be 25 MiB or smaller.", nil); return; }
+
+  NSString *boundary = [NSString stringWithFormat:@"Claire-%@", NSUUID.UUID.UUIDString];
+  NSMutableData *body = [NSMutableData data];
+  void (^appendString)(NSString *) = ^(NSString *value) { [body appendData:[value dataUsingEncoding:NSUTF8StringEncoding]]; };
+  void (^appendField)(NSString *, NSString *) = ^(NSString *name, NSString *value) {
+    appendString([NSString stringWithFormat:@"--%@\r\nContent-Disposition: form-data; name=\"%@\"\r\n\r\n%@\r\n", boundary, name, value ?: @""]);
+  };
+  appendField(@"sessionId", sessionId);
+  appendField(@"chatId", chatId);
+  appendField(@"mediaKind", media[@"kind"] ?: @"");
+  if (content.length && ![media[@"kind"] isEqualToString:@"voice"]) appendField(@"content", content);
+  if (media[@"durationMs"] != nil) appendField(@"durationMs", [media[@"durationMs"] stringValue]);
+  NSString *rawFileName = media[@"fileName"] ?: @"attachment";
+  NSString *fileName = [rawFileName stringByReplacingOccurrencesOfString:@"\"" withString:@""];
+  NSString *mimeType = media[@"mimeType"] ?: @"application/octet-stream";
+  appendString([NSString stringWithFormat:@"--%@\r\nContent-Disposition: form-data; name=\"media\"; filename=\"%@\"\r\nContent-Type: %@\r\n\r\n", boundary, fileName, mimeType]);
+  [body appendData:fileData];
+  appendString([NSString stringWithFormat:@"\r\n--%@--\r\n", boundary]);
+
+  NSString *path = [NSString stringWithFormat:@"/platforms/%@/send", [platform stringByAddingPercentEncodingWithAllowedCharacters:NSCharacterSet.URLPathAllowedCharacterSet]];
+  NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:[ClaireCompanion apiURL:apiURL path:path]]];
+  request.HTTPMethod = @"POST";
+  [request setValue:[NSString stringWithFormat:@"Bearer %@", accessToken] forHTTPHeaderField:@"Authorization"];
+  [request setValue:@"application/json" forHTTPHeaderField:@"Accept"];
+  [request setValue:[NSString stringWithFormat:@"multipart/form-data; boundary=%@", boundary] forHTTPHeaderField:@"Content-Type"];
+  NSURLSession *session = [NSURLSession sessionWithConfiguration:NSURLSessionConfiguration.ephemeralSessionConfiguration delegate:self delegateQueue:NSOperationQueue.mainQueue];
+  NSURLSessionUploadTask *task = [session uploadTaskWithRequest:request fromData:body completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+    if (error) { reject(@"media_upload_failed", error.localizedDescription, error); [session finishTasksAndInvalidate]; return; }
+    NSHTTPURLResponse *http = (NSHTTPURLResponse *)response;
+    NSDictionary *payload = data.length ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil] : @{};
+    if (http.statusCode < 200 || http.statusCode >= 300) {
+      NSString *message = [payload[@"error"] isKindOfClass:NSString.class] ? payload[@"error"] : @"Media upload failed.";
+      reject(@"media_upload_failed", message, nil);
+    } else {
+      resolve(payload[@"message"] ?: @{});
+    }
+    [session finishTasksAndInvalidate];
+  }];
+  [task resume];
+}
+
+- (void)URLSession:(NSURLSession *)session task:(NSURLSessionTask *)task didSendBodyData:(int64_t)bytesSent totalBytesSent:(int64_t)totalBytesSent totalBytesExpectedToSend:(int64_t)totalBytesExpectedToSend
+{
+  if (!_hasDesktopShortcutListeners || totalBytesExpectedToSend <= 0) return;
+  [self sendEventWithName:@"mediaUploadProgress" body:@{ @"taskId": @(task.taskIdentifier), @"progress": @((double)totalBytesSent / (double)totalBytesExpectedToSend) }];
+}
 
 + (BOOL)storeKeychainValue:(NSString *)value account:(NSString *)account error:(NSError **)error
 {
@@ -455,7 +601,7 @@ RCT_EXPORT_MODULE(ClaireCompanion)
 
 - (NSArray<NSString *> *)supportedEvents
 {
-  return @[ @"desktopCommand", @"notificationResponse", @"notificationTokenChanged" ];
+  return @[ @"desktopCommand", @"notificationResponse", @"notificationTokenChanged", @"mediaUploadProgress" ];
 }
 
 - (void)startObserving

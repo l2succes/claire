@@ -73,6 +73,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
       MessageContentType.IMAGE,
       MessageContentType.VIDEO,
       MessageContentType.AUDIO,
+      MessageContentType.VOICE,
       MessageContentType.DOCUMENT,
     ],
   };
@@ -973,6 +974,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
 
     // Send the message
     let eventId: string;
+    let uploadedContentUri: string | undefined;
 
     if (message.media && message.media.length > 0) {
       // Upload and send media
@@ -980,14 +982,38 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
       const uploaded = await this.matrixClient.uploadContent(media.data as Buffer, {
         type: media.mimeType,
       });
+      uploadedContentUri = uploaded.content_uri;
 
       const msgtype = this.contentTypeToMatrixMsgtype(media.type);
+      const fileName = media.fileName || 'attachment';
+      const caption = message.content.trim();
+      const info = {
+        mimetype: media.mimeType,
+        size: media.fileSize,
+        w: media.width,
+        h: media.height,
+        duration: media.durationMs,
+      };
       // Send media message using sendEvent for better type compatibility
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const response = await this.matrixClient.sendEvent(roomId, EventType.RoomMessage, {
         msgtype: msgtype as any,
-        body: message.content || media.fileName || 'media',
+        body: caption || fileName,
+        filename: fileName,
         url: uploaded.content_uri,
+        info,
+        ...(caption ? {
+          format: 'org.matrix.custom.html',
+          formatted_body: caption
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;'),
+        } : {}),
+        ...(media.isVoice ? { 'org.matrix.msc3245.voice': {} } : {}),
+        ...(message.replyToMessageId ? {
+          'm.relates_to': { 'm.in_reply_to': { event_id: message.replyToMessageId } },
+        } : {}),
       });
       eventId = response.event_id;
     } else {
@@ -1025,6 +1051,27 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
       isFromMe: true,
       isRead: true,
       hasMedia: !!message.media?.length,
+      media: message.media?.map((media) => ({
+        id: eventId,
+        type: media.type,
+        url: uploadedContentUri,
+        mimeType: media.mimeType,
+        fileName: media.fileName,
+        fileSize: media.fileSize,
+        width: media.width,
+        height: media.height,
+        duration: media.durationMs,
+      })),
+      platformMetadata: message.media?.length ? {
+        mediaUrl: uploadedContentUri,
+        mediaInfo: {
+          mimetype: message.media[0].mimeType,
+          size: message.media[0].fileSize,
+          w: message.media[0].width,
+          h: message.media[0].height,
+          duration: message.media[0].durationMs,
+        },
+      } : undefined,
     };
   }
 

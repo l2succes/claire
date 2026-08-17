@@ -33,6 +33,7 @@ export interface MacNotificationRegistration {
 }
 
 export interface NotificationResponsePayload { chatId: string; messageId?: string }
+export interface NativeOutgoingMedia { uri: string; fileName: string; mimeType: string; kind: 'image' | 'video' | 'voice'; fileSize: number; durationMs?: number }
 
 export interface NativeIMessageMessage {
   rowId: number;
@@ -75,6 +76,11 @@ interface NativeCompanionModule {
   setDockBadge?(unreadCount: number): Promise<boolean>;
   fetchIMessageMessages?(cursor: number, limit: number): Promise<NativeIMessageMessage[]>;
   sendIMessage?(recipient: string, text: string): Promise<boolean>;
+  pickOutgoingMedia?(): Promise<NativeOutgoingMedia | null>;
+  startVoiceRecording?(): Promise<boolean>;
+  stopVoiceRecording?(): Promise<NativeOutgoingMedia>;
+  cancelVoiceRecording?(): Promise<boolean>;
+  uploadOutgoingMedia?(apiUrl: string, accessToken: string, platform: string, sessionId: string, chatId: string, content: string, media: NativeOutgoingMedia): Promise<{ platformMessageId?: string }>;
 }
 
 const nativeCompanion = NativeModules.ClaireCompanion as NativeCompanionModule | undefined;
@@ -83,6 +89,34 @@ const nativeCompanion = NativeModules.ClaireCompanion as NativeCompanionModule |
 const desktopEvents = nativeCompanion ? new NativeEventEmitter(nativeCompanion as unknown as NativeModule) : null;
 
 export const companionBridge = {
+  async pickOutgoingMedia(): Promise<NativeOutgoingMedia | null> {
+    if (!nativeCompanion?.pickOutgoingMedia) throw new Error('This build does not include the media picker.');
+    return nativeCompanion.pickOutgoingMedia();
+  },
+
+  async startVoiceRecording(): Promise<boolean> {
+    if (!nativeCompanion?.startVoiceRecording) throw new Error('This build does not include voice recording.');
+    return nativeCompanion.startVoiceRecording();
+  },
+
+  async stopVoiceRecording(): Promise<NativeOutgoingMedia> {
+    if (!nativeCompanion?.stopVoiceRecording) throw new Error('This build does not include voice recording.');
+    return nativeCompanion.stopVoiceRecording();
+  },
+
+  async cancelVoiceRecording(): Promise<boolean> {
+    if (!nativeCompanion?.cancelVoiceRecording) return true;
+    return nativeCompanion.cancelVoiceRecording();
+  },
+  async uploadOutgoingMedia(apiUrl: string, accessToken: string, platform: string, sessionId: string, chatId: string, content: string, media: NativeOutgoingMedia): Promise<{ platformMessageId?: string }> {
+    if (!nativeCompanion?.uploadOutgoingMedia) throw new Error('This build does not include native media uploads.');
+    return nativeCompanion.uploadOutgoingMedia(apiUrl, accessToken, platform, sessionId, chatId, content, media);
+  },
+  subscribeMediaUploadProgress(listener: (progress: number) => void): () => void {
+    if (!desktopEvents) return () => {};
+    const subscription = desktopEvents.addListener('mediaUploadProgress', (event: { progress?: number }) => listener(event.progress || 0));
+    return () => subscription.remove();
+  },
   subscribeDesktopCommands(listener: (command: DesktopCommand) => void): () => void {
     if (!desktopEvents) return () => {};
     const subscription = desktopEvents.addListener('desktopCommand', (event: { command?: DesktopCommand }) => {

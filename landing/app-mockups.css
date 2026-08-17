@@ -725,6 +725,16 @@ textarea {
   text-align: right;
   margin-top: 4px;
 }
+.media-bubble { width: 76%; }
+.media-bubble p { margin: 6px 0 0; font-size: 8px; }
+.media-video-preview { height: 82px; display: grid; grid-template-columns: 1fr auto; align-items: end; padding: 7px; border-radius: 10px; color: white; background: linear-gradient(145deg, #343936, #161816); }
+.media-video-preview button { position: absolute; justify-self: center; align-self: center; width: 31px; height: 31px; border: 0; border-radius: 50%; color: var(--claire-ink); background: var(--claire-lime); }
+.media-video-preview span, .media-video-preview b { font-size: 6px; }
+.media-audio-player { display: grid; grid-template-columns: 25px 1fr auto; align-items: center; gap: 7px; min-width: 184px; }
+.media-audio-player button { width: 25px; height: 25px; border: 0; border-radius: 50%; background: var(--claire-ink); color: white; font-size: 7px; }
+.media-audio-player > div { height: 4px; border-radius: 99px; background: var(--neutral-200); overflow: hidden; }
+.media-audio-player i { display: block; width: var(--media-progress); height: 100%; background: var(--claire-focus); }
+.media-audio-player time { font: 6px var(--font-mono); color: var(--neutral-600); }
 .promise-inline {
   border: 1px solid #bfae77;
   background: #fff8dc;
@@ -792,6 +802,13 @@ textarea {
   color: white;
   border-radius: 11px;
 }
+.media-compose-preview { position: absolute; left: 13px; right: 13px; bottom: 61px; display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--claire-ink); border-radius: 12px; background: var(--claire-sky); }
+.media-compose-preview div { flex: 1; }
+.media-compose-preview b, .media-compose-preview small { display: block; font-size: 7px; }
+.media-compose-preview small { margin-top: 2px; color: var(--neutral-600); }
+.media-compose-preview button { border: 0; background: transparent; }
+.media-attachment-menu { position: absolute; left: 12px; bottom: 116px; display: flex; gap: 4px; padding: 6px; border: 1px solid var(--neutral-200); border-radius: 10px; background: white; box-shadow: 0 5px 15px rgb(16 18 15/10%); }
+.media-attachment-menu span { padding: 4px 5px; border-radius: 7px; background: var(--neutral-100); font-size: 6px; }
 .copilot-screen {
   background: var(--claire-sky);
   padding: 22px 14px;
