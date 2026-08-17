@@ -23,21 +23,24 @@ The full neutral scale and CSS custom properties live in `tokens.css`.
 
 ## Typography
 
-Claire uses **two families only**. Extra weights can look like extra fonts — they are not.
+Claire uses **three families, with strict jobs**. Extra weights can look like extra fonts — they are not.
 
 | Family | Loaded weights | Token | Use |
 | --- | --- | --- | --- |
-| **Inter** | 400, 500, 600, 700 | `--font-sans` | Voice, headings, body, nav, buttons, card titles |
+| **Public Sans** | 400, 500, 600, 700 | `--font-sans` | Body, nav, buttons, cards, labels, forms — everything at section-title size and below |
+| **Inter** | 600, 700 | `--font-display` | Big titles only: `h1`, `h2`, hero display, mobile `display`/`screenTitle`, the price figure |
 | **DM Mono** | 400, 500 | `--font-mono` | Kickers, status pills, captions, code, system metadata |
 
-Do not introduce a third family for marketing, cards, or the website. Card titles such as “Claire AI credits” use Inter 700, same as `h1–h4`.
+Do not introduce a fourth family. The split exists because Public Sans is the more comfortable reading and interface face, while Inter holds the very tight display tracking (-0.05em to -0.075em) that the marketing headlines rely on. If a title is under ~24px it is UI, not display, and takes Public Sans.
 
 Weight roles:
 
-- Inter 400 — body and supporting paragraphs
-- Inter 500 — navigation and quiet UI labels
-- Inter 600 — display titles and some buttons
-- Inter 700 — section headings, card titles (`h1–h4`)
+- Public Sans 400 — body and supporting paragraphs
+- Public Sans 500 — navigation and quiet UI labels
+- Public Sans 600 — buttons and emphasis
+- Public Sans 700 — card titles (`h3`, `h4`)
+- Inter 600 — hero and display titles
+- Inter 700 — section headings (`h1`, `h2`)
 - DM Mono 400 — inline code
 - DM Mono 500 — kickers, pills, and mono captions
 
@@ -45,11 +48,11 @@ Scale:
 
 - Display: Inter 600, `clamp(3.25rem, 8vw, 7.5rem)`, 0.88 line-height, -0.075em tracking.
 - Section heading: Inter 700, `clamp(1.8rem, 3vw, 2.75rem)`, 1.02 line-height, -0.05em tracking.
-- Card title: Inter 700, ~18px, -0.035em tracking.
-- Body: Inter 400, 1rem / 1.5. Large intro copy uses 1.125rem.
+- Card title: Public Sans 700, ~18px, -0.035em tracking.
+- Body: Public Sans 400, 1rem / 1.5. Large intro copy uses 1.125rem.
 - Labels: DM Mono 500, 0.75rem or smaller, 0.08–0.12em tracking.
 
-Fallbacks are Avenir Next/Helvetica for sans and SFMono/Consolas for mono. The website loads these faces in `website/src/app/layout.tsx`.
+Fallbacks are Avenir Next/Helvetica for sans and SFMono/Consolas for mono. The website loads these faces in `website/src/app/layout.tsx`; the native apps bundle static TTFs from `mobile/assets/fonts/` and `desktop/macos/assets/fonts/`. All three families are SIL OFL 1.1.
 
 ## Foundations
 

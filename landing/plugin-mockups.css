@@ -1223,3 +1223,9 @@ main {
     flex-direction: column;
   }
 }
+
+/* Big titles keep the display face; body and UI are Public Sans. */
+h1,
+h2 {
+  font-family: var(--font-display);
+}

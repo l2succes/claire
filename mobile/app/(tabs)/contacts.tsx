@@ -3,7 +3,7 @@ import { FlatList, Modal, Pressable, ScrollView, Text, View } from 'react-native
 import { Check, ChevronLeft, ListFilter, Search, Sparkles } from 'lucide-react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { colors, mobileType, radius, space } from '@claire/design-system';
-import { supabase } from '../../services/supabase';
+import { supabase, type DbRow } from '../../services/supabase';
 import { useAuthStore } from '../../stores/authStore';
 import { MobileAvatar, MobileChip, MobileHeader, MobileIconButton, MobileSearchField, MobileState } from '../../components/mobile/claire-mobile';
 import { PlatformName } from '../../components/PlatformIcon';
@@ -51,7 +51,7 @@ export default function ContactsScreen() {
       if (chatResult.error) throw chatResult.error;
       const chatsByContact = new Map<string, Contact['chat']>();
       for (const chat of chatResult.data || []) if (chat.contact_id && !chatsByContact.has(chat.contact_id)) chatsByContact.set(chat.contact_id, chat);
-      setContacts((contactResult.data || []).map(contact => ({ ...contact, chat: chatsByContact.get(contact.id) })) as Contact[]);
+      setContacts((contactResult.data || []).map((contact: DbRow) => ({ ...contact, chat: chatsByContact.get(contact.id) })) as Contact[]);
     }).catch(error => console.error('[People] Failed to load contacts', error)).finally(() => setLoading(false));
   }, [user?.id]);
 

@@ -14,7 +14,9 @@ interface SessionHealth {
 }
 
 export class SessionMonitorService extends EventEmitter {
-  private monitoringInterval: NodeJS.Timeout | null = null;
+  // `ReturnType<typeof setInterval>`, not `NodeJS.Timeout`: a transitive
+  // dependency pulls in the DOM lib, whose `setInterval` returns a number.
+  private monitoringInterval: ReturnType<typeof setInterval> | null = null;
   private sessionHealth: Map<string, SessionHealth> = new Map();
   private readonly CHECK_INTERVAL = 30000; // 30 seconds
   private readonly MAX_FAILURES = 3;

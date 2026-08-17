@@ -19,7 +19,7 @@ export function AskClaire() {
 
   return (
     <form
-      className="mb-8 rounded-[var(--radius-md)] border border-neutral-200 bg-paper p-4"
+      className="ask-claire"
       onSubmit={async (event) => {
         event.preventDefault();
         setPending(true);
@@ -33,11 +33,11 @@ export function AskClaire() {
         setPending(false);
       }}
     >
-      <label className="mb-2 block font-mono text-[11px] font-medium tracking-[0.12em] uppercase">
+      <label className="ask-claire-label">
         Ask Claire
       </label>
       <textarea
-        className="mb-3 w-full rounded-[var(--radius-sm)] border border-neutral-200 bg-cream p-3 text-sm"
+        className="ask-claire-input"
         maxLength={1200}
         rows={3}
         value={question}
@@ -48,13 +48,13 @@ export function AskClaire() {
         {pending ? 'Asking…' : 'Ask'}
       </Button>
       {result?.error ? (
-        <p className="mt-3 text-sm text-neutral-600">
+        <p className="ask-claire-message">
           {result.message ?? 'Ask Claire is unavailable.'}{' '}
           {result.fallback === 'search' ? 'Use the search box instead.' : null}
         </p>
       ) : null}
       {result?.answer ? (
-        <div className="mt-3 text-sm">
+        <div className="ask-claire-message">
           <p>{result.answer}</p>
           {result.sources?.length ? (
             <ul className="mt-2 list-disc pl-5">

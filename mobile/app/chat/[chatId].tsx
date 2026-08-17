@@ -7,7 +7,7 @@ import { ImageIcon, Volume2, Video, FileText, AlertCircle, Link2, MoreHorizontal
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react';
-import { supabase } from '../../services/supabase';
+import { supabase, type DbRow } from '../../services/supabase';
 import { platformsApi, API_BASE_URL } from '../../services/platforms';
 import { useAuthStore } from '../../stores/authStore';
 import { usePlatformStore } from '../../stores/platformStore';
@@ -264,7 +264,7 @@ export default function ChatScreen() {
       let loadedMessages = data || [];
       // Assistant citations can reference older history than the normal chat
       // window. Fetch the cited row explicitly so it is always reachable.
-      if (highlightMessageId && !loadedMessages.some(message => message.id === highlightMessageId)) {
+      if (highlightMessageId && !loadedMessages.some((message: DbRow) => message.id === highlightMessageId)) {
         const { data: highlightedMessage, error: highlightError } = await supabase
           .from('messages')
           .select('id, chat_id, content, timestamp, from_me, contact_name, contact_phone, content_type, media_url, media_mime_type')
@@ -275,10 +275,16 @@ export default function ChatScreen() {
         if (highlightError) throw highlightError;
         if (highlightedMessage) loadedMessages = [...loadedMessages, highlightedMessage];
       }
-      const deduplicated = [...new Map(loadedMessages.map(message => [message.id, message])).values()]
+      const byId = new Map<string, ChatMessage>(
+        loadedMessages.map((message: DbRow) => [message.id as string, message as ChatMessage]),
+      );
+      const deduplicated = [...byId.values()]
         .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
       setMessages((current) => keepPendingSends(deduplicated, current));
-      if (usesNativeMobileCache()) void cacheTimeline(user.id, chatId, deduplicated).catch(() => undefined);
+      // The timeline select does not return chat_id, so stamp it on before
+      // caching: cacheTimeline keys rows by conversation and silently caches
+      // orphans without it.
+      if (usesNativeMobileCache()) void cacheTimeline(user.id, chatId, deduplicated.map((message) => ({ ...message, chat_id: chatId }))).catch(() => undefined);
     } catch (err) {
       console.error('Failed to fetch messages:', err);
     } finally {

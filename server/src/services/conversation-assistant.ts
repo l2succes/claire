@@ -2,7 +2,7 @@ import { createHash } from 'crypto';
 import OpenAI from 'openai';
 import { openaiConfig } from '../config';
 import { logger } from '../utils/logger';
-import { supabase } from './supabase';
+import { supabase, type DbRow } from './supabase';
 
 const RETRIEVAL_LIMIT = 12;
 const BACKFILL_BATCH_SIZE = 100;
@@ -405,7 +405,7 @@ class ConversationAssistantService {
     const { data, error } = await supabase.from('contact_profiles')
       .select('chat_id, ai_instruction').eq('user_id', userId).in('chat_id', chatIds).not('ai_instruction', 'is', null);
     if (error) throw error;
-    return (data || []).map(row => `Chat ${row.chat_id}: ${row.ai_instruction}`).join('\n');
+    return (data || []).map((row: DbRow) => `Chat ${row.chat_id}: ${row.ai_instruction}`).join('\n');
   }
 
   private async ensureConversationThread(userId: string, chatId: string): Promise<AssistantThread> {

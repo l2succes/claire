@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useInfiniteQuery, useQueryClient, type InfiniteData, type QueryClient } from '@tanstack/react-query';
-import { supabase } from '../services/supabase';
+import { supabase, type DbRow } from '../services/supabase';
 import { Platform } from '../types/platform';
 import { cacheTimeline, hydrateMobileCache, usesNativeMobileCache, type CachedChat } from '../services/mobile-cache';
 
@@ -346,12 +346,12 @@ export function useInboxMessages(userId?: string) {
         throw contactsError;
       }
       const avatars = new Map(
-        (contacts || []).map((contact) => [
+        (contacts || []).map((contact: DbRow) => [
           `${contact.platform}:${contact.platform_contact_id}`,
           contact.avatar_url,
         ]),
       );
-      const rows = (data ?? []).map((row) => ({
+      const rows = (data ?? []).map((row: DbRow) => ({
         ...row,
         contacts: {
           avatar_url: avatars.get(`${row.platform || Platform.WHATSAPP}:${row.contact_phone || ''}`) || null,

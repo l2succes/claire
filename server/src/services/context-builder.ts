@@ -1,5 +1,5 @@
 import { logger } from '../utils/logger';
-import { supabase } from './supabase';
+import { supabase, type DbRow } from './supabase';
 import { memoryService, MemoryEntry } from './memory-service';
 
 interface ConversationContext {
@@ -139,7 +139,7 @@ export class ContextBuilder {
 
     if (!messages) return [];
 
-    return messages.reverse().map(msg => ({
+    return messages.reverse().map((msg: DbRow) => ({
       id: msg.whatsapp_id,
       content: msg.content || '',
       fromMe: msg.from_me,
@@ -318,7 +318,7 @@ export class ContextBuilder {
 
     // Simple keyword-based topic detection
     const allContent = recentMessages
-      .map(m => m.content?.toLowerCase() || '')
+      .map((m: DbRow) => m.content?.toLowerCase() || '')
       .join(' ');
 
     const topics = [

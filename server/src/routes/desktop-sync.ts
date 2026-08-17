@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { requireAuth } from '../middleware/auth';
 import { validateRequest } from '../middleware/validation';
-import { supabase } from '../services/supabase';
+import { supabase, type DbRow } from '../services/supabase';
 import { logger } from '../utils/logger';
 
 const router = Router();
@@ -33,7 +33,7 @@ router.get('/bootstrap', requireAuth, async (req: Request, res: Response) => {
     if (cursorResult.error) throw cursorResult.error;
 
     const chats = chatsResult.data || [];
-    const chatIds = chats.map((chat) => chat.id);
+    const chatIds = chats.map((chat: DbRow) => chat.id);
     const latestByChat = new Map<string, Record<string, unknown>>();
     if (chatIds.length) {
       const { data: latest, error } = await supabase
@@ -48,7 +48,7 @@ router.get('/bootstrap', requireAuth, async (req: Request, res: Response) => {
 
     res.json({
       cursor: cursorResult.data?.cursor || 0,
-      chats: chats.map((chat) => ({ ...chat, latest_message: latestByChat.get(chat.id) || null })),
+      chats: chats.map((chat: DbRow) => ({ ...chat, latest_message: latestByChat.get(chat.id) || null })),
       promises: promisesResult.data || [],
       preferences: preferencesResult.data || null,
     });

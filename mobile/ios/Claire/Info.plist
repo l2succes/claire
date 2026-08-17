@@ -67,6 +67,17 @@
     </array>
     <key>RCTNewArchEnabled</key>
     <true/>
+    <key>UIAppFonts</key>
+    <array>
+      <string>PublicSans-Regular.ttf</string>
+      <string>PublicSans-Medium.ttf</string>
+      <string>PublicSans-SemiBold.ttf</string>
+      <string>PublicSans-Bold.ttf</string>
+      <string>Inter-SemiBold.ttf</string>
+      <string>Inter-Bold.ttf</string>
+      <string>DMMono-Regular.ttf</string>
+      <string>DMMono-Medium.ttf</string>
+    </array>
     <key>UILaunchStoryboardName</key>
     <string>SplashScreen</string>
     <key>UIRequiredDeviceCapabilities</key>

@@ -3,7 +3,7 @@ import { FlatList, Pressable, Text, TextInput, View } from 'react-native';
 import { ChevronRight, X } from 'lucide-react-native';
 import { Stack, router } from 'expo-router';
 import { colors, mobileType, space } from '@claire/design-system';
-import { supabase } from '../../services/supabase';
+import { supabase, type DbRow } from '../../services/supabase';
 import { useAuthStore } from '../../stores/authStore';
 import { MobileAvatar, MobileIconButton, MobileState, SectionLabel } from '../../components/mobile/claire-mobile';
 import { PeopleSkeleton } from '../../components/claire/skeleton';
@@ -76,8 +76,8 @@ export function ComposeScreen() {
       if (chatResult.error) throw chatResult.error;
       const contacts = Array.isArray(contactResult.data) ? contactResult.data : [];
       const chats = Array.isArray(chatResult.data) ? chatResult.data : chatResult.data ? [chatResult.data] : [];
-      const contactsById = new Map(contacts.map(contact => [contact.id as string, contact]));
-      setRecipients(chats.map(chat => {
+      const contactsById = new Map<string, DbRow>(contacts.map((contact: DbRow) => [contact.id as string, contact]));
+      setRecipients(chats.map((chat: DbRow) => {
         const contact = chat.contact_id ? contactsById.get(chat.contact_id) : undefined;
         const name = chat.name || contact?.name || contact?.inferred_name || contact?.phone_number || 'Unknown conversation';
         return {

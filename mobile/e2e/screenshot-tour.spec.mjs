@@ -136,6 +136,11 @@ async function signIn(page) {
   await page.getByTestId('signin-password-input').fill('password123');
   await page.getByTestId('signin-submit').click();
   await page.waitForURL('**/dashboard', { timeout: 15_000 });
+
+  // `/dashboard` is the home / daily-brief screen; the inbox lives on
+  // `/messages`, which is what the tour captures.
+  await page.goto('/messages');
+  await page.getByTestId('messages-screen').waitFor({ timeout: 15_000 });
 }
 
 async function openReplyOptions(page) {

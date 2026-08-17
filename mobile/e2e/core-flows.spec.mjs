@@ -741,6 +741,11 @@ async function signIn(page) {
 
   // Mock auth succeeds + platform sessions check returns connected → goes to dashboard
   await page.waitForURL('**/dashboard', { timeout: 15_000 });
+
+  // `/dashboard` is the home / daily-brief screen; the inbox lives on
+  // `/messages`. Every test below asserts against the inbox, so land there.
+  await page.goto('/messages');
+  await page.getByTestId('messages-screen').waitFor({ timeout: 15_000 });
 }
 
 async function openReplyOptions(page) {

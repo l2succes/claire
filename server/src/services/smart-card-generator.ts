@@ -1,7 +1,7 @@
 import OpenAI from 'openai';
 import { config } from '../config';
 import { logger } from '../utils/logger';
-import { supabase } from './supabase';
+import { supabase, type DbRow } from './supabase';
 
 type ChatCategory = 'personal' | 'friend' | 'business' | 'trip' | 'romantic';
 type SmartCardType = 'maps' | 'flight' | 'datetime' | 'reminder' | 'action';
@@ -124,7 +124,7 @@ class SmartCardGenerator {
 
     const messagesText = (messages || [])
       .reverse()
-      .map(m => `${m.from_me ? 'Me' : (m.contact_name || 'Them')}: ${m.content}`)
+      .map((m: DbRow) => `${m.from_me ? 'Me' : (m.contact_name || 'Them')}: ${m.content}`)
       .join('\n');
 
     const profileJson = profile ? JSON.stringify({

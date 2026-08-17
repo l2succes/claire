@@ -18,7 +18,7 @@ import {
   EventType,
 } from 'matrix-js-sdk';
 import { BasePlatformAdapter } from '../base-adapter';
-import { supabase } from '../../services/supabase';
+import { supabase, type DbRow } from '../../services/supabase';
 import {
   Platform,
   AuthMethod,
@@ -993,9 +993,14 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     if (message.media && message.media.length > 0) {
       // Upload and send media
       const media = message.media[0];
-      const uploaded = await this.matrixClient.uploadContent(media.data as Buffer, {
-        type: media.mimeType,
-      });
+      // A `Buffer` is a `Uint8Array` at runtime, but @types/node parameterises
+      // it on `ArrayBufferLike`, which no longer satisfies the DOM
+      // `BufferSource` the SDK asks for. Re-wrap the bytes as a plain
+      // `Uint8Array` backed by its own `ArrayBuffer`.
+      const uploaded = await this.matrixClient.uploadContent(
+        new Uint8Array(media.data as Buffer),
+        { type: media.mimeType },
+      );
 
       const msgtype = this.contentTypeToMatrixMsgtype(media.type);
       // Send media message using sendEvent for better type compatibility
@@ -1330,7 +1335,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
       return;
     }
 
-    const userIds = new Set((users || []).map((user) => user.id));
+    const userIds = new Set<string>((users || []).map((user: DbRow) => user.id as string));
     if (userIds.size !== 1) {
       this.log('warn', `Skipping orphaned Matrix session repair: expected one user, found ${userIds.size}`);
       return;

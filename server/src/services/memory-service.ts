@@ -1,5 +1,5 @@
 import { logger } from '../utils/logger';
-import { supabase } from './supabase';
+import { supabase, type DbRow } from './supabase';
 
 export interface MemoryEntry {
   key: string;
@@ -29,7 +29,7 @@ export class MemoryService {
       return [];
     }
 
-    return (data ?? []).map((row) => ({
+    return (data ?? []).map((row: DbRow) => ({
       key: row.key,
       value: row.value,
       confidence: row.confidence ?? 1.0,

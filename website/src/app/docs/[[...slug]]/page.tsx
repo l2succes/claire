@@ -11,6 +11,7 @@ import { createRelativeLink } from 'fumadocs-ui/mdx';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { AskClaire } from '@/components/docs/ask-claire';
+import { DocsHome } from '@/components/docs/DocsHome';
 import { getMDXComponents } from '@/components/mdx';
 import { source } from '@/lib/source';
 
@@ -19,13 +20,29 @@ export default async function Page(props: { params: Promise<{ slug?: string[] }>
   const page = source.getPage(params.slug);
   if (!page) notFound();
 
+  if (!params.slug?.length) {
+    return (
+      <DocsPage
+        full
+        toc={[]}
+        breadcrumb={{ enabled: false }}
+        footer={{ enabled: false }}
+        tableOfContent={{ enabled: false }}
+        tableOfContentPopover={{ enabled: false }}
+      >
+        <DocsHome />
+      </DocsPage>
+    );
+  }
+
   const MDX = page.data.body;
   const markdownUrl = `${page.url}.md`;
   const githubPath = page.path.replace(/^\/?/, '');
   const githubUrl = `https://github.com/l2succes/claire/blob/main/docs/${githubPath}`;
 
   return (
-    <DocsPage toc={page.data.toc} full={page.data.full}>
+    <DocsPage toc={page.data.toc} full={page.data.full} className="docs-article">
+      <p className="docs-article-kicker">Claire developer docs</p>
       <DocsTitle>{page.data.title}</DocsTitle>
       <DocsDescription>{page.data.description}</DocsDescription>
       <AskClaire />

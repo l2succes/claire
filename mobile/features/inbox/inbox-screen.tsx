@@ -9,7 +9,7 @@ import { MobileChip, MobileHeader, MobileIconButton, MobileSearchField, MobileSt
 import { useInboxMessages, type InboxMessage } from '../../hooks/useInboxMessages';
 import { useAuthStore } from '../../stores/authStore';
 import { usePlatformStore } from '../../stores/platformStore';
-import { supabase } from '../../services/supabase';
+import { supabase, type DbRow } from '../../services/supabase';
 import { API_BASE_URL } from '../../services/platforms';
 import { Platform } from '../../types/platform';
 import { PlatformBadge } from '../../components/PlatformIcon';
@@ -123,7 +123,7 @@ export function InboxScreen() {
     queryFn: async () => {
       const { data, error } = await supabase.from('promises').select('chat_id').eq('user_id', user!.id).in('status', ['pending', 'open']).not('chat_id', 'is', null);
       if (error) throw error;
-      return new Set((data || []).map(row => row.chat_id as string));
+      return new Set((data || []).map((row: DbRow) => row.chat_id as string));
     },
   });
 

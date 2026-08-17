@@ -13,7 +13,9 @@ interface RealtimeMessage {
 export class RealtimeSyncService extends EventEmitter {
   private userChannels: Map<string, any> = new Map();
   private messageBuffers: Map<string, RealtimeMessage[]> = new Map();
-  private syncIntervals: Map<string, NodeJS.Timeout> = new Map();
+  // See session-monitor.ts: the DOM lib leaks in, so `setInterval` is not
+  // guaranteed to hand back a `NodeJS.Timeout`.
+  private syncIntervals: Map<string, ReturnType<typeof setInterval>> = new Map();
 
   constructor() {
     super();
