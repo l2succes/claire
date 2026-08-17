@@ -337,10 +337,20 @@ export default function ChatScreen() {
     };
   }, [accessToken, chatId]);
 
+  // The realtime channel must live exactly as long as the open conversation.
+  // Depending on these callbacks directly would tie its lifetime to their
+  // identity instead: markConversationRead closes over connectedSessions and
+  // also refreshes the notification badge, so calling it produces a new store
+  // array, a new callback, and another teardown/resubscribe — a feedback loop
+  // that measured 91 joins for three chat opens. Read them through a ref so the
+  // handlers always see the latest version without re-running the effect.
+  const chatEffectRef = useRef({ fetchMessages, markConversationRead, refreshConnection, fetchConvSettings });
+  chatEffectRef.current = { fetchMessages, markConversationRead, refreshConnection, fetchConvSettings };
+
   useEffect(() => {
-    fetchMessages().then(markConversationRead);
-    void refreshConnection();
-    if (chatId) fetchConvSettings(chatId);
+    chatEffectRef.current.fetchMessages().then(() => chatEffectRef.current.markConversationRead());
+    void chatEffectRef.current.refreshConnection();
+    if (chatId) chatEffectRef.current.fetchConvSettings(chatId);
 
     const subscription = supabase
       .channel(`chat-${chatId}-${user?.id ?? 'anonymous'}-${Math.random().toString(36).slice(2, 10)}`)
@@ -349,7 +359,7 @@ export default function ChatScreen() {
           const inserted = payload.new as ChatMessage;
           if (usesNativeMobileCache() && user?.id) void cacheTimeline(user.id, chatId, [{ ...inserted, chat_id: chatId }]).catch(() => undefined);
           setMessages((prev) => mergeChatMessage(prev, inserted));
-          if (!inserted.from_me) void markConversationRead();
+          if (!inserted.from_me) void chatEffectRef.current.markConversationRead();
         }
       )
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages', filter: `chat_id=eq.${chatId}` },
@@ -374,7 +384,7 @@ export default function ChatScreen() {
       });
 
     return () => { supabase.removeChannel(subscription); };
-  }, [chatId, user?.id, fetchMessages, markConversationRead, refreshConnection]);
+  }, [chatId, user?.id]);
 
   useEffect(() => {
     void hydrateChatPreferences();
