@@ -135,13 +135,13 @@ export function SectionLabel({ title, detail }: { title: string; detail?: string
 
 const avatarTones = [colors.blush, colors.sky, colors.mint, colors.lavender] as const;
 
-export function MobileAvatar({ name, uri, size = 46, isGroup = false, badge }: { name: string; uri?: string | null; size?: number; isGroup?: boolean; badge?: ReactNode }) {
+export function MobileAvatar({ name, uri, size = 46, isGroup = false, badge, tone }: { name: string; uri?: string | null; size?: number; isGroup?: boolean; badge?: ReactNode; tone?: string }) {
   const hash = [...name].reduce((total, character) => total + character.charCodeAt(0), 0);
-  const tone = avatarTones[hash % avatarTones.length];
+  const background = tone || avatarTones[hash % avatarTones.length];
   const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase() || '?';
   return (
     <View style={{ width: size, height: size, flexShrink: 0 }}>
-      <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: tone, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+      <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: background, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
         {uri ? <Image source={{ uri }} style={{ width: size, height: size }} contentFit="cover" transition={120} /> : isGroup ? <UserRound size={size * 0.48} color={colors.neutral[600]} /> : <Text style={{ ...mobileType.label, color: colors.ink }}>{initials}</Text>}
       </View>
       {badge ? <View style={{ position: 'absolute', right: -3, bottom: -2 }}>{badge}</View> : null}
