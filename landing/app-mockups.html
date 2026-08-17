@@ -16,19 +16,14 @@
     />
     <link rel="stylesheet" href="./tokens.css" />
     <link rel="stylesheet" href="./app-mockups.css" />
+    <link rel="stylesheet" href="./lab-nav.css" />
     <link rel="icon" href="./assets/brand/claire-app-icon.svg" type="image/svg+xml" />
     <script src="./heroicons.js" defer></script>
     <script src="./app-mockups.js" defer></script>
   </head>
   <body>
-    <header class="gallery-header">
-      <a class="gallery-brand" href="./index.html"><img class="gallery-brand-mark" src="./assets/brand/claire-app-icon-lime.svg" alt="" />claire <span>/ mobile app</span></a>
-      <nav class="gallery-links">
-        <a href="./index.html">Landing</a><a href="./style-guide.html">Style guide</a
-        ><a class="active" href="./app-mockups.html">Mobile</a
-        ><a href="./desktop-mockups.html">Desktop</a><a href="./plugin-mockups.html">Plugins</a>
-      </nav>
-    </header>
+    <header data-lab-nav="mobile"></header>
+    <script src="./lab-nav.js"></script>
     <main>
       <section class="gallery-hero">
         <div>
@@ -45,7 +40,7 @@
           <h3>Four tabs. One profile entry. AI appears in context.</h3>
           <div class="route-flow">
             <span class="primary">Home</span><span class="primary">Inbox</span
-            ><span class="primary">Promises</span><span class="primary">Search</span
+            ><span class="primary">Loops</span><span class="primary">Search</span
             ><span>Chat</span><span>Contact memory</span><span>Compose</span><span>Settings</span
             ><span>Accounts</span>
           </div>
@@ -82,7 +77,7 @@
           </article>
           <article class="map-card">
             <span>06 / FOLLOW THROUGH</span>
-            <h3>Promises</h3>
+            <h3>Loops</h3>
             <p>Open, overdue, completed, and message source.</p>
           </article>
           <article class="map-card">
@@ -159,7 +154,7 @@
                 <div class="tab-bar">
                   <span class="active"><i data-heroicon="home"></i></span
                   ><span><i data-heroicon="inbox"></i></span
-                  ><span class="ask-claire"><i data-heroicon="sparkles"></i></span
+                  ><span class="ask-claire"><img class="claire-mark" src="./assets/brand/claire-kept-thread-flipped-paper-dot.svg" alt="" /></span
                   ><span><i data-heroicon="promises"></i></span
                   ><span><i data-heroicon="search"></i></span>
                 </div>
@@ -245,7 +240,7 @@
                 <div class="tab-bar">
                   <span><i data-heroicon="home"></i></span
                   ><span class="active"><i data-heroicon="inbox"></i></span
-                  ><span class="ask-claire"><i data-heroicon="sparkles"></i></span
+                  ><span class="ask-claire"><img class="claire-mark" src="./assets/brand/claire-kept-thread-flipped-paper-dot.svg" alt="" /></span
                   ><span><i data-heroicon="promises"></i></span
                   ><span><i data-heroicon="search"></i></span>
                 </div>
@@ -379,19 +374,19 @@
             </p>
           </article>
           <article class="screen-case" data-kind="core">
-            <div class="screen-meta"><b>05 / PROMISES</b><span>PROMISES TAB</span></div>
+            <div class="screen-meta"><b>05 / LOOPS</b><span>LOOPS TAB</span></div>
             <div class="device">
               <div class="island"></div>
               <div class="status"><span>9:41</span><span>● ◒</span></div>
               <div class="screen">
                 <div class="app-title">
-                  <h2>Promises</h2>
-                  <button class="round-button" aria-label="Add person">
+                  <h2>Loops</h2>
+                  <button class="round-button" aria-label="Add loop">
                     <i data-heroicon="plus"></i>
                   </button>
                 </div>
                 <div class="promise-summary">
-                  <div class="metric lime"><strong>4</strong><span>OPEN PROMISES</span></div>
+                  <div class="metric lime"><strong>4</strong><span>OPEN LOOPS</span></div>
                   <div class="metric blue"><strong>2</strong><span>DUE TODAY</span></div>
                 </div>
                 <div class="filter-chips">
@@ -435,7 +430,7 @@
                 <div class="tab-bar">
                   <span><i data-heroicon="home"></i></span
                   ><span><i data-heroicon="inbox"></i></span
-                  ><span class="ask-claire"><i data-heroicon="sparkles"></i></span
+                  ><span class="ask-claire"><img class="claire-mark" src="./assets/brand/claire-kept-thread-flipped-paper-dot.svg" alt="" /></span
                   ><span class="active"><i data-heroicon="promises"></i></span
                   ><span><i data-heroicon="search"></i></span>
                 </div>
@@ -506,7 +501,7 @@
                 <div class="tab-bar">
                   <span><i data-heroicon="home"></i></span
                   ><span class="active"><i data-heroicon="inbox"></i></span
-                  ><span class="ask-claire"><i data-heroicon="sparkles"></i></span
+                  ><span class="ask-claire"><img class="claire-mark" src="./assets/brand/claire-kept-thread-flipped-paper-dot.svg" alt="" /></span
                   ><span><i data-heroicon="promises"></i></span
                   ><span><i data-heroicon="search"></i></span>
                 </div>
@@ -576,6 +571,8 @@
             </div>
             <p class="screen-note">
               A native form sheet keeps AI reversible and subordinate to the active chat.
+              Expanded Ask Claire tab, cited threads, and in-chat presence:
+              <a href="./ask-claire-mockups.html">see the Ask Claire gallery</a>.
             </p>
           </article>
           <article class="screen-case" data-kind="ai">
@@ -617,7 +614,7 @@
                 <div class="tab-bar">
                   <span><i data-heroicon="home"></i></span
                   ><span><i data-heroicon="inbox"></i></span
-                  ><span class="ask-claire"><i data-heroicon="sparkles"></i></span
+                  ><span class="ask-claire"><img class="claire-mark" src="./assets/brand/claire-kept-thread-flipped-paper-dot.svg" alt="" /></span
                   ><span><i data-heroicon="promises"></i></span
                   ><span class="active"><i data-heroicon="search"></i></span>
                 </div>
@@ -759,78 +756,28 @@ Maya is my product lead. Be concise and warm. Avoid over-explaining, and always 
         <div class="phone-grid">
           <article class="screen-case" data-kind="setup">
             <div class="screen-meta"><b>11 / WELCOME</b><span>ONBOARDING</span></div>
-            <div class="device">
+            <div class="device welcome">
               <div class="island"></div>
               <div class="status"><span>9:41</span><span>● ◒</span></div>
-              <div
-                class="screen no-tab"
-                style="
-                  background: var(--claire-sky);
-                  padding: 45px 22px 22px;
-                  display: flex;
-                  flex-direction: column;
-                "
-              >
-                <div
-                  style="
-                    width: 48px;
-                    height: 48px;
-                    border: 1px solid var(--claire-ink);
-                    background: var(--claire-lime);
-                    border-radius: 14px;
-                    display: grid;
-                    place-items: center;
-                    font-size: 22px;
-                    font-weight: 700;
-                  "
-                >
-                  C
+              <div class="screen no-tab welcome-screen">
+                <div class="welcome-hero">
+                  <div class="welcome-mark">C</div>
+                  <div class="welcome-copy">
+                    <div class="tiny-label">WELCOME TO CLAIRE</div>
+                    <h2>Every conversation.<br />One calm place.</h2>
+                    <p>
+                      Bring the people you care about together—and let Claire remember what deserves
+                      your attention.
+                    </p>
+                  </div>
                 </div>
-                <div style="margin: auto 0">
-                  <div class="tiny-label">WELCOME TO CLAIRE</div>
-                  <h2
-                    style="
-                      font-size: 43px;
-                      line-height: 0.96;
-                      letter-spacing: -0.06em;
-                      margin: 12px 0 18px;
-                    "
-                  >
-                    Every conversation.<br />One calm place.
-                  </h2>
-                  <p style="font-size: 12px; max-width: 290px; color: var(--neutral-600)">
-                    Bring the people you care about together—and let Claire remember what deserves
-                    your attention.
+                <div class="welcome-actions">
+                  <button class="welcome-primary">Continue with Google</button>
+                  <button class="welcome-secondary">Use email instead</button>
+                  <p class="welcome-legal">
+                    Your messages are never used to train shared AI models.
                   </p>
                 </div>
-                <button
-                  style="
-                    border: 0;
-                    border-radius: 16px;
-                    background: var(--claire-ink);
-                    color: white;
-                    height: 50px;
-                    font-size: 11px;
-                    font-weight: 600;
-                  "
-                >
-                  Continue with Google</button
-                ><button
-                  style="
-                    border: 1px solid var(--claire-ink);
-                    border-radius: 16px;
-                    background: transparent;
-                    height: 50px;
-                    font-size: 11px;
-                    font-weight: 600;
-                    margin-top: 8px;
-                  "
-                >
-                  Use email instead
-                </button>
-                <p style="text-align: center; font-size: 7px; color: var(--neutral-600)">
-                  Your messages are never used to train shared models.
-                </p>
               </div>
             </div>
             <p class="screen-note">
@@ -912,11 +859,11 @@ Maya is my product lead. Be concise and warm. Avoid over-explaining, and always 
               <div class="screen no-tab">
                 <div class="app-title">
                   <button class="round-button">‹</button>
-                  <h2>Settings</h2>
+                  <h3>Settings</h3>
                   <span style="width: 38px"></span>
                 </div>
                 <div class="settings-profile">
-                  <div class="avatar purple">LM</div>
+                  <div class="avatar">LM</div>
                   <div>
                     <b>Luc Medina</b>
                     <p>luc@example.com · Personal plan</p>

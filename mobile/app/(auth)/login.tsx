@@ -1,36 +1,41 @@
 /**
  * Platform Connection Screen
  *
- * Allows users to connect multiple messaging platforms.
- * Shows platform selector grid and handles authentication flows.
+ * Allows users to connect messaging platforms during onboarding
+ * and later from Settings. Matches the Connected accounts mockup.
  */
 
-import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
-import { useState, useEffect } from 'react';
+import { Alert, Pressable, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { useEffect, useState } from 'react';
 import { router } from 'expo-router';
-import { ArrowRight, Link2, Settings } from 'lucide-react-native';
-import { PlatformSelector } from '../../components/PlatformSelector';
+import { ChevronLeft, HelpCircle, Laptop } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PlatformAuthModal } from '../../components/PlatformAuthModal';
-import { Button } from '../../components/ui/Button';
-import { Platform, PlatformStatus } from '../../types/platform';
-import { usePlatformStore, useHasAnyConnection } from '../../stores/platformStore';
+import { PlatformIcon } from '../../components/PlatformIcon';
+import { Platform, PlatformStatus, PLATFORM_DISPLAY } from '../../types/platform';
+import { useHasAnyConnection, usePlatformStore } from '../../stores/platformStore';
 import { colors, mobileType, radius, space } from '@claire/design-system';
 
+const CONNECT_COPY: Record<Platform, string> = {
+  [Platform.WHATSAPP]: 'Scan a QR code from Linked Devices',
+  [Platform.TELEGRAM]: 'Verify with your phone number',
+  [Platform.INSTAGRAM]: 'Sign in securely with Meta',
+  [Platform.IMESSAGE]: 'Connect with Claire Desktop on a Mac',
+};
+
 export default function LoginScreen() {
+  const insets = useSafeAreaInsets();
   const [selectedPlatform, setSelectedPlatform] = useState<Platform | null>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
 
   const { connectedSessions, initialize, fetchConnectedSessions, isInitialized } = usePlatformStore();
   const hasConnection = useHasAnyConnection();
 
-  // Initialize platform store on mount
   useEffect(() => {
     if (!isInitialized) {
       void initialize();
       return;
     }
-    // Sessions are server-authoritative. Refresh on re-entry instead of
-    // trusting a persisted "Connected" badge from a prior run.
     void fetchConnectedSessions();
   }, [fetchConnectedSessions, initialize, isInitialized]);
 
@@ -53,91 +58,127 @@ export default function LoginScreen() {
     router.replace('/(tabs)/dashboard');
   };
 
-  const connectedCount = connectedSessions.filter(
-    (s) => s.status === PlatformStatus.CONNECTED
-  ).length;
+  const handleBack = () => {
+    if (router.canGoBack()) router.back();
+    else router.replace('/(auth)/signin');
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.cream }} testID="platform-login-screen">
+      <View style={{ paddingTop: Math.max(insets.top, space[2]), paddingHorizontal: space[4], flexDirection: 'row', alignItems: 'center', minHeight: 52 }}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+          onPress={handleBack}
+          style={{ width: 42, height: 42, borderRadius: 13, borderWidth: 1, borderColor: colors.neutral[200], backgroundColor: colors.paper, alignItems: 'center', justifyContent: 'center' }}
+        >
+          <ChevronLeft size={20} color={colors.ink} />
+        </Pressable>
+        <Text style={{ flex: 1, textAlign: 'center', ...mobileType.sectionTitle, color: colors.ink }}>Connected accounts</Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="How connecting works"
+          onPress={() => Alert.alert('Your account stays yours', 'Claire connects through dedicated Matrix bridges. Disconnect at any time from Settings.')}
+          style={{ width: 42, height: 42, borderRadius: 13, borderWidth: 1, borderColor: colors.neutral[200], backgroundColor: colors.paper, alignItems: 'center', justifyContent: 'center' }}
+        >
+          <HelpCircle size={18} color={colors.ink} />
+        </Pressable>
+      </View>
+
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ flexGrow: 1, padding: space[5], gap: space[5] }}
+        contentContainerStyle={{ paddingHorizontal: space[4], paddingTop: space[3], paddingBottom: space[4], gap: space[3] }}
       >
-        {/* Header */}
-        <View style={{ paddingTop: space[8], gap: space[3] }}>
-          <View style={{ width: 54, height: 54, borderRadius: 18, backgroundColor: colors.lime, alignItems: 'center', justifyContent: 'center' }}>
-            <Link2 size={25} color={colors.ink} />
-          </View>
-          <Text style={{ ...mobileType.display, color: colors.ink }}>Bring your chats together.</Text>
-          <Text style={{ ...mobileType.body, color: colors.neutral[600] }}>Connect one account now. You can add more from Settings whenever you like.</Text>
+        <View style={{ backgroundColor: colors.lime, borderRadius: radius.card, padding: space[4], gap: 6 }}>
+          <Text style={{ ...mobileType.monoLabel, color: colors.ink }}>STEP 2 OF 3</Text>
+          <Text style={{ ...mobileType.sectionTitle, color: colors.ink }}>Bring your conversations together.</Text>
+          <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>
+            Connect one now. You can always add or remove accounts later.
+          </Text>
         </View>
 
-        {/* Platform Selector */}
-        <View style={{ gap: space[3] }}>
-          <Text style={{ ...mobileType.monoLabel, color: colors.neutral[800] }}>CHOOSE A PLATFORM</Text>
-          <View style={{ padding: space[3], borderRadius: radius.card, borderWidth: 1, borderColor: colors.neutral[200], backgroundColor: colors.paper }}>
-          <PlatformSelector
-            onPlatformSelect={handlePlatformSelect}
-            selectedPlatform={selectedPlatform}
-            showDescriptions={true}
-            columns={2}
-          />
-          </View>
-        </View>
-
-        {/* Connection Status */}
-        {connectedCount > 0 && (
-          <View style={{ backgroundColor: colors.successSurface, borderRadius: radius.card, padding: space[4] }}>
-            <Text style={{ ...mobileType.body, color: colors.success, fontWeight: '700', textAlign: 'center' }}>
-              {connectedCount} platform{connectedCount !== 1 ? 's' : ''} connected
-            </Text>
-            <Text style={{ ...mobileType.bodySmall, color: colors.success, textAlign: 'center', marginTop: 4 }}>
-              You can connect more platforms or continue to your inbox
-            </Text>
-          </View>
-        )}
-
-        {/* Continue Button */}
-        <View style={{ marginTop: 'auto', paddingBottom: space[4], gap: space[3] }}>
-          {hasConnection ? (
-            <Button
-              variant="primary"
-              onPress={handleContinue}
-              className="w-full"
-              testID="platform-login-continue"
+        {Object.values(Platform).map((platform) => {
+          const connected = connectedSessions.some(
+            (session) => session.platform === platform && session.status === PlatformStatus.CONNECTED
+          );
+          const display = PLATFORM_DISPLAY[platform];
+          return (
+            <Pressable
+              key={platform}
+              testID={`platform-selector-${platform}`}
+              accessibilityRole="button"
+              accessibilityLabel={`${display.name}. ${connected ? 'Connected' : `Connect. ${CONNECT_COPY[platform]}`}`}
+              onPress={() => handlePlatformSelect(platform)}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: space[3],
+                padding: space[3],
+                borderRadius: 16,
+                borderWidth: 1,
+                borderColor: colors.neutral[200],
+                backgroundColor: colors.paper,
+              }}
             >
-              <View className="flex-row items-center justify-center">
-                <Text style={{ ...mobileType.body, color: colors.paper, fontWeight: '700', marginRight: space[2] }}>
-                  Continue to Claire
-                </Text>
-                <ArrowRight size={20} color={colors.lime} />
+              <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: display.color, alignItems: 'center', justifyContent: 'center' }}>
+                <PlatformIcon platform={platform} size={18} color="#FFFFFF" />
               </View>
-            </Button>
-          ) : (
-            <View style={{ alignItems: 'center', gap: space[2] }}>
-              <Settings size={18} color={colors.neutral[400]} />
-              <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600], textAlign: 'center' }}>
-                Connect at least one platform to continue
-              </Text>
-            </View>
-          )}
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>{display.name}</Text>
+                <Text numberOfLines={1} style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>
+                  {connected ? 'Connected' : CONNECT_COPY[platform]}
+                </Text>
+              </View>
+              {connected ? (
+                <Text style={{ ...mobileType.monoLabel, color: colors.success }}>CONNECTED</Text>
+              ) : (
+                <View style={{ borderWidth: 1, borderColor: colors.neutral[200], borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: colors.paper }}>
+                  <Text style={{ ...mobileType.label, color: colors.ink }}>Connect</Text>
+                </View>
+              )}
+            </Pressable>
+          );
+        })}
 
-          {/* Skip for testing in dev mode */}
-          {__DEV__ && !hasConnection && (
-            <TouchableOpacity
-              onPress={handleContinue}
-              className="mt-4 p-2"
-              testID="platform-login-skip-dev"
-            >
-              <Text className="text-gray-400 text-sm text-center">
-                Skip (dev mode)
-              </Text>
-            </TouchableOpacity>
-          )}
+        <View style={{ flexDirection: 'row', gap: space[3], backgroundColor: colors.mint, borderRadius: 16, padding: space[3], marginTop: space[2] }}>
+          <Laptop size={18} color={colors.ink} />
+          <Text style={{ flex: 1, ...mobileType.bodySmall, color: colors.ink }}>
+            <Text style={{ fontWeight: '700' }}>Your account stays yours.{'\n'}</Text>
+            Claire connects through dedicated Matrix bridges. Disconnect at any time.
+          </Text>
         </View>
       </ScrollView>
 
-      {/* Auth Modal */}
+      <View style={{ paddingHorizontal: space[4], paddingTop: space[3], paddingBottom: Math.max(insets.bottom, space[4]), gap: space[2] }}>
+        <Pressable
+          testID="platform-login-continue"
+          accessibilityRole="button"
+          accessibilityState={{ disabled: !hasConnection }}
+          disabled={!hasConnection}
+          onPress={handleContinue}
+          style={{
+            minHeight: 52,
+            borderRadius: 16,
+            backgroundColor: colors.ink,
+            alignItems: 'center',
+            justifyContent: 'center',
+            opacity: hasConnection ? 1 : 0.35,
+          }}
+        >
+          <Text style={{ ...mobileType.body, fontWeight: '700', color: colors.paper }}>Continue</Text>
+        </Pressable>
+        {hasConnection ? null : (
+          <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600], textAlign: 'center' }}>
+            Connect at least one platform to continue
+          </Text>
+        )}
+        {__DEV__ && !hasConnection ? (
+          <TouchableOpacity onPress={handleContinue} testID="platform-login-skip-dev" style={{ padding: space[2] }}>
+            <Text style={{ ...mobileType.bodySmall, color: colors.neutral[400], textAlign: 'center' }}>Skip (dev mode)</Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
+
       <PlatformAuthModal
         platform={selectedPlatform}
         visible={showAuthModal}

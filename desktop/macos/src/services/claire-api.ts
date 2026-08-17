@@ -157,6 +157,10 @@ export type DesktopPromise = {
   chat?: { name?: string | null; is_group?: boolean | null; platform?: string | null; contact?: { name?: string | null; inferred_name?: string | null; avatar_url?: string | null } | null } | null;
 };
 
+export type DesktopBootstrap = { cursor: number; chats: DesktopChat[]; promises: DesktopPromise[]; preferences: DesktopPreferences | null };
+export type DesktopSyncEvent = { cursor: number; entity_type: 'chat' | 'message' | 'promise' | 'contact' | 'preference'; entity_id: string; operation: 'upsert' | 'delete'; payload: Record<string, unknown> | null; created_at: string };
+export type DesktopSyncResult = { events: DesktopSyncEvent[]; cursor: number; hasMore: boolean };
+
 export class ClaireApi {
   constructor(private readonly baseUrl: string, private readonly accessToken: string) {}
 
@@ -185,8 +189,17 @@ export class ClaireApi {
     return this.request<DesktopChat[]>('/messages/chats');
   }
 
-  async getMessages(chatId: string, limit = 100, offset = 0): Promise<DesktopMessage[]> {
-    const response = await this.request<{ messages: DesktopMessage[] }>(`/messages?chatId=${encodeURIComponent(chatId)}&limit=${limit}&offset=${offset}`);
+  async getDesktopBootstrap(): Promise<DesktopBootstrap> {
+    return this.request<DesktopBootstrap>('/desktop/bootstrap');
+  }
+
+  async syncDesktop(cursor: number): Promise<DesktopSyncResult> {
+    return this.request<DesktopSyncResult>(`/desktop/sync?cursor=${Math.max(0, Math.floor(cursor))}`);
+  }
+
+  async getMessages(chatId: string, limit = 100, offset = 0, before?: { timestamp: string; id: string }): Promise<DesktopMessage[]> {
+    const cursor = before ? `&beforeTimestamp=${encodeURIComponent(before.timestamp)}&beforeId=${encodeURIComponent(before.id)}` : '';
+    const response = await this.request<{ messages: DesktopMessage[] }>(`/messages?chatId=${encodeURIComponent(chatId)}&limit=${limit}&offset=${offset}${cursor}`);
     return [...response.messages].reverse();
   }
 

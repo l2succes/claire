@@ -73,6 +73,10 @@ interface NativeCompanionModule {
   setDesktopPreference?(key: string, value: string): Promise<boolean>;
   openCompactChatWindow?(conversationId: string | null): Promise<boolean>;
   setDockBadge?(unreadCount: number): Promise<boolean>;
+  readEncryptedCache?(userId: string): Promise<string | null>;
+  writeEncryptedCache?(userId: string, payload: string): Promise<boolean>;
+  clearEncryptedCache?(userId: string): Promise<boolean>;
+  getEncryptedCacheInfo?(userId: string): Promise<{ bytes: number; updatedAt: string | null }>;
   fetchIMessageMessages?(cursor: number, limit: number): Promise<NativeIMessageMessage[]>;
   sendIMessage?(recipient: string, text: string): Promise<boolean>;
 }
@@ -217,6 +221,26 @@ export const companionBridge = {
   async setDockBadge(unreadCount: number): Promise<boolean> {
     if (!nativeCompanion?.setDockBadge) return false;
     return nativeCompanion.setDockBadge(Math.max(0, Math.floor(unreadCount)));
+  },
+
+  async readEncryptedCache(userId: string): Promise<string | null> {
+    if (!nativeCompanion?.readEncryptedCache) return null;
+    return nativeCompanion.readEncryptedCache(userId);
+  },
+
+  async writeEncryptedCache(userId: string, payload: string): Promise<boolean> {
+    if (!nativeCompanion?.writeEncryptedCache) return false;
+    return nativeCompanion.writeEncryptedCache(userId, payload);
+  },
+
+  async clearEncryptedCache(userId: string): Promise<boolean> {
+    if (!nativeCompanion?.clearEncryptedCache) return true;
+    return nativeCompanion.clearEncryptedCache(userId);
+  },
+
+  async getEncryptedCacheInfo(userId: string): Promise<{ bytes: number; updatedAt: string | null }> {
+    if (!nativeCompanion?.getEncryptedCacheInfo) return { bytes: 0, updatedAt: null };
+    return nativeCompanion.getEncryptedCacheInfo(userId);
   },
 
   async fetchIMessageMessages(cursor: number, limit = 200): Promise<NativeIMessageMessage[]> {

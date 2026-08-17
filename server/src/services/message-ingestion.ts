@@ -386,6 +386,25 @@ export class MessageIngestionService extends EventEmitter {
   }
 
   /**
+   * Cursor pagination is stable while new messages arrive. Offset pagination
+   * remains available for older clients, but desktop local sync uses this
+   * method when loading older timeline pages.
+   */
+  async getChatMessagesBefore(userId: string, chatId: string, limit: number, before?: { timestamp: string; id: string }) {
+    let query = supabase
+      .from('messages')
+      .select(MESSAGE_SELECT)
+      .eq('user_id', userId)
+      .eq('chat_id', chatId);
+    if (before) {
+      query = query.or(`timestamp.lt.${before.timestamp},and(timestamp.eq.${before.timestamp},id.lt.${before.id})`);
+    }
+    const { data, error } = await query.order('timestamp', { ascending: false }).order('id', { ascending: false }).limit(limit);
+    if (error) throw error;
+    return data ?? [];
+  }
+
+  /**
    * Search messages by content (case-insensitive).
    */
   async searchMessages(userId: string, query: string, limit: number = 50) {

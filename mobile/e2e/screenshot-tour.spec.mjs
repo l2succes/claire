@@ -131,6 +131,7 @@ test.use({ viewport: { width: 390, height: 844 } }); // iPhone 14 Pro size
 async function signIn(page) {
   await page.goto('/signin');
   await page.waitForLoadState('domcontentloaded');
+  await page.getByTestId('signin-use-email').click();
   await page.getByTestId('signin-email-input').fill('test@claire.local');
   await page.getByTestId('signin-password-input').fill('password123');
   await page.getByTestId('signin-submit').click();
@@ -140,6 +141,11 @@ async function signIn(page) {
   // `/messages`, which is what the tour captures.
   await page.goto('/messages');
   await page.getByTestId('messages-screen').waitFor({ timeout: 15_000 });
+}
+
+async function openReplyOptions(page) {
+  await page.getByTestId('chat-composer-add').click();
+  await page.getByTestId('composer-action-reply-options').click();
 }
 
 test.describe('Visual tour', () => {
@@ -156,6 +162,7 @@ test.describe('Visual tour', () => {
   test('02 — sign-in filled', async ({ page }) => {
     await page.goto('/signin');
     await expect(page.getByTestId('signin-screen')).toBeVisible();
+    await page.getByTestId('signin-use-email').click();
     await page.getByTestId('signin-email-input').fill('test@claire.local');
     await page.getByTestId('signin-password-input').fill('password123');
     await page.screenshot({ path: `${SCREENSHOTS_DIR}/02-signin-filled.png` });
@@ -181,6 +188,7 @@ test.describe('Visual tour', () => {
     await signIn(page);
     await page.locator('[data-testid^="message-card-"]').first().click();
     await expect(page.getByTestId('chat-screen')).toBeVisible({ timeout: 10_000 });
+    await openReplyOptions(page);
     await expect(page.getByTestId('ai-suggestion-strip')).toBeVisible({ timeout: 8_000 });
     await page.screenshot({ path: `${SCREENSHOTS_DIR}/05-chat-ai-suggestions.png` });
   });
@@ -188,6 +196,8 @@ test.describe('Visual tour', () => {
   test('06 — composer filled from suggestion', async ({ page }) => {
     await signIn(page);
     await page.locator('[data-testid^="message-card-"]').first().click();
+    await expect(page.getByTestId('chat-screen')).toBeVisible({ timeout: 10_000 });
+    await openReplyOptions(page);
     await expect(page.getByTestId('ai-suggestion-strip')).toBeVisible({ timeout: 8_000 });
     await page.getByTestId('ai-suggestion-use-0').click();
     await page.waitForTimeout(300);
@@ -202,7 +212,7 @@ test.describe('Visual tour', () => {
       const el = document.getElementById('error-toast');
       if (el) el.style.pointerEvents = 'none';
     });
-    await page.click('text=Promises');
+    await page.getByTestId('tab-promises').click();
     await expect(page.getByTestId('promises-screen')).toBeVisible({ timeout: 10_000 });
     await page.waitForTimeout(500);
     await page.screenshot({ path: `${SCREENSHOTS_DIR}/07-promises.png` });

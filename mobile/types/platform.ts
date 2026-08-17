@@ -127,32 +127,49 @@ export const PLATFORM_DISPLAY: Record<Platform, {
   color: string;
   bgColor: string;
   description: string;
+  iconSlug: string;
 }> = {
   [Platform.WHATSAPP]: {
     name: 'WhatsApp',
     color: '#25D366',
     bgColor: '#dcfce7',
     description: 'Connect via phone pairing code',
+    iconSlug: 'whatsapp',
   },
   [Platform.TELEGRAM]: {
     name: 'Telegram',
     color: '#0088cc',
     bgColor: '#dbeafe',
     description: 'Connect via phone number',
+    iconSlug: 'telegram',
   },
   [Platform.INSTAGRAM]: {
     name: 'Instagram',
     color: '#E4405F',
     bgColor: '#fce7f3',
     description: 'Connect with Claire Desktop companion',
+    iconSlug: 'instagram',
   },
   [Platform.IMESSAGE]: {
     name: 'iMessage',
     color: '#007AFF',
     bgColor: '#dbeafe',
     description: 'Connect with Claire Desktop on a Mac',
+    iconSlug: 'imessage',
   },
 };
+
+export function resolvePlatform(value?: string | null): Platform | undefined {
+  if (value === Platform.WHATSAPP || value === Platform.TELEGRAM || value === Platform.INSTAGRAM || value === Platform.IMESSAGE) {
+    return value;
+  }
+  return undefined;
+}
+
+export function platformLabel(value?: string | null, fallback = 'Conversation') {
+  const platform = resolvePlatform(value);
+  return platform ? PLATFORM_DISPLAY[platform].name : (value || fallback);
+}
 
 // Helper to get auth method for a platform
 export const getPlatformAuthMethod = (platform: Platform): AuthMethod => {

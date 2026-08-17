@@ -1,15 +1,16 @@
 /**
  * PlatformIcon Component
  *
- * Displays a platform-specific icon with optional connection indicator.
- * Used throughout the app for platform identification.
+ * Official Simple Icons marks (same source as Connections) with a lucide fallback.
  */
 
-import React from 'react';
-import { View } from 'react-native';
+import React, { useState } from 'react';
+import { Text, View } from 'react-native';
+import { Image } from 'expo-image';
 import { MessageCircle, Send, Instagram, MessageSquare } from 'lucide-react-native';
+import { colors, mobileType } from '@claire/design-system';
 import { cn } from '../utils/cn';
-import { Platform, PLATFORM_DISPLAY } from '../types/platform';
+import { Platform, PLATFORM_DISPLAY, platformLabel, resolvePlatform } from '../types/platform';
 
 interface PlatformIconProps {
   platform: Platform;
@@ -27,6 +28,26 @@ const PLATFORM_ICONS: Record<Platform, React.ComponentType<{ size: number; color
   [Platform.IMESSAGE]: MessageSquare,
 };
 
+function platformIconUri(platform: Platform, color?: string) {
+  const hex = (color || PLATFORM_DISPLAY[platform].color).replace('#', '');
+  return `https://cdn.simpleicons.org/${PLATFORM_DISPLAY[platform].iconSlug}/${hex}`;
+}
+
+function PlatformMark({ platform, size, color }: { platform: Platform; size: number; color?: string }) {
+  const [failed, setFailed] = useState(false);
+  const Fallback = PLATFORM_ICONS[platform];
+  const iconColor = color || PLATFORM_DISPLAY[platform].color;
+  if (failed) return <Fallback size={size} color={iconColor} />;
+  return (
+    <Image
+      source={{ uri: platformIconUri(platform, color) }}
+      style={{ width: size, height: size }}
+      contentFit="contain"
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
 export function PlatformIcon({
   platform,
   size = 24,
@@ -35,17 +56,12 @@ export function PlatformIcon({
   color,
   className,
 }: PlatformIconProps) {
-  const IconComponent = PLATFORM_ICONS[platform];
-  const platformDisplay = PLATFORM_DISPLAY[platform];
-  const iconColor = color || platformDisplay.color;
-
-  // Calculate indicator size relative to icon size
   const indicatorSize = Math.max(8, size * 0.35);
   const indicatorOffset = -indicatorSize * 0.25;
 
   return (
-    <View className={cn('relative', className)} style={{ width: size, height: size }}>
-      <IconComponent size={size} color={iconColor} />
+    <View className={cn('relative', className)} style={{ width: size, height: size, flexShrink: 0 }}>
+      <PlatformMark platform={platform} size={size} color={color} />
 
       {showIndicator && (
         <View
@@ -65,9 +81,6 @@ export function PlatformIcon({
   );
 }
 
-/**
- * Compact platform badge for use in message lists
- */
 export function PlatformBadge({
   platform,
   size = 14,
@@ -77,19 +90,29 @@ export function PlatformBadge({
   size?: number;
   className?: string;
 }) {
-  const IconComponent = PLATFORM_ICONS[platform];
-  const platformDisplay = PLATFORM_DISPLAY[platform];
-
   return (
-    <View className={cn('opacity-70', className)}>
-      <IconComponent size={size} color={platformDisplay.color} />
+    <View className={className} style={{ width: size, height: size, flexShrink: 0 }}>
+      <PlatformMark platform={platform} size={size} />
     </View>
   );
 }
 
-/**
- * Platform icon with background circle
- */
+export function PlatformName({
+  platform,
+  size = 13,
+}: {
+  platform?: string | null;
+  size?: number;
+}) {
+  const resolved = resolvePlatform(platform);
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, minWidth: 0 }}>
+      {resolved ? <PlatformIcon platform={resolved} size={size} /> : null}
+      <Text numberOfLines={1} style={{ ...mobileType.label, color: colors.neutral[600] }}>{platformLabel(platform)}</Text>
+    </View>
+  );
+}
+
 export function PlatformIconButton({
   platform,
   size = 48,
@@ -103,9 +126,7 @@ export function PlatformIconButton({
   disabled?: boolean;
   className?: string;
 }) {
-  const IconComponent = PLATFORM_ICONS[platform];
   const platformDisplay = PLATFORM_DISPLAY[platform];
-
   const iconSize = size * 0.5;
   const indicatorSize = size * 0.2;
 
@@ -122,7 +143,7 @@ export function PlatformIconButton({
         backgroundColor: platformDisplay.bgColor,
       }}
     >
-      <IconComponent size={iconSize} color={platformDisplay.color} />
+      <PlatformMark platform={platform} size={iconSize} />
 
       {connected && (
         <View

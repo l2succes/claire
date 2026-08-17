@@ -795,21 +795,30 @@ main {
 }
 .phones {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 24px;
 }
 .phone-case {
   min-width: 0;
 }
 .phone {
-  width: min(100%, 370px);
-  height: 790px;
+  width: 100%;
+  max-width: 390px;
+  aspect-ratio: 390 / 844;
   margin: auto;
-  border: 2px solid #171914;
-  border-radius: 44px;
-  background: #171914;
-  padding: 9px;
+  border: 8px solid #171914;
+  border-radius: 48px;
+  background: #faf9f5;
+  box-shadow: 0 24px 55px rgb(16 18 15 / 15%);
+  overflow: hidden;
   position: relative;
+}
+.phone:has(.chat-screen) {
+  background: #f4f1ea;
+}
+.phone:has(.chat-screen) .phone-status,
+.phone:has(.chat-screen) .phone-screen {
+  background: #f4f1ea;
 }
 .island {
   position: absolute;
@@ -817,26 +826,27 @@ main {
   height: 24px;
   background: #171914;
   border-radius: 20px;
-  top: 15px;
+  top: 10px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 2;
 }
 .phone-status {
-  height: 35px;
+  height: 48px;
   background: #faf9f5;
-  border-radius: 34px 34px 0 0;
-  padding: 13px 20px 0;
+  padding: 10px 23px 0;
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  font-size: 9px;
+  font-size: 10px;
+  font-weight: 600;
 }
 .phone-screen {
-  height: calc(100% - 35px);
+  height: calc(100% - 48px);
   background: #faf9f5;
-  border-radius: 0 0 34px 34px;
   overflow: hidden;
   padding: 20px;
+  position: relative;
 }
 .phone-screen > header {
   display: flex;

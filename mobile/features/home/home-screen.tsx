@@ -1,16 +1,19 @@
 import { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
-import { ArrowUpRight, CheckCircle2, Clock3, MessageCircle, Settings, Sparkles } from 'lucide-react-native';
+import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { AlertCircle, ArrowUpRight, CheckCircle2, MessageCircle, Settings, Sparkles } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { colors, mobileType, radius, space } from '@claire/design-system';
 import { MobileAvatar, MobileHeader, MobileIconButton, MobileState, SectionLabel } from '../../components/mobile/claire-mobile';
+import { PlatformIcon } from '../../components/PlatformIcon';
 import { useAuthStore } from '../../stores/authStore';
 import { useInboxMessages } from '../../hooks/useInboxMessages';
 import { supabase } from '../../services/supabase';
 import { API_BASE_URL } from '../../services/platforms';
+import { resolvePlatform, platformLabel } from '../../types/platform';
 import { formatInboxTimestamp } from '../../utils/messageTimestamp';
 import { computeUrgencyScore } from '../../utils/urgency';
+import { HomeSkeleton } from '../../components/claire/skeleton';
 
 interface UrgentMessage {
   id: string;
@@ -103,23 +106,30 @@ export function HomeScreen() {
     ? `${actionCount} item${actionCount === 1 ? '' : 's'} need${actionCount === 1 ? 's' : ''} your attention${urgent[0] ? ` — starting with ${urgent[0].contact_name || urgent[0].chat_name || 'a conversation'}.` : '.'}`
     : 'Your priorities will settle here as conversations sync.';
   const dayItems = useMemo(() => [
-    ...urgent.slice(0, 3).map(message => ({
+    ...urgent.slice(0, 3).map(message => {
+      const person = message.contact_name || message.chat_name || 'Someone';
+      const content = message.content?.trim() || '';
+      return {
       key: `message-${message.id}`,
-      title: message.contact_name || message.chat_name || 'Conversation',
-      subtitle: message.content,
-      meta: `${message.platform || 'Message'} · ${formatInboxTimestamp(message.timestamp)}`,
+      title: /(?:https?:\/\/|www\.)/i.test(content) ? `${person} shared a link` : content || `${person} needs a reply`,
+      subtitle: `${platformLabel(message.platform, 'Message')} · ${person}`,
+      platform: resolvePlatform(message.platform),
+      time: formatInboxTimestamp(message.timestamp),
       kind: 'message' as const,
+      urgent: 'score' in message && typeof message.score === 'number' && message.score >= 70,
       onPress: () => router.push({ pathname: '/chat/[chatId]', params: { chatId: message.chat_id, contact_name: message.contact_name || '', chat_name: message.chat_name || '', platform: message.platform || '', is_group: message.is_group ? '1' : '0', highlightMessageId: message.id } }),
-    })),
+    }; }),
     ...openPromises.slice(0, Math.max(0, 4 - Math.min(urgent.length, 3))).map(promise => ({
       key: `promise-${promise.id}`,
       title: promise.content,
-      subtitle: promise.chat?.name || (promise.from_me ? 'Your promise' : "You're waiting"),
-      meta: promise.deadline ? `Due ${new Date(promise.deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}` : 'Open promise',
+      subtitle: `Loop · ${promise.deadline ? `due ${new Date(promise.deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}` : 'open'}`,
+      platform: undefined,
+      time: promise.deadline ? formatInboxTimestamp(promise.deadline) : 'Now',
       kind: 'promise' as const,
+      urgent: false,
       onPress: () => promise.chat_id ? router.push({ pathname: '/chat/[chatId]', params: { chatId: promise.chat_id, chat_name: promise.chat?.name || '', platform: promise.chat?.platform || '', is_group: promise.chat?.is_group ? '1' : '0' } }) : router.push('/(tabs)/promises'),
     })),
-  ], [openPromises, urgent]);
+  ].slice(0, 3), [openPromises, urgent]);
 
   const refresh = useCallback(async () => {
     setIsRefreshing(true);
@@ -144,13 +154,17 @@ export function HomeScreen() {
         subtitle={actionCount === 0 ? "You're clear right now." : `${actionCount} item${actionCount === 1 ? '' : 's'} need${actionCount === 1 ? 's' : ''} your attention.`}
         safeArea
         profile={
-          <Pressable accessibilityRole="button" accessibilityLabel="Open settings" onPress={() => router.push('/(tabs)/settings')}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Open settings" onPress={() => router.push('/settings')}>
             <MobileAvatar name={user?.name || user?.email || 'You'} uri={user?.avatar_url} size={44} badge={<View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: colors.lime, borderWidth: 2, borderColor: colors.cream }} />} />
           </Pressable>
         }
       />
 
       <View style={{ paddingHorizontal: space[4], gap: space[4] }}>
+        {(brief.isLoading && inbox.loading) || promises.isLoading ? (
+          <HomeSkeleton />
+        ) : (
+          <>
         <Pressable
           testID="home-needs-reply"
           accessibilityRole="button"
@@ -168,22 +182,25 @@ export function HomeScreen() {
         </Pressable>
 
         <SectionLabel title="Your day" detail={`${dayItems.length} items`} />
-        {(brief.isLoading && inbox.loading) || promises.isLoading ? (
-          <View style={{ paddingVertical: 56 }}><ActivityIndicator color={colors.ink} /></View>
-        ) : dayItems.length === 0 ? (
-          <MobileState title="A calm day" message="New messages and promises that need attention will appear here." />
+        {dayItems.length === 0 ? (
+          <MobileState title="A calm day" message="New messages and open loops that need attention will appear here." />
         ) : (
           <View>
             {dayItems.map(item => (
-              <Pressable key={item.key} onPress={item.onPress} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: space[3], minHeight: 70, paddingVertical: space[3], borderBottomWidth: 1, borderBottomColor: colors.neutral[200], opacity: pressed ? 0.65 : 1 })}>
-                <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: item.kind === 'promise' ? colors.blush : colors.sky, alignItems: 'center', justifyContent: 'center' }}>
-                  {item.kind === 'promise' ? <CheckCircle2 size={19} color={colors.ink} /> : <MessageCircle size={19} color={colors.ink} />}
+              <Pressable key={item.key} onPress={item.onPress} style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1 })}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[3], minHeight: 82, paddingVertical: space[3], borderBottomWidth: 1, borderBottomColor: colors.neutral[200] }}>
+                  <View style={{ width: 48, height: 48, flexShrink: 0, borderRadius: 16, backgroundColor: item.kind === 'promise' ? colors.sky : item.urgent ? colors.blush : colors.sky, alignItems: 'center', justifyContent: 'center' }}>
+                    {item.kind === 'promise' ? <CheckCircle2 size={23} color={colors.ink} /> : item.urgent ? <AlertCircle size={23} color={colors.ink} /> : <MessageCircle size={22} color={colors.ink} />}
+                  </View>
+                  <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
+                    <Text selectable numberOfLines={1} style={{ ...mobileType.body, fontWeight: '800', color: colors.ink }}>{item.title}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      {item.platform ? <PlatformIcon platform={item.platform} size={14} /> : null}
+                      <Text selectable numberOfLines={1} style={{ flex: 1, ...mobileType.bodySmall, color: colors.neutral[600] }}>{item.subtitle}</Text>
+                    </View>
+                  </View>
+                  <Text selectable numberOfLines={1} style={{ width: 42, textAlign: 'right', ...mobileType.monoLabel, color: colors.neutral[600] }}>{item.time}</Text>
                 </View>
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text selectable numberOfLines={1} style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>{item.title}</Text>
-                  <Text selectable numberOfLines={1} style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{item.subtitle}</Text>
-                </View>
-                <View style={{ alignItems: 'flex-end', gap: 3 }}><Clock3 size={14} color={colors.neutral[400]} /><Text style={{ ...mobileType.monoLabel, color: colors.neutral[600] }}>{item.meta}</Text></View>
               </Pressable>
             ))}
           </View>
@@ -195,8 +212,10 @@ export function HomeScreen() {
             <Text selectable style={{ ...mobileType.monoLabel, color: colors.ink }}>CLAIRE'S TAKE</Text>
             <Text selectable style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>{brief.data?.brief_text || defaultBrief}</Text>
           </View>
-          <MobileIconButton label="Open settings" onPress={() => router.push('/(tabs)/settings')}><Settings size={18} color={colors.ink} /></MobileIconButton>
+          <MobileIconButton label="Open settings" onPress={() => router.push('/settings')}><Settings size={18} color={colors.ink} /></MobileIconButton>
         </View>
+          </>
+        )}
       </View>
     </ScrollView>
   );

@@ -142,6 +142,24 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     ])].filter((id) => this.userMapper.ghostUserToPlatformContact(id)?.platform === platform);
   }
 
+  /** Local Matrix user for this session — the bot account when double-puppeting is off. */
+  private localMatrixUserId(sessionId?: string): string | undefined {
+    if (sessionId) {
+      const fromSession = this.sessionMatrixUserIds.get(sessionId);
+      if (fromSession) return fromSession;
+    }
+    return this.matrixClient?.getUserId() ?? undefined;
+  }
+
+  private rememberSentEvent(eventId?: string): void {
+    if (!eventId) return;
+    this.localSentEventIds.add(eventId);
+    if (this.localSentEventIds.size > 1000) {
+      const oldest = this.localSentEventIds.values().next().value;
+      if (oldest) this.localSentEventIds.delete(oldest);
+    }
+  }
+
   /**
    * Ask the bridge to resolve the connected account's network ID to every
    * exact Matrix ghost alias. This is essential for WhatsApp accounts that
@@ -367,8 +385,8 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
       const sender = event.getSender();
       const eventId = event.getId();
 
-      // Skip events we sent ourselves (avoids echo loops).
-      // When double-puppeting is disabled we use the simpler sender check.
+      // Skip the local timeline echo of SDK sends (persist happens in sendMessage).
+      // When double-puppeting is disabled, every bot-sender event is an SDK send.
       // When double-puppeting is enabled the bridge may send events as the bot user
       // (originating from the user's phone) — we must NOT skip those; instead we
       // rely on localSentEventIds to filter only our own SDK-originated sends.
@@ -402,9 +420,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
       if (!session) return;
 
       const selfGhostIds = this.getSelfGhostIds(chatInfo.sessionId, session, chatInfo.platform);
-      const matrixUserId = this.doublePuppetEnabled
-        ? this.sessionMatrixUserIds.get(chatInfo.sessionId)
-        : undefined;
+      const matrixUserId = this.localMatrixUserId(chatInfo.sessionId);
       const unifiedMessage = await this.eventConverter.toUnifiedMessage(
         event,
         room,
@@ -1004,18 +1020,12 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
       eventId = response.event_id;
     }
 
-    // Track this event ID so we don't echo it back as an incoming message
-    // when double-puppeting is enabled (the bridge will relay it back as the bot user).
-    if (this.doublePuppetEnabled && eventId) {
-      this.localSentEventIds.add(eventId);
-      // Prune old IDs to prevent unbounded growth (keep last 1000)
-      if (this.localSentEventIds.size > 1000) {
-        const oldest = this.localSentEventIds.values().next().value;
-        if (oldest) this.localSentEventIds.delete(oldest);
-      }
-    }
+    // Skip the local timeline echo. Persistence happens via emit below —
+    // without it, bot-originated sends are dropped when double-puppeting is off
+    // (`sender === matrixClient.getUserId()`) and never reach `messages`.
+    this.rememberSentEvent(eventId);
 
-    return {
+    const unifiedMessage: UnifiedMessage = {
       id: `matrix-${eventId}-${Date.now()}`,
       platformMessageId: eventId,
       platform,
@@ -1031,6 +1041,9 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
       isRead: true,
       hasMedia: !!message.media?.length,
     };
+
+    this.emitPlatformEvent('message', sessionId, unifiedMessage);
+    return unifiedMessage;
   }
 
   private contentTypeToMatrixMsgtype(contentType: MessageContentType): MsgType {
@@ -1224,9 +1237,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     const timeline = room.getLiveTimeline();
     const events = timeline.getEvents().slice(-limit);
     const selfGhostIds = this.getSelfGhostIds(sessionId, session, platform);
-    const matrixUserId = this.doublePuppetEnabled
-      ? this.sessionMatrixUserIds.get(sessionId)
-      : undefined;
+    const matrixUserId = this.localMatrixUserId(sessionId);
 
     const messages: UnifiedMessage[] = [];
     for (const event of events) {
@@ -1428,9 +1439,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     let messageCount = 0;
 
     const selfGhostIds = this.getSelfGhostIds(sessionId, session, platform);
-    const matrixUserId = this.doublePuppetEnabled
-      ? this.sessionMatrixUserIds.get(sessionId)
-      : undefined;
+    const matrixUserId = this.localMatrixUserId(sessionId);
 
     for (const room of rooms) {
       const chatInfo = this.roomMapper.getRoomChatInfo(room.roomId);

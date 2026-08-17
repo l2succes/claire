@@ -10,7 +10,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { searchApi, type SearchScope } from '../../services/search';
 
 const scopes: Array<{ value: SearchScope; label: string }> = [
-  { value: 'everything', label: 'Everything' }, { value: 'messages', label: 'Messages' }, { value: 'people', label: 'People' }, { value: 'files', label: 'Files' }, { value: 'promises', label: 'Promises' },
+  { value: 'everything', label: 'Everything' }, { value: 'messages', label: 'Messages' }, { value: 'people', label: 'People' }, { value: 'files', label: 'Files' }, { value: 'promises', label: 'Loops' },
 ];
 
 export function SearchScreen() {
@@ -80,7 +80,7 @@ export function SearchScreen() {
     <ScrollView testID="search-screen" style={{ flex: 1, backgroundColor: colors.cream }} contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ paddingBottom: 112 }} keyboardShouldPersistTaps="handled">
       <MobileHeader title="Search everything" />
       <View style={{ paddingHorizontal: space[4], gap: space[4] }}>
-        <MobileSearchField icon={<Search size={20} color={colors.ink} />} value={query} onChangeText={setQuery} onSubmitEditing={runSearch} placeholder="Messages, people, promises…" returnKeyType="search" style={{ minHeight: 52, backgroundColor: colors.paper, borderWidth: 2, borderColor: colors.ink }} testID="global-search-input" />
+        <MobileSearchField icon={<Search size={20} color={colors.ink} />} value={query} onChangeText={setQuery} onSubmitEditing={runSearch} placeholder="Messages, people, loops…" returnKeyType="search" style={{ minHeight: 52, backgroundColor: colors.paper, borderWidth: 2, borderColor: colors.ink }} testID="global-search-input" />
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space[2] }}>{scopes.map(item => <MobileChip key={item.value} label={item.label} active={scope === item.value} onPress={() => setScope(item.value)} />)}</ScrollView>
         {recent.length ? <><SectionLabel title="Recent searches" detail="Clear" />{recent.map(item => <Pressable key={item} onPress={() => { setQuery(item); setSubmitted(item); }} style={({ pressed }) => ({ minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: space[3], borderBottomWidth: 1, borderBottomColor: colors.neutral[200], opacity: pressed ? 0.64 : 1 })}><Clock3 size={17} color={colors.neutral[600]} /><Text numberOfLines={1} style={{ ...mobileType.body, flex: 1, color: colors.ink }}>{item}</Text><Pressable accessibilityLabel={`Remove ${item}`} onPress={() => { const next = recent.filter(value => value !== item); setRecent(next); void AsyncStorage.setItem(storageKey, JSON.stringify(next)); }} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}><X size={16} color={colors.neutral[400]} /></Pressable></Pressable>)}</> : null}
         <View style={{ padding: space[4], gap: space[2], borderRadius: radius.card, backgroundColor: colors.lavender }}><Sparkles size={21} color={colors.ink} /><Text style={{ ...mobileType.sectionTitle, color: colors.ink }}>Ask naturally.</Text><Text selectable style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>Try “Who recommended the Oaxaca hotel?” or “What did Maya say about launch timing?”</Text></View>

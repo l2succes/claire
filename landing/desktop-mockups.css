@@ -514,12 +514,12 @@ textarea {
 .desk-chat {
   display: flex;
   flex-direction: column;
-  background: #faf9f5;
+  background: var(--claire-cream);
   min-width: 0;
 }
 .desk-chat-head {
   height: 65px;
-  background: var(--claire-paper);
+  background: transparent;
   border-bottom: 1px solid var(--neutral-200);
   display: flex;
   align-items: center;

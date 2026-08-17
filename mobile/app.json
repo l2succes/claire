@@ -9,7 +9,7 @@
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#DFFF64"
     },
     "assetBundlePatterns": [
       "**/*"
@@ -62,7 +62,14 @@
         }
       ],
       "expo-web-browser",
-      "expo-video"
+      "expo-video",
+      [
+        "expo-sqlite",
+        {
+          "useSQLCipher": true
+        }
+      ],
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true

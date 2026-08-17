@@ -11,6 +11,9 @@ prepare_react_native_project!
 target 'ClaireDesktopMac-macOS' do
   platform :macos, '14.0'
   use_native_modules!
+  # The desktop message cache contains private conversation text. SQLCipher
+  # encrypts the per-account SQLite database; its key never leaves Keychain.
+  pod 'SQLCipher', '~> 4.6'
 
   # Flags change depending on the env values.
   flags = get_default_flags()

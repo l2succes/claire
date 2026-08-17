@@ -17,6 +17,8 @@ const getMessagesSchema = z.object({
   query: z.object({
     limit: z.string().optional().transform(val => val ? parseInt(val) : 50),
     offset: z.string().optional().transform(val => val ? parseInt(val) : 0),
+    beforeTimestamp: z.string().datetime().optional(),
+    beforeId: z.string().uuid().optional(),
     chatId: z.string().optional(),
     search: z.string().optional(),
   }),
@@ -54,14 +56,16 @@ router.get(
   async (req: Request, res: Response) => {
     try {
       const userId = req.user?.id as string;
-      const { limit, offset, chatId, search } = req.query as any;
+      const { limit, offset, chatId, search, beforeTimestamp, beforeId } = req.query as any;
 
       let messages;
 
       if (search) {
         messages = await messageIngestion.searchMessages(userId, search, limit);
       } else if (chatId) {
-        messages = await messageIngestion.getChatMessages(userId, chatId, limit, offset);
+        messages = beforeTimestamp && beforeId
+          ? await messageIngestion.getChatMessagesBefore(userId, chatId, limit, { timestamp: beforeTimestamp, id: beforeId })
+          : await messageIngestion.getChatMessages(userId, chatId, limit, offset);
       } else {
         messages = await messageIngestion.getUserMessages(userId, limit, offset);
       }
@@ -71,6 +75,7 @@ router.get(
         pagination: {
           limit,
           offset,
+          nextBefore: messages.length ? { timestamp: messages[messages.length - 1].timestamp, id: messages[messages.length - 1].id } : null,
           total: messages.length,
         },
       });

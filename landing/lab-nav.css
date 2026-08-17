@@ -1,0 +1,76 @@
+.lab-header {
+  height: 72px;
+  padding: 0 28px;
+  border-bottom: 1px solid var(--neutral-200);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  position: sticky;
+  top: 0;
+  background: rgb(244 241 234 / 92%);
+  backdrop-filter: blur(16px);
+  z-index: 40;
+}
+.lab-brand {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex: none;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  color: inherit;
+  text-decoration: none;
+}
+.lab-brand-mark {
+  width: 32px;
+  height: 32px;
+  display: block;
+}
+.lab-brand span {
+  color: var(--neutral-400);
+  font-weight: 500;
+}
+.lab-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.lab-links a {
+  font-size: 12px;
+  padding: 8px 12px;
+  border-radius: 99px;
+  color: inherit;
+  text-decoration: none;
+}
+.lab-links a:hover,
+.lab-links a.active {
+  background: var(--claire-ink);
+  color: white;
+}
+@media (max-width: 860px) {
+  .lab-header {
+    padding: 0 14px;
+  }
+  .lab-brand span {
+    display: none;
+  }
+  .lab-links a {
+    font-size: 11px;
+    padding: 7px 9px;
+  }
+}
+@media (max-width: 640px) {
+  .lab-header {
+    height: auto;
+    min-height: 64px;
+    padding: 10px 12px;
+    flex-wrap: wrap;
+  }
+  .lab-links {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}

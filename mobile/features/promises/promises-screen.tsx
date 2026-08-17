@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ActivityIndicator, FlatList, Modal, Pressable, RefreshControl, Text, TextInput, View } from 'react-native';
+import { FlatList, Modal, Pressable, RefreshControl, Text, TextInput, View } from 'react-native';
 import { Image } from 'expo-image';
 import { AlertCircle, Check, Clock3, MessageCircle, Plus, UserRound, UsersRound, X } from 'lucide-react-native';
 import { router } from 'expo-router';
@@ -9,6 +9,7 @@ import { MobileChip, MobileHeader, MobileIconButton, MobileState } from '../../c
 import { useAuthStore } from '../../stores/authStore';
 import { supabase } from '../../services/supabase';
 import { API_BASE_URL } from '../../services/platforms';
+import { LoopsSkeleton } from '../../components/claire/skeleton';
 
 type PromiseFilter = 'open' | 'completed' | 'waiting';
 interface PromiseItem {
@@ -101,10 +102,10 @@ export function PromisesScreen() {
 
   return (
     <View testID="promises-screen" style={{ flex: 1, backgroundColor: colors.cream }}>
-      <MobileHeader title="Promises" subtitle="Follow through without losing the conversation." safeArea actions={<MobileIconButton label="Add promise" testID="promises-add" onPress={() => setShowCreate(true)}><Plus size={21} color={colors.ink} /></MobileIconButton>} />
+      <MobileHeader title="Loops" subtitle="Follow through without losing the conversation." safeArea actions={<MobileIconButton label="Add a loop" testID="promises-add" onPress={() => setShowCreate(true)}><Plus size={21} color={colors.ink} /></MobileIconButton>} />
       <View style={{ paddingHorizontal: space[4], gap: space[3], paddingBottom: space[3] }}>
         <View style={{ flexDirection: 'row', gap: space[2] }}>
-          <View style={{ flex: 1, padding: space[4], borderRadius: radius.card, backgroundColor: colors.lime }}><Text style={{ ...mobileType.screenTitle, color: colors.ink, fontVariant: ['tabular-nums'] }}>{open.length}</Text><Text style={{ ...mobileType.monoLabel, color: colors.ink }}>OPEN PROMISES</Text></View>
+          <View style={{ flex: 1, padding: space[4], borderRadius: radius.card, backgroundColor: colors.lime }}><Text style={{ ...mobileType.screenTitle, color: colors.ink, fontVariant: ['tabular-nums'] }}>{open.length}</Text><Text style={{ ...mobileType.monoLabel, color: colors.ink }}>OPEN LOOPS</Text></View>
           <View style={{ flex: 1, padding: space[4], borderRadius: radius.card, backgroundColor: colors.sky }}><Text style={{ ...mobileType.screenTitle, color: colors.ink, fontVariant: ['tabular-nums'] }}>{today}</Text><Text style={{ ...mobileType.monoLabel, color: colors.ink }}>DUE TODAY</Text></View>
         </View>
         <View style={{ flexDirection: 'row', gap: space[2] }}>
@@ -113,17 +114,17 @@ export function PromisesScreen() {
           <MobileChip label="I'm waiting" active={filter === 'waiting'} count={waiting.length} onPress={() => setFilter('waiting')} testID="promises-tab-overdue" />
         </View>
       </View>
-      {query.isLoading ? <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator color={colors.ink} /></View> : (
-        <FlatList testID="promises-list" data={visible} renderItem={renderItem} keyExtractor={item => item.id} contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ paddingHorizontal: space[4], paddingBottom: 112 }} refreshControl={<RefreshControl refreshing={query.isRefetching} onRefresh={() => void query.refetch()} tintColor={colors.ink} />} ListEmptyComponent={<MobileState title={filter === 'completed' ? 'Nothing completed yet' : filter === 'waiting' ? "You're not waiting on anyone" : 'No open promises'} message="Claire will surface commitments from your conversations here." />} />
+      {query.isLoading ? <LoopsSkeleton /> : (
+        <FlatList testID="promises-list" data={visible} renderItem={renderItem} keyExtractor={item => item.id} contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ paddingHorizontal: space[4], paddingBottom: 112 }} refreshControl={<RefreshControl refreshing={query.isRefetching} onRefresh={() => void query.refetch()} tintColor={colors.ink} />} ListEmptyComponent={<MobileState title={filter === 'completed' ? 'Nothing completed yet' : filter === 'waiting' ? "You're not waiting on anyone" : 'No open loops'} message="Claire will surface commitments from your conversations here." />} />
       )}
 
       <Modal visible={showCreate} transparent animationType="slide" onRequestClose={() => setShowCreate(false)}>
         <View style={{ flex: 1, backgroundColor: 'rgba(16,18,15,0.35)', justifyContent: 'flex-end' }}>
           <View style={{ backgroundColor: colors.paper, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: space[5], paddingBottom: 36, gap: space[4] }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}><Text style={{ ...mobileType.sectionTitle, flex: 1, color: colors.ink }}>Add a promise</Text><MobileIconButton label="Close" onPress={() => setShowCreate(false)}><X size={19} color={colors.ink} /></MobileIconButton></View>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}><Text style={{ ...mobileType.sectionTitle, flex: 1, color: colors.ink }}>Add a loop</Text><MobileIconButton label="Close" onPress={() => setShowCreate(false)}><X size={19} color={colors.ink} /></MobileIconButton></View>
             <TextInput autoFocus multiline value={newPromise} onChangeText={setNewPromise} placeholder="What do you want to remember?" placeholderTextColor={colors.neutral[400]} style={{ minHeight: 110, textAlignVertical: 'top', padding: space[4], borderRadius: radius.card, borderWidth: 1, borderColor: colors.neutral[200], backgroundColor: colors.cream, ...mobileType.body, color: colors.ink }} />
             {create.error ? <Text selectable style={{ ...mobileType.bodySmall, color: colors.danger }}>{create.error.message}</Text> : null}
-            <Pressable disabled={!newPromise.trim() || create.isPending} onPress={() => create.mutate(newPromise.trim())} style={({ pressed }) => ({ minHeight: 50, borderRadius: radius.control, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center', opacity: !newPromise.trim() || create.isPending ? 0.42 : pressed ? 0.78 : 1 })}><Text style={{ ...mobileType.body, fontWeight: '700', color: colors.paper }}>{create.isPending ? 'Adding…' : 'Add promise'}</Text></Pressable>
+            <Pressable disabled={!newPromise.trim() || create.isPending} onPress={() => create.mutate(newPromise.trim())} style={({ pressed }) => ({ minHeight: 50, borderRadius: radius.control, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center', opacity: !newPromise.trim() || create.isPending ? 0.42 : pressed ? 0.78 : 1 })}><Text style={{ ...mobileType.body, fontWeight: '700', color: colors.paper }}>{create.isPending ? 'Adding…' : 'Add loop'}</Text></Pressable>
           </View>
         </View>
       </Modal>

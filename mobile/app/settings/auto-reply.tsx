@@ -15,10 +15,13 @@ import {
   Alert,
   TextInput,
   Modal,
+  Pressable,
 } from 'react-native';
 import { useState, useEffect, useCallback } from 'react';
 import { router } from 'expo-router';
 import { ChevronLeft, Plus, Trash2, Zap } from 'lucide-react-native';
+import { colors, mobileType, radius } from '@claire/design-system';
+import { MobileHeader, MobileIconButton } from '../../components/mobile/claire-mobile';
 import { supabase } from '../../services/supabase';
 import { API_BASE_URL } from '../../services/platforms';
 
@@ -247,32 +250,17 @@ function CreateRuleModal({
         className="flex-1 bg-gray-50 dark:bg-gray-900"
         keyboardShouldPersistTaps="handled"
       >
+        <MobileHeader
+          title="New Rule"
+          subtitle="Claire can answer for you when a message matches."
+          leading={<MobileIconButton label="Close" testID="auto-reply-modal-close" onPress={onClose}><ChevronLeft size={20} color={colors.ink} /></MobileIconButton>}
+          actions={
+            <Pressable testID="auto-reply-modal-save" onPress={() => void handleSave()} disabled={saving} style={{ minHeight: 36, paddingHorizontal: 14, borderRadius: radius.pill, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center', opacity: saving ? 0.6 : 1 }}>
+              {saving ? <ActivityIndicator size="small" color={colors.lime} /> : <Text style={{ ...mobileType.label, color: colors.paper }}>Save</Text>}
+            </Pressable>
+          }
+        />
         <View className="p-4">
-          {/* Header */}
-          <View className="flex-row items-center mb-6">
-            <TouchableOpacity
-              onPress={onClose}
-              className="mr-3"
-              testID="auto-reply-modal-close"
-            >
-              <ChevronLeft size={24} color="#6b7280" />
-            </TouchableOpacity>
-            <Text className="text-xl font-bold text-gray-900 dark:text-white flex-1">
-              New Rule
-            </Text>
-            <TouchableOpacity
-              onPress={handleSave}
-              disabled={saving}
-              className="bg-green-500 px-4 py-2 rounded-full"
-              testID="auto-reply-modal-save"
-            >
-              {saving ? (
-                <ActivityIndicator size="small" color="white" />
-              ) : (
-                <Text className="text-white font-semibold">Save</Text>
-              )}
-            </TouchableOpacity>
-          </View>
 
           {/* Rule name */}
           <Text className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
@@ -458,27 +446,17 @@ export default function AutoReplySettingsScreen() {
       className="flex-1 bg-gray-50 dark:bg-gray-900"
       testID="auto-reply-settings-screen"
     >
+      <MobileHeader
+        title="Auto-Reply Rules"
+        subtitle="Review automation and safety limits."
+        leading={<MobileIconButton label="Back to Settings" testID="auto-reply-back" onPress={() => router.back()}><ChevronLeft size={20} color={colors.ink} /></MobileIconButton>}
+        actions={
+          <Pressable testID="auto-reply-add-rule" onPress={() => setShowModal(true)} style={{ width: 40, height: 40, borderRadius: 13, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' }}>
+            <Plus size={20} color={colors.paper} />
+          </Pressable>
+        }
+      />
       <View className="p-4">
-        {/* Header */}
-        <View className="flex-row items-center mb-6">
-          <TouchableOpacity
-            onPress={() => router.back()}
-            className="mr-3"
-            testID="auto-reply-back"
-          >
-            <ChevronLeft size={24} color="#6b7280" />
-          </TouchableOpacity>
-          <Text className="text-2xl font-bold text-gray-900 dark:text-white flex-1">
-            Auto-Reply Rules
-          </Text>
-          <TouchableOpacity
-            onPress={() => setShowModal(true)}
-            className="bg-green-500 rounded-full p-2"
-            testID="auto-reply-add-rule"
-          >
-            <Plus size={20} color="white" />
-          </TouchableOpacity>
-        </View>
 
         {/* Empty state */}
         {rules.length === 0 ? (

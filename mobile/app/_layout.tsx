@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import { AppState, Platform } from 'react-native';
+import { useEffect, useState } from 'react';
+import { AppState, Platform, View } from 'react-native';
 import { Stack, router } from 'expo-router';
 import * as Notifications from 'expo-notifications';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -16,6 +16,9 @@ import {
   registerNotificationDevice,
   updateNotificationPresence,
 } from '../services/notifications';
+import { bootstrapMobileCache, reconcileMobileCache } from '../services/mobile-sync';
+import { LaunchReveal } from '../components/LaunchReveal';
+import { useInboxRealtime } from '../hooks/useInboxRealtime';
 import '../global.css';
 
 const SENTRY_DSN = process.env.EXPO_PUBLIC_SENTRY_DSN;
@@ -37,7 +40,16 @@ const queryClient = new QueryClient({
   },
 });
 
+function InboxRealtimeBridge() {
+  const userId = useAuthStore((state) => state.user?.id);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  useInboxRealtime(isAuthenticated ? userId : undefined);
+  return null;
+}
+
 export default function RootLayout() {
+  const [appReady, setAppReady] = useState(false);
+  const [showLaunchReveal, setShowLaunchReveal] = useState(true);
   const initialize = useAuthStore((state) => state.initialize);
   const token = useAuthStore((state) => state.token);
   const initializePlatforms = usePlatformStore((state) => state.initialize);
@@ -50,7 +62,10 @@ export default function RootLayout() {
       } catch (e) {
         console.error('Init error:', e);
       } finally {
-        SplashScreen.hideAsync();
+        setAppReady(true);
+        // Let React commit the lime handoff surface before the native splash leaves.
+        await new Promise<void>((resolve) => setTimeout(resolve, 16));
+        await SplashScreen.hideAsync();
       }
     }
     init();
@@ -59,8 +74,18 @@ export default function RootLayout() {
   useEffect(() => {
     if (!token) return;
     void initializePlatforms();
+    const userId = useAuthStore.getState().user?.id;
+    if (userId) {
+      // Native cache hydration happens before individual screens query. A
+      // failed cache sync never blocks normal online Supabase behavior.
+      void bootstrapMobileCache(userId, token).catch((error) => console.warn('[LocalCache] bootstrap failed', error instanceof Error ? error.message : 'unknown'));
+    }
     const subscription = AppState.addEventListener('change', (state) => {
-      if (state === 'active') void fetchConnectedSessions();
+      if (state === 'active') {
+        void fetchConnectedSessions();
+        const currentUserId = useAuthStore.getState().user?.id;
+        if (currentUserId) void reconcileMobileCache(currentUserId, token).catch(() => undefined);
+      }
     });
     return () => subscription.remove();
   }, [fetchConnectedSessions, initializePlatforms, token]);
@@ -112,19 +137,36 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaProvider>
-        <ClaireThemeProvider surface="mobile">
-        <QueryClientProvider client={queryClient}>
-          <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#F4F1EA' } }}>
-            <Stack.Screen name="(tabs)" />
-            <Stack.Screen name="(auth)" />
-            <Stack.Screen name="assistant" options={{ presentation: 'formSheet', sheetGrabberVisible: true, sheetAllowedDetents: [0.7, 1] }} />
-            <Stack.Screen name="chat/assistant/[chatId]" options={{ presentation: 'formSheet', sheetGrabberVisible: true, sheetAllowedDetents: [0.7, 1] }} />
-          </Stack>
-        </QueryClientProvider>
-        </ClaireThemeProvider>
-      </SafeAreaProvider>
-    </GestureHandlerRootView>
+    <View style={{ flex: 1 }}>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <SafeAreaProvider>
+          <ClaireThemeProvider surface="mobile">
+          <QueryClientProvider client={queryClient}>
+            <InboxRealtimeBridge />
+            <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#F4F1EA' } }}>
+              <Stack.Screen name="(tabs)" />
+              <Stack.Screen name="(auth)" />
+              <Stack.Screen
+                name="compose"
+                options={{
+                  presentation: 'formSheet',
+                  sheetGrabberVisible: true,
+                  sheetAllowedDetents: [1],
+                  headerShown: true,
+                  headerShadowVisible: false,
+                  headerBackVisible: false,
+                  headerStyle: { backgroundColor: '#FFFDF8' },
+                  contentStyle: { backgroundColor: '#FFFDF8' },
+                }}
+              />
+              <Stack.Screen name="assistant" options={{ presentation: 'formSheet', sheetGrabberVisible: true, sheetAllowedDetents: [0.7, 1] }} />
+              <Stack.Screen name="chat/assistant/[chatId]" options={{ presentation: 'formSheet', sheetGrabberVisible: true, sheetAllowedDetents: [0.7, 1] }} />
+            </Stack>
+          </QueryClientProvider>
+          </ClaireThemeProvider>
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
+      {showLaunchReveal ? <LaunchReveal ready={appReady} onFinish={() => setShowLaunchReveal(false)} /> : null}
+    </View>
   );
 }
