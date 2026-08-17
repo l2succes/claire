@@ -9,6 +9,27 @@ Claire can route platforms two ways:
 - **mock** — `MOCK_BRIDGE=true` replaces all adapters with scripted fixtures
   (tests / demos, no infra).
 
+## Current Railway production decision (audited 2026-08-01)
+
+The `claire` Railway project currently contains the Claire API, Redis, and the
+self-hosted Supabase services. It does **not** contain Synapse or any mautrix
+bridge services, and the Claire service has no Matrix connection variables.
+
+Until that infrastructure is provisioned, the canonical mode for the existing
+Railway environment is therefore explicitly:
+
+```text
+NODE_ENV=production
+PLATFORM_MODE=direct
+```
+
+This is an interim operational decision, not a change to the target
+architecture. Do not set `PLATFORM_MODE=matrix` on Railway until Synapse,
+mautrix-whatsapp, mautrix-telegram, and mautrix-meta are deployed and the Matrix
+variables below are populated. The production warning for direct mode is
+intentional: it keeps that architectural debt visible without making the
+currently deployable environment unusable.
+
 ## The bug this guards against
 
 `PLATFORM_MODE` defaults to `direct`. A production deploy that forgets to set it
