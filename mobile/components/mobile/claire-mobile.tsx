@@ -101,7 +101,7 @@ export function MobileSearchField({ icon, style, inputStyle, ...props }: Omit<Te
   );
 }
 
-export function MobileChip({ label, active, count, onPress, testID }: { label: string; active?: boolean; count?: number; onPress: () => void; testID?: string }) {
+export function MobileChip({ label, active, count, onPress, testID, icon }: { label: string; active?: boolean; count?: number; onPress: () => void; testID?: string; icon?: ReactNode }) {
   return (
     <Pressable
       testID={testID}
@@ -115,10 +115,13 @@ export function MobileChip({ label, active, count, onPress, testID }: { label: s
         borderWidth: 1,
         borderColor: active ? colors.ink : colors.neutral[200],
         backgroundColor: active ? colors.ink : colors.paper,
+        flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
+        gap: 6,
       }}
     >
+      {icon}
       <Text maxFontSizeMultiplier={1} style={{ ...mobileType.label, color: active ? colors.paper : colors.neutral[800] }}>{label}{typeof count === 'number' && count > 0 ? ` ${count}` : ''}</Text>
     </Pressable>
   );

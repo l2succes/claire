@@ -29,11 +29,13 @@
     "e2e:web": "bunx playwright test"
   },
   "dependencies": {
+    "@claire/chat-core": "file:../packages/chat-core",
     "@claire/design-system": "file:../packages/design-system",
     "@expo/vector-icons": "^15.0.2",
     "@gluestack-ui/nativewind-utils": "^1.0.0",
     "@gluestack-ui/overlay": "^0.1.0",
     "@gluestack-ui/toast": "^1.0.0",
+    "@gorhom/bottom-sheet": "^5.2.14",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-cookies/cookies": "^6.0.0",
     "@react-navigation/core": "^7",

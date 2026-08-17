@@ -24,7 +24,7 @@ import { ClaireApi, type AssistantAnswer, type AssistantCitation, type Assistant
 import { DesktopCache } from './services/desktop-cache';
 import { createDesktopAuth, exchangeDesktopCallback, signInWithGoogle, type DesktopAuth } from './services/auth';
 import { clampDesktopPaneWidth, desktopWrapGridMetrics, destinationForDesktopCommand, type DesktopDestination } from './services/desktop-navigation';
-import { mergeChronologicalMessages } from './services/message-sync';
+import { mergeChronologicalMessages, normalizeMediaUrl } from '@claire/chat-core';
 
 type Destination = Exclude<DesktopDestination, 'Connections'>;
 type Conversation = { id: string; platformChatId: string; name: string; initials: string; avatarUrl?: string; preview: string; time: string; unread?: number; platform: string; isGroup: boolean; tone: 'mint' | 'sky' | 'blush' | 'lavender' };
@@ -891,18 +891,10 @@ function ReplyOptions({ api, target, chatType, onUse }: { api: ClaireApi | null;
   </View>;
 }
 
-function mediaUrl(value: string, apiBaseUrl: string) {
-  if (value.startsWith('mxc://')) {
-    const [, server, mediaId] = value.match(/^mxc:\/\/([^/]+)\/(.+)$/) || [];
-    return server && mediaId ? `${apiBaseUrl.replace(/\/$/, '')}/media/${encodeURIComponent(server)}/${encodeURIComponent(mediaId)}` : null;
-  }
-  if (value.startsWith('/media/')) return `${apiBaseUrl.replace(/\/$/, '')}${value}`;
-  return value;
-}
 
 function MediaMessage({ message, apiBaseUrl }: { message: DesktopMessage; apiBaseUrl: string }) {
   const [failed, setFailed] = useState(false);
-  const url = message.media_url ? mediaUrl(message.media_url, apiBaseUrl) : null;
+  const url = message.media_url ? normalizeMediaUrl(message.media_url, apiBaseUrl) : null;
   const source = useMemo(() => url ? { uri: url } : undefined, [url]);
   const isImage = Boolean(url && (message.media_mime_type?.startsWith('image/') || message.content_type === 'image'));
   if (isImage && !failed && source) return <Image accessibilityLabel="Message image" source={source} onError={() => setFailed(true)} style={styles.mediaImage} />;

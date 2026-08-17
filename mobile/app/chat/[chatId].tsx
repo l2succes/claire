@@ -1,9 +1,9 @@
 import {
   View, Text, ActivityIndicator, Pressable,
   FlatList, KeyboardAvoidingView, Platform as RNPlatform,
-  Image,
+  Image, Linking,
 } from 'react-native';
-import { ImageIcon, Volume2, Video, FileText, AlertCircle, Link2, MoreHorizontal, Sparkles, X, ChevronLeft } from 'lucide-react-native';
+import { ImageIcon, Volume2, Video, FileText, AlertCircle, Link2, MoreHorizontal, Sparkles, X, ChevronLeft, Play, MapPin } from 'lucide-react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react';
@@ -21,73 +21,20 @@ import { Platform } from '../../types/platform';
 import { PlatformName } from '../../components/PlatformIcon';
 import { setActiveNotificationChat, syncNotificationBadge, updateNotificationPresence } from '../../services/notifications';
 import { colors, mobileType, radius, space } from '@claire/design-system';
-import Animated, { FadeInDown, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { MobileAvatar, MobileIconButton } from '../../components/mobile/claire-mobile';
 import { cacheTimeline, cachedTimeline, usesNativeMobileCache } from '../../services/mobile-cache';
-
-interface ChatMessage {
-  id: string;
-  content: string;
-  timestamp: string;
-  from_me: boolean;
-  contact_name?: string;
-  contact_phone?: string;
-  content_type?: string;
-  media_url?: string;
-  media_mime_type?: string;
-  platform_message_id?: string;
-}
-
-function isLocalSend(id: string) {
-  return id.startsWith('optimistic-') || id.startsWith('local-');
-}
-
-function mergeChatMessage(prev: ChatMessage[], incoming: ChatMessage): ChatMessage[] {
-  if (prev.some((message) => message.id === incoming.id)) {
-    return prev.map((message) => message.id === incoming.id ? { ...message, ...incoming } : message);
-  }
-  if (incoming.from_me) {
-    const localIndex = prev.findIndex((message) => isLocalSend(message.id) && message.content === incoming.content);
-    if (localIndex >= 0) {
-      const next = [...prev];
-      next[localIndex] = { ...prev[localIndex], ...incoming, id: incoming.id };
-      return next;
-    }
-  }
-  return [...prev, incoming];
-}
-
-function keepPendingSends(serverMessages: ChatMessage[], current: ChatMessage[]) {
-  const pending = current.filter((message) => (
-    isLocalSend(message.id)
-    && !serverMessages.some((row) => row.id === message.id || (row.from_me && row.content === message.content))
-  ));
-  return [...serverMessages, ...pending].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-}
-
-function chatMessageFromSend(payload: unknown, fallback: ChatMessage): ChatMessage {
-  if (!payload || typeof payload !== 'object') return fallback;
-  const raw = payload as Record<string, unknown>;
-  const platformMessageId = typeof raw.platformMessageId === 'string'
-    ? raw.platformMessageId
-    : typeof raw.platform_message_id === 'string'
-      ? raw.platform_message_id
-      : undefined;
-  const timestampValue = raw.timestamp;
-  const timestamp = typeof timestampValue === 'string'
-    ? new Date(timestampValue).toISOString()
-    : timestampValue instanceof Date
-      ? timestampValue.toISOString()
-      : fallback.timestamp;
-  return {
-    ...fallback,
-    id: fallback.id,
-    content: typeof raw.content === 'string' ? raw.content : fallback.content,
-    timestamp,
-    from_me: true,
-    ...(platformMessageId ? { platform_message_id: platformMessageId } : {}),
-  };
-}
+import {
+  chatMessageFromSend,
+  isBridgeFailure,
+  isLocalSend,
+  isPlayableAudio,
+  keepPendingSends,
+  mergeChatMessage,
+  parseMediaCaption,
+  normalizeMediaUrl as normalizeMediaUrlWithBase,
+  type ChatMessage,
+} from '@claire/chat-core';
 
 function InjectedBubble({
   animate,
@@ -126,13 +73,65 @@ try {
   expoVideoModule = null;
 }
 
+// The shared helper takes the base URL as a parameter so desktop can pass its
+// own; bind this client's once here.
 function normalizeMediaUrl(value?: string | null): string | null {
-  if (!value) return null;
-  if (value.startsWith('/media/')) return `${API_BASE_URL}${value}`;
-  const mxc = value.match(/^mxc:\/\/([^/]+)\/(.+)$/)
-    || value.match(/\/_matrix\/(?:client\/v1\/media|media\/v3)\/(?:thumbnail|download)\/([^/]+)\/([^?]+)/);
-  if (mxc) return `${API_BASE_URL}/media/${encodeURIComponent(mxc[1])}/${encodeURIComponent(mxc[2])}`;
-  return value;
+  return normalizeMediaUrlWithBase(value, API_BASE_URL);
+}
+
+/**
+ * Guidance the bridge appends about affordances it cannot carry across (tap
+ * targets, call answering). It is about the message rather than part of it, so
+ * it reads in a quieter, distinct voice, set off by a rule.
+ */
+function MessageHint({ label, testID, divider = true }: { label: string; testID?: string; divider?: boolean }) {
+  return (
+    <View
+      testID={testID}
+      // Some messages are nothing but the hint ("Incoming call. Use the
+      // WhatsApp app to answer."); a rule with nothing above it reads as a
+      // rendering fault, so the divider only appears when there is body text.
+      style={divider ? {
+        marginTop: 8,
+        paddingTop: 6,
+        borderTopWidth: 1,
+        borderTopColor: colors.neutral[200],
+      } : undefined}
+    >
+      <Text
+        maxFontSizeMultiplier={1.2}
+        style={{ ...mobileType.label, color: colors.neutral[400], fontStyle: 'italic' }}
+      >
+        {label}
+      </Text>
+    </View>
+  );
+}
+
+function MessageBadge({ label, testID }: { label: string; testID?: string }) {
+  return (
+    <View
+      testID={testID}
+      style={{
+        alignSelf: 'flex-start',
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        marginBottom: 6,
+        borderRadius: 999,
+        backgroundColor: colors.neutral[100],
+      }}
+    >
+      <Text
+        maxFontSizeMultiplier={1.2}
+        style={{ ...mobileType.label, color: colors.neutral[600] }}
+      >
+        {label}
+      </Text>
+    </View>
+  );
 }
 
 function MediaImage({ uri, messageId }: { uri: string; messageId: string }) {
@@ -172,8 +171,42 @@ function MediaVideo({ uri, messageId }: { uri: string; messageId: string }) {
       </View>
     );
   }
+  return <MediaVideoSurface uri={uri} messageId={messageId} />;
+}
+
+const VIDEO_SURFACE = { width: 250, height: 180, borderRadius: radius.control, marginBottom: 4, backgroundColor: colors.ink } as const;
+
+/**
+ * Mount the player only after a tap. useVideoPlayer allocates a native player
+ * per call, and a busy conversation renders many video rows at once, so
+ * creating them all up front costs memory and decoders for videos nobody
+ * watches. Until then this is a poster with a play affordance.
+ */
+function MediaVideoSurface({ uri, messageId }: { uri: string; messageId: string }) {
+  const [started, setStarted] = useState(false);
+  if (!started) {
+    return (
+      <Pressable
+        testID={`media-video-play-${messageId}`}
+        accessibilityRole="button"
+        accessibilityLabel="Play video"
+        onPress={() => setStarted(true)}
+        style={({ pressed }) => ({ ...VIDEO_SURFACE, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.85 : 1 })}
+      >
+        <View style={{ width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.paper }}>
+          <Play size={22} color={colors.ink} fill={colors.ink} />
+        </View>
+      </Pressable>
+    );
+  }
+  return <MediaVideoPlayer uri={uri} messageId={messageId} />;
+}
+
+function MediaVideoPlayer({ uri, messageId }: { uri: string; messageId: string }) {
+  const video = expoVideoModule!;
   const player = video.useVideoPlayer(uri, (instance) => {
     instance.loop = false;
+    instance.play();
   });
   const VideoView = video.VideoView;
   return (
@@ -183,7 +216,65 @@ function MediaVideo({ uri, messageId }: { uri: string; messageId: string }) {
       nativeControls
       contentFit="contain"
       playsInline
-      style={{ width: 250, height: 180, borderRadius: radius.control, marginBottom: 4, backgroundColor: colors.ink }}
+      style={VIDEO_SURFACE}
+    />
+  );
+}
+
+function MediaAudio({ uri, mime, messageId, label }: { uri: string; mime?: string | null; messageId: string; label: string }) {
+  const [started, setStarted] = useState(false);
+  const playable = isPlayableAudio(mime) && !!expoVideoModule;
+
+  return (
+    // The bubble sizes to its content, so a flex:1 child here would resolve to
+    // zero width and wrap the label one character per line. Give the row an
+    // explicit width to lay out against.
+    <View testID={`media-audio-${messageId}`} style={{ flexDirection: 'row', alignItems: 'center', gap: space[2], minHeight: 40, width: 210 }}>
+      <Pressable
+        testID={`media-audio-play-${messageId}`}
+        accessibilityRole="button"
+        accessibilityLabel={playable ? 'Play voice message' : 'Voice message cannot be played yet'}
+        accessibilityState={{ disabled: !playable }}
+        disabled={!playable || started}
+        onPress={() => setStarted(true)}
+        style={({ pressed }) => ({
+          width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center',
+          backgroundColor: playable ? colors.lime : colors.neutral[100],
+          opacity: pressed ? 0.85 : 1,
+        })}
+      >
+        {playable
+          ? <Play size={17} color={colors.ink} fill={colors.ink} />
+          : <Volume2 size={17} color={colors.neutral[400]} />}
+      </Pressable>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text numberOfLines={1} style={{ ...mobileType.bodySmall, color: colors.ink }}>{label}</Text>
+        {!playable ? (
+          <Text numberOfLines={1} style={{ ...mobileType.label, color: colors.neutral[400] }}>
+            Playback needs a supported format
+          </Text>
+        ) : null}
+      </View>
+      {started && playable ? <MediaAudioPlayer uri={uri} messageId={messageId} /> : null}
+    </View>
+  );
+}
+
+function MediaAudioPlayer({ uri, messageId }: { uri: string; messageId: string }) {
+  const video = expoVideoModule!;
+  const player = video.useVideoPlayer(uri, (instance) => {
+    instance.loop = false;
+    instance.play();
+  });
+  const VideoView = video.VideoView;
+  // Audio-only source: keep the surface out of layout but mounted so the
+  // player stays attached while it plays.
+  return (
+    <VideoView
+      testID={`media-audio-player-${messageId}`}
+      player={player}
+      nativeControls={false}
+      style={{ width: 0, height: 0 }}
     />
   );
 }
@@ -493,10 +584,6 @@ export default function ChatScreen() {
     }
   }, [chatId, fetchChatInfo, inputText, platform, connectedSessions, user?.id]);
 
-  const isBridgeFailure = (content: string) =>
-    content.startsWith('* Failed to bridge media') ||
-    content.startsWith('Failed to bridge media');
-
   const renderMessageBody = (item: ChatMessage) => {
     const textColor = colors.ink;
     const iconColor = colors.neutral[600];
@@ -515,15 +602,19 @@ export default function ChatScreen() {
 
     const type = item.content_type || 'text';
 
+    const caption = parseMediaCaption(item.content);
+
     if (type === 'image' && item.media_url) {
       const imageUri = normalizeMediaUrl(item.media_url);
       if (!imageUri) return null;
       return (
         <View>
+          {caption.badge ? <MessageBadge label={caption.badge} testID={`media-badge-${item.id}`} /> : null}
           <MediaImage uri={imageUri} messageId={item.id} />
-          {item.content ? (
-            <Text style={{ ...mobileType.body, color: textColor, marginTop: 2 }}>{item.content}</Text>
+          {caption.text ? (
+            <Text style={{ ...mobileType.body, color: textColor, marginTop: 2 }}>{caption.text}</Text>
           ) : null}
+          {caption.hint ? <MessageHint label={caption.hint} testID={`media-hint-${item.id}`} /> : null}
         </View>
       );
     }
@@ -538,13 +629,14 @@ export default function ChatScreen() {
     }
 
     if (type === 'audio') {
+      const audioUri = normalizeMediaUrl(item.media_url);
       return (
-        <View testID={`media-audio-${item.id}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <Volume2 size={16} color={iconColor} />
-          <Text style={{ fontSize: 14, color: textColor }}>
-            {item.content || 'Voice message'}
-          </Text>
-        </View>
+        <MediaAudio
+          uri={audioUri || ''}
+          mime={audioUri ? item.media_mime_type : null}
+          messageId={item.id}
+          label={caption.text || caption.badge || 'Voice message'}
+        />
       );
     }
 
@@ -553,8 +645,9 @@ export default function ChatScreen() {
       if (videoUri) {
         return (
           <View>
+            {caption.badge ? <MessageBadge label={caption.badge} testID={`media-badge-${item.id}`} /> : null}
             <MediaVideo uri={videoUri} messageId={item.id} />
-            {item.content ? <Text style={{ fontSize: 14, color: textColor, marginTop: 2 }}>{item.content}</Text> : null}
+            {caption.text ? <Text style={{ fontSize: 14, color: textColor, marginTop: 2 }}>{caption.text}</Text> : null}
           </View>
         );
       }
@@ -572,21 +665,66 @@ export default function ChatScreen() {
     }
 
     if (type === 'document') {
+      const documentUri = normalizeMediaUrl(item.media_url);
+      const label = caption.text || caption.badge || 'File';
+      const body = (
+        // Same content-sized-bubble constraint as the audio row: without an
+        // explicit width the label collapses and wraps per character.
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2], width: 210 }}>
+          <FileText size={18} color={documentUri ? colors.ink : iconColor} />
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text numberOfLines={1} style={{ ...mobileType.bodySmall, color: textColor }}>{label}</Text>
+            {documentUri ? (
+              <Text style={{ ...mobileType.label, color: colors.neutral[400] }}>Tap to open</Text>
+            ) : null}
+          </View>
+        </View>
+      );
+      if (!documentUri) return <View testID={`media-document-${item.id}`}>{body}</View>;
       return (
-        <View testID={`media-document-${item.id}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <FileText size={16} color={iconColor} />
-          <Text style={{ fontSize: 14, color: textColor }}>
-            {item.content || 'File'}
+        <Pressable
+          testID={`media-document-${item.id}`}
+          accessibilityRole="button"
+          accessibilityLabel={`Open ${label}`}
+          onPress={() => { void Linking.openURL(documentUri).catch(() => undefined); }}
+          style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+        >
+          {body}
+        </Pressable>
+      );
+    }
+
+    if (type === 'location') {
+      // Previously fell through to the text branch and printed raw coordinates.
+      return (
+        <View testID={`media-location-${item.id}`} style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}>
+          <MapPin size={17} color={iconColor} />
+          <Text numberOfLines={2} style={{ ...mobileType.bodySmall, color: textColor }}>
+            {caption.text || 'Shared a location'}
           </Text>
         </View>
       );
     }
 
-    // Default: text
+    // Default: text. Keep links intact here — a message that is only a URL is
+    // the whole message — but still lift out placeholders and the native-app
+    // hint so they do not read as body copy.
+    const body = parseMediaCaption(item.content, { dropSelfLinks: false });
+    if (!body.badge && !body.hint) {
+      return (
+        <Text style={{ ...mobileType.body, color: textColor }}>
+          {body.text ?? item.content}
+        </Text>
+      );
+    }
     return (
-      <Text style={{ ...mobileType.body, color: textColor }}>
-        {item.content}
-      </Text>
+      <View>
+        {body.badge ? <MessageBadge label={body.badge} testID={`text-badge-${item.id}`} /> : null}
+        {body.text ? (
+          <Text style={{ ...mobileType.body, color: textColor }}>{body.text}</Text>
+        ) : null}
+        {body.hint ? <MessageHint label={body.hint} testID={`text-hint-${item.id}`} divider={!!(body.text || body.badge)} /> : null}
+      </View>
     );
   };
 
@@ -636,7 +774,7 @@ export default function ChatScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.cream }} edges={['top']} testID="chat-screen">
       {/* Header */}
-      <Animated.View entering={FadeInDown.duration(240).springify().damping(20)} style={{
+      <View style={{
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: space[3],
@@ -666,7 +804,7 @@ export default function ChatScreen() {
             params: { chatId: chatId!, platform, contact_name, chat_name, is_group },
           })}
         ><MoreHorizontal size={21} color={colors.ink} /></MobileIconButton>
-      </Animated.View>
+      </View>
 
       {showQuickContext ? <View style={{ marginHorizontal: space[3], marginTop: space[2], padding: space[3], flexDirection: 'row', alignItems: 'center', gap: space[2], borderRadius: radius.control, borderWidth: 1, borderColor: colors.ink, backgroundColor: colors.sky }} testID="chat-quick-context">
         <View style={{ width: 28, height: 28, borderRadius: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.lime }}><Sparkles size={15} color={colors.ink} /></View>
