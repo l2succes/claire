@@ -9,5 +9,32 @@ export function incomingContactId(message: Pick<UnifiedMessage, 'platform' | 'is
   // generic branch below.
   if (message.platform === Platform.IMESSAGE) return message.senderId;
 
-  return message.senderId.match(/@(?:whatsapp|_telegram|meta|_imessage)_([^:]+):/)?.[1] || null;
+  return message.senderId.match(GHOST_MXID_PATTERN)?.[1] || null;
+}
+
+/**
+ * Ghost MXID → platform contact id. Kept in one place so adding a bridge does
+ * not require finding every copy of this regex.
+ */
+const GHOST_MXID_PATTERN = /@(?:whatsapp|_telegram|meta|_imessage|slack)_([^:]+):/;
+
+/**
+ * Resolve a ghost MXID to its platform contact id.
+ *
+ * Same extraction as incomingContactId, minus the message context — used for
+ * mention lists, where the MXIDs belong to people other than the sender.
+ */
+export function ghostToPlatformContactId(mxid: string): string | null {
+  if (!mxid) return null;
+  return mxid.match(GHOST_MXID_PATTERN)?.[1] || null;
+}
+
+/**
+ * Resolve a list of mention MXIDs to platform contact ids, dropping any that
+ * don't parse (bridge bots, the homeserver's own users) and de-duplicating.
+ */
+export function resolveMentions(mxids: string[] | undefined): string[] | null {
+  if (!mxids?.length) return null;
+  const resolved = [...new Set(mxids.map(ghostToPlatformContactId).filter((id): id is string => !!id))];
+  return resolved.length ? resolved : null;
 }

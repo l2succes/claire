@@ -121,7 +121,8 @@ export function InboxScreen() {
     enabled: !!user?.id,
     staleTime: 60_000,
     queryFn: async () => {
-      const { data, error } = await supabase.from('promises').select('chat_id').eq('user_id', user!.id).in('status', ['pending', 'open']).not('chat_id', 'is', null);
+      // 'overdue' is a valid stored status; 'open' never has been.
+      const { data, error } = await supabase.from('promises').select('chat_id').eq('user_id', user!.id).in('status', ['pending', 'overdue']).not('chat_id', 'is', null);
       if (error) throw error;
       return new Set((data || []).map((row: DbRow) => row.chat_id as string));
     },

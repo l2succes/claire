@@ -36,7 +36,7 @@ import { platformManager } from './adapters';
 import { aiProcessor } from './services/ai-processor';
 import { conversationAssistant } from './services/conversation-assistant';
 import { voiceProfileService } from './services/voice-profile-service';
-import { incomingContactId } from './services/contact-identity';
+import { incomingContactId, resolveMentions } from './services/contact-identity';
 import { promiseDetector } from './services/promise-detector';
 import { autoReplyEngine } from './services/auto-reply-engine';
 import { notificationDeliveryService } from './services/notification-delivery';
@@ -387,6 +387,7 @@ async function initializePlatforms() {
           name: message.chatName || message.chatId,
           is_group: message.chatType === 'group',
           last_message_at: message.timestamp,
+          ...(typeof message.memberCount === 'number' ? { member_count: message.memberCount } : {}),
         }, { onConflict: 'user_id,platform,platform_chat_id' })
         .select('id')
         .single();
@@ -450,6 +451,11 @@ async function initializePlatforms() {
           contact_id: contactId,
           contact_name: message.isFromMe ? null : (message.senderName || null),
           contact_phone: message.isFromMe ? null : senderContactId,
+          reply_to_platform_message_id: message.replyToMessageId || null,
+          thread_root_platform_id: message.threadRootId || null,
+          mentions: resolveMentions(message.mentions),
+          mentions_room: message.mentionsRoom === true,
+          formatted_body: message.formattedBody || null,
           metadata: message.platformMetadata || null,
           media_url: (() => {
             const mediaUrl = message.platformMetadata?.mediaUrl;
@@ -518,8 +524,10 @@ async function initializePlatforms() {
             .catch((err) => logger.debug('Voice profile refresh skipped:', (err as Error).message));
         }
 
-        // Detect and persist promises (fire-and-forget, both inbound and outbound)
-        if (savedMsg?.id && message.content?.trim()) {
+        // Detect and persist promises (fire-and-forget, both inbound and outbound).
+        // Backfill is excluded: history replays would re-run detection over every
+        // archived message, which is both expensive and produces stale loops.
+        if (savedMsg?.id && !isBackfill && message.content?.trim()) {
           promiseDetector.detectPromises(savedMsg.id, message.content, message.userId, message.isFromMe)
             .catch((err) => logger.debug('Promise detection skipped:', (err as Error).message));
         }
