@@ -5,6 +5,8 @@ test.describe('Claire web shell', () => {
     await page.goto('/signin');
 
     await expect(page.getByTestId('signin-screen')).toBeVisible();
+    await expect(page.getByTestId('google-sign-in-signin')).toBeVisible();
+    await page.getByTestId('signin-use-email').click();
     await expect(page.getByTestId('signin-email-input')).toBeVisible();
     await expect(page.getByTestId('signin-password-input')).toBeVisible();
     await expect(page.getByTestId('signin-submit')).toBeVisible();

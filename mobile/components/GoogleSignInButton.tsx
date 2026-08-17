@@ -4,12 +4,14 @@ import { router } from 'expo-router';
 import { googleAuth } from '../services/googleAuth';
 import { supabase } from '../services/supabase';
 import { Ionicons } from '@expo/vector-icons';
+import { colors, mobileType } from '@claire/design-system';
 
 interface GoogleSignInButtonProps {
   mode: 'signin' | 'signup';
+  variant?: 'default' | 'welcome';
 }
 
-export function GoogleSignInButton({ mode }: GoogleSignInButtonProps) {
+export function GoogleSignInButton({ mode, variant = 'default' }: GoogleSignInButtonProps) {
   const [loading, setLoading] = useState(false);
 
   const handleGoogleSignIn = async () => {
@@ -47,6 +49,32 @@ export function GoogleSignInButton({ mode }: GoogleSignInButtonProps) {
       setLoading(false);
     }
   };
+
+  if (variant === 'welcome') {
+    return (
+      <TouchableOpacity
+        onPress={handleGoogleSignIn}
+        disabled={loading}
+        testID={`google-sign-in-${mode}`}
+        style={{
+          minHeight: 52,
+          borderRadius: 22,
+          backgroundColor: colors.ink,
+          alignItems: 'center',
+          justifyContent: 'center',
+          opacity: loading ? 0.5 : 1,
+        }}
+      >
+        {loading ? (
+          <ActivityIndicator size="small" color={colors.paper} />
+        ) : (
+          <Text style={{ ...mobileType.body, color: colors.paper, fontWeight: '700' }}>
+            Continue with Google
+          </Text>
+        )}
+      </TouchableOpacity>
+    );
+  }
 
   return (
     <TouchableOpacity

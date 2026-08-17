@@ -733,6 +733,7 @@ async function mockBackend(page) {
 async function signIn(page) {
   await page.goto('/signin');
   await page.waitForLoadState('domcontentloaded');
+  await page.getByTestId('signin-use-email').click();
 
   await page.getByTestId('signin-email-input').fill('test@claire.local');
   await page.getByTestId('signin-password-input').fill('password123');
@@ -761,6 +762,8 @@ test.describe('Core loop — mock backend', () => {
     await page.goto('/signin');
 
     await expect(page.getByTestId('signin-screen')).toBeVisible();
+    await expect(page.getByTestId('google-sign-in-signin')).toBeVisible();
+    await page.getByTestId('signin-use-email').click();
     await expect(page.getByTestId('signin-email-input')).toBeVisible();
     await expect(page.getByTestId('signin-password-input')).toBeVisible();
     await expect(page.getByTestId('signin-submit')).toBeVisible();

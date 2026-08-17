@@ -131,6 +131,7 @@ test.use({ viewport: { width: 390, height: 844 } }); // iPhone 14 Pro size
 async function signIn(page) {
   await page.goto('/signin');
   await page.waitForLoadState('domcontentloaded');
+  await page.getByTestId('signin-use-email').click();
   await page.getByTestId('signin-email-input').fill('test@claire.local');
   await page.getByTestId('signin-password-input').fill('password123');
   await page.getByTestId('signin-submit').click();
@@ -156,6 +157,7 @@ test.describe('Visual tour', () => {
   test('02 — sign-in filled', async ({ page }) => {
     await page.goto('/signin');
     await expect(page.getByTestId('signin-screen')).toBeVisible();
+    await page.getByTestId('signin-use-email').click();
     await page.getByTestId('signin-email-input').fill('test@claire.local');
     await page.getByTestId('signin-password-input').fill('password123');
     await page.screenshot({ path: `${SCREENSHOTS_DIR}/02-signin-filled.png` });
