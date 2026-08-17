@@ -180,6 +180,19 @@ describe('MatrixUserMapper.detectPlatformFromUser', () => {
   });
 });
 
+describe('MatrixUserMapper.matrixMemberToContact', () => {
+  it('removes the bridge suffix before persisting a WhatsApp contact name', () => {
+    const contact = mapper.matrixMemberToContact(
+      '@whatsapp_15166100494:claire.local',
+      'Maya Chen (WA)',
+      undefined,
+      'user-1',
+    );
+
+    expect(contact?.displayName).toBe('Maya Chen');
+  });
+});
+
 // ---------------------------------------------------------------------------
 // isBridgeBot
 // ---------------------------------------------------------------------------

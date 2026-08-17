@@ -53,6 +53,8 @@
     "docker:matrix": "docker compose -f docker/matrix/docker-compose.matrix.yml up -d",
     "docker:matrix:down": "docker compose -f docker/matrix/docker-compose.matrix.yml down",
     "docker:matrix:logs": "docker compose -f docker/matrix/docker-compose.matrix.yml logs -f",
+    "db:push:railway:dry-run": "bunx supabase@latest db push --db-url \"$DIRECT_DATABASE_URL\" --dry-run",
+    "db:push:railway": "bunx supabase@latest db push --db-url \"$DIRECT_DATABASE_URL\"",
     "graph": "nx graph",
     "affected": "nx affected -t typecheck lint test build",
     "many": "nx run-many -t typecheck lint test build",

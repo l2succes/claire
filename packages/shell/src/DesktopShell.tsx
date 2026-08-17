@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { TextInput } from 'react-native';
+import { PanelLeftClose, PanelLeftOpen } from 'lucide-react-native';
 import { View } from '@tamagui/core';
 import {
   ClaireIconButton,
@@ -148,7 +149,11 @@ function DesktopTitleBar({
               borderRadius={10}
               testID="desktop-toggle-sidebar"
             >
-              <ClaireText variant="label">{collapsed ? '›' : '‹'}</ClaireText>
+              {collapsed ? (
+                <PanelLeftOpen size={17} color={colors.ink} />
+              ) : (
+                <PanelLeftClose size={17} color={colors.ink} />
+              )}
             </ClaireIconButton>
           </View>
         </DragRegion>

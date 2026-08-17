@@ -204,6 +204,16 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     return match ? `/media/${encodeURIComponent(match[1])}/${encodeURIComponent(match[2])}` : mediaUrl;
   }
 
+  /** Do not replace a known name with the bridge's phone-number fallback. */
+  private contactNameForStorage(displayName: string | undefined, platformContactId: string): string | null {
+    const name = displayName ? this.userMapper.cleanDisplayName(displayName) : '';
+    if (!name) return null;
+    const normalizedId = platformContactId.replace(/[^a-z0-9]/gi, '').toLowerCase();
+    const normalizedName = name.replace(/[^a-z0-9]/gi, '').toLowerCase();
+    if (normalizedName === normalizedId || /^[+\d().\s-]+$/.test(name)) return null;
+    return name;
+  }
+
   /** Correct rows already written by an older sender/media conversion path. */
   private async repairPersistedMessage(message: UnifiedMessage): Promise<void> {
     const { data: existing, error: lookupError } = await supabase
@@ -1385,17 +1395,22 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
         // Skip the user's own ghost contact
         if (selfGhostIds.some((id) => this.userMapper.ghostUserToPlatformContact(id)?.platformContactId === contact.platformContactId)) continue;
 
+        const name = this.contactNameForStorage(contact.displayName, contact.platformContactId);
+        const payload: DbRow = {
+          user_id: session.userId,
+          platform: contact.platform,
+          platform_contact_id: contact.platformContactId,
+          whatsapp_id: contact.platformContactId,
+          avatar_url: contact.avatarUrl || null,
+          phone_number: contact.phoneNumber || (/^\d+$/.test(contact.platformContactId) ? contact.platformContactId : null),
+          ...(contact.username ? { username: contact.username } : {}),
+          // Omitting an unknown name is intentional: on conflict Supabase then
+          // preserves a real name that was learned from an earlier sync.
+          ...(name ? { name } : {}),
+        };
         const { error } = await supabase
           .from('contacts')
-          .upsert({
-            user_id: session.userId,
-            platform: contact.platform,
-            platform_contact_id: contact.platformContactId,
-            whatsapp_id: contact.platformContactId,
-            name: contact.displayName || contact.platformContactId,
-            avatar_url: contact.avatarUrl || null,
-            phone_number: /^\d+$/.test(contact.platformContactId) ? contact.platformContactId : null,
-          }, { onConflict: 'user_id,platform,platform_contact_id' });
+          .upsert(payload, { onConflict: 'user_id,platform,platform_contact_id' });
 
         if (!error) synced++;
       }

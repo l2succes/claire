@@ -228,6 +228,33 @@ export const MOCK_PLATFORM_SESSIONS = [
   },
 ];
 
+export const MOCK_PEOPLE = [
+  {
+    id: 'mock-contact-wa-alice',
+    name: 'Alice',
+    phone_number: '+15551234567',
+    avatar_url: null,
+    inferred_name: null,
+    inferred_relationship: 'Colleague',
+    is_group: false,
+    platform: 'whatsapp',
+    username: null,
+    chat: { id: 'mock-chat-wa-alice', name: null, platform: 'whatsapp', is_group: false, last_message_at: new Date().toISOString() },
+  },
+  {
+    id: 'mock-contact-ig-carol',
+    name: 'Carol',
+    phone_number: null,
+    avatar_url: null,
+    inferred_name: null,
+    inferred_relationship: null,
+    is_group: false,
+    platform: 'instagram',
+    username: 'carol',
+    chat: { id: 'mock-chat-ig-carol', name: null, platform: 'instagram', is_group: false, last_message_at: new Date().toISOString() },
+  },
+];
+
 export const MOCK_MORNING_BRIEF = {
   brief_text: '2 messages need your attention — starting with Alice (WA) and Bob (TG).',
   urgent_messages: [
@@ -526,6 +553,23 @@ export async function mockBackend(page) {
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({ sessions: MOCK_PLATFORM_SESSIONS }),
+    });
+  });
+
+  // People is a paginated server endpoint rather than an unbounded client
+  // Supabase query. Keep the desktop-shell tests representative of that path.
+  await page.route('**/contacts**', async (route) => {
+    const url = new URL(route.request().url());
+    const platform = url.searchParams.get('platform');
+    const q = (url.searchParams.get('q') || '').toLowerCase();
+    const contacts = MOCK_PEOPLE.filter((contact) =>
+      (!platform || platform === 'all' || contact.platform === platform)
+      && (!q || [contact.name, contact.phone_number, contact.username].some((value) => value?.toLowerCase().includes(q))),
+    );
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ success: true, data: { contacts, nextOffset: null } }),
     });
   });
 

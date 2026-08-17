@@ -8,6 +8,6 @@
   "types": "src/index.ts",
   "exports": { ".": "./src/index.ts" },
   "scripts": { "typecheck": "tsc --noEmit" },
-  "dependencies": { "@claire/design-system": "workspace:*", "@claire/host": "workspace:*", "@claire/tokens": "workspace:*" },
+  "dependencies": { "@claire/design-system": "workspace:*", "@claire/host": "workspace:*", "@claire/tokens": "workspace:*", "lucide-react-native": "^0.294.0" },
   "nx": { "tags": ["scope:shared", "type:ui"] }
 }

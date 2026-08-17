@@ -162,12 +162,14 @@ export class MatrixUserMapper {
       return null;
     }
 
+    const cleanedDisplayName = displayName ? this.cleanDisplayName(displayName) : '';
+
     return {
       id: `matrix-contact-${userId}`,
       platformContactId: platformInfo.platformContactId,
       platform: platformInfo.platform,
       userId: sessionUserId,
-      displayName: displayName || platformInfo.platformContactId,
+      displayName: cleanedDisplayName || platformInfo.platformContactId,
       avatarUrl,
       isBlocked: false,
       isVerified: false,
