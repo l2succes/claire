@@ -15,7 +15,7 @@ const nodeModulesPaths = [
 // Source-only workspace packages. Metro has to watch them (so edits trigger a
 // rebuild) and resolve them (so `@claire/*` imports find the TypeScript source
 // rather than a build output that does not exist).
-const workspacePackages = ['tokens', 'design-system', 'host', 'shell'];
+const workspacePackages = ['tokens', 'design-system', 'chat-core', 'host', 'shell'];
 
 config.watchFolders = [
   ...(config.watchFolders || []),

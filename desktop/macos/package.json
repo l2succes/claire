@@ -11,6 +11,7 @@
     "pods": "pod install --project-directory=macos"
   },
   "dependencies": {
+    "@claire/chat-core": "file:../../packages/chat-core",
     "@claire/design-system": "file:../../packages/design-system",
     "@supabase/supabase-js": "2.39.1",
     "lucide-react-native": "^1.31.0",

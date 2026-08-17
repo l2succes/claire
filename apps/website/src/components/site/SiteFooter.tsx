@@ -7,7 +7,7 @@ export function SiteFooter({ note = 'All your chats. One AI.' }: { note?: string
     <footer className="footer shell">
       <Link className="brand" href="/">
         <span className="brand-mark is-logo">
-          <img src="/assets/brand/claire-kept-thread-flipped.svg" alt="" />
+          <img src="/assets/brand/claire-app-icon-lime.svg" alt="" />
         </span>
         <span>claire</span>
       </Link>

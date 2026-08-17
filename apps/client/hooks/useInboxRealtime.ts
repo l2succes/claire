@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../services/supabase';
 import { notifyWebMessageUpdate } from '../services/notifications';
 import {
-  inboxQueryKey,
+  inboxQueryPrefix,
   markInboxAiResponse,
   patchInboxChat,
   patchInboxRealtimeMessage,
@@ -39,7 +39,7 @@ export function useInboxRealtime(userId?: string) {
       if (cancelled) return;
       if (fallbackTimer) clearInterval(fallbackTimer);
       fallbackTimer = setInterval(() => {
-        if (!cancelled) void queryClient.invalidateQueries({ queryKey: inboxQueryKey(userId) });
+        if (!cancelled) void queryClient.invalidateQueries({ queryKey: inboxQueryPrefix(userId) });
       }, intervalMs);
     };
 

@@ -3,6 +3,8 @@ import { useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 import { colors, useIsDesktopLayout } from '@claire/design-system';
 import { ClaireTabBar } from '../../components/claire/tab-bar';
+import { MoreSheet } from '../../features/more/more-sheet';
+import { useMoreSheet } from '../../hooks/useMoreSheet';
 import { LiquidGlassTabs } from '../../components/claire/liquid-glass-tabs';
 import { useAuthStore } from '../../stores/authStore';
 import { supabase } from '../../services/supabase';
@@ -59,6 +61,7 @@ export default function TabLayout() {
   }
 
   return (
+    <>
     <Tabs
       tabBar={(props) => (isDesktop ? null : <ClaireTabBar {...props} />)}
       screenOptions={{
@@ -80,7 +83,23 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen name="search" options={{ href: null }} />
-      <Tabs.Screen name="more" options={{ title: 'More' }} />
+      <Tabs.Screen
+        name="more"
+        options={{ title: 'More' }}
+        listeners={{
+          // More is an action, not a destination: swallow the navigation and
+          // raise the sheet over whichever tab is showing. Removing this
+          // listener restores the previous full-screen More route.
+          tabPress: (event) => {
+            event.preventDefault();
+            useMoreSheet.getState().open();
+          },
+        }}
+      />
     </Tabs>
+    {/* Mounted beside the navigator, not inside a screen, so it can open over
+        whichever tab is currently showing. */}
+    <MoreSheet />
+    </>
   );
 }

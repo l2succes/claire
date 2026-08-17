@@ -2,9 +2,18 @@
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
-      "@claire/design-system": ["packages/design-system/src/index.ts"],
-      "@claire/platform-catalog": ["packages/platform-catalog/src/index.ts"],
-      "@claire/plugin-sdk": ["packages/plugin-sdk/src/index.ts"]
+      "@claire/chat-core": [
+        "packages/chat-core/src/index.ts"
+      ],
+      "@claire/design-system": [
+        "packages/design-system/src/index.ts"
+      ],
+      "@claire/platform-catalog": [
+        "packages/platform-catalog/src/index.ts"
+      ],
+      "@claire/plugin-sdk": [
+        "packages/plugin-sdk/src/index.ts"
+      ]
     }
   }
 }

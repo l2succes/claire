@@ -53,7 +53,7 @@ export function HomePage() {
             <article className="app-window">
               <aside className="app-sidebar">
                 <div className="mini-brand is-logo">
-                  <img src="/assets/brand/claire-kept-thread-flipped.svg" alt="" />
+                  <img src="/assets/brand/claire-app-icon-lime.svg" alt="" />
                 </div>
                 <button className="nav-icon active" aria-label="Home">
                   <HeroIcon name="home" />

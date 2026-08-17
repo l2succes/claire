@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Modal, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { PenSquare, Pin, Search, Sparkles, X } from 'lucide-react-native';
 import { Image } from 'expo-image';
@@ -21,8 +21,47 @@ type PlatformFilter = 'all' | Platform;
 
 const avatarTones = [colors.sky, colors.mint, colors.lavender, colors.blush] as const;
 
+const MEDIA_PREVIEW_LABELS: Record<string, string> = {
+  image: 'sent a picture',
+  video: 'sent a video',
+  audio: 'sent a voice message',
+  document: 'sent a file',
+  location: 'shared a location',
+};
+
+/**
+ * The preview line for a media conversation. Bridged attachments usually carry
+ * no caption, so the row used to read a bare "Media"; describe what arrived
+ * instead, attribute it in a group, and show the picture itself when there is
+ * one.
+ */
+function conversationPreview(message: InboxMessage): { label: string; thumbnailUri?: string } {
+  const type = message.content_type || 'text';
+  const caption = message.content?.trim();
+  const mediaLabel = MEDIA_PREVIEW_LABELS[type];
+  // In a group the sender is not the conversation, so name them the way the
+  // other messaging clients do: "Juan: sent a picture".
+  const speaker = message.is_group && message.sender_name && !message.from_me ? message.sender_name : undefined;
+  const thumbnailUri = type === 'image' && message.media_url ? normalizeInboxMediaUrl(message.media_url) : undefined;
+
+  if (!mediaLabel) return { label: caption || 'No messages yet' };
+  const body = caption || mediaLabel;
+  return { label: speaker ? `${speaker}: ${body}` : body, thumbnailUri };
+}
+
+// Attachments are stored as Matrix mxc:// or as a server-relative /media path;
+// both need resolving to something the image loader can fetch.
+function normalizeInboxMediaUrl(value: string): string | undefined {
+  if (value.startsWith('/media/')) return `${API_BASE_URL}${value}`;
+  const mxc = value.match(/^mxc:\/\/([^/]+)\/(.+)$/);
+  if (mxc) return `${API_BASE_URL}/media/${encodeURIComponent(mxc[1])}/${encodeURIComponent(mxc[2])}`;
+  return /^https?:\/\//i.test(value) ? value : undefined;
+}
+
 function InboxConversationRow({ message, pinned, onPress, onLongPress }: { message: InboxMessage; pinned?: boolean; onPress: () => void; onLongPress: () => void }) {
   const [imageFailed, setImageFailed] = useState(false);
+  const [thumbFailed, setThumbFailed] = useState(false);
+  const preview = conversationPreview(message);
   const name = message.chat_name || message.contact_name || 'Unknown conversation';
   const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase() || '?';
   const tone = avatarTones[[...name].reduce((total, character) => total + character.charCodeAt(0), 0) % avatarTones.length];
@@ -61,7 +100,19 @@ function InboxConversationRow({ message, pinned, onPress, onLongPress }: { messa
 
       <View style={{ position: 'absolute', top: pinned ? 20 : 14, left: inset + 58, right: inset, gap: 3 }}>
         <Text maxFontSizeMultiplier={1} selectable numberOfLines={1} style={{ paddingRight: 64, fontFamily: mobileType.body.fontFamily, fontSize: 17, lineHeight: 21, fontWeight: message.unread_count ? '700' : '600', color: colors.ink }}>{name}</Text>
-        <Text maxFontSizeMultiplier={1} selectable numberOfLines={1} style={{ paddingRight: message.unread_count ? 36 : 0, fontFamily: mobileType.body.fontFamily, fontSize: 14, lineHeight: 19, color: colors.neutral[600], fontWeight: message.unread_count ? '500' : '400' }}>{message.content || 'Media'}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingRight: message.unread_count ? 36 : 0 }}>
+          {preview.thumbnailUri && !thumbFailed ? (
+            <Image
+              source={{ uri: preview.thumbnailUri }}
+              style={{ width: 26, height: 26, borderRadius: 5, backgroundColor: colors.neutral[100] }}
+              contentFit="cover"
+              transition={120}
+              onError={() => setThumbFailed(true)}
+              testID={`inbox-preview-thumb-${message.chat_id}`}
+            />
+          ) : null}
+          <Text maxFontSizeMultiplier={1} selectable numberOfLines={1} style={{ flex: 1, fontFamily: mobileType.body.fontFamily, fontSize: 14, lineHeight: 19, color: colors.neutral[600], fontWeight: message.unread_count ? '500' : '400' }}>{preview.label}</Text>
+        </View>
       </View>
       <Text maxFontSizeMultiplier={1} selectable style={{ position: 'absolute', right: inset, top: pinned ? 21 : 16, fontFamily: mobileType.monoLabel.fontFamily, fontSize: 11, lineHeight: 14, letterSpacing: 0.4, color: colors.neutral[400] }}>{formatInboxTimestamp(message.timestamp)}</Text>
       {message.unread_count ? <View style={{ position: 'absolute', right: inset, bottom: pinned ? 16 : 14, minWidth: 22, height: 22, paddingHorizontal: 5, borderRadius: 11, backgroundColor: colors.lime, alignItems: 'center', justifyContent: 'center' }}><Text maxFontSizeMultiplier={1} style={{ ...mobileType.label, color: colors.ink, fontVariant: ['tabular-nums'] }}>{message.unread_count}</Text></View> : null}
@@ -105,13 +156,29 @@ export function InboxScreen() {
   const params = useLocalSearchParams<{ filter?: string }>();
   const user = useAuthStore(state => state.user);
   const connectedSessions = usePlatformStore(state => state.connectedSessions);
-  const inbox = useInboxMessages(user?.id);
   const [query, setQuery] = useState('');
+  // Search runs in the database now, so debounce the term rather than issuing a
+  // request per keystroke.
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(query.trim()), 250);
+    return () => clearTimeout(timer);
+  }, [query]);
   const [filter, setFilter] = useState<InboxFilter>(params.filter === 'needs_reply' ? 'needs_reply' : 'all');
   const [platform, setPlatform] = useState<PlatformFilter>('all');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [snoozeTarget, setSnoozeTarget] = useState<InboxMessage | null>(null);
   const [locallySnoozed, setLocallySnoozed] = useState<Set<string>>(new Set());
+
+  const inbox = useInboxMessages(user?.id, { search: debouncedQuery, filter, platform });
+
+  // Changing a filter replaces the result set, so bring the viewport with it —
+  // otherwise the list stays scrolled where the previous, longer result set
+  // left it and the new top rows are off-screen.
+  const listRef = useRef<FlatList<InboxMessage>>(null);
+  useEffect(() => {
+    listRef.current?.scrollToOffset({ offset: 0, animated: true });
+  }, [filter, platform, debouncedQuery]);
 
   useEffect(() => {
     if (params.filter === 'needs_reply') setFilter('needs_reply');
@@ -129,16 +196,15 @@ export function InboxScreen() {
   });
 
   const visibleMessages = useMemo(() => inbox.messages.filter(message => {
+    // Snooze is the only local-only concern: an optimistic snooze must hide the
+    // row before the server round-trip lands.
     if (locallySnoozed.has(message.id)) return false;
     if (message.snoozed_until && new Date(message.snoozed_until) > new Date()) return false;
-    if (platform !== 'all' && message.platform !== platform) return false;
-    if (filter === 'unread' && !message.unread_count) return false;
-    if (filter === 'needs_reply' && message.from_me) return false;
-    if (filter === 'groups' && !message.is_group) return false;
-    const normalizedQuery = query.trim().toLowerCase();
-    if (!normalizedQuery) return true;
-    return [message.chat_name, message.contact_name, message.contact_phone, message.content].some(value => value?.toLowerCase().includes(normalizedQuery));
-  }), [filter, inbox.messages, locallySnoozed, platform, query]);
+    // Platform, unread, needs-reply, groups and the search term are all applied
+    // by the query now. Re-applying them here would only ever filter the page
+    // already in memory, which is what made them miss most conversations.
+    return true;
+  }), [inbox.messages, locallySnoozed]);
 
   const openChat = useCallback((message: InboxMessage) => router.push({
     pathname: '/chat/[chatId]',
@@ -231,12 +297,22 @@ export function InboxScreen() {
         <MobileSearchField style={{ minHeight: 46, borderRadius: 13, paddingHorizontal: space[4], backgroundColor: colors.neutral[100] }} inputStyle={{ fontSize: 15, lineHeight: 20 }} icon={<Search size={24} strokeWidth={1.7} color={colors.neutral[600]} />} value={query} onChangeText={setQuery} placeholder="Search conversations" returnKeyType="search" testID="messages-search-input" />
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingRight: space[4] }}>
           {filters.map(item => <MobileChip key={item.value} label={item.label} count={item.count} active={filter === item.value} onPress={() => setFilter(item.value)} testID={`inbox-filter-${item.value}`} />)}
-          {platformFilters.map(item => <MobileChip key={item.value} label={item.label} active={platform === item.value} onPress={() => setPlatform(platform === item.value ? 'all' : item.value)} testID={`inbox-platform-${item.value}`} />)}
+          {platformFilters.map(item => (
+            <MobileChip
+              key={item.value}
+              label={item.label}
+              icon={item.value === 'all' ? undefined : <PlatformBadge platform={item.value} size={14} />}
+              active={platform === item.value}
+              onPress={() => setPlatform(platform === item.value ? 'all' : item.value)}
+              testID={`inbox-platform-${item.value}`}
+            />
+          ))}
         </ScrollView>
       </View>
 
       {inbox.loading ? <InboxSkeleton testID="messages-loading" /> : (
       <FlatList
+        ref={listRef}
         testID="messages-list"
         data={displayedMessages}
         keyExtractor={item => item.conversation_key}
@@ -244,7 +320,9 @@ export function InboxScreen() {
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{ paddingBottom: 156 }}
         onEndReached={() => {
-          if (searching || !displayedMessages.length || !inbox.hasMore || inbox.loadingMore) return;
+          // Search results paginate too — the feed is filtered in the database,
+          // so there can be more matches beyond the first page.
+          if (!displayedMessages.length || !inbox.hasMore || inbox.loadingMore) return;
           void inbox.fetchNextMessages();
         }}
         onEndReachedThreshold={0.4}

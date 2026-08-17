@@ -7,6 +7,113 @@ import { smartCardGenerator } from '../services/smart-card-generator';
 
 const router = Router();
 
+const FEED_PAGE_SIZE = 20;
+const FEED_MAX_PAGE_SIZE = 50;
+
+/**
+ * Keyset cursors are `<last_activity_at>|<chat_id>`. Offset pagination drifts
+ * on this feed: a new message reorders the list between pages, so rows shift
+ * across the boundary and the client both repeats and skips conversations.
+ */
+function encodeCursor(row: DbRow): string {
+  return `${row.last_activity_at as string}|${row.chat_id as string}`;
+}
+
+function decodeCursor(value: unknown): { lastActivityAt: string; chatId: string } | null {
+  if (typeof value !== 'string' || !value.includes('|')) return null;
+  const separator = value.lastIndexOf('|');
+  const lastActivityAt = value.slice(0, separator);
+  const chatId = value.slice(separator + 1);
+  if (!lastActivityAt || !chatId) return null;
+  return { lastActivityAt, chatId };
+}
+
+/**
+ * GET /conversations
+ * Paginate the unified inbox one row per conversation.
+ *
+ * The inbox is a list of conversations, so it must paginate over
+ * conversations. Paginating `messages` and collapsing them client-side yields
+ * only a few conversations per page and makes older ones effectively
+ * unreachable. Backed by the `conversation_feed` view.
+ *
+ * Query: ?limit=20&cursor=<ts|chatId>&q=&platform=&filter=unread|groups|needs_reply
+ */
+router.get('/', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: 'Not authenticated' });
+
+    const limit = Math.min(
+      Math.max(Number.parseInt(String(req.query.limit ?? ''), 10) || FEED_PAGE_SIZE, 1),
+      FEED_MAX_PAGE_SIZE,
+    );
+    const cursor = decodeCursor(req.query.cursor);
+    const search = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+    const platform = typeof req.query.platform === 'string' ? req.query.platform : '';
+    const filter = typeof req.query.filter === 'string' ? req.query.filter : '';
+
+    let query = supabase
+      .from('conversation_feed')
+      .select('*', { count: 'exact' })
+      .eq('user_id', userId)
+      .eq('is_archived', false)
+      // WhatsApp's status broadcast is a pseudo-chat, never a conversation.
+      // Older rows carry no platform_chat_id, so match the name too.
+      .not('platform_chat_id', 'eq', 'status@broadcast')
+      .not('chat_name', 'eq', 'WhatsApp Status Broadcast')
+      .order('last_activity_at', { ascending: false })
+      .order('chat_id', { ascending: false })
+      .limit(limit + 1);
+
+    if (cursor) {
+      query = query.or(
+        `last_activity_at.lt.${cursor.lastActivityAt},` +
+        `and(last_activity_at.eq.${cursor.lastActivityAt},chat_id.lt.${cursor.chatId})`,
+      );
+    }
+    if (platform) query = query.eq('platform', platform);
+    if (filter === 'unread') query = query.gt('unread_count', 0);
+    if (filter === 'groups') query = query.eq('is_group', true);
+    if (filter === 'needs_reply') query = query.eq('last_message_from_me', false);
+    if (search) {
+      // Search every conversation in the database rather than the page the
+      // client happens to hold. Commas and parens would break PostgREST's
+      // filter grammar, so drop them from the pattern.
+      const pattern = `%${search.replace(/[,()]/g, ' ')}%`;
+      query = query.or(
+        `chat_name.ilike.${pattern},` +
+        `contact_name.ilike.${pattern},` +
+        `contact_inferred_name.ilike.${pattern},` +
+        `contact_phone.ilike.${pattern},` +
+        `last_message_content.ilike.${pattern}`,
+      );
+    }
+
+    const { data, error, count } = await query;
+    if (error) throw error;
+
+    const rows = data || [];
+    const hasMore = rows.length > limit;
+    const conversations = hasMore ? rows.slice(0, limit) : rows;
+
+    return res.json({
+      success: true,
+      data: {
+        conversations,
+        nextCursor: hasMore && conversations.length
+          ? encodeCursor(conversations[conversations.length - 1] as DbRow)
+          : null,
+        hasMore,
+        total: count ?? null,
+      },
+    });
+  } catch (error) {
+    logger.error('Error fetching conversation feed:', error);
+    return res.status(500).json({ error: 'Failed to fetch conversations' });
+  }
+});
+
 /**
  * GET /conversations/:chatId/settings
  * Fetch category + profile + smart cards for a conversation
