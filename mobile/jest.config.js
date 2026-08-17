@@ -1,7 +1,17 @@
+const path = require('path');
+
+// These packages are pinned to a single copy so React and React Native are not
+// instantiated twice. Resolve them instead of hardcoding `<rootDir>/node_modules`:
+// under Bun workspaces most of them hoist to the repo root, and hardcoded paths
+// made every suite fail to load with "Could not locate module react-native".
+const entry = (name) => require.resolve(name, { paths: [__dirname] });
+const packageDir = (name) =>
+  path.dirname(require.resolve(`${name}/package.json`, { paths: [__dirname] }));
+
 module.exports = {
   preset: 'jest-expo',
   transformIgnorePatterns: [
-    'node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|@sentry/.*|native-base|react-native-svg|react-native-gesture-handler|react-native-screens|react-native-safe-area-context|@react-native-async-storage/async-storage|react-native-reanimated|nativewind|lucide-react-native)',
+    'node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|@sentry/.*|native-base|react-native-svg|react-native-gesture-handler|react-native-screens|react-native-safe-area-context|@react-native-async-storage/async-storage|react-native-reanimated|nativewind|lucide-react-native|@claire/.*)',
   ],
   collectCoverageFrom: [
     '**/*.{ts,tsx}',
@@ -15,9 +25,9 @@ module.exports = {
   ],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',
-    '^react$': '<rootDir>/node_modules/react/index.js',
-    '^react-native$': '<rootDir>/node_modules/react-native/index.js',
-    '^react-native-css-interop/(.*)$': '<rootDir>/node_modules/react-native-css-interop/$1',
+    '^react$': entry('react'),
+    '^react-native$': entry('react-native'),
+    '^react-native-css-interop/(.*)$': `${packageDir('react-native-css-interop')}/$1`,
   },
   setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'],
   testEnvironment: 'jsdom',

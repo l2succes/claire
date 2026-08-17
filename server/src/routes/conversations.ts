@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { config } from '../config';
 import { requireAuth } from '../middleware/auth';
 import { logger } from '../utils/logger';
-import { supabase } from '../services/supabase';
+import { supabase, type DbRow } from '../services/supabase';
 import { smartCardGenerator } from '../services/smart-card-generator';
 
 const router = Router();
@@ -271,7 +271,7 @@ async function extractKeyFacts(
 
   const messagesText = messages
     .reverse()
-    .map(m => `${m.from_me ? 'Me' : (m.contact_name || 'Them')}: ${m.content}`)
+    .map((m: DbRow) => `${m.from_me ? 'Me' : (m.contact_name || 'Them')}: ${m.content}`)
     .join('\n');
 
   try {

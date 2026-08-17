@@ -8,7 +8,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, router } from 'expo-router';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { ChevronLeft, SendHorizonal } from 'lucide-react-native';
-import { supabase } from '../../services/supabase';
+import { supabase, type DbRow } from '../../services/supabase';
 import { platformsApi, API_BASE_URL } from '../../services/platforms';
 import { useAuthStore } from '../../stores/authStore';
 import { usePlatformStore } from '../../stores/platformStore';
@@ -171,7 +171,7 @@ export default function ChatScreen() {
       let loadedMessages = data || [];
       // Assistant citations can reference older history than the normal chat
       // window. Fetch the cited row explicitly so it is always reachable.
-      if (highlightMessageId && !loadedMessages.some(message => message.id === highlightMessageId)) {
+      if (highlightMessageId && !loadedMessages.some((message: DbRow) => message.id === highlightMessageId)) {
         const { data: highlightedMessage, error: highlightError } = await supabase
           .from('messages')
           .select('id, content, timestamp, from_me, contact_name, contact_phone, content_type, media_url, media_mime_type')
@@ -182,8 +182,14 @@ export default function ChatScreen() {
         if (highlightError) throw highlightError;
         if (highlightedMessage) loadedMessages = [...loadedMessages, highlightedMessage];
       }
-      setMessages([...new Map(loadedMessages.map(message => [message.id, message])).values()]
-        .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()));
+      const byId = new Map<string, ChatMessage>(
+        loadedMessages.map((message: DbRow) => [message.id as string, message as ChatMessage]),
+      );
+      setMessages(
+        [...byId.values()].sort(
+          (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+        ),
+      );
     } catch (err) {
       console.error('Failed to fetch messages:', err);
     } finally {

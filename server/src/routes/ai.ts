@@ -6,7 +6,7 @@ import { responseCache } from '../services/response-cache';
 import { validateRequest } from '../middleware/validation';
 import { requireAuth } from '../middleware/auth';
 import { logger } from '../utils/logger';
-import { supabase } from '../services/supabase';
+import { supabase, type DbRow } from '../services/supabase';
 
 const router = Router();
 
@@ -629,14 +629,14 @@ router.get('/group-summary/:chatId',
       const transcript = messages
         .slice()
         .reverse()
-        .map((m) => `${m.contact_name || (m.from_me ? 'You' : 'Unknown')}: ${m.content}`)
+        .map((m: DbRow) => `${m.contact_name || (m.from_me ? 'You' : 'Unknown')}: ${m.content}`)
         .join('\n');
 
       let summary: string;
 
       if (!aiProcessor.isConfigured) {
         // Mock mode — deterministic fallback so tests pass without real AI
-        const participants = new Set(messages.map((m) => m.contact_name || 'Unknown'));
+        const participants = new Set(messages.map((m: DbRow) => m.contact_name || 'Unknown'));
         summary = `This group has ${messages.length} recent messages from ${participants.size} participant${participants.size === 1 ? '' : 's'}. Topics discussed include updates and coordination. (mock summary)`;
       } else {
         summary = await aiProcessor.summarizeText(

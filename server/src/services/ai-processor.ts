@@ -2,7 +2,7 @@ import AnthropicBedrock from '@anthropic-ai/bedrock-sdk';
 import OpenAI from 'openai';
 import { aiConfig } from '../config';
 import { logger } from '../utils/logger';
-import { supabase } from './supabase';
+import { supabase, type DbRow } from './supabase';
 import { contextBuilder } from './context-builder';
 import { promptTemplates } from './prompt-templates';
 import { responseCache } from './response-cache';
@@ -386,8 +386,8 @@ export class AIProcessor {
 
     return {
       totalSuggestions: data.length,
-      averageConfidence: data.reduce((sum, r) => sum + (r.confidence || 0), 0) / data.length,
-      selectionRate: data.filter((r) => r.selected_index !== null).length / data.length,
+      averageConfidence: data.reduce((sum: number, r: DbRow) => sum + (r.confidence || 0), 0) / data.length,
+      selectionRate: data.filter((r: DbRow) => r.selected_index !== null).length / data.length,
       messageTypes: this.groupByMessageType(data),
       qualityScore: this.calculateQualityScore(data),
     };

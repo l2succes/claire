@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
-import { supabase } from '../services/supabase';
+import { supabase, type DbRow } from '../services/supabase';
 import { validateRequest } from '../middleware/validation';
 import { requireAuth } from '../middleware/auth';
 import { logger } from '../utils/logger';
@@ -36,7 +36,9 @@ async function hydratePromiseConversations(userId: string, rows: PromiseConversa
     .in('id', messageIds);
   if (error) throw error;
 
-  const byMessageId = new Map((sources || []).map((source) => [source.id, source]));
+  const byMessageId = new Map<string, DbRow>(
+    (sources || []).map((source: DbRow) => [source.id as string, source]),
+  );
   return rows.map((row) => {
     const source = row.message_id ? byMessageId.get(row.message_id) : null;
     if (!source) return row;

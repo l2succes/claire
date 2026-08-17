@@ -17,7 +17,7 @@ import { requireAuth } from '../middleware/auth';
 import { BridgeHttpClient } from '../adapters/matrix/bridge-http-client';
 import { loginWithCredentials, submitTwoFactorCode } from '../services/instagram-login';
 import { platformCatalog, platformCatalogVersion } from '../platform-catalog';
-import { supabase } from '../services/supabase';
+import { supabase, type DbRow } from '../services/supabase';
 
 // Railway services cannot reach each other through localhost. Railway does not
 // inject NODE_ENV by default, so its public-domain marker is also used to
@@ -161,7 +161,7 @@ router.get('/interests', async (req: Request, res: Response) => {
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
     if (error) throw error;
-    return res.json({ success: true, platformIds: (data || []).map((row) => row.platform_id) });
+    return res.json({ success: true, platformIds: (data || []).map((row: DbRow) => row.platform_id) });
   } catch (error) {
     logger.error('Error loading platform interest:', error);
     return res.status(500).json({ success: false, error: 'Failed to load platform interest' });

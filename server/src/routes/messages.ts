@@ -4,7 +4,7 @@ import { messageIngestion } from '../services/message-ingestion';
 import { messageQueue } from '../services/message-queue';
 import { realtimeSync } from '../services/realtime-sync';
 import { whatsappAuth } from '../auth/whatsapp-auth';
-import { supabase } from '../services/supabase';
+import { supabase, type DbRow } from '../services/supabase';
 import { validateRequest } from '../middleware/validation';
 import { requireAuth } from '../middleware/auth';
 import { logger } from '../utils/logger';
@@ -101,7 +101,7 @@ router.get(
       if (error) throw error;
 
       const chatRows = chats || [];
-      const chatIds = chatRows.map((chat) => chat.id);
+      const chatIds = chatRows.map((chat: DbRow) => chat.id);
       if (!chatIds.length) return res.json([]);
 
       // A single batched lookup keeps inbox rows useful without an N+1 query.
@@ -120,7 +120,7 @@ router.get(
         if (message.chat_id && !latestByChat.has(message.chat_id)) latestByChat.set(message.chat_id, message);
       }
 
-      return res.json(chatRows.map((chat) => ({
+      return res.json(chatRows.map((chat: DbRow) => ({
         ...chat,
         latest_message: latestByChat.get(chat.id) || null,
       })));
@@ -165,7 +165,7 @@ router.get(
       ]);
 
       const unread = (unreadChats.data || []).reduce(
-        (sum, chat) => sum + (chat.unread_count || 0),
+        (sum: number, chat: DbRow) => sum + (chat.unread_count || 0),
         0
       );
 
@@ -372,12 +372,12 @@ router.post(
         .in('id', messageIds);
       if (lookupError) throw lookupError;
 
-      const chatIds = [...new Set((messages || []).map((message) => message.chat_id).filter(Boolean))];
+      const chatIds = [...new Set((messages || []).map((message: DbRow) => message.chat_id).filter(Boolean))];
       const readAt = new Date().toISOString();
       for (const chatId of chatIds) {
         const latestRead = (messages || [])
-          .filter((message) => message.chat_id === chatId)
-          .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp))[0];
+          .filter((message: DbRow) => message.chat_id === chatId)
+          .sort((a: DbRow, b: DbRow) => Date.parse(b.timestamp) - Date.parse(a.timestamp))[0];
         const { error } = await supabase
           .from('chats')
           .update({
