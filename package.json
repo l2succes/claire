@@ -13,7 +13,7 @@
     "dev": "concurrently \"bun run dev:server\" \"bun run dev:mobile\"",
     "dev:server": "cd apps/server && bun run dev",
     "dev:mobile": "cd apps/client && bun run dev",
-    "dev:desktop": "cd desktop/macos && bun run start",
+    "dev:desktop": "cd apps/desktop && bun run dev",
     "dev:website": "cd apps/website && bun run dev",
     "dev:plugin": "bun test --watch examples/plugins",
     "plugin:create": "bun run scripts/plugin-create.ts",
@@ -53,7 +53,13 @@
     "docker:matrix:logs": "docker compose -f docker/matrix/docker-compose.matrix.yml logs -f",
     "graph": "nx graph",
     "affected": "nx affected -t typecheck lint test build",
-    "many": "nx run-many -t typecheck lint test build"
+    "many": "nx run-many -t typecheck lint test build",
+    "desktop:dev": "cd apps/desktop && bun run dev",
+    "desktop:prod": "cd apps/desktop && bun run prod",
+    "desktop:prod:fresh": "cd apps/desktop && bun run prod:fresh",
+    "desktop:package": "cd apps/desktop && bun run package",
+    "desktop:package:dev": "cd apps/desktop && bun run package:dev",
+    "desktop:macos": "cd desktop/macos && bun run start"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",

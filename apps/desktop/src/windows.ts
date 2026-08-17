@@ -1,5 +1,6 @@
 import { BrowserWindow, shell } from 'electron';
 import path from 'node:path';
+import { APP_NAME, channelIconPath, IS_DEV } from './channel';
 import { getWindowBounds, saveWindowBounds } from './preferences';
 import { RENDERER_ORIGIN } from './protocol';
 import { isSecureStorageAvailable } from './secure-store';
@@ -44,6 +45,9 @@ export function createMainWindow(): BrowserWindow {
     minWidth: 900,
     minHeight: 600,
     show: false,
+    title: APP_NAME,
+    // Windows and Linux read the window icon from here; macOS uses the Dock.
+    icon: channelIconPath(),
     backgroundColor: '#F4F1EA',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     trafficLightPosition: process.platform === 'darwin' ? { x: 18, y: 18 } : undefined,
@@ -59,7 +63,9 @@ export function createMainWindow(): BrowserWindow {
 
   applyLinkPolicy(window);
   void window.loadURL(rendererUrl('/'));
-  if (DEV_SERVER_URL) window.webContents.openDevTools({ mode: 'detach' });
+  // DevTools only on the debug channel — a production run pointed at a dev
+  // server (which is a legitimate thing to do) should not sprout an inspector.
+  if (IS_DEV && DEV_SERVER_URL) window.webContents.openDevTools({ mode: 'detach' });
 
   return window;
 }
@@ -87,6 +93,8 @@ export function openConversationWindow(chatId: string): BrowserWindow {
     minWidth: CONVERSATION_MIN.width,
     minHeight: CONVERSATION_MIN.height,
     show: false,
+    title: APP_NAME,
+    icon: channelIconPath(),
     backgroundColor: '#F4F1EA',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     webPreferences: webPreferences(),

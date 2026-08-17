@@ -3,8 +3,11 @@ productName: Claire
 copyright: Copyright © Claire contributors
 
 directories:
-  output: release
+  output: release/production
   buildResources: build
+
+# build/icon.png — the lime field with the ink mark, matching the mobile icon.
+icon: build/icon.png
 
 # `dist-main` is the compiled main/preload; `renderer` is the
 # `expo export -p web` output produced by `bun run bundle:renderer`.
@@ -12,6 +15,10 @@ files:
   - dist-main/**/*
   - renderer/**/*
   - package.json
+  # BrowserWindow({ icon }) reads these at runtime on Windows and Linux.
+  # macOS takes the window icon from the bundle instead.
+  - build/icon.png
+  - build/icon-dev.png
 
 mac:
   category: public.app-category.social-networking

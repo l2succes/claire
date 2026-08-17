@@ -1,5 +1,6 @@
-import { app, BrowserWindow, ipcMain, Notification, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, nativeImage, Notification, shell } from 'electron';
 import path from 'node:path';
+import { APP_NAME, applyChannelIdentity, channelIconPath, IS_DEV } from './channel';
 import { buildApplicationMenu } from './menu';
 import { getPreference, setPreference } from './preferences';
 import {
@@ -25,8 +26,11 @@ let mainWindow: BrowserWindow | null = null;
  */
 let activeConversationId: string | null = null;
 
-// Privileges must be registered before the app is ready, or the scheme will
-// not be treated as secure and localStorage will not persist.
+// Both of these must run before anything else touches app paths or windows.
+// applyChannelIdentity repoints userData, which the single-instance lock below
+// is keyed on; the scheme privileges must be registered before the app is
+// ready or the renderer origin will not be treated as secure.
+applyChannelIdentity();
 registerRendererSchemePrivileges();
 
 if (!app.requestSingleInstanceLock()) {
@@ -42,6 +46,13 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 async function onReady(): Promise<void> {
+  // A packaged build gets its icon from the bundle; an unpackaged run would
+  // otherwise show the stock Electron icon and be unidentifiable in the Dock.
+  if (!app.isPackaged && process.platform === 'darwin' && app.dock) {
+    const icon = nativeImage.createFromPath(channelIconPath());
+    if (!icon.isEmpty()) app.dock.setIcon(icon);
+  }
+
   registerRendererProtocol(RENDERER_ROOT);
   registerIpcHandlers();
   buildApplicationMenu({

@@ -28,32 +28,56 @@ deep-link scheme (`apps/client/app.json`) and is reserved here for OAuth callbac
 
 ## Running it
 
-```sh
-# 1. Start the client's web dev server (from apps/client)
-cd apps/client && bunx expo start --web --port 8081
+Two channels. They are separate applications — different name, icon, and
+`userData` directory — so both can run at the same time without one taking the
+other's single-instance lock or disturbing its signed-in session.
 
-# 2. Start Electron against it (from apps/desktop)
-cd apps/desktop && bun run dev
+|  | `bun run dev` | `bun run prod` |
+|---|---|---|
+| Name | Claire Dev | Claire |
+| Icon | black field, lime mark | lime field, ink mark |
+| Renderer | Expo web dev server, Fast Refresh | exported bundle over `claire-app://` |
+| DevTools | open on launch | closed |
+| userData | `…/Application Support/Claire Dev` | `…/Application Support/Claire` |
+
+```sh
+# from apps/desktop
+bun run dev          # debug: starts the dev server, waits for it, launches Claire Dev
+bun run prod         # production: launches Claire against the exported bundle
+bun run prod:fresh   # same, but re-export the bundle first
 ```
 
-`bun run dev` sets `CLAIRE_DEV_SERVER_URL=http://localhost:8081`. If Expo picked a different
-port, pass it explicitly:
+Or from the repository root:
 
 ```sh
-CLAIRE_DEV_SERVER_URL=http://localhost:8083 bun run dev
+bun run desktop:dev
+bun run desktop:prod
 ```
 
-Packaged run, with no dev server:
+`bun run dev` starts the Expo web server itself and picks a port that nothing
+is using — it does not assume 8081 is available, which matters when another
+checkout is already serving on it. Quitting the app stops the dev server too.
+
+`bun run prod` reuses an existing `renderer/` bundle if one is present; pass
+`--fresh` (or use `prod:fresh`) to re-export.
+
+### Distributables
 
 ```sh
-bun run bundle:renderer   # expo export -p web -> apps/desktop/renderer
-bun run start
+bun run package        # Claire      -> release/production
+bun run package:dev    # Claire Dev  -> release/dev
 ```
 
-Distributables:
+Both are unsigned. Only the production build registers the `claire://` OAuth
+scheme; registering it from two apps would make the callback target a coin flip.
+
+### Icons
+
+`build/icon.png` and `build/icon-dev.png` are committed, and generated from the
+same path `ClaireMark` draws inside the app:
 
 ```sh
-bun run package           # -> apps/desktop/release
+bun run icons        # needs `brew install librsvg`
 ```
 
 ## Security model
