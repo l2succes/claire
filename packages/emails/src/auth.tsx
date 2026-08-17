@@ -21,8 +21,10 @@ export function RecoveryEmail() {
 }
 
 export function MagicLinkEmail() {
-  return <ClaireEmailLayout preview="Use this one-time link to sign in to Claire." eyebrow="SIGN IN" title="Your sign-in link is ready." action={{ label: 'Sign in to Claire', href: confirmationUrl }}>
-    <Text style={copy.paragraph}>Use this one-time link to sign in. For your security, it expires shortly and can only be used once.</Text>
+  return <ClaireEmailLayout preview="Use this one-time code to sign in to Claire." eyebrow="SIGN IN" title="Your sign-in code is ready.">
+    <Text style={copy.paragraph}>Enter this one-time code in Claire. It expires shortly and can only be used once.</Text>
+    <Text style={copy.code}>{token}</Text>
+    <Text style={copy.small}>Do not share this code with anyone.</Text>
   </ClaireEmailLayout>;
 }
 

@@ -100,7 +100,7 @@ export default function AccountSecurityScreen() {
               accessibilityRole="button"
               disabled={saving}
               onPress={() => void savePassword()}
-              style={({ pressed }) => ({ minHeight: 52, borderRadius: radius.control, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center', opacity: saving || pressed ? 0.6 : 1 })}
+              style={{ minHeight: 52, borderRadius: radius.control, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center', opacity: saving ? 0.6 : 1 }}
             >
               <Text style={{ ...mobileType.body, color: colors.paper, fontWeight: '700' }}>{saving ? 'Saving…' : hasPassword ? 'Update password' : 'Add password'}</Text>
             </Pressable>
