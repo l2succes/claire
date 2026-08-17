@@ -613,9 +613,9 @@ export default function PricingPage() {
                   Nothing a customer can see happens without a human yes. Each run leaves a receipt:
                   what fired, which inputs were used, who approved it, and how to undo it.
                 </p>
-                <a className="button button-dark pr-governance-link" href="/developers#plugins">
+                <Link className="button button-dark pr-governance-link" href="/developers#plugins">
                   Read the plugin model <HeroIcon name="arrow-right" />
-                </a>
+                </Link>
               </div>
               <ul className="pr-ladder">
                 {riskLadder.map((step) => (
