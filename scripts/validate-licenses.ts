@@ -20,8 +20,8 @@ if (missing.length > 0) {
   process.exit(1);
 }
 
-if (existsSync('client') && !existsSync('mobile')) {
-  console.error('client/ is still present and mobile/ is missing');
+if (existsSync('mobile') && !existsSync('apps/client')) {
+  console.error('mobile/ is still present and apps/client/ is missing');
   process.exit(1);
 }
 

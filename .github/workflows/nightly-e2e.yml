@@ -65,8 +65,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-          cd server && bun install
-          cd ../mobile && bun install
+          cd apps/server && bun install
+          cd ../client && bun install
 
       # ------------------------------------------------------------------
       # Boot Supabase stack (DB + Kong + GoTrue + PostgREST + Realtime)
@@ -153,7 +153,7 @@ jobs:
       # Start Bun server (MOCK_BRIDGE mode — no Matrix/bridges needed)
       # ------------------------------------------------------------------
       - name: Start Bun server
-        working-directory: ./server
+        working-directory: ./apps/server
         run: |
           MOCK_BRIDGE=true bun run src/index.ts &
           echo "SERVER_PID=$!" >> $GITHUB_ENV
@@ -163,11 +163,11 @@ jobs:
       # Install Playwright browsers and run e2e against the Expo web build
       # ------------------------------------------------------------------
       - name: Install Playwright browsers
-        working-directory: ./mobile
+        working-directory: ./apps/client
         run: bunx playwright install chromium --with-deps
 
       - name: Run Playwright e2e (mock-bridge, real Supabase)
-        working-directory: ./mobile
+        working-directory: ./apps/client
         env:
           MOCK_BRIDGE: 'true'
           # Override the client to talk to the real (local) Supabase
@@ -184,7 +184,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report-nightly
-          path: mobile/playwright-report/
+          path: apps/client/playwright-report/
           retention-days: 7
 
       - name: Upload Playwright trace
@@ -192,7 +192,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: playwright-trace-nightly
-          path: mobile/test-results/
+          path: apps/client/test-results/
           retention-days: 7
 
       # ------------------------------------------------------------------

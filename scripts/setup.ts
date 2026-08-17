@@ -8,8 +8,8 @@ import { copyFileSync, existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 
 const envCopies = [
-  ['server/.env.example', 'server/.env'],
-  ['mobile/.env.example', 'mobile/.env'],
+  ['apps/server/.env.example', 'apps/server/.env'],
+  ['apps/client/.env.example', 'apps/client/.env'],
 ] as const;
 
 for (const [from, to] of envCopies) {

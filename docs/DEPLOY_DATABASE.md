@@ -1,8 +1,20 @@
 # Deploying the Database
 
-Apply Claire migrations from `supabase/migrations/` to a local Docker stack or your own Supabase project.
+Apply Claire migrations from `supabase/migrations/` with the Supabase CLI. The production target is Railway's direct Postgres endpoint.
 
-## Option 1: Supabase CLI
+## Railway production
+
+Set `DIRECT_DATABASE_URL` to Railway's **direct Postgres connection string** (a `postgresql://...` URL), not `SUPABASE_URL` or another HTTP endpoint. Railway's TCP proxy does not use TLS, so its URL must include `?sslmode=disable`. Keep this value in Railway or your local secret manager; do not commit it.
+
+```bash
+export DIRECT_DATABASE_URL='postgresql://…?sslmode=disable'
+bun run db:push:railway:dry-run
+bun run db:push:railway
+```
+
+`db push --db-url` applies only migrations not already recorded in the target database. It does not require `supabase link`, which is for Supabase-hosted projects.
+
+## Supabase-hosted projects
 
 ```bash
 bunx supabase login
@@ -10,13 +22,13 @@ bunx supabase link --project-ref <your-project-ref>
 bunx supabase db push
 ```
 
-## Option 2: Dashboard SQL Editor
+## Dashboard SQL Editor
 
 1. Open your Supabase project dashboard.
 2. Open the SQL Editor.
 3. Run each file in `supabase/migrations/` in timestamp order.
 
-## Option 3: Direct Postgres
+## Direct Postgres fallback
 
 ```bash
 psql "$DATABASE_URL" -f supabase/migrations/20250806092049_initial_schema.sql

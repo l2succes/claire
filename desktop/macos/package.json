@@ -44,5 +44,11 @@
   },
   "engines": {
     "node": ">=20"
+  },
+  "nx": {
+    "tags": [
+      "scope:client",
+      "type:app"
+    ]
   }
 }

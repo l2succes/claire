@@ -63,6 +63,10 @@ services:
     container_name: claire-mautrix-whatsapp
     volumes:
       - ./data/whatsapp:/data
+      # Keep the bridge configuration under version control. Without this
+      # mount mautrix generates /data/config.yaml on first boot and silently
+      # ignores docker/matrix/bridges/whatsapp/config.yaml.
+      - ./bridges/whatsapp/config.yaml:/data/config.yaml:ro
     networks:
       - claire-matrix
     depends_on:

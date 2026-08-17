@@ -22,7 +22,11 @@ appservice:
 
 bridge:
     username_template: "whatsapp_{{.}}"
-    displayname_template: "{{.Name}} (WA)"
+    # FullName is the name saved in the linked WhatsApp account's contact
+    # list. The public/business names are fallbacks for numbers that aren't
+    # saved. Only enable FullName when bridge users are trusted or their data
+    # is isolated; do not enable it on a shared public Matrix bridge.
+    displayname_template: '{{or .FullName .BusinessName .PushName .Phone .RedactedPhone "Unknown user"}} (WA)'
     command_prefix: "!wa"
 
     permissions:

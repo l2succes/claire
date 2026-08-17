@@ -44,7 +44,7 @@ WORKDIR /app
 FROM base AS deps
 
 # Copy package files
-COPY server/package.json ./
+COPY apps/server/package.json ./
 
 # Install production dependencies
 # --ignore-scripts prevents better-sqlite3 from compiling native binaries in Docker
@@ -60,12 +60,12 @@ WORKDIR /app
 
 # Copy package files and install dependencies for TypeScript build
 # --ignore-scripts skips native module compilation (we only need types)
-COPY server/package.json ./
+COPY apps/server/package.json ./
 RUN bun install --ignore-scripts
 
 # Copy source code
-COPY server/src ./src
-COPY server/tsconfig.json ./
+COPY apps/server/src ./src
+COPY apps/server/tsconfig.json ./
 
 # Build the application
 RUN bun build src/index.ts --target=bun --outdir=dist
