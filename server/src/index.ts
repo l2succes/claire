@@ -242,11 +242,12 @@ async function collectReadiness() {
   return { checks, allOk };
 }
 
-// Public liveness/readiness endpoint for Railway and load balancers. It does
-// not expose dependency names, errors, or deployment metadata.
-app.get('/healthz', async (_req, res) => {
-  const { allOk } = await collectReadiness();
-  return res.status(allOk ? 200 : 503).json({ status: allOk ? 'ok' : 'degraded' });
+// Public liveness endpoint for Railway and load balancers. It deliberately
+// reports only whether this HTTP process is running; dependency readiness is
+// available through the protected /health diagnostic below. This lets a newly
+// deployed staging API start before fixture schema/data provisioning is done.
+app.get('/healthz', (_req, res) => {
+  return res.status(200).json({ status: 'ok' });
 });
 
 // Detailed readiness is an operator diagnostic. Public traffic should use
