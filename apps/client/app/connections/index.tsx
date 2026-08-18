@@ -3,14 +3,16 @@ import { Pressable, ScrollView, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { Check, ChevronLeft, ChevronRight, Laptop, Plus, RefreshCw, Smartphone } from 'lucide-react-native';
 import { router } from 'expo-router';
-import { colors, mobileType, radius, space } from '@claire/design-system';
-import { platformsApi, type PlatformDefinition } from '../../services/platforms';
+import { colors, mobileType, radius, space, useIsDesktopLayout } from '@claire/design-system';
+import { host } from '@claire/host';
+import { API_BASE_URL, platformsApi, type PlatformDefinition } from '../../services/platforms';
 import { usePlatformStore } from '../../stores/platformStore';
 import { Platform, PlatformStatus, resolvePlatform } from '../../types/platform';
 import { PlatformIcon } from '../../components/PlatformIcon';
 import { PlatformAuthModal } from '../../components/PlatformAuthModal';
 import { MobileHeader, MobileIconButton, MobileState, SectionLabel } from '../../components/mobile/claire-mobile';
 import { ConnectionsSkeleton } from '../../components/claire/skeleton';
+import { useAuthStore } from '../../stores/authStore';
 
 function ConnectionMark({ definition }: { definition: PlatformDefinition }) {
   const platform = resolvePlatform(definition.id);
@@ -22,6 +24,7 @@ function ConnectionMark({ definition }: { definition: PlatformDefinition }) {
 }
 
 export default function ConnectionsScreen() {
+  const isDesktop = useIsDesktopLayout();
   const sessions = usePlatformStore(state => state.connectedSessions);
   const fetchSessions = usePlatformStore(state => state.fetchConnectedSessions);
   const [definitions, setDefinitions] = useState<PlatformDefinition[]>([]);
@@ -29,6 +32,8 @@ export default function ConnectionsScreen() {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Platform | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const accessToken = useAuthStore(state => state.token);
+  const user = useAuthStore(state => state.user);
 
   const load = async () => {
     setError(null);
@@ -59,6 +64,31 @@ export default function ConnectionsScreen() {
       setSelected(definition.id as Platform);
       return;
     }
+    if (definition.id === Platform.INSTAGRAM && host.name === 'electron' && accessToken) {
+      setError(null);
+      const result = await host.startInstagramLogin({ apiUrl: API_BASE_URL, accessToken });
+      if (!result.success) setError(result.error || 'Instagram sign-in did not finish.');
+      else await load();
+      return;
+    }
+    if (definition.id === Platform.IMESSAGE && host.name === 'electron') {
+      const status = await host.getCompanionStatus();
+      if (status.imessage === 'ready') {
+        if (!accessToken || !user?.id) {
+          setError('Sign in again before enrolling this Mac for iMessage sync.');
+          return;
+        }
+        const result = await host.configureCompanion({ apiUrl: API_BASE_URL, accessToken, userId: user.id });
+        if (!result.success) setError(result.error || 'Could not start iMessage sync.');
+        else { setError(null); await load(); }
+      } else if (status.imessage === 'needs_permission') {
+        await host.openSystemSettings('full_disk_access');
+        setError('Grant Full Disk Access to Claire, then return here to finish iMessage setup.');
+      } else {
+        setError('iMessage setup is available only in Claire Desktop on a Mac.');
+      }
+      return;
+    }
     if (definition.supportStatus === 'planned' || definition.supportStatus === 'unavailable') {
       await platformsApi.requestPlatformInterest(definition.id);
       setRequested(current => current.includes(definition.id) ? current : [...current, definition.id]);
@@ -69,7 +99,8 @@ export default function ConnectionsScreen() {
     const connected = connectedPlatforms.has(definition.id as Platform);
     const isRequested = requested.includes(definition.id);
     const mobileSetup = canConnectOnMobile(definition);
-    const actionLabel = connected ? 'Connected' : isRequested ? 'Requested' : mobileSetup ? 'Connect' : definition.setupSurface === 'desktop' || definition.setupSurface === 'mac' ? 'Claire Desktop' : 'Join waitlist';
+    const desktopConnectable = (definition.id === Platform.INSTAGRAM || definition.id === Platform.IMESSAGE) && host.name === 'electron';
+    const actionLabel = connected ? 'Connected' : isRequested ? 'Requested' : mobileSetup || desktopConnectable ? 'Connect' : definition.setupSurface === 'desktop' || definition.setupSurface === 'mac' ? 'Claire Desktop' : 'Join waitlist';
     return (
       <View key={definition.id}>
         <Pressable
@@ -95,6 +126,20 @@ export default function ConnectionsScreen() {
       </View>
     );
   };
+
+  if (isDesktop) {
+    return <View style={{ flex: 1, minHeight: 0, flexDirection: 'row', backgroundColor: colors.cream }} testID="desktop-connections-screen">
+      <DesktopSettingsNav active="Connections" />
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 34, paddingBottom: 60 }}>
+        <View style={{ width: '100%', maxWidth: 1080, alignSelf: 'center' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 22 }}><View><Text style={{ ...mobileType.monoLabel, color: colors.neutral[600] }}>ACCOUNTS & BRIDGES</Text><Text style={{ ...mobileType.screenTitle, color: colors.ink, marginTop: 4 }}>Connections</Text><Text style={{ ...mobileType.bodySmall, color: colors.neutral[600], marginTop: 3 }}>{connectedPlatforms.size} active networks · desktop-aware setup</Text></View><Pressable onPress={() => void load()}><View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 9, borderRadius: 10, backgroundColor: colors.ink }}><Plus size={16} color={colors.paper} /><Text style={{ ...mobileType.label, color: colors.paper }}>Add connection</Text></View></Pressable></View>
+          <View style={{ flexDirection: 'row', gap: 9, alignItems: 'center', padding: 13, borderRadius: 13, borderWidth: 1, borderColor: colors.ink, backgroundColor: colors.sky, marginBottom: 18 }}><Laptop size={19} color={colors.ink} /><Text style={{ flex: 1, ...mobileType.bodySmall, color: colors.ink }}><Text style={{ fontWeight: '700' }}>This Mac can host on-device connections.</Text> iMessage is available while Claire Desktop and Messages are running.</Text></View>
+          {loading ? <ConnectionsSkeleton /> : error ? <MobileState error title="Connections unavailable" message={error} /> : <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 13 }}>{[...available, ...roadmap].map((definition) => <DesktopConnectionCard key={definition.id} definition={definition} connected={connectedPlatforms.has(definition.id as Platform)} requested={requested.includes(definition.id)} onPress={() => void act(definition)} />)}</View>}
+        </View>
+      </ScrollView>
+      <PlatformAuthModal platform={selected} visible={!!selected} onClose={() => setSelected(null)} onSuccess={() => { setSelected(null); void load(); }} existingSession={selected ? sessions.find(session => session.platform === selected && session.status === PlatformStatus.CONNECTED) || null : null} />
+    </View>;
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.cream }}>
@@ -142,4 +187,14 @@ export default function ConnectionsScreen() {
       />
     </View>
   );
+}
+
+function DesktopSettingsNav({ active }: { active: string }) {
+  const items = ['Profile', 'Connections', 'AI behavior', 'Relationships', 'Notifications', 'Appearance', 'Shortcuts', 'Privacy & data', 'About'];
+  return <View style={{ width: 210, flexShrink: 0, padding: space[4], backgroundColor: '#F4F2EC', borderRightWidth: 1, borderColor: colors.neutral[200] }}><Text style={{ ...mobileType.sectionTitle, color: colors.ink, marginBottom: space[3] }}>Settings</Text>{items.map((item) => <View key={item} style={{ minHeight: 34, justifyContent: 'center', paddingHorizontal: 10, borderRadius: 9, backgroundColor: item === active ? colors.ink : 'transparent', marginBottom: 3 }}><Text style={{ ...mobileType.bodySmall, color: item === active ? colors.paper : colors.ink }}>{item}</Text></View>)}</View>;
+}
+
+function DesktopConnectionCard({ definition, connected, requested, onPress }: { definition: PlatformDefinition; connected: boolean; requested: boolean; onPress: () => void }) {
+  const state = connected ? 'CONNECTED' : requested ? 'REQUESTED' : definition.id === Platform.IMESSAGE ? 'LOCAL' : definition.id === Platform.INSTAGRAM ? 'DESKTOP AUTH' : definition.supportStatus === 'available' || definition.supportStatus === 'beta' ? 'AVAILABLE' : 'PLANNED';
+  return <View style={{ width: '31%', minWidth: 240, minHeight: 182, padding: space[3], borderWidth: 1, borderColor: definition.id === Platform.IMESSAGE ? colors.ink : colors.neutral[200], borderRadius: 16, backgroundColor: colors.paper, justifyContent: 'space-between' }}><View><View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}><ConnectionMark definition={definition} /><View style={{ flex: 1, minWidth: 0 }}><Text style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>{definition.name}</Text><Text style={{ ...mobileType.label, color: colors.neutral[600] }}>{definition.setupLabel}</Text></View></View><Text style={{ ...mobileType.monoLabel, color: state === 'CONNECTED' ? colors.success : state === 'LOCAL' ? colors.focus : colors.neutral[600], marginTop: 13 }}>{state}</Text><Text style={{ ...mobileType.bodySmall, color: colors.neutral[600], marginTop: 4 }}>{definition.id === Platform.IMESSAGE ? 'Uses Messages and macOS permissions.' : definition.id === Platform.INSTAGRAM ? 'Sign in safely in Claire Desktop.' : definition.setupSurface === 'phone' ? 'Cloud bridge and synced history.' : 'Requires a future bridge.'}</Text></View><Pressable onPress={onPress}><View style={{ alignSelf: 'flex-start', marginTop: 14, paddingHorizontal: 10, paddingVertical: 7, borderWidth: 1, borderColor: colors.ink, borderRadius: 99 }}><Text style={{ ...mobileType.label, color: colors.ink }}>{connected ? 'Manage' : definition.id === Platform.IMESSAGE ? 'Permissions' : definition.id === Platform.INSTAGRAM ? 'Reconnect' : definition.supportStatus === 'available' ? 'Connect' : 'Join waitlist'}</Text></View></Pressable></View>;
 }

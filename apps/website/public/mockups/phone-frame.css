@@ -1,0 +1,70 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/*
+ * The one reusable mobile-device primitive.
+ *
+ * The app viewport is the canonical canvas. A gallery column or docs embed
+ * may scale the whole device down, but it must never make the app reflow into
+ * a narrower viewport. Claire is shown as an iPhone 15: 393 × 852 CSS pixels
+ * inside the device, with all chrome included in the same scaled canvas.
+ */
+:root {
+  --claire-phone-viewport-width: 393px;
+  --claire-phone-viewport-height: 852px;
+  --claire-phone-frame-bezel: 8px;
+  --claire-phone-frame-width: calc(var(--claire-phone-viewport-width) + (var(--claire-phone-frame-bezel) * 2));
+  --claire-phone-frame-height: calc(var(--claire-phone-viewport-height) + (var(--claire-phone-frame-bezel) * 2));
+  --claire-phone-frame-radius: 54px;
+}
+
+claire-phone {
+  display: block;
+  width: calc(var(--claire-phone-frame-width) * var(--claire-phone-render-scale, 1));
+  height: calc(var(--claire-phone-frame-height) * var(--claire-phone-render-scale, 1));
+  margin: auto;
+  position: relative;
+  overflow: visible;
+}
+
+.claire-phone__canvas {
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: var(--claire-phone-frame-width);
+  height: var(--claire-phone-frame-height);
+  padding: var(--claire-phone-frame-bezel);
+  overflow: hidden;
+  background: var(--claire-ink);
+  border-radius: var(--claire-phone-frame-radius);
+  box-shadow: 0 24px 55px rgb(16 18 15 / 15%);
+  transform: scale(var(--claire-phone-render-scale, 1));
+  transform-origin: top left;
+}
+
+.claire-phone__viewport {
+  position: relative;
+  width: var(--claire-phone-viewport-width);
+  height: var(--claire-phone-viewport-height);
+  overflow: hidden;
+  border-radius: calc(var(--claire-phone-frame-radius) - var(--claire-phone-frame-bezel));
+  background: var(--claire-paper);
+}
+
+.claire-phone__island {
+  position: absolute;
+  z-index: 3;
+  top: 18px;
+  left: 50%;
+  width: 102px;
+  height: 29px;
+  border-radius: 999px;
+  background: var(--claire-ink);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.claire-phone__viewport > iframe {
+  display: block;
+  width: var(--claire-phone-viewport-width);
+  height: var(--claire-phone-viewport-height);
+  border: 0;
+  background: var(--claire-paper);
+}

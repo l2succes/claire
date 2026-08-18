@@ -85,6 +85,7 @@ function ComposerBar({
   menu,
   inputTestID,
   sendTestID,
+  inputRef,
   style,
   ...inputProps
 }: Omit<TextInputProps, 'style'> & {
@@ -102,6 +103,7 @@ function ComposerBar({
   menu?: ReactNode;
   inputTestID?: string;
   sendTestID?: string;
+  inputRef?: React.RefObject<TextInput | null>;
   style?: StyleProp<ViewStyle>;
 }) {
   const armed = Boolean(value?.toString().trim()) && !sending;
@@ -123,6 +125,7 @@ function ComposerBar({
           {addIcon}
         </Pressable>
         <TextInput
+          ref={inputRef}
           {...inputProps}
           value={value}
           onChangeText={onChangeText}
@@ -184,6 +187,7 @@ export function ChatComposer({
   replyOptionsVisible = false,
   onToggleReplyOptions,
   style,
+  inputRef,
   ...inputProps
 }: Omit<TextInputProps, 'style'> & {
   onSend: () => void;
@@ -192,6 +196,7 @@ export function ChatComposer({
   replyOptionsVisible?: boolean;
   onToggleReplyOptions?: () => void;
   style?: StyleProp<ViewStyle>;
+  inputRef?: React.RefObject<TextInput | null>;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const toggleMenu = () => setMenuOpen((open) => !open);
@@ -229,6 +234,7 @@ export function ChatComposer({
       addActive={menuOpen}
       menu={menuOpen ? <ComposerMenu items={actions} testID="chat-composer-menu" /> : null}
       inputTestID="chat-input"
+      inputRef={inputRef}
       sendTestID="chat-send-button"
       style={style}
       {...inputProps}

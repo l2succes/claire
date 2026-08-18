@@ -22,6 +22,9 @@ import { useInboxRealtime } from '../hooks/useInboxRealtime';
 import { useClaireFonts } from '../hooks/useClaireFonts';
 import { DesktopChrome } from '../components/desktop/DesktopChrome';
 import { useUnreadBadge } from '../hooks/useUnreadBadge';
+import { useWorkspaceHandoff } from '../hooks/useWorkspaceHandoff';
+import { host } from '@claire/host';
+import { API_BASE_URL } from '../services/platforms';
 import '../global.css';
 
 const SENTRY_DSN = process.env.EXPO_PUBLIC_SENTRY_DSN;
@@ -48,6 +51,19 @@ function UnreadBadgeBridge() {
   return null;
 }
 
+function WorkspaceHandoffBridge() {
+  useWorkspaceHandoff();
+  return null;
+}
+
+function DesktopPushBridge() {
+  const token = useAuthStore((state) => state.token);
+  useEffect(() => {
+    if (token && host.name === 'electron') void host.configurePushNotifications({ apiUrl: API_BASE_URL, accessToken: token });
+  }, [token]);
+  return null;
+}
+
 function InboxRealtimeBridge() {
   const userId = useAuthStore((state) => state.user?.id);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
@@ -57,7 +73,10 @@ function InboxRealtimeBridge() {
 
 export default function RootLayout() {
   const [initialized, setInitialized] = useState(false);
-  const [showLaunchReveal, setShowLaunchReveal] = useState(true);
+  // Electron already owns a native startup experience. Replaying the large
+  // lime reveal inside its renderer makes desktop feel slower and obscures the
+  // workspace after the window is ready, so keep the animation phone-only.
+  const [showLaunchReveal, setShowLaunchReveal] = useState(() => host.name !== 'electron');
   // No-op on native, where the expo-font plugin embeds the families at build
   // time. On web and in Electron it registers them, so holding the reveal until
   // it resolves avoids a visible reflow from fallback metrics.
@@ -157,6 +176,8 @@ export default function RootLayout() {
           <QueryClientProvider client={queryClient}>
             <InboxRealtimeBridge />
             <UnreadBadgeBridge />
+            <WorkspaceHandoffBridge />
+            <DesktopPushBridge />
             <DesktopChrome>
             <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#F4F1EA' } }}>
               <Stack.Screen name="(tabs)" />

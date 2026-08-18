@@ -27,7 +27,7 @@ bun run storybook
 
 ## Docs source
 
-Canonical Markdown lives in `../docs`. `bun run sync-docs` copies the public pages into `content/docs` before `dev` and `build`.
+Canonical Markdown lives in `../docs`. `bun run sync-docs` validates and copies every Markdown document into `content/docs` before `dev` and `build`; `content/docs` is generated and gitignored. The website is the default HTML reader experience, while `/docs/<path>.md` remains available for copying and machine use.
 
 ## Public interfaces
 
@@ -37,4 +37,4 @@ Canonical Markdown lives in `../docs`. `bun run sync-docs` copies the public pag
 - `GET /llms-full.txt`
 - `GET /docs/<path>.md`
 
-Ask Claire defaults to `CLAIRE_DOCS_ASK_MODEL=gpt-5.4-mini` and a `$50` in-memory monthly budget. If the API key is missing it returns `503` with `{ fallback: "search" }`.
+Ask Claire uses the Vercel AI SDK with its direct OpenAI provider. It defaults to `CLAIRE_DOCS_ASK_MODEL=gpt-5.4-mini` and a `$50` in-memory monthly budget. Set `OPENAI_API_KEY` only in the website host’s server environment (never a `NEXT_PUBLIC_*` value). If the key is missing it returns `503` with `{ fallback: "search" }`.

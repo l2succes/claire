@@ -4,7 +4,6 @@
   "private": true,
   "workspaces": [
     "apps/*",
-    "desktop/macos",
     "packages/*",
     "examples/plugins/*"
   ],
@@ -20,11 +19,23 @@
     "test:plugins": "bun test examples/plugins",
     "landing": "bunx serve landing",
     "catalog:generate": "bun run scripts/generate-platform-catalog.ts",
+    "secrets:bootstrap": "bun run scripts/secrets/bootstrap.ts",
+    "secrets:check": "bun run scripts/secrets/check.ts",
+    "secrets:sync:railway": "bun run scripts/secrets/sync-railway.ts",
+    "secrets:provision:supabase-staging": "bun run scripts/secrets/provision-supabase-staging.ts",
+    "secrets:provision:api-staging": "bun run scripts/secrets/provision-api-staging.ts",
+    "secrets:sync:eas-staging": "bun run scripts/secrets/sync-eas-staging.ts",
+    "secrets:provision:staging": "bun run scripts/secrets/provision-staging.ts",
+    "secrets:store:supabase-studio": "bun run scripts/secrets/store-supabase-studio-access.ts",
+    "secrets:inventory:railway": "bun run scripts/secrets/inventory-railway.ts",
+    "secrets:store:spaceship": "bun run scripts/secrets/store-spaceship-operator.ts",
     "emails:build": "cd packages/emails && bun run build",
     "emails:preview": "cd packages/emails && bun run dev",
     "dev:prod": "concurrently \"bun run dev:server\" \"bun run mobile:prod\"",
     "mobile:prod": "cd apps/client && bun run start:prod",
+    "mobile:staging": "cd apps/client && bun run start:staging",
     "mobile:prod:local": "cd apps/client && bun run start:prod:local",
+    "mobile:ios:staging": "cd apps/client && bun run ios:staging",
     "mobile:ios:prod": "cd apps/client && bun run ios:prod",
     "mobile:ios:prod:local": "cd apps/client && bun run ios:prod:local",
     "mobile:ios:prod:device": "cd apps/client && bun run ios:prod:device",
@@ -62,8 +73,7 @@
     "desktop:prod": "cd apps/desktop && bun run prod",
     "desktop:prod:fresh": "cd apps/desktop && bun run prod:fresh",
     "desktop:package": "cd apps/desktop && bun run package",
-    "desktop:package:dev": "cd apps/desktop && bun run package:dev",
-    "desktop:macos": "cd desktop/macos && bun run start"
+    "desktop:package:dev": "cd apps/desktop && bun run package:dev"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",

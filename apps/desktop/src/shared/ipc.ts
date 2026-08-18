@@ -33,6 +33,16 @@ export const IPC = {
   requestActiveConversation: 'claire:request-active-conversation',
   /** Renderer -> main. Answers `requestActiveConversation`. */
   reportActiveConversation: 'claire:report-active-conversation',
+  cacheRead: 'claire:cache-read',
+  cacheWrite: 'claire:cache-write',
+  cacheClear: 'claire:cache-clear',
+  cacheInfo: 'claire:cache-info',
+  companionStatus: 'claire:companion-status',
+  instagramLogin: 'claire:instagram-login',
+  imessageSend: 'claire:imessage-send',
+  openSystemSettings: 'claire:open-system-settings',
+  configurePush: 'claire:configure-push',
+  configureCompanion: 'claire:configure-companion',
 } as const;
 
 export type NotifyPayload = {
@@ -52,11 +62,27 @@ export type NavigateTarget = string;
 export type DesktopCapabilities = {
   badge: boolean;
   notifications: boolean;
-  /** Native iMessage bridging is not implemented yet. See apps/desktop/README.md. */
+  /** A Mac can expose iMessage controls; permission state comes from status. */
   imessage: boolean;
   /** safeStorage is usable — false on a Linux box with no keyring. */
   secureStorage: boolean;
+  encryptedCache: boolean;
 };
+
+export type EncryptedCacheInfo = { available: boolean; byteLength: number; updatedAt: string | null };
+export type CompanionStatus = {
+  hostPlatform: 'macos' | 'windows' | 'linux';
+  imessage: 'unavailable' | 'needs_permission' | 'ready';
+  encryptedCache: EncryptedCacheInfo;
+  pushHelper: 'unsupported' | 'not_configured' | 'ready';
+};
+export type InstagramLoginRequest = { apiUrl: string; accessToken: string };
+export type InstagramLoginResult = { success: boolean; error?: string };
+export type IMessageSendRequest = { recipient: string; text: string };
+export type IMessageSendResult = { success: true } | { success: false; error: string };
+export type PushSetupRequest = { apiUrl: string; accessToken: string };
+export type CompanionSetupRequest = { apiUrl: string; accessToken: string; userId: string };
+export type CompanionSetupResult = { success: boolean; error?: string; deviceId?: string };
 
 export type ClaireDesktopApi = {
   readonly platform: NodeJS.Platform;
@@ -70,6 +96,16 @@ export type ClaireDesktopApi = {
   secureGet(key: string): Promise<string | null>;
   secureSet(key: string, value: string): Promise<boolean>;
   secureDelete(key: string): Promise<void>;
+  getCompanionStatus(): Promise<CompanionStatus>;
+  readEncryptedCache(userId: string): Promise<string | null>;
+  writeEncryptedCache(userId: string, value: string): Promise<boolean>;
+  clearEncryptedCache(userId: string): Promise<void>;
+  getEncryptedCacheInfo(userId: string): Promise<EncryptedCacheInfo>;
+  startInstagramLogin(request: InstagramLoginRequest): Promise<InstagramLoginResult>;
+  sendIMessage(request: IMessageSendRequest): Promise<IMessageSendResult>;
+  openSystemSettings(section: 'full_disk_access' | 'automation'): Promise<void>;
+  configurePushNotifications(request: PushSetupRequest): Promise<void>;
+  configureCompanion(request: CompanionSetupRequest): Promise<CompanionSetupResult>;
   /** Open a conversation in its own compact window. */
   openConversationWindow(chatId: string): void;
   /**

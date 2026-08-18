@@ -1,3 +1,0 @@
-#include "Pods/Target Support Files/Pods-ClaireDesktopMac-macOS/Pods-ClaireDesktopMac-macOS.release.xcconfig"
-#include? "ClaireDesktop.xcconfig"
-APS_ENVIRONMENT = production

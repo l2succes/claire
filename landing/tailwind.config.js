@@ -17,7 +17,7 @@ module.exports = {
         },
       },
       fontFamily: {
-        sans: ['Inter', 'Avenir Next', 'Avenir', 'Helvetica', 'Arial', 'sans-serif'],
+        sans: ['Public Sans', 'Avenir Next', 'Avenir', 'Helvetica', 'Arial', 'sans-serif'],
         mono: ['DM Mono', 'SFMono-Regular', 'Consolas', 'monospace'],
       },
       borderRadius: { claire: '1.25rem', panel: '2rem', feature: '3rem' },

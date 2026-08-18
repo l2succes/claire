@@ -27,3 +27,9 @@ regexes = [
   '''test-anon-key''',
   '''sk-your-openai-api-key''',
 ]
+
+[[allowlists]]
+description = "1Password account UUID (public identifier, not a credential)"
+regexes = [
+  '''J6NIRZ4PIJHXRF4SKPUJWROWAU''',
+]

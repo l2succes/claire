@@ -75,3 +75,28 @@ export function setCachedAnswer(
 ) {
   questionCache.set(hash, value);
 }
+
+export type DocsChunk = { title: string; url: string; description: string; text: string };
+
+/**
+ * Naive but predictable retrieval: term overlap across title, description, and
+ * body. Grounding quality matters more than ranking sophistication here, and
+ * the corpus is small enough that this stays fast without an embedding store.
+ */
+export function retrieveDocs(question: string, index: DocsChunk[], limit = 4) {
+  const terms = question
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((term) => term.length > 2);
+
+  return index
+    .map((chunk) => {
+      const haystack = `${chunk.title} ${chunk.description} ${chunk.text}`.toLowerCase();
+      const score = terms.reduce((sum, term) => sum + (haystack.includes(term) ? 1 : 0), 0);
+      return { chunk, score };
+    })
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+    .map((item) => item.chunk);
+}
