@@ -110,7 +110,7 @@ export default function Page() {
             {
               term: 'Sync starts only after you connect',
               description:
-                'Synced text and captions power the unified inbox, Ask Claire, reply suggestions, and promise tracking.',
+                'Synced text and captions power the unified inbox, Ask Claire, reply suggestions, and loop tracking.',
             },
             {
               term: 'Disconnecting revokes the connection',

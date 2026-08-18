@@ -6,7 +6,7 @@
  *   so Playwright tests can start from a known state.
  *
  * GET /seed/fixtures
- *   Returns the fixture summary (counts, IDs, promise message text) for
+ *   Returns the fixture summary (counts, IDs, loop message text) for
  *   tests to assert against.
  */
 
@@ -43,8 +43,8 @@ router.post('/reset', requireMockMode, async (_req: Request, res: Response) => {
   try {
     logger.info('[seed] Resetting mock fixtures...');
 
-    // Delete in dependency order (messages → ai_suggestions → promises → chats → contacts)
-    await supabase.from('promises').delete().eq('user_id', MOCK_USER_ID);
+    // Delete in dependency order (messages → ai_suggestions -> loops -> chats → contacts)
+    await supabase.from('loops').delete().eq('user_id', MOCK_USER_ID);
     await supabase.from('ai_suggestions').delete().eq('user_id', MOCK_USER_ID);
     await supabase.from('messages').delete().eq('user_id', MOCK_USER_ID);
     await supabase.from('chats').delete().eq('user_id', MOCK_USER_ID);

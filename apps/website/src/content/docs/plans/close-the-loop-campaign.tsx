@@ -37,9 +37,9 @@ export default function Page() {
 
       <Section id="source" title="Source and scope">
         <P>
-          The page lives in <C>landing/close-the-loop.html</C>, with its visual system in{' '}
-          <C>landing/close-the-loop.css</C> and interaction logic in{' '}
-          <C>landing/close-the-loop.js</C>. It is a campaign concept, not a claim that these
+          The page lives in <C>apps/website/public/campaigns/close-the-loop.html</C>, with its visual system in{' '}
+          <C>apps/website/public/campaigns/close-the-loop.css</C> and interaction logic in{' '}
+          <C>apps/website/public/campaigns/close-the-loop.js</C>. It is a campaign concept, not a claim that these
           automated actions are already shipping.
         </P>
       </Section>

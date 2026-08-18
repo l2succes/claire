@@ -93,7 +93,7 @@ function ConversationInspector({ message }: { message?: InboxMessage }) {
   const name = message.chat_name || message.contact_name || 'Conversation';
   const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'C';
   const relationship = message.is_group ? 'Group conversation' : 'Business · Product lead';
-  const promiseTitle = message.has_open_promise ? 'Follow up on this conversation' : 'No open promises right now';
+  const loopTitle = message.has_open_loop ? 'Follow up on this conversation' : 'No open loops right now';
   const sharedSummary = message.media_url ? 'Shared media available' : 'Conversation links and media';
 
   return <View flex={1} minHeight={0} backgroundColor="$paper" borderLeftWidth={1} borderColor="$neutral200">
@@ -111,8 +111,8 @@ function ConversationInspector({ message }: { message?: InboxMessage }) {
         <View padding="$3" borderRadius={14} backgroundColor="$lavender"><Text style={{ ...type.body, fontWeight: '700', color: colors.ink }}>Warm + direct</Text><Text style={{ ...type.bodySmall, color: colors.neutral[600], marginTop: 7 }}>Keep replies concise. Surface open decisions and avoid over-explaining.</Text></View>
       </InspectorSection>
 
-      <InspectorSection label="OPEN PROMISES">
-        <View flexDirection="row" alignItems="center" columnGap="$2"><View width={34} height={34} borderRadius={17} borderWidth={1} borderColor="$ink" alignItems="center" justifyContent="center"><Circle size={6} color={colors.ink} /></View><View flex={1} minWidth={0}><Text numberOfLines={1} style={{ ...type.bodySmall, fontWeight: '700', color: colors.ink }}>{promiseTitle}</Text><Text style={{ ...type.label, color: colors.neutral[600], marginTop: 2 }}>{message.has_open_promise ? 'Open loop · needs attention' : 'Claire will surface one when it appears'}</Text></View></View>
+      <InspectorSection label="OPEN LOOPS">
+        <View flexDirection="row" alignItems="center" columnGap="$2"><View width={34} height={34} borderRadius={17} borderWidth={1} borderColor="$ink" alignItems="center" justifyContent="center"><Circle size={6} color={colors.ink} /></View><View flex={1} minWidth={0}><Text numberOfLines={1} style={{ ...type.bodySmall, fontWeight: '700', color: colors.ink }}>{loopTitle}</Text><Text style={{ ...type.label, color: colors.neutral[600], marginTop: 2 }}>{message.has_open_loop ? 'Open loop · needs attention' : 'Claire will surface one when it appears'}</Text></View></View>
       </InspectorSection>
 
       <InspectorSection label="SHARED">

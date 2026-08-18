@@ -107,10 +107,10 @@ export function createApp() {
   });
 
   // ------------------------------------------------------------------
-  // /promises
+  // /loops
   // ------------------------------------------------------------------
-  const MOCK_PROMISE = {
-    id: 'promise-1',
+  const MOCK_LOOP = {
+    id: 'loop-1',
     user_id: 'test-user',
     message_id: 'msg-1',
     chat_id: 'chat-1',
@@ -122,24 +122,24 @@ export function createApp() {
     created_at: new Date().toISOString(),
   };
 
-  app.get('/promises', requireAuth, (_req, res) => {
-    res.json({ promises: [MOCK_PROMISE], total: 1 });
+  app.get('/loops', requireAuth, (_req, res) => {
+    res.json({ loops: [MOCK_LOOP], total: 1 });
   });
-  app.get('/promises/:id', requireAuth, (req, res): void => {
-    if (req.params.id !== MOCK_PROMISE.id) {
-      res.status(404).json({ error: 'Promise not found' });
+  app.get('/loops/:id', requireAuth, (req, res): void => {
+    if (req.params.id !== MOCK_LOOP.id) {
+      res.status(404).json({ error: 'Loop not found' });
       return;
     }
-    res.json({ promise: MOCK_PROMISE });
+    res.json({ loop: MOCK_LOOP });
   });
-  app.patch('/promises/:id', requireAuth, (req, res) => {
-    res.json({ promise: { ...MOCK_PROMISE, ...req.body, id: req.params.id } });
+  app.patch('/loops/:id', requireAuth, (req, res) => {
+    res.json({ loop: { ...MOCK_LOOP, ...req.body, id: req.params.id } });
   });
-  app.post('/promises/:id/snooze', requireAuth, (req, res) => {
+  app.post('/loops/:id/snooze', requireAuth, (req, res) => {
     const snoozedUntil = req.body?.until ?? new Date(Date.now() + 86_400_000).toISOString();
-    res.json({ promise: { ...MOCK_PROMISE, id: req.params.id, deadline: snoozedUntil } });
+    res.json({ loop: { ...MOCK_LOOP, id: req.params.id, deadline: snoozedUntil } });
   });
-  app.delete('/promises/:id', requireAuth, (_req, res) => {
+  app.delete('/loops/:id', requireAuth, (_req, res) => {
     res.json({ success: true });
   });
 
@@ -156,7 +156,7 @@ export function createApp() {
       quiet_hours_start: '22:00',
       quiet_hours_end: '08:00',
       notify_messages: true,
-      notify_promises: true,
+      notify_loops: true,
       notify_ai_suggestions: false,
     },
   };

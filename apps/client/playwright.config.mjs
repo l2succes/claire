@@ -10,11 +10,18 @@ export default defineConfig({
     trace: 'on-first-retry',
     // Silence browser console noise in CI
     bypassCSP: true,
-    // Below `breakpoints.expanded` (1180) from packages/tokens, so the suites
-    // land in the phone layout they were written against. Playwright's own
-    // default is 1280 wide, which now renders the desktop shell — the specs
-    // that want that chrome (desktop-shell.spec.mjs) set their own viewport.
-    viewport: { width: 1024, height: 800 },
+    // A real phone width, so the suites land in the phone layout they were
+    // written against. Specs that want the desktop chrome (desktop-shell.spec.mjs)
+    // set their own viewport.
+    //
+    // This was 1024, chosen when `breakpoints.expanded` was 1180. That token is
+    // now 900 (packages/tokens/src/index.ts), so 1024 had quietly moved ABOVE
+    // the breakpoint: the suite rendered the two-pane desktop shell, which
+    // auto-opens the first conversation, so `signIn`'s wait for
+    // `messages-screen` timed out and took 49 of 69 tests with it. Pinning a
+    // phone width rather than a number just under the breakpoint means the next
+    // token change cannot silently do this again.
+    viewport: { width: 390, height: 844 },
   },
   webServer: process.env.PLAYWRIGHT_BASE_URL
     ? undefined

@@ -11,7 +11,7 @@ import { supabase } from '../../services/supabase';
 import { formatInboxTimestamp } from '../../utils/messageTimestamp';
 import { installationId, listHandoffs, type WorkspaceHandoff } from '../../services/handoffs';
 
-type OpenPromise = { id: string; content: string; chat_id?: string | null; deadline?: string | null };
+type OpenLoop = { id: string; content: string; chat_id?: string | null; deadline?: string | null };
 
 type PrimaryHomeAction = {
   eyebrow: string;
@@ -47,14 +47,14 @@ export function DesktopHomeScreen() {
   const user = useAuthStore((state) => state.user);
   const inbox = useInboxMessages(user?.id, { filter: 'needs_reply' });
   const media = useMedia();
-  const promises = useQuery({
-    queryKey: ['desktop-home-promises', user?.id],
+  const loops = useQuery({
+    queryKey: ['desktop-home-loops', user?.id],
     enabled: !!user?.id,
     staleTime: 60_000,
     queryFn: async () => {
-      const { data, error } = await supabase.from('promises').select('id, content, chat_id, deadline').eq('user_id', user!.id).in('status', ['pending', 'overdue']).order('updated_at', { ascending: false }).limit(8);
+      const { data, error } = await supabase.from('loops').select('id, content, chat_id, deadline').eq('user_id', user!.id).in('status', ['open', 'waiting', 'snoozed']).order('updated_at', { ascending: false }).limit(8);
       if (error) throw error;
-      return (data || []) as OpenPromise[];
+      return (data || []) as OpenLoop[];
     },
   });
   const handoff = useQuery({
@@ -90,18 +90,18 @@ export function DesktopHomeScreen() {
       };
     }
 
-    const firstPromise = promises.data?.[0];
-    if (firstPromise) {
+    const firstLoop = loops.data?.[0];
+    if (firstLoop) {
       return {
-        eyebrow: 'OPEN PROMISES',
-        title: `${promises.data?.length || 1} open promise${(promises.data?.length || 1) === 1 ? '' : 's'} to keep moving.`,
-        rowTitle: firstPromise.content,
-        rowDetail: firstPromise.deadline ? `Due ${new Date(firstPromise.deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}` : 'Open loop',
+        eyebrow: 'OPEN LOOPS',
+        title: `${loops.data?.length || 1} open loop${(loops.data?.length || 1) === 1 ? '' : 's'} to keep moving.`,
+        rowTitle: firstLoop.content,
+        rowDetail: firstLoop.deadline ? `Due ${new Date(firstLoop.deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}` : 'Open loop',
         action: 'Open',
         icon: <CheckCircle2 size={18} color={colors.ink} />,
-        onPress: () => firstPromise.chat_id
-          ? router.push(`/chat/${firstPromise.chat_id}` as never)
-          : router.push('/promises'),
+        onPress: () => firstLoop.chat_id
+          ? router.push(`/chat/${firstLoop.chat_id}` as never)
+          : router.push('/loops'),
       };
     }
 
@@ -114,11 +114,11 @@ export function DesktopHomeScreen() {
       icon: <Sparkles size={18} color={colors.ink} />,
       onPress: () => router.push('/ask-claire'),
     };
-  }, [handoff.data, latest, needsReply.length, promises.data]);
+  }, [handoff.data, latest, needsReply.length, loops.data]);
   const greetingSummary = needsReply.length
     ? `${needsReply.length} conversation${needsReply.length === 1 ? '' : 's'} ${needsReply.length === 1 ? 'is' : 'are'} waiting.`
-    : promises.data?.length
-      ? `${promises.data.length} open promise${promises.data.length === 1 ? '' : 's'} to keep moving.`
+    : loops.data?.length
+      ? `${loops.data.length} open loop${loops.data.length === 1 ? '' : 's'} to keep moving.`
       : 'You’re clear right now.';
 
   return <ScrollView style={{ flex: 1, backgroundColor: colors.cream }} contentContainerStyle={{ padding: 34, paddingBottom: 64 }} testID="desktop-home-screen">
@@ -147,7 +147,7 @@ export function DesktopHomeScreen() {
 
       <View flexDirection={media.gtWide ? 'row' : 'column'} columnGap="$3" rowGap="$3">
         <View flex={1} minHeight={185} borderRadius={20} borderWidth={1} borderColor="$neutral200" backgroundColor="$paper" padding="$4" rowGap="$2"><Text style={{ ...type.monoLabel, color: colors.ink }}>NEEDS A REPLY</Text>{needsReply.slice(0, 2).map((message) => <DesktopActionRow key={message.id} icon={<ArrowUpRight size={17} color={colors.ink} />} title={message.chat_name || message.contact_name || 'Conversation'} detail={message.content || 'New message'} action="Reply" onPress={() => router.push({ pathname: '/chat/[chatId]', params: { chatId: message.chat_id, platform: message.platform || '', chat_name: message.chat_name || '', contact_name: message.contact_name || '', is_group: message.is_group ? '1' : '0' } } as never)} />)}{!needsReply.length ? <Text style={{ ...type.bodySmall, color: colors.neutral[600] }}>Nothing waiting for you.</Text> : null}</View>
-        <View flex={1} minHeight={185} borderRadius={20} borderWidth={1} borderColor="$neutral200" backgroundColor="$paper" padding="$4" rowGap="$2"><Text style={{ ...type.monoLabel, color: colors.ink }}>OPEN PROMISES</Text>{(promises.data || []).slice(0, 2).map((promise) => <DesktopActionRow key={promise.id} icon={<CheckCircle2 size={17} color={colors.ink} />} title={promise.content} detail={promise.deadline ? `Due ${new Date(promise.deadline).toLocaleDateString()}` : 'Open loop'} action="Open" onPress={() => promise.chat_id ? router.push(`/chat/${promise.chat_id}` as never) : router.push('/promises')} />)}{!promises.data?.length ? <Text style={{ ...type.bodySmall, color: colors.neutral[600] }}>No open loops right now.</Text> : null}</View>
+        <View flex={1} minHeight={185} borderRadius={20} borderWidth={1} borderColor="$neutral200" backgroundColor="$paper" padding="$4" rowGap="$2"><Text style={{ ...type.monoLabel, color: colors.ink }}>OPEN LOOPS</Text>{(loops.data || []).slice(0, 2).map((loop) => <DesktopActionRow key={loop.id} icon={<CheckCircle2 size={17} color={colors.ink} />} title={loop.content} detail={loop.deadline ? `Due ${new Date(loop.deadline).toLocaleDateString()}` : 'Open loop'} action="Open" onPress={() => loop.chat_id ? router.push(`/chat/${loop.chat_id}` as never) : router.push('/loops')} />)}{!loops.data?.length ? <Text style={{ ...type.bodySmall, color: colors.neutral[600] }}>No open loops right now.</Text> : null}</View>
       </View>
     </View>
   </ScrollView>;

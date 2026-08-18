@@ -483,3 +483,14 @@ export const platformCatalog: readonly PlatformDefinition[] = [
 ] as const;
 
 export const platformCatalogVersion = 2;
+
+export {
+  DEFAULT_LOOP_SEMANTICS,
+  loopSemanticsFor,
+  hasBroadcastMention,
+  type LoopSemantics,
+  type MentionStyle,
+  type ThreadingModel,
+  type GroupModel,
+  type LoopSensitivity,
+} from './loop-semantics';

@@ -9,8 +9,8 @@
  *  - 3 connected platforms: whatsapp, telegram, instagram
  *  - 3 chats (one per platform) + 1 group chat (whatsapp)
  *  - 10 messages across the chats
- *  - 1 promise-bearing message: "I'll send you the report by Friday"
- *  - 1 AI suggestion tied to the promise-bearing message
+ *  - 1 loop-bearing message: "I'll send you the report by Friday"
+ *  - 1 AI suggestion tied to the loop-bearing message
  */
 
 import { Platform, MessageContentType, UnifiedMessage, UnifiedChat, UnifiedContact } from './adapters/types';
@@ -36,7 +36,7 @@ export const MOCK_CONTACT_IDS = {
 export const MOCK_MESSAGE_IDS = {
   wa_alice_1: 'mock-msg-wa-alice-1',
   wa_alice_2: 'mock-msg-wa-alice-2',
-  wa_alice_promise: 'mock-msg-wa-alice-promise',
+  wa_alice_loop: 'mock-msg-wa-alice-loop',
   wa_alice_reply: 'mock-msg-wa-alice-reply',
   tg_bob_1: 'mock-msg-tg-bob-1',
   tg_bob_2: 'mock-msg-tg-bob-2',
@@ -46,8 +46,8 @@ export const MOCK_MESSAGE_IDS = {
   wa_group_2: 'mock-msg-wa-group-2',
 } as const;
 
-// The canonical promise message text — used in tests to assert detection
-export const PROMISE_MESSAGE_TEXT = "I'll send you the report by Friday";
+// The canonical loop message text — used in tests to assert detection
+export const LOOP_MESSAGE_TEXT = "I'll send you the report by Friday";
 
 // ─── Base timestamp (deterministic — 2026-06-28T10:00:00Z) ─────────────────
 
@@ -158,12 +158,12 @@ export const MOCK_MESSAGES: UnifiedMessage[] = [
     hasMedia: false,
   },
   {
-    id: MOCK_MESSAGE_IDS.wa_alice_promise,
-    platformMessageId: MOCK_MESSAGE_IDS.wa_alice_promise,
+    id: MOCK_MESSAGE_IDS.wa_alice_loop,
+    platformMessageId: MOCK_MESSAGE_IDS.wa_alice_loop,
     platform: Platform.WHATSAPP,
     sessionId: MOCK_SESSION_ID,
     userId: MOCK_USER_ID,
-    content: PROMISE_MESSAGE_TEXT,
+    content: LOOP_MESSAGE_TEXT,
     contentType: MessageContentType.TEXT,
     senderId: MOCK_USER_ID,
     chatId: MOCK_CHAT_IDS.whatsapp_alice,
@@ -330,7 +330,7 @@ export const FIXTURE_SUMMARY = {
   platforms: ['whatsapp', 'telegram', 'instagram'] as const,
   chatCount: MOCK_CHATS.length,
   messageCount: MOCK_MESSAGES.length,
-  promiseMessageId: MOCK_MESSAGE_IDS.wa_alice_promise,
-  promiseMessageText: PROMISE_MESSAGE_TEXT,
+  promiseMessageId: MOCK_MESSAGE_IDS.wa_alice_loop,
+  promiseMessageText: LOOP_MESSAGE_TEXT,
   unreadCount: MOCK_CHATS.reduce((sum, c) => sum + (c.unreadCount ?? 0), 0),
 };

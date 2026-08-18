@@ -52,7 +52,7 @@ bunx supabase db reset`}</Terminal>
         <P>Confirm these tables exist:</P>
         <ul>
           <li><C>users</C>, <C>contacts</C>, <C>chats</C>, <C>messages</C></li>
-          <li><C>ai_suggestions</C>, <C>promises</C>, <C>contact_inferences</C></li>
+          <li><C>ai_suggestions</C>, <C>loops</C>, <C>contact_inferences</C></li>
           <li><C>user_preferences</C>, <C>auto_reply_rules</C></li>
         </ul>
         <P>Then reload the PostgREST schema cache so the API sees the new shape immediately:</P>

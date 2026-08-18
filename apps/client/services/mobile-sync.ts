@@ -13,13 +13,13 @@ import {
 type Bootstrap = {
   cursor: number;
   chats: CachedChat[];
-  promises: Record<string, unknown>[];
+  loops: Record<string, unknown>[];
   preferences: Record<string, unknown> | null;
 };
 
 type SyncEvent = {
   cursor: number;
-  entity_type: 'chat' | 'message' | 'promise' | 'contact' | 'preference';
+  entity_type: 'chat' | 'message' | 'loop' | 'contact' | 'preference';
   entity_id: string;
   operation: 'upsert' | 'delete';
   payload: Record<string, unknown> | null;

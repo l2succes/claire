@@ -48,7 +48,7 @@ export default function Page() {
   primitives/  ClaireText · ClaireButton · ClaireIconButton · ClaireCard
                ClaireAvatar · ClaireChip · ClaireField · ClaireDivider
   patterns/    ConversationRow · MessageBubble · PlatformBadge
-               AIAssistCard · PromiseCard`}</Code>
+               AIAssistCard · LoopCard`}</Code>
         <P>
           Start inside <C>mobile/design-system/</C> if workspace wiring would slow the first pull
           request, then extract to <C>packages/</C> when the desktop bootstrap begins.
@@ -126,12 +126,12 @@ export const radius = { control: 12, card: 20, panel: 32, feature: 48, pill: 999
         <Section id="ai-assist" title="AI assist card" level={3}>
           <ul>
             <li>
-              Always state why it appeared: quick context, promise found, suggested reply, or answer.
+              Always state why it appeared: quick context, loop found, suggested reply, or answer.
             </li>
             <li>Generated answers link back to their source messages.</li>
             <li>The primary action is explicit; dismissal and correction are always available.</li>
             <li>
-              AI color is contextual — sky, lavender, or a warm promise yellow — never a generic gradient.
+              AI color is contextual — sky, lavender, or a warm loop yellow — never a generic gradient.
             </li>
           </ul>
         </Section>
@@ -152,8 +152,8 @@ export const radius = { control: 12, card: 20, panel: 32, feature: 48, pill: 999
           rows={[
             [<C key="a">app/(tabs)/dashboard.tsx</C>, 'Daily brief', 'Keep the smart-card data; replace section composition.'],
             [<C key="b">app/(tabs)/messages.tsx</C>, 'Unified inbox', 'Move platform filters into chips; normalize conversation rows.'],
-            [<C key="c">app/chat/[chatId].tsx</C>, 'Chat', 'Add the AI context ribbon and inline promise card behind flags.'],
-            [<C key="d">app/(tabs)/promises.tsx</C>, 'Promises', 'Introduce summary metrics and source-message links.'],
+            [<C key="c">app/chat/[chatId].tsx</C>, 'Chat', 'Add the AI context ribbon and inline loop card behind flags.'],
+            [<C key="d">app/(tabs)/loops.tsx</C>, 'Loops', 'Introduce summary metrics and source-message links.'],
             [<C key="e">app/(tabs)/contacts.tsx</C>, 'People', 'Add a context-needed section and a relationship entry.'],
             [<C key="f">app/chat/settings/[chatId].tsx</C>, 'Relationship memory', 'Recompose prompt, type, and tone around a contact model.'],
             [<C key="g">app/(tabs)/settings.tsx</C>, 'Settings hub', 'Split Claire behaviour from app and infrastructure settings.'],
@@ -167,7 +167,7 @@ export const radius = { control: 12, card: 20, panel: 32, feature: 48, pill: 999
         <ol>
           <li>
             <b>Snapshot and protect behaviour.</b> Capture screenshots and flow tests for sign-in, inbox
-            filters, chat send, platform auth, promise tracking, and relationship settings. Add a{' '}
+            filters, chat send, platform auth, loop tracking, and relationship settings. Add a{' '}
             <C>newDesignSystem</C> flag that switches presentation only — never maintain two data
             implementations.
           </li>
@@ -177,11 +177,11 @@ export const radius = { control: 12, card: 20, panel: 32, feature: 48, pill: 999
           </li>
           <li>
             <b>Shared patterns.</b> Platform badge, conversation row, message bubble and composer, AI
-            assist and promise cards, settings row and toggle, and the empty, error, and skeleton states.
+            assist and loop cards, settings row and toggle, and the empty, error, and skeleton states.
           </li>
           <li>
             <b>Migrate the core loop</b>, one screen at a time behind the flag: inbox, chat, daily brief,
-            promises, search.
+            loops, search.
           </li>
           <li>
             <b>People and settings.</b> Replace free-form relationship strings with an enum plus an
@@ -200,7 +200,7 @@ export const radius = { control: 12, card: 20, panel: 32, feature: 48, pill: 999
 
       <Section id="navigation" title="Navigation migration">
         <P>
-          The proposed mobile shell is Home, Inbox, Promises, and Search, with People as an Inbox subview
+          The proposed mobile shell is Home, Inbox, Loops, and Search, with People as an Inbox subview
           and Settings opening from the profile.
         </P>
         <Callout kind="warning" title="Do not change topology and visuals together">

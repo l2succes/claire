@@ -28,9 +28,8 @@ test.describe('Claire desktop shell', () => {
     await signIn(page);
 
     await expect(page.getByTestId('desktop-navigation-rail')).toBeVisible();
-    await expect(page.getByTestId('desktop-search-input')).toBeVisible();
     await expect(page.getByTestId('desktop-nav-inbox')).toBeVisible();
-    await expect(page.getByTestId('desktop-nav-promises')).toBeVisible();
+    await expect(page.getByTestId('desktop-nav-loops')).toBeVisible();
   });
 
   test('starts the desktop workspace at the Electron minimum width', async ({ page }) => {
@@ -80,11 +79,11 @@ test.describe('Claire desktop shell', () => {
     await page.setViewportSize(EXPANDED);
     await signIn(page);
 
-    await page.getByTestId('desktop-nav-promises').click();
-    await expect(page).toHaveURL(/promises/);
+    await page.getByTestId('desktop-nav-loops').click();
+    await expect(page).toHaveURL(/loops/);
 
     await page.goBack();
-    await expect(page).not.toHaveURL(/promises/);
+    await expect(page).not.toHaveURL(/loops/);
   });
 
   test('the sidebar collapses and the choice survives a reload', async ({ page }) => {

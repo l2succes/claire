@@ -24,7 +24,7 @@ import preferencesRoutes from './routes/preferences';
 import autoReplyRoutes from './routes/auto-reply';
 import { aiRateLimit, authRateLimit } from './middleware/rate-limit';
 import seedRoutes from './routes/seed';
-import promiseRoutes from './routes/promises';
+import loopRoutes from './routes/loops';
 import pushTokenRoutes from './routes/push-tokens';
 import notificationDeviceRoutes from './routes/notification-devices';
 import contactRoutes from './routes/contacts';
@@ -37,8 +37,8 @@ import { platformManager } from './adapters';
 import { aiProcessor } from './services/ai-processor';
 import { conversationAssistant } from './services/conversation-assistant';
 import { voiceProfileService } from './services/voice-profile-service';
-import { incomingContactId } from './services/contact-identity';
-import { promiseDetector } from './services/promise-detector';
+import { incomingContactId, resolveMentions } from './services/contact-identity';
+import { scheduleChat } from './services/loops/loop-queue';
 import { autoReplyEngine } from './services/auto-reply-engine';
 import { notificationDeliveryService } from './services/notification-delivery';
 import { Platform, PlatformStatus } from './adapters/types';
@@ -107,7 +107,7 @@ app.use('/conversations', conversationRoutes);
 app.use('/preferences', preferencesRoutes);
 // Seed/reset route — only functional when MOCK_BRIDGE=true (guarded inside route)
 app.use('/seed', seedRoutes);
-app.use('/promises', promiseRoutes);
+app.use('/loops', loopRoutes);
 app.use('/push-tokens', pushTokenRoutes);
 app.use('/notification-devices', notificationDeviceRoutes);
 app.use('/contacts', contactRoutes);
@@ -414,6 +414,9 @@ async function initializePlatforms() {
             name: message.chatName || message.chatId,
             is_group: message.chatType === 'group',
             last_message_at: message.timestamp,
+            ...(typeof message.memberCount === 'number'
+              ? { member_count: message.memberCount }
+              : {}),
           },
           { onConflict: 'user_id,platform,platform_chat_id' }
         )
@@ -483,6 +486,11 @@ async function initializePlatforms() {
             contact_id: contactId,
             contact_name: message.isFromMe ? null : message.senderName || null,
             contact_phone: message.isFromMe ? null : senderContactId,
+            reply_to_platform_message_id: message.replyToMessageId || null,
+            thread_root_platform_id: message.threadRootId || null,
+            mentions: resolveMentions(message.mentions),
+            mentions_room: message.mentionsRoom === true,
+            formatted_body: message.formattedBody || null,
             metadata: message.platformMetadata || null,
             media_url: (() => {
               const mediaUrl = message.platformMetadata?.mediaUrl;
@@ -580,11 +588,20 @@ async function initializePlatforms() {
             .catch((err) => logger.debug('Voice profile refresh skipped:', (err as Error).message));
         }
 
-        // Detect and persist promises (fire-and-forget, both inbound and outbound)
-        if (savedMsg?.id && message.content?.trim()) {
-          promiseDetector
-            .detectPromises(savedMsg.id, message.content, message.userId, message.isFromMe)
-            .catch((err) => logger.debug('Promise detection skipped:', (err as Error).message));
+        // Schedule loop detection for this chat (fire-and-forget).
+        //
+        // Scheduling is per-CHAT and debounced, not per-message: a burst of
+        // twenty messages costs one detection pass over the whole exchange
+        // rather than twenty passes over twenty fragments. That is what lets one
+        // plan stay one loop as it evolves.
+        //
+        // Backfill is excluded: replaying history would re-run detection over
+        // every archived message, which is expensive and produces stale loops.
+        // `chat.id` is the database UUID; message.chatId is the platform's id.
+        if (savedMsg?.id && !isBackfill && message.content?.trim() && chat?.id) {
+          void scheduleChat(message.userId, chat.id).catch((err) =>
+            logger.debug('Loop detection skipped:', (err as Error).message)
+          );
         }
 
         // Evaluate auto-reply rules for incoming messages (fire-and-forget)
@@ -652,7 +669,7 @@ const serverReady = Promise.resolve(
     // Start session monitor
     sessionMonitor.start();
 
-    // Start promise reminder scheduler
+    // Start loop reminder scheduler
     reminderScheduler.start();
 
     // Initialize platforms

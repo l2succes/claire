@@ -7,6 +7,7 @@ export const primaryNavigation = [
 ] as const;
 
 export const moreLinks = [
+  { href: '/lab', title: 'Claire Lab', body: 'The visual system, product references, and working explorations.' },
   { href: '/business', title: 'Business', body: 'A shared inbox for customer teams.' },
   {
     href: '/campaigns/close-the-loop',

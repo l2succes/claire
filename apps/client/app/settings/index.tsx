@@ -61,8 +61,8 @@ export default function SettingsScreen() {
   const resetPlatforms = usePlatformStore(state => state.reset);
   const connected = usePlatformStore(state => state.connectedSessions).filter(session => session.status === PlatformStatus.CONNECTED).length;
   const hydrate = useChatPreferencesStore(state => state.hydrate);
-  const promiseDetection = useChatPreferencesStore(state => state.promiseDetection);
-  const setPromiseDetection = useChatPreferencesStore(state => state.setPromiseDetection);
+  const loopDetection = useChatPreferencesStore(state => state.loopDetection);
+  const setLoopDetection = useChatPreferencesStore(state => state.setLoopDetection);
 
   useEffect(() => { void hydrate(); }, [hydrate]);
 
@@ -78,23 +78,23 @@ export default function SettingsScreen() {
     { title: 'AI behavior', detail: 'Suggestions, summaries, and memory', icon: Sparkles, href: '/settings/ai', testID: 'settings-ai-settings', iconBackground: colors.lavender },
     { title: 'Relationships', detail: 'People, categories, and prompts', icon: Smile, href: '/people', testID: 'settings-relationships', iconBackground: colors.blush },
     {
-      title: 'Promise detection',
+      title: 'Loop detection',
       detail: 'Automatically suggest tracking',
       icon: Check,
-      testID: 'settings-promise-detection-row',
+      testID: 'settings-loop-detection-row',
       iconBackground: colors.mint,
       accessory: (
         <Pressable
-          testID="settings-promise-detection"
+          testID="settings-loop-detection"
           accessibilityRole="switch"
-          accessibilityState={{ checked: promiseDetection }}
-          onPress={() => void setPromiseDetection(!promiseDetection)}
+          accessibilityState={{ checked: loopDetection }}
+          onPress={() => void setLoopDetection(!loopDetection)}
           style={{
             width: 48,
             height: 28,
             borderRadius: 99,
             padding: 2,
-            backgroundColor: promiseDetection ? colors.lime : colors.neutral[200],
+            backgroundColor: loopDetection ? colors.lime : colors.neutral[200],
             justifyContent: 'center',
           }}
         >
@@ -103,7 +103,7 @@ export default function SettingsScreen() {
             height: 24,
             borderRadius: 12,
             backgroundColor: colors.ink,
-            alignSelf: promiseDetection ? 'flex-end' : 'flex-start',
+            alignSelf: loopDetection ? 'flex-end' : 'flex-start',
           }} />
         </Pressable>
       ),

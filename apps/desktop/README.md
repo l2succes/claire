@@ -104,7 +104,7 @@ Supabase OAuth popup, which must stay in-app to complete sign-in.
 | `⌘N` focus composer | `Menu` → `focusComposer` IPC | main | ⚠️ channel only — no screen listens yet |
 | `⌘⇧M` conversation in its own window (min 360 × 460) | second `BrowserWindow` at a deep route | main | ⚠️ channel only — no screen reports the active chat yet |
 | Collapsible sidebar, pane widths, window bounds restore | `src/preferences.ts` in userData | main | ✅ verified |
-| Inbox, chat history, promises, people, Ask Claire | shared client screens | renderer | ✅ inherited |
+| Inbox, chat history, loops, people, Ask Claire | shared client screens | renderer | ✅ inherited |
 | Realtime + reconciliation polling | shared client services | renderer | ✅ inherited |
 | Companion enrollment, P-256 identity, device credential | `crypto.subtle` + `safeStorage` | main | ☐ not started |
 | iMessage `chat.db` import, resumable cursor | `better-sqlite3`, needs Full Disk Access | main | ☐ not started |

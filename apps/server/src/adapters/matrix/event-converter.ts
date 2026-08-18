@@ -65,6 +65,17 @@ export class MatrixEventConverter {
     // Extract reply info
     const replyToMessageId = content['m.relates_to']?.['m.in_reply_to']?.event_id;
 
+    // Native threads (Slack, Discord) arrive as an `m.thread` relation whose
+    // event_id is the thread root. Reply-only platforms never set this.
+    const relatesTo = content['m.relates_to'];
+    const threadRootId = relatesTo?.rel_type === 'm.thread' ? relatesTo.event_id : undefined;
+
+    // Structured mentions. `body` renders these differently on every platform —
+    // WhatsApp writes the phone number, Telegram the handle, Slack the display
+    // name — so text matching does not generalize and this is the real signal.
+    const mentions = content['m.mentions']?.user_ids;
+    const mentionsRoom = content['m.mentions']?.room === true;
+
     // Check for media
     const hasMedia = this.hasMediaContent(content);
 
@@ -97,6 +108,11 @@ export class MatrixEventConverter {
       isRead: false,
       hasMedia,
       replyToMessageId,
+      threadRootId,
+      mentions: mentions?.length ? mentions : undefined,
+      mentionsRoom: mentionsRoom || undefined,
+      formattedBody: content.formatted_body,
+      memberCount: this.roomMemberCount(room),
       platformMetadata: {
         matrixRoomId: room.roomId,
         matrixEventId: eventId,
@@ -168,6 +184,19 @@ export class MatrixEventConverter {
     // Fall back to LID count for all-LID groups (mautrix v2 fully migrated accounts).
     const countSet = phoneIds.size > 0 ? phoneIds : lidIds;
     return countSet.size > 1;
+  }
+
+  /**
+   * Total real members in the room, excluding bridge bots.
+   *
+   * Deliberately not deduped the way isGroupRoom() is: this answers "how large
+   * is the audience" rather than "how many distinct people", so a large channel
+   * where only a handful of people ever post still reads as a broadcast surface.
+   */
+  private roomMemberCount(room: Room): number | undefined {
+    const members = room.getJoinedMembers();
+    if (!members?.length) return undefined;
+    return members.filter((member) => !this.userMapper.isBridgeBot(member.userId)).length;
   }
 
   /**

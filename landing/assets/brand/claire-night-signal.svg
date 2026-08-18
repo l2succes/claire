@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
-  <title id="title">Claire Night Signal logo</title>
-  <desc id="desc">A lime chat bubble with a letter C and small intelligence spark on a dark tile.</desc>
-  <rect x="2" y="2" width="60" height="60" rx="19" fill="#10120F"/>
-  <path d="M15 15h25c7.2 0 12 4.8 12 12v9c0 7.2-4.8 12-12 12h-8l-8 6v-6h-9c-7.2 0-12-4.8-12-12v-9c0-7.2 4.8-12 12-12Z" fill="#DFFF64"/>
-  <path d="M37.5 24.2c-2-2-4.5-3-7.3-3-5.7 0-10 4.3-10 10s4.3 10 10 10c2.8 0 5.3-1 7.3-3" fill="none" stroke="#10120F" stroke-width="4.8" stroke-linecap="round"/>
-  <path d="m50.5 8.5 1.5 4 4 1.5-4 1.5-1.5 4-1.5-4-4-1.5 4-1.5 1.5-4Z" fill="#FF745F" stroke="#10120F" stroke-width="1.2" stroke-linejoin="round"/>
-</svg>

@@ -20,7 +20,7 @@ interface MessageCardProps {
     status?: 'sent' | 'delivered' | 'read' | 'pending';
     unread_count?: number;
     has_ai_response?: boolean;
-    has_open_promise?: boolean;
+    has_open_loop?: boolean;
     platform?: Platform;
     is_pinned?: boolean;
   };
@@ -95,9 +95,9 @@ export function MessageCard({ message, variant = 'default', onPress, onLongPress
             </View>
           ) : null}
         </View>
-        {variant === 'default' && (message.has_open_promise || message.has_ai_response) ? (
+        {variant === 'default' && (message.has_open_loop || message.has_ai_response) ? (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2], paddingTop: 2 }}>
-            {message.has_open_promise ? <Text testID={`message-card-promise-badge-${message.id}`} style={{ ...mobileType.monoLabel, color: colors.warning }}>OPEN LOOP</Text> : null}
+            {message.has_open_loop ? <Text testID={`message-card-loop-badge-${message.id}`} style={{ ...mobileType.monoLabel, color: colors.warning }}>OPEN LOOP</Text> : null}
             {message.has_ai_response ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}><Sparkles size={11} color={colors.focus} /><Text style={{ ...mobileType.monoLabel, color: colors.focus }}>REPLY READY</Text></View> : null}
           </View>
         ) : null}

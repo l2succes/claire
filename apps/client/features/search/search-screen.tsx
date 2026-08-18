@@ -10,7 +10,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { searchApi, type SearchScope } from '../../services/search';
 
 const scopes: Array<{ value: SearchScope; label: string }> = [
-  { value: 'everything', label: 'Everything' }, { value: 'messages', label: 'Messages' }, { value: 'people', label: 'People' }, { value: 'files', label: 'Files' }, { value: 'promises', label: 'Loops' },
+  { value: 'everything', label: 'Everything' }, { value: 'messages', label: 'Messages' }, { value: 'people', label: 'People' }, { value: 'files', label: 'Files' }, { value: 'loops', label: 'Loops' },
 ];
 
 export function SearchScreen() {
@@ -39,7 +39,7 @@ export function SearchScreen() {
     return [
       ...exact.data.messages.map(item => ({ kind: 'message' as const, id: item.id, title: item.chat?.name || item.contact?.name || item.contact?.inferred_name || item.contact_name || 'Conversation', subtitle: item.content, meta: `${item.platform || 'message'} · ${new Date(item.timestamp).toLocaleDateString()}`, onPress: () => router.push({ pathname: '/chat/[chatId]', params: { chatId: item.chat_id, chat_name: item.chat?.name || '', contact_name: item.contact_name || '', platform: item.platform || '', is_group: item.chat?.is_group ? '1' : '0', highlightMessageId: item.id } }) })),
       ...exact.data.people.map(item => ({ kind: 'person' as const, id: item.id, title: item.name || item.inferred_name || item.phone_number || 'Contact', subtitle: item.phone_number || 'Known contact', meta: item.platform || 'person', onPress: () => router.push({ pathname: '/(tabs)/contacts', params: { query: item.name || item.inferred_name || item.phone_number || '' } }) })),
-      ...exact.data.promises.map(item => ({ kind: 'promise' as const, id: item.id, title: item.content, subtitle: item.chat?.name || 'Personal reminder', meta: item.deadline ? new Date(item.deadline).toLocaleDateString() : item.status, onPress: () => item.chat_id ? router.push({ pathname: '/chat/[chatId]', params: { chatId: item.chat_id, chat_name: item.chat?.name || '', platform: item.chat?.platform || '', is_group: item.chat?.is_group ? '1' : '0' } }) : router.push('/(tabs)/promises') })),
+      ...exact.data.loops.map(item => ({ kind: 'loop' as const, id: item.id, title: item.content, subtitle: item.chat?.name || 'Personal reminder', meta: item.deadline ? new Date(item.deadline).toLocaleDateString() : item.status, onPress: () => item.chat_id ? router.push({ pathname: '/chat/[chatId]', params: { chatId: item.chat_id, chat_name: item.chat?.name || '', platform: item.chat?.platform || '', is_group: item.chat?.is_group ? '1' : '0' } }) : router.push('/(tabs)/loops') })),
       ...exact.data.files.map(item => ({ kind: 'file' as const, id: item.id, title: item.content || item.content_type || 'Attachment', subtitle: item.chat?.name || item.contact_name || 'Conversation', meta: item.media_mime_type || item.platform || 'file', onPress: () => router.push({ pathname: '/chat/[chatId]', params: { chatId: item.chat_id, chat_name: item.chat?.name || '', contact_name: item.contact_name || '', platform: item.platform || '', is_group: item.chat?.is_group ? '1' : '0', highlightMessageId: item.id } }) })),
     ];
   }, [exact.data]);
@@ -66,7 +66,7 @@ export function SearchScreen() {
             <SectionLabel title="Best matches" detail={`${resultCount}`} />
           </View>}
           renderItem={({ item }) => <Pressable testID={`search-result-${item.kind}-${item.id}`} onPress={item.onPress} style={({ pressed }) => ({ minHeight: 70, flexDirection: 'row', alignItems: 'center', gap: space[3], paddingVertical: space[3], borderBottomWidth: 1, borderBottomColor: colors.neutral[200], opacity: pressed ? 0.65 : 1 })}>
-            <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: item.kind === 'message' ? colors.sky : item.kind === 'person' ? colors.blush : item.kind === 'promise' ? colors.lime : colors.lavender, alignItems: 'center', justifyContent: 'center' }}>{item.kind === 'message' ? <MessageCircle size={18} color={colors.ink} /> : item.kind === 'person' ? <UserRound size={18} color={colors.ink} /> : item.kind === 'promise' ? <CheckCircle2 size={18} color={colors.ink} /> : <FileText size={18} color={colors.ink} />}</View>
+            <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: item.kind === 'message' ? colors.sky : item.kind === 'person' ? colors.blush : item.kind === 'loop' ? colors.lime : colors.lavender, alignItems: 'center', justifyContent: 'center' }}>{item.kind === 'message' ? <MessageCircle size={18} color={colors.ink} /> : item.kind === 'person' ? <UserRound size={18} color={colors.ink} /> : item.kind === 'loop' ? <CheckCircle2 size={18} color={colors.ink} /> : <FileText size={18} color={colors.ink} />}</View>
             <View style={{ flex: 1, minWidth: 0 }}><Text selectable numberOfLines={1} style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>{item.title}</Text><Text selectable numberOfLines={2} style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{item.subtitle}</Text></View>
             <Text style={{ ...mobileType.monoLabel, color: colors.neutral[400], maxWidth: 76 }} numberOfLines={2}>{item.meta}</Text>
           </Pressable>}

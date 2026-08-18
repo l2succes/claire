@@ -13,6 +13,7 @@ export enum Platform {
   TELEGRAM = 'telegram',
   IMESSAGE = 'imessage',
   INSTAGRAM = 'instagram',
+  SLACK = 'slack',
 }
 
 /**
@@ -90,6 +91,23 @@ export interface UnifiedMessage {
   isFromMe: boolean;
   isRead: boolean;
   replyToMessageId?: string;
+
+  // Conversation structure. `threadRootId` is set only on platforms with native
+  // threading (Slack, Discord); reply-only platforms leave it undefined.
+  threadRootId?: string;
+
+  // Structured @-mentions as platform sender identifiers (ghost MXIDs upstream of
+  // ingest, resolved to platform contact IDs on write). `mentionsRoom` covers
+  // broadcast mentions — @channel/@here/@everyone — which address everyone and so
+  // must never be read as addressing one person.
+  mentions?: string[];
+  mentionsRoom?: boolean;
+  formattedBody?: string;
+
+  // Total members in the chat as reported by the bridge. Distinct from the
+  // sender-derived roster: a large channel where few people post has a high
+  // member count and a tiny roster, and only the former marks it a broadcast.
+  memberCount?: number;
 
   // Media
   hasMedia: boolean;

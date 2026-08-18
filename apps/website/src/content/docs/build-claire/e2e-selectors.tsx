@@ -96,7 +96,7 @@ export default function Page() {
               [<C key="d">messages-list</C>, 'Conversation FlatList'],
               [<C key="e">messages-empty</C>, 'Empty state'],
               [<C key="f">message-card-&lt;id&gt;</C>, 'Individual MessageCard row; id is the message UUID'],
-              [<C key="g">message-card-promise-badge-&lt;id&gt;</C>, 'Amber promise badge when the chat has an open promise'],
+              [<C key="g">message-card-loop-badge-&lt;id&gt;</C>, 'OPEN LOOP badge when the chat has at least one open loop'],
             ]}
           />
         </Section>
@@ -113,17 +113,19 @@ export default function Page() {
           />
         </Section>
 
-        <Section id="promises" title="Promises — /(tabs)/promises" level={3}>
+        <Section id="loops" title="Loops — /(tabs)/loops" level={3}>
+          <P>Verified against <C>apps/client/features/loops/loops-screen.tsx</C>.</P>
           <Table
             head={['Selector', 'Element']}
             rows={[
-              [<C key="a">promises-screen</C>, 'Root ScrollView'],
-              [<C key="b">promises-empty</C>, 'Empty state'],
-              [<C key="c">promises-list</C>, 'Promises list'],
-              [<C key="d">promise-item-&lt;id&gt;</C>, 'Individual promise row'],
-              [<C key="e">promise-complete-&lt;id&gt;</C>, 'Mark-complete button'],
-              [<C key="f">promise-snooze-&lt;id&gt;</C>, 'Snooze button'],
-              [<C key="g">promise-source-&lt;id&gt;</C>, 'Source chat link'],
+              [<C key="a">loops-screen</C>, 'Root View'],
+              [<C key="b">loops-list</C>, 'Loops FlatList'],
+              [<C key="c">loops-add</C>, 'Add-loop button in the header'],
+              [<C key="d">loops-tab-open</C>, '"Open" filter chip'],
+              [<C key="e">loops-tab-done</C>, '"Completed" filter chip'],
+              [<C key="f">loops-tab-waiting</C>, '"I\u2019m waiting" filter chip'],
+              [<C key="g">loop-item-&lt;id&gt;</C>, 'Individual loop row'],
+              [<C key="h">loop-toggle-&lt;id&gt;</C>, 'Complete/reopen checkbox on a loop row'],
             ]}
           />
         </Section>

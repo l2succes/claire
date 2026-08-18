@@ -50,7 +50,7 @@ function makeStubQueue(): ReminderQueue {
 /** Supabase-like chain that resolves on the specified terminal method. */
 function makeChain(resolveOn: string, value: any): Record<string, any> {
   const chain: Record<string, any> = {};
-  for (const m of ['select', 'lte', 'gte', 'eq', 'is', 'single', 'update']) {
+  for (const m of ['select', 'lte', 'gte', 'eq', 'in', 'is', 'or', 'single', 'update']) {
     chain[m] = () => chain;
   }
   chain[resolveOn] = () => Promise.resolve(value);
@@ -107,10 +107,10 @@ describe('ReminderScheduler enqueueDeadlineReminders', () => {
     resetScheduler();
   });
 
-  it('enqueues a job for each due promise', async () => {
+  it('enqueues a job for each due loop', async () => {
     const deadline = new Date(Date.now() + 60 * 60 * 1000).toISOString();
     supabaseFromImpl = () =>
-      makeChain('is', {
+      makeChain('or', {
         data: [{ id: 'p-1', user_id: 'u-1', content: 'Send report', deadline, priority: 'high' }],
         error: null,
       });
@@ -124,13 +124,13 @@ describe('ReminderScheduler enqueueDeadlineReminders', () => {
     await reminderScheduler.enqueueDeadlineReminders();
 
     expect(addCalls.length).toBe(1);
-    expect(addCalls[0].data.promiseId).toBe('p-1');
+    expect(addCalls[0].data.loopId).toBe('p-1');
     expect(addCalls[0].data.userId).toBe('u-1');
     expect(addCalls[0].opts.jobId).toBe('reminder-p-1');
   });
 
   it('does nothing when no due promises', async () => {
-    supabaseFromImpl = () => makeChain('is', { data: [], error: null });
+    supabaseFromImpl = () => makeChain('or', { data: [], error: null });
 
     reminderScheduler._setQueue(makeStubQueue());
     reminderScheduler.start();
@@ -142,17 +142,17 @@ describe('ReminderScheduler enqueueDeadlineReminders', () => {
   });
 
   it('does not throw on DB error', async () => {
-    supabaseFromImpl = () => makeChain('is', { data: null, error: { message: 'DB exploded' } });
+    supabaseFromImpl = () => makeChain('or', { data: null, error: { message: 'DB exploded' } });
 
     reminderScheduler._setQueue(makeStubQueue());
     reminderScheduler.start();
     await expect(reminderScheduler.enqueueDeadlineReminders()).resolves.toBeUndefined();
   });
 
-  it('enqueues multiple promises with correct dedup jobIds', async () => {
+  it('enqueues multiple loops with correct dedup jobIds', async () => {
     const deadline = new Date(Date.now() + 60 * 60 * 1000).toISOString();
     supabaseFromImpl = () =>
-      makeChain('is', {
+      makeChain('or', {
         data: [
           { id: 'p-a', user_id: 'u-1', content: 'Thing A', deadline, priority: 'medium' },
           { id: 'p-b', user_id: 'u-1', content: 'Thing B', deadline, priority: 'low' },
@@ -175,7 +175,7 @@ describe('ReminderScheduler enqueueDeadlineReminders', () => {
 });
 
 // ---------------------------------------------------------------------------
-describe('ReminderScheduler triggerReminderForPromise', () => {
+describe('ReminderScheduler triggerReminderForLoop', () => {
   beforeEach(() => resetScheduler());
   afterEach(async () => {
     if ((reminderScheduler as any).started) await reminderScheduler.stop();
@@ -190,9 +190,9 @@ describe('ReminderScheduler triggerReminderForPromise', () => {
     supabaseFromImpl = () => {
       if (!triggerCalled) {
         // queries from enqueueDeadlineReminders — return empty, no-op
-        return makeChain('is', { data: [], error: null });
+        return makeChain('or', { data: [], error: null });
       }
-      // queries from triggerReminderForPromise
+      // queries from triggerReminderForLoop
       if (triggerCalled) {
         const firstCallChain = makeChain('single', {
           data: { id: 'p-99', user_id: 'u-2', content: 'Call client', deadline, priority: 'high' },
@@ -209,7 +209,7 @@ describe('ReminderScheduler triggerReminderForPromise', () => {
     // Wait for the auto-enqueue to drain
     await new Promise((r) => setTimeout(r, 0));
 
-    // Now switch to triggerReminderForPromise mode
+    // Now switch to triggerReminderForLoop mode
     let updateCallCount = 0;
     supabaseFromImpl = () => {
       updateCallCount++;
@@ -222,28 +222,28 @@ describe('ReminderScheduler triggerReminderForPromise', () => {
       return makeChain('eq', { error: null });
     };
 
-    const result = await reminderScheduler.triggerReminderForPromise('p-99');
+    const result = await reminderScheduler.triggerReminderForLoop('p-99');
     expect(result.sent).toBe(true);
     expect(pushCalls).toEqual([
       {
         userId: 'u-2',
         payload: {
-          title: 'Promise reminder',
+          title: 'Loop reminder',
           body: 'Call client',
           sound: 'default',
-          data: { type: 'promise-reminder', promiseId: 'p-99' },
+          data: { type: 'loop-reminder', loopId: 'p-99' },
         },
       },
     ]);
   });
 
-  it('throws when promise not found', async () => {
+  it('throws when loop not found', async () => {
     supabaseFromImpl = () => makeChain('single', { data: null, error: { message: 'not found' } });
 
     reminderScheduler._setQueue(makeStubQueue());
     reminderScheduler.start();
-    await expect(reminderScheduler.triggerReminderForPromise('no-such')).rejects.toThrow(
-      'Promise not found: no-such'
+    await expect(reminderScheduler.triggerReminderForLoop('no-such')).rejects.toThrow(
+      'Loop not found: no-such'
     );
   });
 });
