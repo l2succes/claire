@@ -30,6 +30,7 @@
     "secrets:sync:eas-staging": "bun run scripts/secrets/sync-eas-staging.ts",
     "secrets:provision:staging": "bun run scripts/secrets/provision-staging.ts",
     "secrets:store:supabase-studio": "bun run scripts/secrets/store-supabase-studio-access.ts",
+    "secrets:inventory:railway": "bun run scripts/secrets/inventory-railway.ts",
     "dev:prod": "concurrently \"bun run dev:server\" \"bun run mobile:prod\"",
     "mobile:prod": "cd mobile && bun run start:prod",
     "mobile:prod:local": "cd mobile && bun run start:prod:local",

@@ -42,6 +42,22 @@ variable. The field labels must exactly match the Railway variable names, such
 as `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `JWT_SECRET`,
 `ENCRYPTION_KEY`, `HEALTHCHECK_TOKEN`, `REDIS_URL`, and `CORS_ORIGINS`.
 
+For the complete live-service inventory, the repository uses one item per
+Railway service to preserve identical variable names across services. This
+command reads each configured non-`RAILWAY_*` variable, writes it as a
+concealed field, verifies the replacement item before trashing an older copy,
+and never writes to Railway:
+
+```sh
+bun run secrets:inventory:railway
+```
+
+To resume a single service after an interrupted run, scope the same command:
+
+```sh
+bun run secrets:inventory:railway -- --environment=production --service='Supabase Realtime'
+```
+
 ## Safe Railway sync
 
 Copy an example manifest to an ignored local file and review the variable names
