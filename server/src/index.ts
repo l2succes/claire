@@ -77,19 +77,22 @@ if (config.SENTRY_DSN) {
 
 // Middleware
 app.use(helmet());
-app.use(cors({
-  origin: process.env.NODE_ENV === 'production'
-    ? (origin, callback) => {
-        if (!origin || serverConfig.corsOrigins.includes(origin)) {
-          callback(null, true);
-          return;
-        }
+app.use(
+  cors({
+    origin:
+      process.env.NODE_ENV === 'production'
+        ? (origin, callback) => {
+            if (!origin || serverConfig.corsOrigins.includes(origin)) {
+              callback(null, true);
+              return;
+            }
 
-        callback(new Error(`Origin ${origin} is not allowed by CORS`));
-      }
-    : true,
-  credentials: true,
-}));
+            callback(new Error(`Origin ${origin} is not allowed by CORS`));
+          }
+        : true,
+    credentials: true,
+  })
+);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(morgan('combined', { stream }));
@@ -120,9 +123,8 @@ app.use('/auto-reply', autoReplyRoutes);
 app.get('/', (req, res, next) => {
   const code = typeof req.query.code === 'string' ? req.query.code : null;
   const error = typeof req.query.error === 'string' ? req.query.error : null;
-  const errorDescription = typeof req.query.error_description === 'string'
-    ? req.query.error_description
-    : null;
+  const errorDescription =
+    typeof req.query.error_description === 'string' ? req.query.error_description : null;
 
   if (code || error) {
     const client = resolveOAuthClient(req.query.client, req.get('user-agent') || '');
@@ -176,8 +178,7 @@ app.get('/media/:server/:mediaId', async (req, res) => {
   }
 });
 
-// Health / readiness check — reports DB, Redis, and Matrix (when configured)
-app.get('/health', async (_req, res) => {
+async function collectReadiness() {
   const checks: Record<
     string,
     { status: 'ok' | 'error'; latencyMs?: number; error?: string; detail?: unknown }
@@ -238,9 +239,29 @@ app.get('/health', async (_req, res) => {
   }
 
   const allOk = Object.values(checks).every((c) => c.status === 'ok');
-  const httpStatus = allOk ? 200 : 503;
+  return { checks, allOk };
+}
 
-  res.status(httpStatus).json({
+// Public liveness/readiness endpoint for Railway and load balancers. It does
+// not expose dependency names, errors, or deployment metadata.
+app.get('/healthz', async (_req, res) => {
+  const { allOk } = await collectReadiness();
+  return res.status(allOk ? 200 : 503).json({ status: allOk ? 'ok' : 'degraded' });
+});
+
+// Detailed readiness is an operator diagnostic. Public traffic should use
+// /healthz; production access to this endpoint requires a separate secret.
+app.get('/health', async (req, res) => {
+  if (config.NODE_ENV === 'production') {
+    const token = req.get('x-health-check-token');
+    if (!serverConfig.healthcheckToken || token !== serverConfig.healthcheckToken) {
+      return res.status(404).json({ error: 'Route not found' });
+    }
+  }
+
+  const { checks, allOk } = await collectReadiness();
+
+  return res.status(allOk ? 200 : 503).json({
     status: allOk ? 'ok' : 'degraded',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
@@ -261,9 +282,7 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
     Sentry.captureException(err);
   }
   res.status(err.status || 500).json({
-    error: config.NODE_ENV === 'production'
-      ? 'Internal server error'
-      : err.message,
+    error: config.NODE_ENV === 'production' ? 'Internal server error' : err.message,
   });
 });
 
@@ -369,7 +388,11 @@ async function initializePlatforms() {
         // not read. Keep the operation idempotent and never overwrite content
         // that was already imported successfully.
         if (message.platform === Platform.IMESSAGE && message.content && !existing.content) {
-          await supabase.from('messages').update({ content: message.content }).eq('id', existing.id).eq('user_id', message.userId);
+          await supabase
+            .from('messages')
+            .update({ content: message.content })
+            .eq('id', existing.id)
+            .eq('user_id', message.userId);
         }
         return; // already processed — skip chat/AI/contact upserts
       }
@@ -379,15 +402,18 @@ async function initializePlatforms() {
       // 1. Upsert chat record to get its UUID
       const { data: chat, error: chatError } = await supabase
         .from('chats')
-        .upsert({
-          user_id: message.userId,
-          whatsapp_chat_id: message.chatId,
-          platform_chat_id: message.chatId,
-          platform: message.platform,
-          name: message.chatName || message.chatId,
-          is_group: message.chatType === 'group',
-          last_message_at: message.timestamp,
-        }, { onConflict: 'user_id,platform,platform_chat_id' })
+        .upsert(
+          {
+            user_id: message.userId,
+            whatsapp_chat_id: message.chatId,
+            platform_chat_id: message.chatId,
+            platform: message.platform,
+            name: message.chatName || message.chatId,
+            is_group: message.chatType === 'group',
+            last_message_at: message.timestamp,
+          },
+          { onConflict: 'user_id,platform,platform_chat_id' }
+        )
         .select('id')
         .single();
 
@@ -411,14 +437,17 @@ async function initializePlatforms() {
         {
           const { data: contact, error: contactError } = await supabase
             .from('contacts')
-            .upsert({
-              user_id: message.userId,
-              platform: message.platform,
-              platform_contact_id: platformContactId,
-              whatsapp_id: platformContactId,
-              name: message.senderName || platformContactId,
-              phone_number: /^\d+$/.test(platformContactId) ? platformContactId : null,
-            }, { onConflict: 'user_id,platform,platform_contact_id' })
+            .upsert(
+              {
+                user_id: message.userId,
+                platform: message.platform,
+                platform_contact_id: platformContactId,
+                whatsapp_id: platformContactId,
+                name: message.senderName || platformContactId,
+                phone_number: /^\d+$/.test(platformContactId) ? platformContactId : null,
+              },
+              { onConflict: 'user_id,platform,platform_contact_id' }
+            )
             .select('id')
             .single();
           if (contactError) {
@@ -435,33 +464,42 @@ async function initializePlatforms() {
       // 2. Insert message record (ignoreDuplicates as a safety net)
       const { data: savedMsg, error: msgError } = await supabase
         .from('messages')
-        .upsert({
-          user_id: message.userId,
-          chat_id: chat.id,
-          whatsapp_id: message.platformMessageId,
-          platform_message_id: message.platformMessageId,
-          platform: message.platform,
-          content: message.content,
-          from_me: message.isFromMe,
-          type: message.contentType,
-          content_type: message.contentType,
-          timestamp: message.timestamp,
-          is_group: message.chatType === 'group',
-          contact_id: contactId,
-          contact_name: message.isFromMe ? null : (message.senderName || null),
-          contact_phone: message.isFromMe ? null : senderContactId,
-          metadata: message.platformMetadata || null,
-          media_url: (() => {
-            const mediaUrl = message.platformMetadata?.mediaUrl;
-            if (!mediaUrl || typeof mediaUrl !== 'string') return null;
-            if (mediaUrl.startsWith('/media/')) return mediaUrl;
-            const match = mediaUrl.match(/^mxc:\/\/([^/]+)\/(.+)$/)
-              || mediaUrl.match(/\/_matrix\/(?:client\/v1\/media|media\/v3)\/(?:thumbnail|download)\/([^/]+)\/([^?]+)/);
-            return match ? `/media/${encodeURIComponent(match[1])}/${encodeURIComponent(match[2])}` : mediaUrl;
-          })(),
-          media_mime_type:
-            (message.platformMetadata?.mediaInfo as { mimetype?: string } | undefined)?.mimetype || null,
-        }, { onConflict: 'whatsapp_id', ignoreDuplicates: true })
+        .upsert(
+          {
+            user_id: message.userId,
+            chat_id: chat.id,
+            whatsapp_id: message.platformMessageId,
+            platform_message_id: message.platformMessageId,
+            platform: message.platform,
+            content: message.content,
+            from_me: message.isFromMe,
+            type: message.contentType,
+            content_type: message.contentType,
+            timestamp: message.timestamp,
+            is_group: message.chatType === 'group',
+            contact_id: contactId,
+            contact_name: message.isFromMe ? null : message.senderName || null,
+            contact_phone: message.isFromMe ? null : senderContactId,
+            metadata: message.platformMetadata || null,
+            media_url: (() => {
+              const mediaUrl = message.platformMetadata?.mediaUrl;
+              if (!mediaUrl || typeof mediaUrl !== 'string') return null;
+              if (mediaUrl.startsWith('/media/')) return mediaUrl;
+              const match =
+                mediaUrl.match(/^mxc:\/\/([^/]+)\/(.+)$/) ||
+                mediaUrl.match(
+                  /\/_matrix\/(?:client\/v1\/media|media\/v3)\/(?:thumbnail|download)\/([^/]+)\/([^?]+)/
+                );
+              return match
+                ? `/media/${encodeURIComponent(match[1])}/${encodeURIComponent(match[2])}`
+                : mediaUrl;
+            })(),
+            media_mime_type:
+              (message.platformMetadata?.mediaInfo as { mimetype?: string } | undefined)
+                ?.mimetype || null,
+          },
+          { onConflict: 'whatsapp_id', ignoreDuplicates: true }
+        )
         .select('id')
         .maybeSingle();
 
@@ -488,79 +526,107 @@ async function initializePlatforms() {
             senderName: message.senderName,
             content: message.content,
             messageId: savedMsg.id,
-          }).catch((error) => logger.debug('Incoming push notification skipped:', (error as Error).message));
+          }).catch((error) =>
+            logger.debug('Incoming push notification skipped:', (error as Error).message)
+          );
         }
 
         // Generate AI response suggestion for incoming messages (fire-and-forget)
-        if (!message.isFromMe && savedMsg?.id && message.content?.trim() && aiProcessor.isConfigured) {
+        if (
+          !message.isFromMe &&
+          savedMsg?.id &&
+          message.content?.trim() &&
+          aiProcessor.isConfigured
+        ) {
           const chatType = message.chatType === 'group' ? 'group' : 'individual';
-          aiProcessor.generateAndStore(savedMsg.id, message.content, message.userId, chatType)
+          aiProcessor
+            .generateAndStore(savedMsg.id, message.content, message.userId, chatType)
             .catch((err) => logger.debug('AI suggestion skipped:', (err as Error).message));
         }
 
         // Keep the global Ask Claire index current for new text/caption rows.
         if (savedMsg?.id && message.content?.trim() && conversationAssistant.isConfigured) {
-          void conversationAssistant.indexMessage({
-            id: savedMsg.id,
-            user_id: message.userId,
-            content: message.content,
-            contact_name: message.isFromMe ? null : (message.senderName || null),
-            from_me: message.isFromMe,
-            timestamp: message.timestamp instanceof Date ? message.timestamp.toISOString() : String(message.timestamp),
-            platform: message.platform,
-          }).catch((err) => logger.debug('Conversation assistant index skipped:', (err as Error).message));
+          void conversationAssistant
+            .indexMessage({
+              id: savedMsg.id,
+              user_id: message.userId,
+              content: message.content,
+              contact_name: message.isFromMe ? null : message.senderName || null,
+              from_me: message.isFromMe,
+              timestamp:
+                message.timestamp instanceof Date
+                  ? message.timestamp.toISOString()
+                  : String(message.timestamp),
+              platform: message.platform,
+            })
+            .catch((err) =>
+              logger.debug('Conversation assistant index skipped:', (err as Error).message)
+            );
         }
 
         // Voice summaries are derived only from messages sent by the account
         // owner; profiles store aggregate guidance, never the source text.
-        if (savedMsg?.id && message.isFromMe && message.content?.trim() && voiceProfileService.isConfigured) {
-          void voiceProfileService.markSentMessage(message.userId)
+        if (
+          savedMsg?.id &&
+          message.isFromMe &&
+          message.content?.trim() &&
+          voiceProfileService.isConfigured
+        ) {
+          void voiceProfileService
+            .markSentMessage(message.userId)
             .catch((err) => logger.debug('Voice profile refresh skipped:', (err as Error).message));
         }
 
         // Detect and persist promises (fire-and-forget, both inbound and outbound)
         if (savedMsg?.id && message.content?.trim()) {
-          promiseDetector.detectPromises(savedMsg.id, message.content, message.userId, message.isFromMe)
+          promiseDetector
+            .detectPromises(savedMsg.id, message.content, message.userId, message.isFromMe)
             .catch((err) => logger.debug('Promise detection skipped:', (err as Error).message));
         }
 
         // Evaluate auto-reply rules for incoming messages (fire-and-forget)
         if (!message.isFromMe && message.content?.trim()) {
-          autoReplyEngine.evaluate({
-            id: savedMsg?.id ?? message.platformMessageId,
-            userId: message.userId,
-            chatId: message.chatId,
-            platform: message.platform,
-            content: message.content,
-            senderName: message.senderName,
-          }).then(async (result) => {
-            if (result.fired && result.reply) {
-              logger.info(`Auto-reply rule "${result.ruleName}" fired — reply queued for chat ${message.chatId}`);
-              try {
-                const sessions = await platformManager.getUserSessions(message.userId);
-                const session = sessions.find(
-                  (candidate) =>
-                    candidate.platform === message.platform &&
-                    candidate.status === PlatformStatus.CONNECTED,
+          autoReplyEngine
+            .evaluate({
+              id: savedMsg?.id ?? message.platformMessageId,
+              userId: message.userId,
+              chatId: message.chatId,
+              platform: message.platform,
+              content: message.content,
+              senderName: message.senderName,
+            })
+            .then(async (result) => {
+              if (result.fired && result.reply) {
+                logger.info(
+                  `Auto-reply rule "${result.ruleName}" fired — reply queued for chat ${message.chatId}`
                 );
-                if (session) {
-                  await platformManager.sendMessage(
-                    message.platform,
-                    session.id,
-                    message.chatId,
-                    { content: result.reply },
+                try {
+                  const sessions = await platformManager.getUserSessions(message.userId);
+                  const session = sessions.find(
+                    (candidate) =>
+                      candidate.platform === message.platform &&
+                      candidate.status === PlatformStatus.CONNECTED
                   );
-                } else {
-                  logger.warn(`Auto-reply: no active session for user ${message.userId} on ${message.platform}`);
+                  if (session) {
+                    await platformManager.sendMessage(
+                      message.platform,
+                      session.id,
+                      message.chatId,
+                      { content: result.reply }
+                    );
+                  } else {
+                    logger.warn(
+                      `Auto-reply: no active session for user ${message.userId} on ${message.platform}`
+                    );
+                  }
+                } catch (err) {
+                  logger.warn('Auto-reply send failed:', (err as Error).message);
                 }
-              } catch (err) {
-                logger.warn('Auto-reply send failed:', (err as Error).message);
               }
-            }
-          }).catch((err: Error) => logger.debug('Auto-reply evaluation skipped:', err.message));
+            })
+            .catch((err: Error) => logger.debug('Auto-reply evaluation skipped:', err.message));
         }
       }
-
     } catch (err) {
       logger.error('Error saving message to DB:', err);
     }
@@ -574,18 +640,20 @@ async function initializePlatforms() {
 
 // Start server only after the self-hosted companion table is available. This
 // prevents the desktop client from seeing a live route backed by a stale schema.
-const serverReady = ensureCompanionSchema().then(() => app.listen(PORT, async () => {
-  logger.info(`Server running on port ${PORT} in ${config.NODE_ENV} mode`);
+const serverReady = ensureCompanionSchema().then(() =>
+  app.listen(PORT, async () => {
+    logger.info(`Server running on port ${PORT} in ${config.NODE_ENV} mode`);
 
-  // Start session monitor
-  sessionMonitor.start();
+    // Start session monitor
+    sessionMonitor.start();
 
-  // Start promise reminder scheduler
-  reminderScheduler.start();
+    // Start promise reminder scheduler
+    reminderScheduler.start();
 
-  // Initialize platforms
-  await initializePlatforms();
-}));
+    // Initialize platforms
+    await initializePlatforms();
+  })
+);
 
 // Graceful shutdown
 process.on('SIGTERM', async () => {

@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Claire endpoint directory</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+        background: #0c0d10;
+        color: #f5f7fb;
+      }
+      body { max-width: 960px; margin: 0 auto; padding: 56px 24px; }
+      h1 { margin: 0; font-size: clamp(2rem, 5vw, 3.4rem); letter-spacing: -0.05em; }
+      .intro { color: #aab1c0; max-width: 650px; line-height: 1.6; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; margin-top: 32px; }
+      section { border: 1px solid #2b3040; border-radius: 16px; overflow: hidden; background: #141720; }
+      section > header { padding: 20px 22px; border-bottom: 1px solid #2b3040; }
+      h2 { margin: 0; font-size: 1.2rem; }
+      header p { margin: 6px 0 0; color: #aab1c0; font-size: 0.9rem; }
+      ul { list-style: none; padding: 0; margin: 0; }
+      li { padding: 16px 22px; border-bottom: 1px solid #242938; }
+      li:last-child { border-bottom: 0; }
+      a { color: #9eb7ff; text-decoration: none; font-weight: 650; }
+      a:hover { text-decoration: underline; }
+      small { display: block; color: #aab1c0; margin-top: 4px; line-height: 1.4; }
+      code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.82em; color: #d7deed; }
+      .status { display: inline-block; margin-left: 8px; padding: 2px 7px; border-radius: 999px; font-size: 0.7rem; font-weight: 700; vertical-align: middle; }
+      .live { color: #9ff1c2; background: #183927; }
+      .pending { color: #ffd98a; background: #483712; }
+      footer { margin-top: 26px; color: #7e8799; font-size: 0.85rem; line-height: 1.5; }
+    </style>
+  </head>
+  <body>
+    <h1>Claire endpoint directory</h1>
+    <p class="intro">
+      Public URLs for Claire. Production and staging are strictly isolated. Internal
+      services such as Postgres, Redis, Studio, bridges, and object storage are intentionally not listed.
+    </p>
+
+    <main class="grid">
+      <section>
+        <header>
+          <h2>Production <span class="status live">LIVE</span></h2>
+          <p>Real users and production data.</p>
+        </header>
+        <ul>
+          <li>
+            <a href="https://useclaire.co">Website — useclaire.co</a>
+            <small>Primary public website.</small>
+          </li>
+          <li>
+            <a href="https://www.useclaire.co">Website redirect — www.useclaire.co</a>
+            <small>Permanent redirect to the primary website.</small>
+          </li>
+          <li>
+            <a href="https://api.useclaire.co">Claire API — api.useclaire.co</a>
+            <small>Application API. Authentication is required for private routes.</small>
+          </li>
+          <li>
+            <a href="https://api.useclaire.co/healthz">API liveness — /healthz</a>
+            <small>Non-sensitive load-balancer readiness result.</small>
+          </li>
+          <li>
+            <a href="https://supabase.useclaire.co">Supabase gateway — supabase.useclaire.co</a>
+            <small>Public gateway only; Auth and API requests still require their normal credentials.</small>
+          </li>
+        </ul>
+      </section>
+
+      <section>
+        <header>
+          <h2>Staging <span class="status pending">PROVISIONING</span></h2>
+          <p>Fixtures and opt-in testers only; never production data or credentials.</p>
+        </header>
+        <ul>
+          <li>
+            <a href="https://staging.useclaire.co">Website — staging.useclaire.co</a>
+            <small>Tracks the <code>main</code> branch in Vercel.</small>
+          </li>
+          <li>
+            <a href="https://api.staging.useclaire.co">Claire API — api.staging.useclaire.co</a>
+            <small>Reserved. Available after the isolated staging API deployment and DNS/TLS verification.</small>
+          </li>
+          <li>
+            <a href="https://api.staging.useclaire.co/healthz">API liveness — /healthz</a>
+            <small>Reserved with the staging API endpoint.</small>
+          </li>
+          <li>
+            <a href="https://supabase.staging.useclaire.co">Supabase gateway — supabase.staging.useclaire.co</a>
+            <small>Live isolated Supabase gateway. Auth is invite-only and redirects are limited to staging origins.</small>
+          </li>
+        </ul>
+      </section>
+    </main>
+
+    <footer>
+      Updated during infrastructure setup. Do not add direct links to private Railway services,
+      database hosts, Studio, storage, Redis, Synapse, or bridge administration endpoints.
+    </footer>
+  </body>
+</html>

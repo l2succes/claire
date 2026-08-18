@@ -4,8 +4,10 @@
   "main": "index.js",
   "scripts": {
     "env:pull:dev": "bunx eas env:pull --environment development --non-interactive",
+    "env:pull:staging": "bunx eas env:pull --environment preview --non-interactive",
     "env:pull:prod": "bunx eas env:pull --environment production --non-interactive",
     "start": "bun run env:pull:dev && bunx expo start",
+    "start:staging": "bun run env:pull:staging && bunx expo start",
     "start:prod": "bun run env:pull:prod && bunx expo start",
     "start:prod:local": "NODE_ENV=production bunx expo start",
     "dev": "bunx expo start",
