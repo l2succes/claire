@@ -179,7 +179,7 @@ EAS environment variables are stored in the cloud — no `.env` file needed on C
 │       ├── routes/            # API routes
 │       └── config/            # Configuration
 ├── mobile/                    # Expo iOS, Android, and mobile web
-├── desktop/macos/             # Desktop app and native companion
+├── apps/desktop/              # Electron desktop app
 ├── website/                   # Marketing site, docs, Storybook
 ├── packages/                  # design-system, platform-catalog, plugin-sdk
 ├── examples/plugins/          # Local fixture plugins
@@ -208,7 +208,7 @@ EAS environment variables are stored in the cloud — no `.env` file needed on C
 - [Payments & AI Credits Spec](docs/PAYMENTS_AND_AI_CREDITS_SPEC.md) — Claire Plus consumer subscription, prepaid managed-AI credits, BYOK, ledger, entitlements, and payment controls
 - [Security Claims & Validation Roadmap](docs/SECURITY_CLAIMS_AND_ROADMAP.md) — Current public claims, data boundaries, and evidence gates for stronger privacy statements
 - [Claire Plugin System Spec](docs/CLAIRE_PLUGIN_SYSTEM_SPEC.md) — Plugin manifests, permissions, conversation triggers, approvals, execution, audit, and rollout
-- [Interactive Product Mockups](landing/README.md) — Landing page, mobile screens, desktop screens, and visual style guide
+- [Website and Claire Lab](apps/website/README.md) — Marketing pages, mobile and desktop references, visual style guide, and the Close your loops campaign
 - [Official mautrix docs](https://docs.mau.fi/) — Upstream bridge documentation
 
 ## License

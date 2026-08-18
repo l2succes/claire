@@ -1,7 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
-  <title id="title">Claire Open C offset logo</title>
-  <desc id="desc">A lime chat bubble containing a compact C with two balanced terminal cuts.</desc>
-  <path d="M21 4h22c10.5 0 17 6.5 17 17v14c0 10.5-6.5 17-17 17H33L22 60v-8h-1C10.5 52 4 45.5 4 35V21C4 10.5 10.5 4 21 4Z" fill="#DFFF64" stroke="#10120F" stroke-width="2" stroke-linejoin="round"/>
-  <path d="M41.7 22.4c-2.4-2.3-5.5-3.5-9.1-3.5-7.1 0-12.3 4.9-12.3 11.3s5.2 11.3 12.3 11.3c3.6 0 6.7-1.2 9.1-3.5" fill="none" stroke="#10120F" stroke-width="6" stroke-linecap="round"/>
-  <path d="M42.3 26.5h3.2M42.3 33.9h3.2" stroke="#10120F" stroke-width="3" stroke-linecap="round"/>
-</svg>

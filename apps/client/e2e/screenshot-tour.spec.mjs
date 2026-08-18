@@ -54,6 +54,28 @@ const MOCK_INBOX_MESSAGES = [
   },
 ];
 
+const MOCK_CONVERSATION_FEED = MOCK_INBOX_MESSAGES.map((message) => ({
+  chat_id: message.chat_id,
+  platform: message.platform,
+  chat_name: message.chats?.name || message.contact_name,
+  contact_name: message.contact_name,
+  contact_inferred_name: null,
+  contact_avatar_url: null,
+  contact_phone: null,
+  is_group: message.is_group,
+  unread_count: message.from_me ? 0 : 1,
+  is_pinned: false,
+  last_message_id: message.id,
+  last_message_content: message.content,
+  last_message_from_me: message.from_me,
+  last_message_status: message.status,
+  last_message_content_type: 'text',
+  last_message_sender_name: message.contact_name,
+  last_message_has_ai_response: message.ai_suggestions.length > 0,
+  last_message_snoozed_until: null,
+  last_activity_at: message.timestamp,
+}));
+
 const MOCK_CHAT_MESSAGES = [
   { id: 'chatmsg-1', content: "Hi! I'll send you the report by Friday", timestamp: new Date(Date.now() - 3700_000).toISOString(), from_me: false, contact_name: 'Alice (WA)', content_type: 'text' },
   { id: 'chatmsg-2', content: 'Thanks for letting me know', timestamp: new Date(Date.now() - 3600_000).toISOString(), from_me: true, contact_name: null, content_type: 'text' },
@@ -85,12 +107,16 @@ const MOCK_MORNING_BRIEF = {
 const TINY_PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
 
 async function mockBackend(page) {
+  await page.route('**/auth/v1/otp**', r => r.fulfill({ status: 200, contentType: 'application/json', body: '{}' }));
+  await page.route('**/auth/v1/verify**', r => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_SESSION_RESP) }));
   await page.route('**/auth/v1/token**', r => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_SESSION_RESP) }));
   await page.route('**/auth/v1/user**', r => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_USER) }));
   await page.route('**/rest/v1/**', async (route) => {
     const url = route.request().url();
     const method = route.request().method();
-    if (url.includes('/messages')) {
+    if (url.includes('/conversation_feed')) {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_CONVERSATION_FEED) });
+    } else if (url.includes('/messages')) {
       if (url.includes('chat_id=eq.')) await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_CHAT_MESSAGES) });
       else await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_INBOX_MESSAGES) });
     } else if (url.includes('/ai_suggestions')) {
@@ -133,8 +159,9 @@ async function signIn(page) {
   await page.waitForLoadState('domcontentloaded');
   await page.getByTestId('signin-use-email').click();
   await page.getByTestId('signin-email-input').fill('test@claire.local');
-  await page.getByTestId('signin-password-input').fill('password123');
-  await page.getByTestId('signin-submit').click();
+  await page.getByTestId('signin-send-otp').click();
+  await page.getByTestId('signin-otp-input').fill('123456');
+  await page.getByTestId('signin-verify-otp').click();
   await page.waitForURL('**/dashboard', { timeout: 15_000 });
 
   // `/dashboard` is the home / daily-brief screen; the inbox lives on
@@ -164,7 +191,8 @@ test.describe('Visual tour', () => {
     await expect(page.getByTestId('signin-screen')).toBeVisible();
     await page.getByTestId('signin-use-email').click();
     await page.getByTestId('signin-email-input').fill('test@claire.local');
-    await page.getByTestId('signin-password-input').fill('password123');
+    await page.getByTestId('signin-send-otp').click();
+    await page.getByTestId('signin-otp-input').fill('123456');
     await page.screenshot({ path: `${SCREENSHOTS_DIR}/02-signin-filled.png` });
   });
 

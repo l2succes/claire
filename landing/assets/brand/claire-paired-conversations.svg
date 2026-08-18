@@ -1,7 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
-  <title id="title">Claire Paired Conversations logo</title>
-  <desc id="desc">Two overlapping conversation bubbles surround a letter C.</desc>
-  <path d="M7 16c0-6.1 4.9-11 11-11h23c6.1 0 11 4.9 11 11v15c0 6.1-4.9 11-11 11H27l-9 7v-7c-6.1 0-11-4.9-11-11V16Z" fill="#B9DCFF" stroke="#10120F" stroke-width="2"/>
-  <path d="M20 26c0-6.1 4.9-11 11-11h15c6.1 0 11 4.9 11 11v15c0 6.1-4.9 11-11 11h-2v7l-9-7h-4c-6.1 0-11-4.9-11-11V26Z" fill="#DFFF64" stroke="#10120F" stroke-width="2" stroke-linejoin="round"/>
-  <path d="M45 29.2c-1.8-2.1-4.2-3.2-7-3.2-5.7 0-9.8 4.2-9.8 9.7s4.1 9.7 9.8 9.7c2.8 0 5.2-1.1 7-3.1" fill="none" stroke="#10120F" stroke-width="4.8" stroke-linecap="round"/>
-</svg>

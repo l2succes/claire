@@ -1,4 +1,0 @@
-#include "Pods/Target Support Files/Pods-ClaireDesktopMac-macOS/Pods-ClaireDesktopMac-macOS.debug.xcconfig"
-#include? "ClaireDesktop.xcconfig"
-CLAIRE_CONFIG_LOADED = YES
-APS_ENVIRONMENT = development

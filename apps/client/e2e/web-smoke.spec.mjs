@@ -8,8 +8,7 @@ test.describe('Claire web shell', () => {
     await expect(page.getByTestId('google-sign-in-signin')).toBeVisible();
     await page.getByTestId('signin-use-email').click();
     await expect(page.getByTestId('signin-email-input')).toBeVisible();
-    await expect(page.getByTestId('signin-password-input')).toBeVisible();
-    await expect(page.getByTestId('signin-submit')).toBeVisible();
+    await expect(page.getByTestId('signin-send-otp')).toBeVisible();
   });
 
   test('renders platform connection shell', async ({ page }) => {

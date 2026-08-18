@@ -1,10 +1,10 @@
 import React, { useCallback, type ReactNode } from 'react';
 import { router, usePathname } from 'expo-router';
 import {
-  ChatBubbleLeftRightIcon,
   CheckBadgeIcon,
   Cog6ToothIcon,
   HomeIcon,
+  InboxIcon,
   SparklesIcon,
   UserGroupIcon,
 } from 'react-native-heroicons/outline';
@@ -52,27 +52,28 @@ export function DesktopChrome({ children }: { children: ReactNode }) {
 
 const DESTINATIONS: DesktopDestination[] = [
   {
-    route: '/(tabs)/dashboard',
+    route: '/dashboard',
     label: 'Home',
     icon: (props) => <HomeIcon {...props} />,
   },
   {
-    route: '/(tabs)/messages',
+    route: '/messages',
     label: 'Inbox',
-    icon: (props) => <ChatBubbleLeftRightIcon {...props} />,
+    activeRoutes: ['/chat'],
+    icon: (props) => <InboxIcon {...props} />,
   },
   {
-    route: '/(tabs)/loops',
+    route: '/loops',
     label: 'Loops',
     icon: (props) => <CheckBadgeIcon {...props} />,
   },
   {
-    route: '/(tabs)/ask-claire',
+    route: '/ask-claire',
     label: 'Ask Claire',
     icon: (props) => <SparklesIcon {...props} />,
   },
   {
-    route: '/(tabs)/contacts',
+    route: '/contacts',
     label: 'People',
     icon: (props) => <UserGroupIcon {...props} />,
   },
@@ -80,5 +81,6 @@ const DESTINATIONS: DesktopDestination[] = [
     route: '/settings',
     label: 'Settings',
     icon: (props) => <Cog6ToothIcon {...props} />,
+    placement: 'bottom',
   },
 ];

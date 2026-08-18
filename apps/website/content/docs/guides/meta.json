@@ -1,0 +1,10 @@
+{
+  "title": "Guides",
+  "pages": [
+    "mobile",
+    "desktop",
+    "plugins",
+    "testing",
+    "self-hosting"
+  ]
+}

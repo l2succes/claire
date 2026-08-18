@@ -9,7 +9,9 @@
   "exports": {
     ".": "./src/index.ts",
     "./tokens.css": "./css/tokens.css",
-    "./css/tokens.css": "./css/tokens.css"
+    "./css/tokens.css": "./css/tokens.css",
+    "./theme.css": "./css/theme.css",
+    "./css/theme.css": "./css/theme.css"
   },
   "scripts": {
     "generate": "bun run scripts/generate-css.ts",

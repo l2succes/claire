@@ -1,9 +1,19 @@
 import React, { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react-native';
 import { View } from '@tamagui/core';
-import { ClaireIconButton, ClaireText, colors } from '@claire/design-system';
+import { useMedia } from '@tamagui/core';
+import {
+  ClaireIconButton,
+  ClaireText,
+  colors,
+} from '@claire/design-system';
 import { host } from '@claire/host';
 import { DragRegion } from './DragRegion';
+import {
+  DesktopNavigationRail,
+  DesktopNavigationRailTitleBarBackdrop,
+  type DesktopDestination,
+} from './DesktopNavigationRail';
 
 /**
  * The desktop chrome: title bar, navigation rail, and the content area that
@@ -18,16 +28,13 @@ import { DragRegion } from './DragRegion';
  * links working identically in Electron and the browser.
  */
 
-export type DesktopDestination = {
-  /** expo-router path. */
-  route: string;
-  label: string;
-  icon: (props: { size: number; color: string; strokeWidth?: number }) => ReactNode;
-};
+export type { DesktopDestination } from './DesktopNavigationRail';
 
-const RAIL_WIDTH = 148;
-const RAIL_WIDTH_COLLAPSED = 84;
+const RAIL_WIDTH = 64;
 const TITLE_BAR_HEIGHT = 52;
+// Keep interactive title-bar controls out of macOS's traffic-light zone. On
+// expanded rails the control also stays aligned just beyond the rail edge.
+const TRAFFIC_LIGHT_CLEARANCE = 116;
 const NAV_COLLAPSED_KEY = 'desktop.navigation-collapsed';
 
 export function DesktopShell({
@@ -41,14 +48,17 @@ export function DesktopShell({
   activeRoute: string;
   onNavigate: (route: string) => void;
 }) {
-  const [collapsed, setCollapsed] = useState(false);
+  // Start in the compact, mockup-style rail. A user can expand it on a wide
+  // window when labels are more useful than content width.
+  const [collapsed, setCollapsed] = useState(true);
+  const media = useMedia();
 
   // Pane state belongs to this machine, not the account, so it goes through the
   // host preference store rather than the synced profile.
   useEffect(() => {
     let active = true;
     void host.getPreference(NAV_COLLAPSED_KEY).then((value) => {
-      if (active && value != null) setCollapsed(value === '1');
+      if (active && value != null) setCollapsed(value !== '0');
     });
     return () => {
       active = false;
@@ -63,18 +73,22 @@ export function DesktopShell({
     });
   }, []);
 
-  const railWidth = collapsed ? RAIL_WIDTH_COLLAPSED : RAIL_WIDTH;
+  // The desktop reference uses one familiar, icon-first rail at every desktop
+  // width. Labels belong to the content panes, never to a second navigation
+  // column that steals room from the workspace.
+  const visiblyCollapsed = collapsed || !media.gtWide;
+  const railWidth = visiblyCollapsed ? RAIL_WIDTH : 164;
 
   return (
     <View flex={1} backgroundColor="$cream">
       <DesktopTitleBar
-        collapsed={collapsed}
+        collapsed={visiblyCollapsed}
         railWidth={railWidth}
         onToggleNavigation={toggleCollapsed}
       />
       <View flex={1} flexDirection="row" minHeight={0}>
-        <NavigationRail
-          collapsed={collapsed}
+        <DesktopNavigationRail
+          collapsed={visiblyCollapsed}
           width={railWidth}
           destinations={destinations}
           activeRoute={activeRoute}
@@ -97,6 +111,8 @@ function DesktopTitleBar({
   railWidth: number;
   onToggleNavigation: () => void;
 }) {
+  const leadingClearance = Math.max(railWidth + 16, TRAFFIC_LIGHT_CLEARANCE);
+
   return (
     <DragRegion height={TITLE_BAR_HEIGHT}>
       <View
@@ -104,24 +120,15 @@ function DesktopTitleBar({
         flexDirection="row"
         alignItems="center"
         position="relative"
+        backgroundColor="$cream"
       >
-        {/* The rail colour runs up behind the title bar so the sidebar reads as
-            one surface rather than a panel bolted under a toolbar. */}
-        <View
-          style={{ pointerEvents: 'none' }}
-          position="absolute"
-          left={0}
-          top={0}
-          bottom={0}
-          width={railWidth}
-          backgroundColor="$ink"
-        />
-        {/* On macOS the traffic lights sit here; the spacer keeps the toggle
-            clear of them at both rail widths. */}
-        <View width={railWidth} />
+        <DesktopNavigationRailTitleBarBackdrop expanded={!collapsed} width={railWidth} />
+        {/* Compact navigation begins below the title bar, leaving a calm gray
+            traffic-light zone. The expanded rail intentionally caps it. */}
+        <View width={leadingClearance} />
 
         <DragRegion draggable={false}>
-          <View paddingLeft="$2" justifyContent="center">
+          <View paddingLeft="$1" justifyContent="center">
             <ClaireIconButton
               accessibilityLabel={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
               onPress={onToggleNavigation}
@@ -130,24 +137,30 @@ function DesktopTitleBar({
               borderRadius={10}
               testID="desktop-toggle-sidebar"
             >
-              {collapsed ? (
-                <PanelLeftOpen size={17} color={colors.ink} />
-              ) : (
-                <PanelLeftClose size={17} color={colors.ink} />
-              )}
+              {collapsed ? <PanelLeftOpen size={17} color={colors.ink} /> : <PanelLeftClose size={17} color={colors.ink} />}
             </ClaireIconButton>
           </View>
         </DragRegion>
 
-        {/* Flexible spacer. Search lives behind ⌘K and connections in Settings,
+        {/* Flexible spacer. Search is on ⌘K and connections live in Settings,
             so neither needs permanent chrome here. */}
         <DragRegion draggable={false} flex={1} />
 
-
+        {collapsed ? null : (
+          <View
+            style={{ pointerEvents: 'none' }}
+            position="absolute"
+            left={0}
+            bottom={0}
+            width={railWidth}
+            height={1}
+            backgroundColor="$ink"
+          />
+        )}
         <View
           style={{ pointerEvents: 'none' }}
           position="absolute"
-          left={railWidth}
+          left={collapsed ? 0 : railWidth}
           right={0}
           bottom={0}
           height={1}
@@ -156,80 +169,4 @@ function DesktopTitleBar({
       </View>
     </DragRegion>
   );
-}
-
-function NavigationRail({
-  collapsed,
-  width,
-  destinations,
-  activeRoute,
-  onNavigate,
-}: {
-  collapsed: boolean;
-  width: number;
-  destinations: DesktopDestination[];
-  activeRoute: string;
-  onNavigate: (route: string) => void;
-}) {
-  return (
-    <View
-      width={width}
-      flexGrow={0}
-      flexShrink={0}
-      backgroundColor="$ink"
-      paddingHorizontal="$2"
-      paddingTop="$2"
-      rowGap={2}
-      testID="desktop-navigation-rail"
-    >
-      {destinations.map((destination) => {
-        const active = isRouteActive(activeRoute, destination.route);
-        return (
-          <View
-            key={destination.route}
-            role="button"
-            aria-label={destination.label}
-            aria-selected={active}
-            onPress={() => onNavigate(destination.route)}
-            testID={`desktop-nav-${slug(destination.label)}`}
-            minHeight={44}
-            borderRadius="$control"
-            paddingHorizontal="$2"
-            flexDirection="row"
-            alignItems="center"
-            columnGap={10}
-            cursor="pointer"
-            justifyContent={collapsed ? 'center' : 'flex-start'}
-            backgroundColor={active ? '$neutral800' : 'transparent'}
-            hoverStyle={{ backgroundColor: '$neutral800' }}
-            pressStyle={{ opacity: 0.84 }}
-          >
-            {destination.icon({
-              size: 22,
-              color: active ? colors.lime : colors.neutral[300],
-              strokeWidth: 1.9,
-            })}
-            {!collapsed ? (
-              <ClaireText variant="label" color={active ? '$lime' : '$neutral300'} numberOfLines={1}>
-                {destination.label}
-              </ClaireText>
-            ) : null}
-          </View>
-        );
-      })}
-    </View>
-  );
-}
-
-/**
- * `/` must only match itself, but every other destination owns its subtree —
- * `/chat/abc` should still light up Inbox.
- */
-function isRouteActive(current: string, route: string): boolean {
-  if (route === '/') return current === '/' || current === '';
-  return current === route || current.startsWith(`${route}/`);
-}
-
-function slug(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 }

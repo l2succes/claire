@@ -14,6 +14,7 @@ import { resolvePlatform, platformLabel } from '../../types/platform';
 import { formatInboxTimestamp } from '../../utils/messageTimestamp';
 import { computeUrgencyScore } from '../../utils/urgency';
 import { HomeSkeleton } from '../../components/claire/skeleton';
+import { installationId, listHandoffs, type WorkspaceHandoff } from '../../services/handoffs';
 
 interface UrgentMessage {
   id: string;
@@ -75,6 +76,17 @@ export function HomeScreen() {
     // The Home brief includes overdue commitments too. The previous pending-only
     // request made a real overdue queue disappear from this screen.
     queryFn: () => authJson<BriefLoop[]>('/loops?limit=20'),
+  });
+  const handoffs = useQuery({
+    queryKey: ['workspace-handoffs', user?.id],
+    enabled: !!user?.id,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return null;
+      const ownInstallation = await installationId();
+      return (await listHandoffs(session.access_token)).find((handoff) => handoff.installation_id !== ownInstallation) || null;
+    },
   });
 
   const firstName = user?.name?.trim().split(/\s+/)[0] || user?.email?.split('@')[0] || 'there';
@@ -181,6 +193,8 @@ export function HomeScreen() {
           </View>
         </Pressable>
 
+        {handoffs.data ? <ContinueElsewhere handoff={handoffs.data} /> : null}
+
         <SectionLabel title="Your day" detail={`${dayItems.length} items`} />
         {dayItems.length === 0 ? (
           <MobileState title="A calm day" message="New messages and open loops that need attention will appear here." />
@@ -219,4 +233,15 @@ export function HomeScreen() {
       </View>
     </ScrollView>
   );
+}
+
+function ContinueElsewhere({ handoff }: { handoff: WorkspaceHandoff }) {
+  const route = handoff.payload.route || (handoff.payload.chatId ? `/chat/${handoff.payload.chatId}` : '/(tabs)/dashboard');
+  return <Pressable accessibilityRole="button" onPress={() => router.push(route as never)} style={({ pressed }) => ({ opacity: pressed ? 0.76 : 1 })} testID="continue-handoff">
+    <View style={{ padding: space[3], gap: 4, borderRadius: radius.card, borderWidth: 1, borderColor: colors.neutral[200], backgroundColor: colors.paper }}>
+      <Text style={{ ...mobileType.monoLabel, color: colors.neutral[600] }}>CONTINUE FROM {handoff.source_platform.toUpperCase()}</Text>
+      <Text style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>Pick up where you left off</Text>
+      <Text numberOfLines={1} style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{handoff.payload.draft ? 'Your draft is ready to continue.' : 'Restore your recent workspace context.'}</Text>
+    </View>
+  </Pressable>;
 }

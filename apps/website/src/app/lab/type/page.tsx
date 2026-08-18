@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import type { Metadata } from 'next';
+import { LabFrame } from '@/components/site/LabFrame';
 
 export const metadata: Metadata = {
   title: 'Type lab',
@@ -8,7 +9,5 @@ export const metadata: Metadata = {
 };
 
 export default function TypeLabPage() {
-  return (
-    <iframe className="mockup-frame" title="Claire type lab" src="/lab/type-lab.html" />
-  );
+  return <LabFrame title="Claire type lab" src="/lab/type-lab.html" />;
 }

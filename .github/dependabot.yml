@@ -20,7 +20,3 @@ updates:
     directory: /website
     schedule:
       interval: weekly
-  - package-ecosystem: npm
-    directory: /desktop/macos
-    schedule:
-      interval: weekly

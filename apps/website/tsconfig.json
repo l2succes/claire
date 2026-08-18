@@ -25,9 +25,6 @@
     "paths": {
       "@/*": [
         "./src/*"
-      ],
-      "@/.source": [
-        "./.source/server.ts"
       ]
     }
   },
@@ -36,8 +33,6 @@
     "**/*.ts",
     "**/*.tsx",
     ".next/types/**/*.ts",
-    ".source/**/*.ts",
-    "source.config.ts",
     ".next/dev/types/**/*.ts"
   ],
   "exclude": [

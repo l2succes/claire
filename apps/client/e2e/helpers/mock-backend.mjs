@@ -84,6 +84,31 @@ export const MOCK_INBOX_MESSAGES = [
   },
 ];
 
+// One row per conversation, mirroring the `conversation_feed` view used by
+// the inbox and home screens. Keep this derived from the message fixtures so
+// a fixture edit cannot make the two representations drift apart.
+export const MOCK_CONVERSATION_FEED = MOCK_INBOX_MESSAGES.map((message) => ({
+  chat_id: message.chat_id,
+  platform: message.platform,
+  chat_name: message.chats?.name || message.contact_name,
+  contact_name: message.contact_name,
+  contact_inferred_name: null,
+  contact_avatar_url: null,
+  contact_phone: message.contact_phone,
+  is_group: message.is_group,
+  unread_count: message.from_me ? 0 : 1,
+  is_pinned: false,
+  last_message_id: message.id,
+  last_message_content: message.content,
+  last_message_from_me: message.from_me,
+  last_message_status: message.status,
+  last_message_content_type: 'text',
+  last_message_sender_name: message.contact_name,
+  last_message_has_ai_response: message.ai_suggestions.length > 0,
+  last_message_snoozed_until: null,
+  last_activity_at: message.timestamp,
+}));
+
 export const MOCK_CHAT_MESSAGES = [
   {
     id: 'chatmsg-1',
@@ -362,7 +387,25 @@ export const MOCK_GROUP_SUMMARY_RESP = {
 // ---------------------------------------------------------------------------
 
 export async function mockBackend(page) {
-  // Supabase auth: sign-in via password (POST /auth/v1/token)
+  // Supabase passwordless email sign-in: requesting a code has no session;
+  // verifying it creates the same session returned by password auth.
+  await page.route('**/auth/v1/otp**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({}),
+    });
+  });
+
+  await page.route('**/auth/v1/verify**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(MOCK_SESSION_RESP),
+    });
+  });
+
+  // Keep the password endpoint mocked for legacy flows that still use it.
   await page.route('**/auth/v1/token**', async (route) => {
     await route.fulfill({
       status: 200,
@@ -385,7 +428,13 @@ export async function mockBackend(page) {
     const url = route.request().url();
     const method = route.request().method();
 
-    if (url.includes('/messages')) {
+    if (url.includes('/conversation_feed')) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(MOCK_CONVERSATION_FEED),
+      });
+    } else if (url.includes('/messages')) {
       // Inbox list or chat detail (chat_id=eq. in query params)
       if (url.includes('chat_id=eq.')) {
         await route.fulfill({
@@ -771,8 +820,9 @@ export async function signIn(page) {
   await page.getByTestId('signin-use-email').click();
 
   await page.getByTestId('signin-email-input').fill('test@claire.local');
-  await page.getByTestId('signin-password-input').fill('password123');
-  await page.getByTestId('signin-submit').click();
+  await page.getByTestId('signin-send-otp').click();
+  await page.getByTestId('signin-otp-input').fill('123456');
+  await page.getByTestId('signin-verify-otp').click();
 
   // Mock auth succeeds + platform sessions check returns connected → goes to dashboard
   await page.waitForURL('**/dashboard', { timeout: 15_000 });

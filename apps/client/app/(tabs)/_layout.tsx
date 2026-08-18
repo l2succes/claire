@@ -25,7 +25,7 @@ function useOpenLoopCount() {
         .from('loops')
         .select('id', { count: 'exact', head: true })
         .eq('user_id', user.id)
-        .in('status', ['pending', 'open']);
+        .in('status', ['open', 'waiting', 'snoozed']);
       if (!cancelled) setCount(nextCount ?? 0);
     };
 

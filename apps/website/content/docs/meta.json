@@ -1,0 +1,12 @@
+{
+  "title": "Claire Docs",
+  "pages": [
+    "index",
+    "getting-started",
+    "architecture",
+    "guides",
+    "reference",
+    "contributing",
+    "product"
+  ]
+}

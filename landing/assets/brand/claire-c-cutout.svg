@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
-  <title id="title">Claire Cutout C logo</title>
-  <desc id="desc">A bold letter C cut directly from the Claire chat bubble.</desc>
-  <path d="M21 4h22c10.5 0 17 6.5 17 17v14c0 10.5-6.5 17-17 17H33L22 60v-8h-1C10.5 52 4 45.5 4 35V21C4 10.5 10.5 4 21 4Z" fill="#DFFF64" stroke="#10120F" stroke-width="2" stroke-linejoin="round"/>
-  <circle cx="32" cy="30" r="16.2" fill="#10120F"/>
-  <circle cx="32" cy="30" r="10.3" fill="#DFFF64"/>
-  <rect x="31" y="24.4" width="20" height="11.2" rx="5.6" fill="#DFFF64"/>
-</svg>

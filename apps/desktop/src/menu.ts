@@ -1,5 +1,6 @@
-import { app, Menu, shell, type BrowserWindow, type MenuItemConstructorOptions } from 'electron';
+import { Menu, shell, type BrowserWindow, type MenuItemConstructorOptions } from 'electron';
 import { IPC } from './shared/ipc';
+import { APP_NAME, IS_DEV } from './channel';
 
 /**
  * The Navigate menu mirrors the shortcuts the React Native macOS host already
@@ -8,11 +9,11 @@ import { IPC } from './shared/ipc';
  * back/forward and deep links working in both Electron and the browser.
  */
 const NAVIGATION: Array<{ label: string; accelerator: string; route: string }> = [
-  { label: 'Home', accelerator: 'CmdOrCtrl+1', route: '/' },
-  { label: 'Inbox', accelerator: 'CmdOrCtrl+2', route: '/dashboard' },
-  { label: 'Promises', accelerator: 'CmdOrCtrl+3', route: '/promises' },
-  { label: 'People', accelerator: 'CmdOrCtrl+4', route: '/people' },
-  { label: 'Ask Claire', accelerator: 'CmdOrCtrl+K', route: '/assistant' },
+  { label: 'Home', accelerator: 'CmdOrCtrl+1', route: '/dashboard' },
+  { label: 'Inbox', accelerator: 'CmdOrCtrl+2', route: '/messages' },
+  { label: 'Loops', accelerator: 'CmdOrCtrl+3', route: '/loops' },
+  { label: 'People', accelerator: 'CmdOrCtrl+4', route: '/contacts' },
+  { label: 'Ask Claire', accelerator: '', route: '/ask-claire' },
   { label: 'Settings', accelerator: 'CmdOrCtrl+,', route: '/settings' },
 ];
 
@@ -35,12 +36,12 @@ export function buildApplicationMenu({
     ...(isMac
       ? ([
           {
-            label: app.name,
+            label: APP_NAME,
             submenu: [
-              { role: 'about' },
+              { label: `About ${APP_NAME}`, role: 'about' },
               { type: 'separator' },
               {
-                label: 'Settings…',
+                label: 'Claire Settings…',
                 accelerator: 'CmdOrCtrl+,',
                 click: () => send('/settings'),
               },
@@ -57,13 +58,20 @@ export function buildApplicationMenu({
         ] as MenuItemConstructorOptions[])
       : []),
     {
-      label: 'File',
+      label: 'Claire',
       submenu: [
         {
-          label: 'New Message',
-          accelerator: 'CmdOrCtrl+N',
+          label: 'New Conversation',
           click: () => getWindow()?.webContents.send(IPC.focusComposer),
         },
+        {
+          label: 'Ask Claire',
+          accelerator: 'CmdOrCtrl+K',
+          click: () => send('/ask-claire'),
+        },
+        { type: 'separator' },
+        { label: 'Connections', click: () => send('/connections') },
+        { label: 'Set Up iMessage', click: () => send('/connections?platform=imessage') },
         { type: 'separator' },
         isMac ? { role: 'close' } : { role: 'quit' },
       ],
@@ -81,7 +89,7 @@ export function buildApplicationMenu({
       ],
     },
     {
-      label: 'Navigate',
+      label: 'Workspace',
       submenu: NAVIGATION.map(({ label, accelerator, route }) => ({
         label,
         accelerator,
@@ -89,11 +97,30 @@ export function buildApplicationMenu({
       })),
     },
     {
+      label: 'Conversation',
+      submenu: [
+        {
+          label: 'Focus Composer',
+          accelerator: 'CmdOrCtrl+N',
+          click: () => getWindow()?.webContents.send(IPC.focusComposer),
+        },
+        {
+          label: 'Open Conversation in New Window',
+          accelerator: 'CmdOrCtrl+Shift+M',
+          click: () => {
+            const chatId = getActiveConversationId();
+            if (chatId) openConversationWindow(chatId);
+          },
+        },
+        { type: 'separator' },
+        { label: 'Search Messages', accelerator: 'CmdOrCtrl+F', click: () => send('/search') },
+      ],
+    },
+    {
       label: 'View',
       submenu: [
         { role: 'reload' },
-        { role: 'forceReload' },
-        { role: 'toggleDevTools' },
+        ...(IS_DEV ? ([{ role: 'toggleDevTools' }] as MenuItemConstructorOptions[]) : []),
         { type: 'separator' },
         { role: 'resetZoom' },
         { role: 'zoomIn' },
@@ -105,16 +132,6 @@ export function buildApplicationMenu({
     {
       label: 'Window',
       submenu: [
-        {
-          label: 'Open Conversation in New Window',
-          accelerator: 'CmdOrCtrl+Shift+M',
-          click: () => {
-            const chatId = getActiveConversationId();
-            // Nothing to detach when no conversation is on screen.
-            if (chatId) openConversationWindow(chatId);
-          },
-        },
-        { type: 'separator' },
         { role: 'minimize' },
         { role: 'zoom' },
         ...(isMac
@@ -130,6 +147,10 @@ export function buildApplicationMenu({
           click: () => {
             void shell.openExternal('https://github.com/l2succes/claire');
           },
+        },
+        {
+          label: 'Report an Issue',
+          click: () => { void shell.openExternal('https://github.com/l2succes/claire/issues'); },
         },
       ],
     },

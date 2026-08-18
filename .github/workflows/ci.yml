@@ -16,6 +16,16 @@ env:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     strategy:
       # Run both suites even if one fails, so we see the full picture.
@@ -78,9 +88,7 @@ jobs:
         run: bun run lint
 
       - name: Run type checking
-        run: |
-          cd apps/server && bun run typecheck
-          cd ../client && bun run typecheck
+        run: bun run typecheck
 
   e2e:
     name: Mock end-to-end tests
@@ -137,3 +145,7 @@ jobs:
       - name: Build client for web
         working-directory: ./apps/client
         run: bunx expo export -p web
+
+      - name: Build website and public documentation
+        working-directory: ./apps/website
+        run: bun run build

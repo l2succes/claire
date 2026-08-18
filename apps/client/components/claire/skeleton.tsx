@@ -112,6 +112,55 @@ export function AskClaireSkeleton() {
   );
 }
 
+/** Desktop Ask Claire is a three-pane workspace, so its loading state keeps
+ * that structure visible rather than briefly collapsing into the phone list. */
+export function DesktopAskClaireSkeleton() {
+  return (
+    <View testID="desktop-assistant-loading" style={{ flex: 1, minHeight: 0, flexDirection: 'row', backgroundColor: '#FAF9F5' }}>
+      <View style={{ width: 210, flexShrink: 0, padding: space[3], backgroundColor: '#F4F2EC', borderRightWidth: 1, borderRightColor: colors.neutral[200] }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+          <Bone width={96} height={11} />
+          <Bone width={26} height={26} radius={8} style={{ marginLeft: 'auto' }} delay={30} />
+        </View>
+        {Array.from({ length: 4 }, (_, index) => (
+          <View key={index} style={{ padding: 10, marginBottom: 5, borderRadius: 11 }}>
+            <Bone width={index === 1 ? '76%' : '62%'} height={13} delay={index * 55 + 50} />
+            <Bone width="88%" height={10} style={{ marginTop: 7 }} delay={index * 55 + 80} />
+          </View>
+        ))}
+      </View>
+      <View style={{ flex: 1, minWidth: 0, padding: 30, paddingBottom: 18 }}>
+        <Bone width={118} height={10} />
+        <Bone width={170} height={28} style={{ marginTop: 9 }} delay={30} />
+        <Bone width="52%" height={13} style={{ marginTop: 9 }} delay={60} />
+        <View style={{ flexDirection: 'row', gap: 12, marginTop: 25, padding: 16, borderWidth: 1, borderColor: colors.neutral[200], borderRadius: 16, backgroundColor: colors.sky }}>
+          <Bone width={34} height={34} radius={10} delay={90} />
+          <View style={{ flex: 1, gap: 9 }}>
+            <Bone width="38%" height={10} delay={120} />
+            <Bone width="92%" height={14} delay={150} />
+            <Bone width="74%" height={14} delay={180} />
+          </View>
+        </View>
+        <Bone width={142} height={10} style={{ marginTop: 24 }} delay={210} />
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
+          {Array.from({ length: 4 }, (_, index) => <Bone key={index} width="47.5%" height={82} radius={13} delay={240 + index * 55} />)}
+        </View>
+        <Bone width="100%" height={48} radius={14} style={{ marginTop: 'auto' }} delay={440} />
+      </View>
+      <View style={{ width: 235, flexShrink: 0, padding: space[3], borderLeftWidth: 1, borderLeftColor: colors.neutral[200], backgroundColor: '#F4F2EC' }}>
+        <Bone width={114} height={10} />
+        {Array.from({ length: 3 }, (_, index) => (
+          <View key={index} style={{ marginTop: 12, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: colors.neutral[200], backgroundColor: colors.paper }}>
+            <Bone width="48%" height={10} delay={index * 70 + 100} />
+            <Bone width="72%" height={13} style={{ marginTop: 8 }} delay={index * 70 + 130} />
+            <Bone width="92%" height={10} style={{ marginTop: 7 }} delay={index * 70 + 160} />
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 export function ChatSkeleton({ testID }: { testID?: string }) {
   return (
     <Animated.View entering={FadeIn.duration(180)} testID={testID} style={{ flex: 1, justifyContent: 'flex-end', paddingHorizontal: space[4], paddingBottom: space[4], gap: space[3] }}>

@@ -100,7 +100,7 @@ function claireFont(family: string) {
  * Breakpoints.
  *
  * `compact` is a phone or a narrow window. `gtExpanded` is where the desktop
- * shell takes over — the same 1180 threshold the shell uses, read from
+ * shell takes over — the same 900 threshold the shell uses, read from
  * `@claire/tokens` so the two cannot disagree.
  */
 export const media = {
@@ -108,6 +108,8 @@ export const media = {
   gtCompact: { minWidth: breakpoints.compact },
   medium: { maxWidth: breakpoints.expanded - 1 },
   gtExpanded: { minWidth: breakpoints.expanded },
+  gtWide: { minWidth: breakpoints.wide },
+  gtFull: { minWidth: breakpoints.full },
   // Pointer-precision, not size: hover affordances should not appear on touch.
   pointerFine: { pointer: 'fine' },
 } as const;

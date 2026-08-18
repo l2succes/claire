@@ -4,7 +4,6 @@
   "private": true,
   "workspaces": [
     "apps/*",
-    "desktop/macos",
     "packages/*",
     "examples/plugins/*"
   ],
@@ -63,7 +62,6 @@
     "desktop:prod:fresh": "cd apps/desktop && bun run prod:fresh",
     "desktop:package": "cd apps/desktop && bun run package",
     "desktop:package:dev": "cd apps/desktop && bun run package:dev",
-    "desktop:macos": "cd desktop/macos && bun run start",
     "eval:loops": "cd apps/server && bun run eval:loops"
   },
   "devDependencies": {

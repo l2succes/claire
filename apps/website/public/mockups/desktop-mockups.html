@@ -11,20 +11,22 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@600;700&family=Public+Sans:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Public+Sans:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="./tokens.css" />
     <link rel="stylesheet" href="./desktop-mockups.css" />
     <link rel="icon" href="/assets/brand/claire-app-icon.svg" type="image/svg+xml" />
     <script src="./heroicons.js" defer></script>
+    <script src="./desktop-tabs.js" defer></script>
     <script src="./desktop-mockups.js" defer></script>
+      <script src="./mockup-embed.js"></script>
   </head>
   <body>
     <header class="desktop-doc-header">
       <a class="desktop-doc-brand" href="/" target="_top"><img class="desktop-doc-brand-mark" src="/assets/brand/claire-app-icon-lime.svg" alt="" />claire <span>/ desktop app</span></a>
       <nav class="desktop-doc-links">
-        <a href="/developers" target="_top">Style guide</a><a href="/mockups/mobile" target="_top">Mobile</a
+        <a href="/mockups/desktop/components" target="_top">Components</a><a href="/mockups/mobile" target="_top">Mobile</a
         ><a class="active" href="/mockups/desktop" target="_top">Desktop</a
         ><a href="/mockups/loops" target="_top">Loops</a><a href="/mockups/plugins" target="_top">Plugins</a>
       </nav>
@@ -139,7 +141,7 @@
           </p>
         </div>
 
-        <article class="frame-case" data-desktop-kind="client">
+        <article class="frame-case" data-desktop-kind="client" data-screen="unified-workspace">
           <div class="frame-label">
             <b>01 / UNIFIED WORKSPACE</b><span>DEFAULT WINDOW · 1440 × 900</span>
           </div>
@@ -153,28 +155,7 @@
               </div>
             </header>
             <div class="workspace">
-              <aside class="desk-rail">
-                <button class="rail-icon active" aria-label="Home">
-                  <i data-heroicon="home"></i></button
-                ><button class="rail-icon" aria-label="Inbox"><i data-heroicon="inbox"></i></button
-                ><button class="rail-icon" aria-label="Promises">
-                  <i data-heroicon="promises"></i></button
-                ><button class="rail-icon" aria-label="Ask Claire">
-                  <i data-heroicon="sparkles"></i></button
-                ><button class="rail-icon" aria-label="Search">
-                  <i data-heroicon="search"></i>
-                </button>
-                <div class="rail-divider"></div>
-                <button class="rail-icon"><span style="color: #27ae60">●</span></button
-                ><button class="rail-icon"><span style="color: #3399db">●</span></button
-                ><button class="rail-icon"><span style="color: #cf4f87">●</span></button
-                ><button class="rail-icon"><span style="color: #2e7cff">●</span></button>
-                <div class="rail-spacer"></div>
-                <button class="rail-icon" aria-label="Settings">
-                  <i data-heroicon="settings"></i>
-                </button>
-                <div class="rail-avatar">LM</div>
-              </aside>
+              <claire-desktop-tabs variant="workspace" active="home"></claire-desktop-tabs>
               <aside class="desk-list">
                 <div class="desk-list-head">
                   <h2>Inbox</h2>
@@ -318,7 +299,7 @@
           </p>
         </article>
 
-        <article class="frame-case" data-desktop-kind="companion">
+        <article class="frame-case" data-desktop-kind="companion" data-screen="desktop-home">
           <div class="frame-label">
             <b>02 / DESKTOP HOME + HANDOFF</b><span>COMPANION AND STANDALONE STATUS</span>
           </div>
@@ -332,24 +313,9 @@
               </div>
             </header>
             <div class="companion-layout">
-              <aside class="standard-rail" aria-label="Primary navigation">
-                <button class="rail-icon active" aria-label="Home">
-                  <i data-heroicon="home"></i></button
-                ><button class="rail-icon" aria-label="Inbox"><i data-heroicon="inbox"></i></button
-                ><button class="rail-icon" aria-label="Promises">
-                  <i data-heroicon="promises"></i></button
-                ><button class="rail-icon" aria-label="Ask Claire">
-                  <i data-heroicon="sparkles"></i></button
-                ><button class="rail-icon" aria-label="People">
-                  <i data-heroicon="people"></i></button
-                ><button class="rail-icon" aria-label="Connections">
-                  <i data-heroicon="chat"></i></button
-                ><button class="rail-icon" aria-label="Settings">
-                  <i data-heroicon="settings"></i>
-                </button>
-              </aside>
+              <claire-desktop-tabs active="home"></claire-desktop-tabs>
               <aside class="companion-sidebar">
-                <div class="companion-brand"><img src="/assets/brand/claire-app-icon-lime.svg" alt="" />claire</div>
+                <div class="companion-brand"><img src="/assets/brand/claire-kept-thread-flipped.svg" alt="" />claire</div>
                 <nav class="companion-nav">
                   <button class="active"><i data-heroicon="home"></i>Home</button
                   ><button><i data-heroicon="inbox"></i>Inbox</button
@@ -480,7 +446,7 @@
           </p>
         </article>
 
-        <article class="frame-case" data-desktop-kind="client">
+        <article class="frame-case" data-desktop-kind="client" data-screen="ask-claire-workspace">
           <div class="frame-label">
             <b>03 / ASK CLAIRE WORKSPACE</b><span>⌥⌘A FROM ANYWHERE</span>
           </div>
@@ -491,21 +457,7 @@
               <div></div>
             </header>
             <div class="ask-workspace">
-              <aside class="standard-rail" aria-label="Primary navigation">
-                <button class="rail-icon" aria-label="Home"><i data-heroicon="home"></i></button
-                ><button class="rail-icon" aria-label="Inbox"><i data-heroicon="inbox"></i></button
-                ><button class="rail-icon" aria-label="Promises">
-                  <i data-heroicon="promises"></i></button
-                ><button class="rail-icon active" aria-label="Ask Claire">
-                  <i data-heroicon="sparkles"></i></button
-                ><button class="rail-icon" aria-label="People">
-                  <i data-heroicon="people"></i></button
-                ><button class="rail-icon" aria-label="Connections">
-                  <i data-heroicon="chat"></i></button
-                ><button class="rail-icon" aria-label="Settings">
-                  <i data-heroicon="settings"></i>
-                </button>
-              </aside>
+              <claire-desktop-tabs active="sparkles"></claire-desktop-tabs>
               <aside class="ask-thread-rail">
                 <div class="ask-rail-head">
                   <i data-heroicon="sparkles"></i><span>ASK CLAIRE</span
@@ -600,7 +552,7 @@
           </p>
         </article>
 
-        <article class="frame-case" data-desktop-kind="setup">
+        <article class="frame-case" data-desktop-kind="setup" data-screen="connections">
           <div class="frame-label">
             <b>04 / CONNECTIONS</b><span>CLOUD + ON-DEVICE NETWORKS</span>
           </div>
@@ -611,21 +563,7 @@
               <div class="window-tools"><button>?</button></div>
             </header>
             <div class="connections-layout">
-              <aside class="standard-rail" aria-label="Primary navigation">
-                <button class="rail-icon" aria-label="Home"><i data-heroicon="home"></i></button
-                ><button class="rail-icon" aria-label="Inbox"><i data-heroicon="inbox"></i></button
-                ><button class="rail-icon" aria-label="Promises">
-                  <i data-heroicon="promises"></i></button
-                ><button class="rail-icon" aria-label="Ask Claire">
-                  <i data-heroicon="sparkles"></i></button
-                ><button class="rail-icon" aria-label="People">
-                  <i data-heroicon="people"></i></button
-                ><button class="rail-icon active" aria-label="Connections">
-                  <i data-heroicon="chat"></i></button
-                ><button class="rail-icon" aria-label="Settings">
-                  <i data-heroicon="settings"></i>
-                </button>
-              </aside>
+              <claire-desktop-tabs active="chat"></claire-desktop-tabs>
               <aside class="settings-sidebar">
                 <h2>Settings</h2>
                 <button>Profile</button><button class="active">Connections</button
@@ -743,7 +681,7 @@
           </p>
         </article>
 
-        <article class="frame-case" data-desktop-kind="setup">
+        <article class="frame-case" data-desktop-kind="setup" data-screen="imessage-setup">
           <div class="frame-label">
             <b>05 / IMESSAGE ON-DEVICE SETUP</b><span>NATIVE PERMISSION WIZARD</span>
           </div>
@@ -801,7 +739,7 @@
                     <i data-heroicon="desktop"></i>
                     <div>
                       <b>Accessibility</b>
-                      <p>Interact with the Messages interface</p>
+                      <p>Public Sansact with the Messages interface</p>
                     </div>
                     <em>REQUIRED</em>
                   </article>
@@ -852,7 +790,7 @@
           </p>
         </article>
 
-        <article class="frame-case" data-desktop-kind="client">
+        <article class="frame-case" data-desktop-kind="client" data-screen="relationship-memory">
           <div class="frame-label">
             <b>06 / RELATIONSHIP MEMORY</b><span>PEOPLE + LIVE AI PREVIEW</span>
           </div>
@@ -865,21 +803,7 @@
               </div>
             </header>
             <div class="relationship-layout">
-              <aside class="standard-rail" aria-label="Primary navigation">
-                <button class="rail-icon" aria-label="Home"><i data-heroicon="home"></i></button
-                ><button class="rail-icon" aria-label="Inbox"><i data-heroicon="inbox"></i></button
-                ><button class="rail-icon" aria-label="Promises">
-                  <i data-heroicon="promises"></i></button
-                ><button class="rail-icon" aria-label="Ask Claire">
-                  <i data-heroicon="sparkles"></i></button
-                ><button class="rail-icon active" aria-label="People">
-                  <i data-heroicon="people"></i></button
-                ><button class="rail-icon" aria-label="Connections">
-                  <i data-heroicon="chat"></i></button
-                ><button class="rail-icon" aria-label="Settings">
-                  <i data-heroicon="settings"></i>
-                </button>
-              </aside>
+              <claire-desktop-tabs active="people"></claire-desktop-tabs>
               <aside class="people-column">
                 <h2>People</h2>
                 <div class="desk-search"><i data-heroicon="search"></i>Search people</div>
@@ -977,7 +901,7 @@
           </p>
         </article>
 
-        <article class="frame-case" data-desktop-kind="companion">
+        <article class="frame-case" data-desktop-kind="companion" data-screen="compact-chat">
           <div class="frame-label">
             <b>07 / COMPACT CHAT</b><span>RESIZABLE COMPANION WINDOW</span>
           </div>

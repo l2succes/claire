@@ -2,7 +2,6 @@
 import type { Metadata } from 'next';
 import { DM_Mono, Inter, Public_Sans } from 'next/font/google';
 import type { ReactNode } from 'react';
-import { RootProvider } from 'fumadocs-ui/provider/next';
 import './globals.css';
 
 // Body, UI, labels — everything at section-title size and below.
@@ -45,18 +44,7 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
       className={`${publicSans.variable} ${inter.variable} ${dmMono.variable} ${publicSans.className}`}
       suppressHydrationWarning
     >
-      <body className="flex min-h-screen flex-col">
-        <RootProvider
-          theme={{ defaultTheme: 'light', enableSystem: false }}
-          search={{
-            options: {
-              api: '/api/search',
-            },
-          }}
-        >
-          {children}
-        </RootProvider>
-      </body>
+      <body className="flex min-h-screen flex-col">{children}</body>
     </html>
   );
 }

@@ -16,6 +16,7 @@ cd "$(dirname "$0")/.."
 #   LEGACY_LOOP_DETECTION_KEY               -> one-time AsyncStorage migration
 #   destinationForDesktopCommand shim       -> pre-rename native binaries
 #   "i promise" in the COMMISSIVE regex      -> ordinary English, not the feature
+#   "product promise" / "not a promise that"  -> ordinary English in prose
 ALLOW='Promise<|Promise\.|: Promise\b|new Promise|await Promise|Promise>|PromiseLike'
 
 # Local accumulators fed to Promise.all. Naming an array of pending work
@@ -38,12 +39,12 @@ MATCHES=$(grep -rn --binary-files=without-match \
   -iE '\bpromises?\b' \
   apps/server/src apps/client/app apps/client/features apps/client/components \
   apps/client/services apps/client/hooks apps/client/stores apps/client/e2e \
-  desktop/macos/src 2>/dev/null \
+  apps/desktop/src apps/website/src/content/docs 2>/dev/null \
   | grep -vE "$ALLOW" \
   | grep -vE "$ALLOW_IDIOM" \
   | grep -vE "$PENDING_DELETION" \
   | grep -vE 'LEGACY_LOOP_DETECTION_KEY|claire\.settings\.promiseDetection' \
-  | grep -vE "i promise|I promise" \
+  | grep -vE "i promise|I promise|product promise|not a promise that|a broken promise" \
   | grep -vE "=== 'promises'|pre-rename|before the rename|before the loops rename" \
   || true)
 
