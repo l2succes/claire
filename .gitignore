@@ -95,6 +95,8 @@ Thumbs.db
 
 # Leftover local trees after earlier client/ renames and worktree experiments.
 # Keep the native project in apps/client/ios (Xcode + Podfile); never commit Pods.
+/mobile/
+/website/
 /client/
 /wt-96/
 /turbo-fieldfare/
