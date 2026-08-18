@@ -74,8 +74,9 @@ async function main() {
     tags: ['claire', 'staging', 'railway'],
     notesPlain: 'Fixture-mode Claire API only. Do not add production platform sessions, OAuth secrets, Matrix admin tokens, or production data.',
   };
-  await run(['op', 'item', 'create', '--category', 'login', '--vault', vault, '-'], JSON.stringify(item), true);
+  await run(['op', 'item', 'create', '--category', 'login', '--title', targetTitle, '--vault', vault, '-'], JSON.stringify(item), true);
   console.log('Stored isolated staging API credentials in 1Password.');
+  console.log('Syncing fixture API configuration to Railway...');
 
   const staticVariables = {
     NODE_ENV: 'production',
@@ -91,9 +92,12 @@ async function main() {
     DIRECT_DATABASE_URL: '${{Postgres.POSTGRES_PRIVATE_URL}}',
     REDIS_URL: '${{Redis.REDIS_URL}}',
   };
-  for (const [key, value] of Object.entries({ ...staticVariables, ...variables })) {
-    await run(['railway', 'variable', 'set', key, '--stdin', '--skip-deploys', '--service', service, '--environment', environment, '--project', projectId], value);
-  }
+  await Promise.all(
+    Object.entries({ ...staticVariables, ...variables }).map(([key, value]) =>
+      run(['railway', 'variable', 'set', key, '--stdin', '--skip-deploys', '--service', service, '--environment', environment, '--project', projectId], value),
+    ),
+  );
+  console.log('Requesting the fixture API redeploy...');
   await run(['railway', 'redeploy', '--yes', '--service', service, '--environment', environment, '--project', projectId], undefined, true);
   console.log('Configured and redeployed the fixture-only staging Claire API.');
 }

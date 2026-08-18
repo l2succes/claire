@@ -142,14 +142,20 @@ async function main() {
     notesPlain: 'Generated locally by scripts/secrets/provision-supabase-staging.ts. Source of record for the isolated Railway project claire-staging.',
   };
 
-  await run(['op', 'item', 'create', '--category', 'login', '--vault', vault, '-'], JSON.stringify(item), true);
+  await run(['op', 'item', 'create', '--category', 'login', '--title', itemTitle, '--vault', vault, '-'], JSON.stringify(item), true);
   console.log('Stored the staging Supabase credentials in 1Password.');
-  for (const [key, value] of Object.entries(credentials)) {
-    await run(['railway', 'variable', 'set', key, '--stdin', '--skip-deploys', '--service', studioService, '--environment', environment, '--project', projectId], value);
-  }
-  for (const service of ['Supabase Studio', 'Envoy', 'Gotrue Auth', 'Postgrest', 'Supabase Realtime', 'Supabase Storage', 'Supavisor']) {
-    await run(['railway', 'redeploy', '--yes', '--service', service, '--environment', environment, '--project', projectId], undefined, true);
-  }
+  console.log('Syncing 9 staging credentials to Railway...');
+  await Promise.all(
+    Object.entries(credentials).map(([key, value]) =>
+      run(['railway', 'variable', 'set', key, '--stdin', '--skip-deploys', '--service', studioService, '--environment', environment, '--project', projectId], value),
+    ),
+  );
+  console.log('Requesting dependent service redeploys...');
+  await Promise.all(
+    ['Supabase Studio', 'Envoy', 'Gotrue Auth', 'Postgrest', 'Supabase Realtime', 'Supabase Storage', 'Supavisor'].map((service) =>
+      run(['railway', 'redeploy', '--yes', '--service', service, '--environment', environment, '--project', projectId], undefined, true),
+    ),
+  );
   console.log('Configured Railway from 1Password-backed staging credentials and redeployed dependent services.');
 }
 
