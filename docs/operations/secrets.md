@@ -75,6 +75,16 @@ The command generates the complete JWT/key set locally, creates the concealed-fi
 
 If a failed initial deployment needs a complete staging-key rotation, use `bun run secrets:provision:supabase-staging --rotate`. This moves the previous staging-only 1Password item to the recoverable 1Password trash, writes a replacement item with the same name, and redeploys the isolated staging services.
 
+### Fixture-only Claire API
+
+After the `claire-api` service and Redis have been created in the isolated Railway project, run:
+
+```sh
+bun run secrets:provision:api-staging
+```
+
+This creates `Railway / Staging`, reads only the staging Supabase item, and deploys the API with `MOCK_BRIDGE=true`. It is the safe path for fixture testing. Run it with `--rotate` only to replace the isolated API key set. Real tester platform connections require a separately provisioned staging Matrix/Synapse and bridge topology; never add live production sessions to this item.
+
 ## Local commands
 
 Use 1Password references in ignored local files and execute commands with

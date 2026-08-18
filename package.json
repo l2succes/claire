@@ -26,6 +26,7 @@
     "secrets:check": "bun run scripts/secrets/check.ts",
     "secrets:sync:railway": "bun run scripts/secrets/sync-railway.ts",
     "secrets:provision:supabase-staging": "bun run scripts/secrets/provision-supabase-staging.ts",
+    "secrets:provision:api-staging": "bun run scripts/secrets/provision-api-staging.ts",
     "dev:prod": "concurrently \"bun run dev:server\" \"bun run mobile:prod\"",
     "mobile:prod": "cd mobile && bun run start:prod",
     "mobile:prod:local": "cd mobile && bun run start:prod:local",

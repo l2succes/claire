@@ -115,7 +115,7 @@ async function main() {
       '1Password CLI is not signed in for this terminal. Run: eval "$(op signin --account my)" and then rerun this command in the same terminal.',
     );
   }
-  const rotate = Bun.argv.includes('--rotate');
+  const rotate = process.argv.includes('--rotate');
   const items = JSON.parse(await run(['op', 'item', 'list', '--vault', vault, '--format', 'json'])) as Array<{
     id: string;
     title: string;
