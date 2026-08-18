@@ -78,3 +78,6 @@ For a physical device, register it with EAS first, then open the EAS build's
 install link on that device. Use `production-store` only for an App Store or
 TestFlight submission; it is deliberately separate from the installable
 internal `production` profile.
+
+See [Expo and EAS mobile builds](./expo-builds.md) for device registration,
+local Prebuild commands, private installation, and build recovery.
