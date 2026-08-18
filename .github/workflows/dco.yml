@@ -3,6 +3,10 @@ name: DCO
 on:
   pull_request:
     types: [opened, synchronize, reopened]
+    # DCO belongs on contribution PRs. Promotion PRs (main → production) include
+    # GitHub squash-merge commits that already landed on main, which often omit
+    # a Signed-off-by trailer even when every original PR was signed off.
+    branches: [main, develop]
 
 jobs:
   dco:

@@ -3,7 +3,8 @@ import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const onePasswordAccount = 'J6NIRZ4PIJHXRF4SKPUJWROWAU';
+import { OP_ACCOUNT_ID } from './op-account';
+
 const vault = 'Personal';
 const title = 'Spaceship / Operator';
 
@@ -34,7 +35,7 @@ async function run(command: string[], stdin?: string, showDiagnostic = false) {
 }
 
 async function main() {
-  await run(['op', 'signin', '--account', onePasswordAccount]);
+  await run(['op', 'signin', '--account', OP_ACCOUNT_ID]);
   await run(['op', 'whoami']);
   const apiKey = (
     await run(['security', 'find-generic-password', '-s', 'spaceship-cli', '-a', 'api-key', '-w'])

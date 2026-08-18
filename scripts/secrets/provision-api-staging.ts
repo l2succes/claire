@@ -3,8 +3,9 @@ import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { OP_ACCOUNT_ID } from './op-account';
+
 const vault = 'Claire — Staging';
-const onePasswordAccount = 'J6NIRZ4PIJHXRF4SKPUJWROWAU';
 const sourceTitle = 'Supabase / Staging';
 const targetTitle = 'Railway / Staging';
 const projectId = '03f719da-7c4a-4bdb-9e17-0137924c024b';
@@ -117,7 +118,7 @@ async function createAndVerifyItem(item: Record<string, unknown>, expectedLabels
 
 async function main() {
   try {
-    await run(['op', 'signin', '--account', onePasswordAccount]);
+    await run(['op', 'signin', '--account', OP_ACCOUNT_ID]);
     await run(['op', 'whoami']);
   } catch {
     throw new Error(

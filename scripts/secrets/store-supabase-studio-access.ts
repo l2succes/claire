@@ -2,7 +2,7 @@ import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const onePasswordAccount = 'J6NIRZ4PIJHXRF4SKPUJWROWAU';
+import { OP_ACCOUNT_ID } from './op-account';
 
 const targets = [
   {
@@ -152,7 +152,7 @@ async function storeTarget(target: (typeof targets)[number]) {
 
 async function main() {
   try {
-    await run(['op', 'signin', '--account', onePasswordAccount]);
+    await run(['op', 'signin', '--account', OP_ACCOUNT_ID]);
     await run(['op', 'whoami']);
   } catch {
     throw new Error(
