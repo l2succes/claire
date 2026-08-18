@@ -26,6 +26,13 @@ access, Vercel access, and R2 administration credentials, in the operator's
 private vault. Do not grant staging collaborators access to production or
 operator secrets.
 
+The local authenticated Spaceship DNS credential can be copied from macOS
+Keychain into the private `Personal` vault without printing it:
+
+```sh
+bun run secrets:store:spaceship
+```
+
 ## Item layout
 
 Create a Password item for each provider and environment. Use concealed custom
