@@ -1,0 +1,75 @@
+:root {
+  --claire-ink: #10120f;
+  --claire-cream: #f4f1ea;
+  --claire-paper: #fffdf8;
+  --claire-lime: #dfff64;
+  --claire-lime-hover: #d2f04f;
+  --claire-sky: #b9dcff;
+  --claire-blush: #f2cfe1;
+  --claire-coral: #ff745f;
+  --claire-lavender: #d8ccff;
+  --claire-mint: #bdebd5;
+  --neutral-50: #faf9f6;
+  --neutral-100: #f0eee8;
+  --neutral-200: #dfdcd3;
+  --neutral-400: #9b9b91;
+  --neutral-600: #62635d;
+  --neutral-800: #2d2f2b;
+  --neutral-950: #10120f;
+  --success: #18794e;
+  --warning: #b75d00;
+  --danger: #c83a3a;
+  --focus: #3c68ff;
+  --font-sans: 'Public Sans', 'Avenir Next', Avenir, Helvetica, Arial, sans-serif;
+  --font-display: Inter, 'Avenir Next', Avenir, Helvetica, Arial, sans-serif;
+  --font-mono: 'DM Mono', 'SFMono-Regular', Consolas, monospace;
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.375rem;
+  --text-2xl: clamp(1.8rem, 3vw, 2.75rem);
+  --text-display: clamp(3.25rem, 8vw, 7.5rem);
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+  --space-24: 6rem;
+  --radius-sm: 0.75rem;
+  --radius-md: 1.25rem;
+  --radius-lg: 2rem;
+  --radius-xl: 3rem;
+  --radius-pill: 999px;
+  --shadow-sm: 0 1px 2px rgb(16 18 15/8%);
+  --shadow-md: 0 14px 32px rgb(16 18 15/10%);
+  --shadow-lg: 0 30px 80px rgb(16 18 15/14%);
+  --transition: 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/*
+ * Claire icon system
+ * Heroicons 24px outline is the default for navigation and actions. Icons inherit
+ * color from their parent so active, hover, and disabled states stay token-driven.
+ */
+.hero-icon {
+  display: inline-block;
+  width: 1.5rem;
+  height: 1.5rem;
+  flex: 0 0 auto;
+  vertical-align: middle;
+  overflow: visible;
+}
+
+.hero-icon--sm {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.hero-icon--lg {
+  width: 1.75rem;
+  height: 1.75rem;
+}

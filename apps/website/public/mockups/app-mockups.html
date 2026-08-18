@@ -11,21 +11,25 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@600;700&family=Public+Sans:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Public+Sans:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="./tokens.css" />
+    <link rel="stylesheet" href="./phone-frame.css" />
     <link rel="stylesheet" href="./app-mockups.css" />
     <link rel="icon" href="/assets/brand/claire-app-icon.svg" type="image/svg+xml" />
     <script src="./heroicons.js" defer></script>
+    <script src="./phone-frame.js" defer></script>
+    <script src="./mobile-tabs.js" defer></script>
     <script src="./app-mockups.js" defer></script>
+      <script src="./mockup-embed.js"></script>
   </head>
   <body>
     <header class="gallery-header">
       <a class="gallery-brand" href="/" target="_top"><img class="gallery-brand-mark" src="/assets/brand/claire-app-icon-lime.svg" alt="" />claire <span>/ mobile app</span></a>
       <nav class="gallery-links">
-        <a href="/" target="_top">Landing</a><a href="/developers" target="_top">Style guide</a
-        ><a class="active" href="/mockups/mobile" target="_top">Mobile</a
+        <a href="/" target="_top">Landing</a><a href="/mockups/mobile/components" target="_top">Components</a
+        ><a class="active" href="/mockups/mobile" target="_top">Concepts</a><a href="/mockups/mobile/app" target="_top">App preview</a
         ><a href="/mockups/desktop" target="_top">Desktop</a><a href="/mockups/plugins" target="_top">Plugins</a>
       </nav>
     </header>
@@ -113,13 +117,12 @@
           </p>
         </div>
         <div class="phone-grid">
-          <article class="screen-case" data-kind="core">
+          <article class="screen-case" data-kind="core" data-screen="daily-brief">
             <div class="screen-meta"><b>01 / DAILY BRIEF</b><span>HOME TAB</span></div>
-            <div class="device">
+            <claire-phone>
               <div class="island"></div>
               <div class="status"><span>9:41</span><span>● ◒</span></div>
               <div class="screen">
-                <img class="brief-logo" src="/assets/brand/claire-app-icon-lime.svg" alt="" />
                 <div class="brief-date">THURSDAY, AUG 13</div>
                 <h2 class="brief-title">Good morning,<br />Luc.</h2>
                 <p class="brief-sub">You’re clear after three quick actions.</p>
@@ -157,22 +160,16 @@
                   <span>✦</span>
                   <div><small>CLAIRE’S TAKE</small><b>Your morning is quiet after these.</b></div>
                 </div>
-                <div class="tab-bar">
-                  <span class="active"><i data-heroicon="home"></i></span
-                  ><span><i data-heroicon="inbox"></i></span
-                  ><span class="ask-claire"><img class="claire-mark" src="/assets/brand/claire-kept-thread-flipped-paper-dot.svg" alt="" /></span
-                  ><span><i data-heroicon="promises"></i></span
-                  ><span><i data-heroicon="search"></i></span>
-                </div>
+                <claire-mobile-tabs active="home"></claire-mobile-tabs>
               </div>
-            </div>
+            </claire-phone>
             <p class="screen-note">
               Orientation screen: prioritizes people and commitments, not message volume.
             </p>
           </article>
-          <article class="screen-case" data-kind="core">
+          <article class="screen-case" data-kind="core" data-screen="unified-inbox">
             <div class="screen-meta"><b>02 / UNIFIED INBOX</b><span>INBOX TAB</span></div>
-            <div class="device">
+            <claire-phone>
               <div class="island"></div>
               <div class="status"><span>9:41</span><span>● ◒</span></div>
               <div class="screen">
@@ -243,23 +240,17 @@
                 <button class="floating-compose" aria-label="New message">
                   <i data-heroicon="compose"></i>
                 </button>
-                <div class="tab-bar">
-                  <span><i data-heroicon="home"></i></span
-                  ><span class="active"><i data-heroicon="inbox"></i></span
-                  ><span class="ask-claire"><img class="claire-mark" src="/assets/brand/claire-kept-thread-flipped-paper-dot.svg" alt="" /></span
-                  ><span><i data-heroicon="promises"></i></span
-                  ><span><i data-heroicon="search"></i></span>
-                </div>
+                <claire-mobile-tabs active="inbox"></claire-mobile-tabs>
               </div>
-            </div>
+            </claire-phone>
             <p class="screen-note">
               Standard inbox: one person-first list with explicit platform badges and utility
               filters.
             </p>
           </article>
-          <article class="screen-case" data-kind="core">
+          <article class="screen-case" data-kind="core" data-screen="chat">
             <div class="screen-meta"><b>03 / CHAT</b><span>DETAIL STACK</span></div>
-            <div class="device">
+            <claire-phone>
               <div class="island"></div>
               <div class="status"><span>9:41</span><span>● ◒</span></div>
               <div class="screen chat-screen">
@@ -311,19 +302,19 @@
                 <div class="composer">
                   <button aria-label="Add attachment"><i data-heroicon="plus"></i></button
                   ><span>Write a message…</span
-                  ><button aria-label="Ask Claire"><img class="claire-mark" src="/assets/brand/claire-kept-thread-flipped-paper-dot.svg" alt="" /></button
+                  ><button aria-label="Ask Claire"><i data-heroicon="sparkles"></i></button
                   ><button class="send" aria-label="Send"><i data-heroicon="send"></i></button>
                 </div>
               </div>
-            </div>
+            </claire-phone>
             <p class="screen-note">
               AI stays at the top as context and inline as a promise. The conversation remains
               primary.
             </p>
           </article>
-          <article class="screen-case" data-kind="core">
+          <article class="screen-case" data-kind="core" data-screen="new-message">
             <div class="screen-meta"><b>04 / NEW MESSAGE</b><span>MODAL STACK</span></div>
-            <div class="device">
+            <claire-phone>
               <div class="island"></div>
               <div class="status"><span>9:41</span><span>● ◒</span></div>
               <div class="screen no-tab">
@@ -373,15 +364,15 @@
                   <span>›</span>
                 </div>
               </div>
-            </div>
+            </claire-phone>
             <p class="screen-note">
               A cross-platform recipient picker avoids making users choose a service before a
               person.
             </p>
           </article>
-          <article class="screen-case" data-kind="core">
+          <article class="screen-case" data-kind="core" data-screen="promises">
             <div class="screen-meta"><b>05 / PROMISES</b><span>PROMISES TAB</span></div>
-            <div class="device">
+            <claire-phone>
               <div class="island"></div>
               <div class="status"><span>9:41</span><span>● ◒</span></div>
               <div class="screen">
@@ -433,22 +424,16 @@
                   </div>
                   <span class="due">MON</span>
                 </div>
-                <div class="tab-bar">
-                  <span><i data-heroicon="home"></i></span
-                  ><span><i data-heroicon="inbox"></i></span
-                  ><span class="ask-claire"><img class="claire-mark" src="/assets/brand/claire-kept-thread-flipped-paper-dot.svg" alt="" /></span
-                  ><span class="active"><i data-heroicon="promises"></i></span
-                  ><span><i data-heroicon="search"></i></span>
-                </div>
+                <claire-mobile-tabs active="promises"></claire-mobile-tabs>
               </div>
-            </div>
+            </claire-phone>
             <p class="screen-note">
               Commitments link back to their source message so they always retain human context.
             </p>
           </article>
-          <article class="screen-case" data-kind="core">
+          <article class="screen-case" data-kind="core" data-screen="contacts">
             <div class="screen-meta"><b>06 / CONTACTS</b><span>INBOX SUBVIEW</span></div>
-            <div class="device">
+            <claire-phone>
               <div class="island"></div>
               <div class="status"><span>9:41</span><span>● ◒</span></div>
               <div class="screen">
@@ -504,15 +489,9 @@
                   </div>
                   <span>›</span>
                 </div>
-                <div class="tab-bar">
-                  <span><i data-heroicon="home"></i></span
-                  ><span class="active"><i data-heroicon="inbox"></i></span
-                  ><span class="ask-claire"><img class="claire-mark" src="/assets/brand/claire-kept-thread-flipped-paper-dot.svg" alt="" /></span
-                  ><span><i data-heroicon="promises"></i></span
-                  ><span><i data-heroicon="search"></i></span>
-                </div>
+                <claire-mobile-tabs active="inbox"></claire-mobile-tabs>
               </div>
-            </div>
+            </claire-phone>
             <p class="screen-note">
               Contacts can live as an Inbox subview rather than competing for a fifth primary tab.
             </p>
@@ -529,9 +508,9 @@
           </p>
         </div>
         <div class="phone-grid">
-          <article class="screen-case" data-kind="ai">
+          <article class="screen-case" data-kind="ai" data-screen="ai-copilot">
             <div class="screen-meta"><b>07 / AI COPILOT</b><span>FORM SHEET</span></div>
-            <div class="device">
+            <claire-phone>
               <div class="island"></div>
               <div class="status" style="background: var(--claire-sky)">
                 <span>9:41</span><span>● ◒</span>
@@ -574,14 +553,14 @@
                   </div>
                 </div>
               </div>
-            </div>
+            </claire-phone>
             <p class="screen-note">
               A native form sheet keeps AI reversible and subordinate to the active chat.
             </p>
           </article>
-          <article class="screen-case" data-kind="ai">
+          <article class="screen-case" data-kind="ai" data-screen="global-search">
             <div class="screen-meta"><b>08 / GLOBAL SEARCH</b><span>SEARCH TAB</span></div>
-            <div class="device">
+            <claire-phone>
               <div class="island"></div>
               <div class="status"><span>9:41</span><span>● ◒</span></div>
               <div class="screen search-screen">
@@ -615,23 +594,17 @@
                     timing?”
                   </p>
                 </div>
-                <div class="tab-bar">
-                  <span><i data-heroicon="home"></i></span
-                  ><span><i data-heroicon="inbox"></i></span
-                  ><span class="ask-claire"><img class="claire-mark" src="/assets/brand/claire-kept-thread-flipped-paper-dot.svg" alt="" /></span
-                  ><span><i data-heroicon="promises"></i></span
-                  ><span class="active"><i data-heroicon="search"></i></span>
-                </div>
+                <claire-mobile-tabs active="search"></claire-mobile-tabs>
               </div>
-            </div>
+            </claire-phone>
             <p class="screen-note">
               Global search covers message text, people, attachments, commitments, and semantic
               questions.
             </p>
           </article>
-          <article class="screen-case" data-kind="ai">
+          <article class="screen-case" data-kind="ai" data-screen="search-results">
             <div class="screen-meta"><b>09 / SEARCH RESULTS</b><span>SEARCH STACK</span></div>
-            <div class="device">
+            <claire-phone>
               <div class="island"></div>
               <div class="status"><span>9:41</span><span>● ◒</span></div>
               <div class="screen no-tab">
@@ -683,16 +656,16 @@
                   </div>
                 </div>
               </div>
-            </div>
+            </claire-phone>
             <p class="screen-note">
               Answers are concise and cite visible source messages—never a source-less AI oracle.
             </p>
           </article>
-          <article class="screen-case" data-kind="ai">
+          <article class="screen-case" data-kind="ai" data-screen="relationship-memory">
             <div class="screen-meta">
               <b>10 / RELATIONSHIP MEMORY</b><span>CONTACT SETTINGS</span>
             </div>
-            <div class="device">
+            <claire-phone>
               <div class="island"></div>
               <div class="status"><span>9:41</span><span>● ◒</span></div>
               <div class="screen no-tab form-screen">
@@ -740,7 +713,7 @@ Maya is my product lead. Be concise and warm. Avoid over-explaining, and always 
                 </div>
                 <button class="save-bar">Save relationship memory</button>
               </div>
-            </div>
+            </claire-phone>
             <p class="screen-note">
               User-owned prompt plus relationship category; relationship changes tone, never access
               or permissions.
@@ -758,41 +731,91 @@ Maya is my product lead. Be concise and warm. Avoid over-explaining, and always 
           </p>
         </div>
         <div class="phone-grid">
-          <article class="screen-case" data-kind="setup">
+          <article class="screen-case" data-kind="setup" data-screen="welcome">
             <div class="screen-meta"><b>11 / WELCOME</b><span>ONBOARDING</span></div>
-            <div class="device welcome">
+            <claire-phone>
               <div class="island"></div>
               <div class="status"><span>9:41</span><span>● ◒</span></div>
-              <div class="screen no-tab welcome-screen">
-                <div class="welcome-hero">
-                  <img class="welcome-mark" src="/assets/brand/claire-app-icon-lime.svg" alt="" />
-                  <div class="welcome-copy">
-                    <div class="tiny-label">WELCOME TO CLAIRE</div>
-                    <h2>Every conversation.<br />One calm place.</h2>
-                    <p>
-                      Bring the people you care about together—and let Claire remember what deserves
-                      your attention.
-                    </p>
-                  </div>
+              <div
+                class="screen no-tab"
+                style="
+                  background: var(--claire-sky);
+                  padding: 45px 22px 22px;
+                  display: flex;
+                  flex-direction: column;
+                "
+              >
+                <div
+                  style="
+                    width: 48px;
+                    height: 48px;
+                    border: 1px solid var(--claire-ink);
+                    background: var(--claire-lime);
+                    border-radius: 14px;
+                    display: grid;
+                    place-items: center;
+                    font-size: 22px;
+                    font-weight: 700;
+                  "
+                >
+                  C
                 </div>
-                <div class="welcome-actions">
-                  <button class="welcome-primary">Continue with Google</button>
-                  <button class="welcome-secondary">Use email instead</button>
-                  <p class="welcome-legal">
-                    Your messages are never used to train shared AI models.
+                <div style="margin: auto 0">
+                  <div class="tiny-label">WELCOME TO CLAIRE</div>
+                  <h2
+                    style="
+                      font-size: 43px;
+                      line-height: 0.96;
+                      letter-spacing: -0.06em;
+                      margin: 12px 0 18px;
+                    "
+                  >
+                    Every conversation.<br />One calm place.
+                  </h2>
+                  <p style="font-size: 12px; max-width: 290px; color: var(--neutral-600)">
+                    Bring the people you care about together—and let Claire remember what deserves
+                    your attention.
                   </p>
                 </div>
+                <button
+                  style="
+                    border: 0;
+                    border-radius: 16px;
+                    background: var(--claire-ink);
+                    color: white;
+                    height: 50px;
+                    font-size: 11px;
+                    font-weight: 600;
+                  "
+                >
+                  Continue with Google</button
+                ><button
+                  style="
+                    border: 1px solid var(--claire-ink);
+                    border-radius: 16px;
+                    background: transparent;
+                    height: 50px;
+                    font-size: 11px;
+                    font-weight: 600;
+                    margin-top: 8px;
+                  "
+                >
+                  Use email instead
+                </button>
+                <p style="text-align: center; font-size: 7px; color: var(--neutral-600)">
+                  Your messages are never used to train shared models.
+                </p>
               </div>
-            </div>
+            </claire-phone>
             <p class="screen-note">
               Value, authentication, and privacy are communicated together before permissions.
             </p>
           </article>
-          <article class="screen-case" data-kind="setup">
+          <article class="screen-case" data-kind="setup" data-screen="connect-accounts">
             <div class="screen-meta">
               <b>12 / CONNECT ACCOUNTS</b><span>ONBOARDING + SETTINGS</span>
             </div>
-            <div class="device">
+            <claire-phone>
               <div class="island"></div>
               <div class="status"><span>9:41</span><span>● ◒</span></div>
               <div class="screen no-tab">
@@ -850,24 +873,24 @@ Maya is my product lead. Be concise and warm. Avoid over-explaining, and always 
                 </div>
                 <button class="save-bar">Continue</button>
               </div>
-            </div>
+            </claire-phone>
             <p class="screen-note">
               The same connection UI works during onboarding and later from Settings.
             </p>
           </article>
-          <article class="screen-case" data-kind="setup">
+          <article class="screen-case" data-kind="setup" data-screen="settings">
             <div class="screen-meta"><b>13 / SETTINGS</b><span>PROFILE ENTRY</span></div>
-            <div class="device">
+            <claire-phone>
               <div class="island"></div>
               <div class="status"><span>9:41</span><span>● ◒</span></div>
               <div class="screen no-tab">
                 <div class="app-title">
                   <button class="round-button">‹</button>
-                  <h3>Settings</h3>
+                  <h2>Settings</h2>
                   <span style="width: 38px"></span>
                 </div>
                 <div class="settings-profile">
-                  <div class="avatar">LM</div>
+                  <div class="avatar purple">LM</div>
                   <div>
                     <b>Luc Medina</b>
                     <p>luc@example.com · Personal plan</p>
@@ -935,15 +958,15 @@ Maya is my product lead. Be concise and warm. Avoid over-explaining, and always 
                   </div>
                 </div>
               </div>
-            </div>
+            </claire-phone>
             <p class="screen-note">
               Settings separates Claire’s behavior from app plumbing and puts privacy at the top
               level.
             </p>
           </article>
-          <article class="screen-case" data-kind="setup">
+          <article class="screen-case" data-kind="setup" data-screen="ai-and-privacy">
             <div class="screen-meta"><b>14 / AI & PRIVACY</b><span>SETTINGS STACK</span></div>
-            <div class="device">
+            <claire-phone>
               <div class="island"></div>
               <div class="status"><span>9:41</span><span>● ◒</span></div>
               <div class="screen no-tab">
@@ -1019,7 +1042,7 @@ Maya is my product lead. Be concise and warm. Avoid over-explaining, and always 
                   </div>
                 </div>
               </div>
-            </div>
+            </claire-phone>
             <p class="screen-note">
               Every AI behavior is independently reversible; destructive data actions are explicit.
             </p>

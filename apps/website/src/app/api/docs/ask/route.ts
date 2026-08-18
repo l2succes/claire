@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
-import { getDocsIndex, retrieveDocs } from '@/lib/docs-index';
+import { openai } from '@ai-sdk/openai';
+import { generateText } from 'ai';
+import { getDocs } from '@/lib/docs';
+import { getDocText } from '@/lib/docs-text';
 import {
   ASK_MODEL,
+  retrieveDocs,
   checkBudget,
   checkRateLimit,
   getCachedAnswer,
@@ -58,7 +62,7 @@ export async function POST(request: Request) {
       {
         error: 'ai_unavailable',
         fallback: 'search',
-        message: 'Ask Claire is disabled until OPENAI_API_KEY is configured. Use /api/search.',
+        message: 'Ask Claire is disabled until OPENAI_API_KEY is configured. Use the documentation search.',
       },
       { status: 503 },
     );
@@ -72,7 +76,12 @@ export async function POST(request: Request) {
     );
   }
 
-  const index = await getDocsIndex();
+  const index = getDocs().map((doc) => ({
+    title: doc.title,
+    url: doc.url,
+    description: doc.description,
+    text: getDocText(doc.slug).text,
+  }));
   const sources = retrieveDocs(question, index);
   if (sources.length === 0) {
     return Response.json({
@@ -86,41 +95,25 @@ export async function POST(request: Request) {
     .map((source, i) => `[${i + 1}] ${source.title} (${source.url})\n${source.text.slice(0, 1800)}`)
     .join('\n\n');
 
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: ASK_MODEL,
+  let answer: string;
+  try {
+    const result = await generateText({
+      model: openai(ASK_MODEL),
       temperature: 0.2,
-      max_tokens: 700,
-      messages: [
-        {
-          role: 'system',
-          content:
-            'You are Ask Claire for the Claire open-source docs. Answer only from the provided sources. Cite sources as [n]. If the sources are insufficient, say so and suggest /api/search. Do not invent APIs, hosts, or privacy guarantees.',
-        },
-        {
-          role: 'user',
-          content: `Question:\n${question}\n\nSources:\n${context}`,
-        },
-      ],
-    }),
-  });
-
-  if (!response.ok) {
-    return Response.json(
-      { error: 'provider_error', fallback: 'search', status: response.status },
-      { status: 502 },
-    );
+      maxOutputTokens: 700,
+      system:
+        'You are Ask Claire for the Claire open-source docs. Answer only from the provided sources. Cite sources as [n]. If the sources are insufficient, say so and suggest the documentation search. Do not invent APIs, hosts, or privacy guarantees.',
+      prompt: `Question:\n${question}\n\nSources:\n${context}`,
+    });
+    answer = result.text.slice(0, MAX_ANSWER_CHARS);
+  } catch {
+    return Response.json({ error: 'provider_error', fallback: 'search' }, { status: 502 });
   }
 
-  const payload = (await response.json()) as {
-    choices?: { message?: { content?: string } }[];
-  };
-  const answer = (payload.choices?.[0]?.message?.content ?? '').slice(0, MAX_ANSWER_CHARS);
+  if (!answer) {
+    return Response.json({ error: 'provider_error', fallback: 'search' }, { status: 502 });
+  }
+
   const result = {
     answer,
     sources: sources.map((source) => ({ title: source.title, url: source.url })),

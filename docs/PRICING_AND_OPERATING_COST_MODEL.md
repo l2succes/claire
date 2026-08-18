@@ -1,7 +1,7 @@
 # Claire Pricing and Operating Cost Model
 
-**Status:** Planning baseline  
-**Last updated:** August 15, 2026  
+**Status:** Planning baseline
+**Last updated:** August 15, 2026
 **Related documents:** [Payments and AI Credits](./PAYMENTS_AND_AI_CREDITS_SPEC.md), [AI Platform and Self-Hosting](./AI_PLATFORM_AND_SELF_HOSTING_SPEC.md), [Matrix Bridge Reference](./MATRIX_BRIDGE_REFERENCE.md)
 
 ## Purpose

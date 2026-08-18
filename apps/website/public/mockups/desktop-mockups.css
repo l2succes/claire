@@ -290,7 +290,10 @@ textarea {
   display: grid;
   grid-template-columns: 64px 300px minmax(390px, 1fr) 285px;
 }
-.desk-rail {
+claire-desktop-tabs {
+  width: 64px;
+  flex: 0 0 64px;
+  min-width: 64px;
   background: #171917;
   color: white;
   padding: 13px 9px;
@@ -298,8 +301,9 @@ textarea {
   flex-direction: column;
   align-items: center;
   gap: 8px;
+  overflow: hidden;
 }
-.desk-logo {
+.desktop-tabs__mark {
   width: 36px;
   height: 36px;
   border: 1px solid white;
@@ -308,9 +312,15 @@ textarea {
   border-radius: 10px;
   display: grid;
   place-items: center;
-  font-weight: 700;
   margin-bottom: 7px;
 }
+.desktop-tabs__nav {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.desktop-tabs__tab,
 .rail-icon {
   width: 40px;
   height: 40px;
@@ -320,23 +330,22 @@ textarea {
   color: #8e938a;
   font-size: 17px;
 }
+.desktop-tabs__tab.active,
 .rail-icon.active {
   background: #2c2f2a;
   color: var(--claire-lime);
 }
+.desktop-tabs__tab .hero-icon,
 .rail-icon .hero-icon {
   width: 22px;
   height: 22px;
 }
-.standard-rail {
-  min-width: 64px;
-  background: #171917;
-  color: white;
-  padding: 16px 9px;
+.desktop-tabs__networks {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  font-size: 12px;
 }
 .window-tools .hero-icon,
 .desk-search .hero-icon,
@@ -348,16 +357,16 @@ textarea {
   width: 18px;
   height: 18px;
 }
-.rail-divider {
+.desktop-tabs__divider {
   width: 26px;
   height: 1px;
   background: #3c403a;
   margin: 4px 0;
 }
-.rail-spacer {
+.desktop-tabs__spacer {
   flex: 1;
 }
-.rail-avatar {
+.desktop-tabs__avatar {
   width: 33px;
   height: 33px;
   border-radius: 50%;

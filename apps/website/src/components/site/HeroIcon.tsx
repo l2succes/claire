@@ -80,7 +80,7 @@ export function HeroIcon({
         size === 'md' && 'size-6',
         size === 'lg' && 'size-8',
         size === 'xl' && 'size-12',
-        className,
+        className
       )}
     />
   );
