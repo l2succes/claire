@@ -1,7 +1,7 @@
 {
   "title": "Claire Docs",
   "source": "canonical",
-  "website": "website/content/docs",
+  "website": "apps/website/content/docs",
   "pages": [
     "getting-started/repository-setup.md",
     "architecture/overview.md",

@@ -1,6 +1,6 @@
 import { colors, fonts, radius, space, type } from '../../../packages/design-system/src/tokens';
 import { clampDesktopPaneWidth, desktopWrapGridMetrics, destinationForDesktopCommand } from '../src/services/desktop-navigation';
-import { mergeChronologicalMessages } from '../src/services/message-sync';
+import { mergeChronologicalMessages } from '@claire/chat-core';
 
 test('desktop consumes the shared Claire design language', () => {
   expect(colors.ink).toBe('#10120F');
@@ -9,9 +9,12 @@ test('desktop consumes the shared Claire design language', () => {
   expect(colors.successSurface).toBe('#DDF5E5');
   expect(radius.card).toBe(20);
   expect(space[4]).toBe(16);
-  expect(fonts.sans).toBe('Inter');
+  // b5806a8 introduced Public Sans for body/UI and moved Inter to the display
+  // face; this assertion had not been updated since.
+  expect(fonts.sans).toBe('Public Sans');
+  expect(fonts.display).toBe('Inter');
   expect(fonts.mono).toBe('DM Mono');
-  expect(type.display.fontFamily).toBe(fonts.sans);
+  expect(type.display.fontFamily).toBe(fonts.display);
   expect(type.monoLabel.fontFamily).toBe(fonts.mono);
   expect(type.display.fontSize).toBeGreaterThan(type.screenTitle.fontSize);
 });

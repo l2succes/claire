@@ -24,7 +24,7 @@ ALLOW_IDIOM='(const|let) promises\b|promises\.push\(|promises\.length|, promises
 
 # Files removed wholesale by the detection-pipeline work. Renaming symbols in a
 # module that is about to be deleted is churn, so they are excluded until then.
-PENDING_DELETION='server/src/services/promise-detector\.ts|server/src/services/message-queue\.ts|promiseDetector'
+PENDING_DELETION='apps/server/src/services/promise-detector\.ts|apps/server/src/services/message-queue\.ts|promiseDetector'
 
 MATCHES=$(grep -rn --binary-files=without-match \
   --exclude-dir=node_modules \
@@ -36,7 +36,8 @@ MATCHES=$(grep -rn --binary-files=without-match \
   --exclude='*.lockb' \
   --exclude='yarn.lock' \
   -iE '\bpromises?\b' \
-  server/src mobile/app mobile/features mobile/components mobile/services mobile/hooks mobile/stores \
+  apps/server/src apps/client/app apps/client/features apps/client/components \
+  apps/client/services apps/client/hooks apps/client/stores apps/client/e2e \
   desktop/macos/src 2>/dev/null \
   | grep -vE "$ALLOW" \
   | grep -vE "$ALLOW_IDIOM" \

@@ -105,6 +105,43 @@ docker exec supabase-db psql -U postgres -d postgres -c "NOTIFY pgrst, 'reload s
 - `mobile/app/chat/[chatId].tsx` — Chat detail screen
 - `mobile/components/MessageCard.tsx` — Message display with platform badges
 
+## Mobile Code Conventions
+
+Keep screens thin and composable. A screen file should read as layout; anything
+else belongs in a subcomponent, a hook, or a data module.
+
+- **Extract subcomponents.** A repeated row, card, or sheet body gets its own
+  named component in the same feature folder rather than an inline block inside
+  a `.map()`. See `features/more/more-sheet.tsx` (`MoreSheetRow`).
+- **Business logic goes in hooks or stores**, never inline in a screen. State
+  that outlives one screen belongs in a zustand store under `hooks/` or
+  `stores/` (`hooks/useMoreSheet.ts`); data fetching belongs in a query hook
+  (`hooks/useInboxMessages.ts`).
+- **Feature folders.** Screen-level UI lives in `features/<feature>/`, with
+  static config split out (`features/more/more-destinations.ts`) so the view
+  imports data rather than declaring it.
+- **Reusable shells live in `components/mobile/`.** Shared chrome — sheets,
+  chips, headers, buttons — goes here so features do not re-implement it
+  (`components/mobile/bottom-sheet.tsx`).
+- **Route files stay trivial.** Files under `app/` should wire params and render
+  a feature component; keep the implementation in `features/`.
+- **Replacing a screen? Keep the old one.** Move it to
+  `features/<feature>/legacy-*.tsx` and leave a comment naming the one edit that
+  reverts the change, until the replacement has shipped.
+
+### Mobile gotchas
+
+- **`Pressable`'s `({ pressed }) => style` callback does not apply.** NativeWind's
+  `react-native-css-interop` wraps `Pressable` and drops the callback result, so
+  the element renders with no style at all (a row loses `flexDirection` and
+  collapses into a column). Use a static style object and track pressed state
+  with `onPressIn`/`onPressOut`.
+- **Content-sized bubbles collapse `flex: 1` children to zero width**, which
+  wraps text one character per line. Give such rows an explicit width.
+- **The floating tab bar is absolutely positioned** (58pt above the safe-area
+  inset). Anything anchored to the bottom must reserve that space — see
+  `bottomSheetInset()` in `components/mobile/bottom-sheet.tsx`.
+
 ## Known Conventions
 
 - Messages upsert on `onConflict: 'whatsapp_id'` (the platform message ID)
