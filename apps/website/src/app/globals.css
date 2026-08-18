@@ -1,8 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 @import 'tailwindcss';
 @import '@claire/tokens/css/tokens.css';
-@import 'fumadocs-ui/css/neutral.css';
-@import 'fumadocs-ui/css/preset.css';
 
 @source '../../content/docs/**/*.{md,mdx}';
 @source '../**/*.{ts,tsx}';

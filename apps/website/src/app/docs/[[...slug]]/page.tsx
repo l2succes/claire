@@ -1,79 +1,69 @@
 // SPDX-License-Identifier: Apache-2.0
-import {
-  DocsBody,
-  DocsDescription,
-  DocsPage,
-  DocsTitle,
-  MarkdownCopyButton,
-  ViewOptionsPopover,
-} from 'fumadocs-ui/layouts/docs/page';
-import { createRelativeLink } from 'fumadocs-ui/mdx';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { AskClaire } from '@/components/docs/ask-claire';
-import { DocsHome } from '@/components/docs/DocsHome';
-import { getMDXComponents } from '@/components/mdx';
-import { source } from '@/lib/source';
+import { DocsHome } from '@/components/docs/docs-home';
+import { DocsFooter } from '@/components/docs/shell/DocsFooter';
+import { DocsPageHeader } from '@/components/docs/shell/DocsPageHeader';
+import { DocsToc } from '@/components/docs/shell/DocsToc';
+import { getDoc, getDocs } from '@/lib/docs';
+import { getDocText } from '@/lib/docs-text';
 
 export default async function Page(props: { params: Promise<{ slug?: string[] }> }) {
-  const params = await props.params;
-  const page = source.getPage(params.slug);
-  if (!page) notFound();
+  const { slug } = await props.params;
+  if (!slug?.length) return <DocsHome />;
 
-  if (!params.slug?.length) {
-    return (
-      <DocsPage
-        full
-        toc={[]}
-        breadcrumb={{ enabled: false }}
-        footer={{ enabled: false }}
-        tableOfContent={{ enabled: false }}
-        tableOfContentPopover={{ enabled: false }}
-      >
-        <DocsHome />
-      </DocsPage>
-    );
-  }
+  const doc = getDoc(slug);
+  if (!doc) notFound();
 
-  const MDX = page.data.body;
-  const markdownUrl = `${page.url}.md`;
-  const githubPath = page.path.replace(/^\/?/, '');
-  const githubUrl = `https://github.com/l2succes/claire/blob/main/docs/${githubPath}`;
+  const { headings, markdown } = getDocText(doc.slug);
+  const { Component } = doc;
 
   return (
-    <DocsPage toc={page.data.toc} full={page.data.full} className="docs-article">
-      <p className="docs-article-kicker">Claire developer docs</p>
-      <DocsTitle>{page.data.title}</DocsTitle>
-      <DocsDescription>{page.data.description}</DocsDescription>
-      <AskClaire />
-      <div className="mb-6 flex flex-wrap items-center gap-2">
-        <MarkdownCopyButton markdownUrl={markdownUrl} />
-        <ViewOptionsPopover markdownUrl={markdownUrl} githubUrl={githubUrl} />
-      </div>
-      <DocsBody>
-        <MDX
-          components={getMDXComponents({
-            a: createRelativeLink(source, page),
-          })}
-        />
-      </DocsBody>
-    </DocsPage>
+    <div className="docs-article">
+      <article className="docs-article__content">
+        <DocsPageHeader doc={doc} markdown={markdown} />
+        <Component />
+        <DocsFooter doc={doc} />
+      </article>
+      <DocsToc headings={headings} />
+    </div>
   );
 }
 
 export function generateStaticParams() {
-  return source.generateParams();
+  return [{ slug: [] as string[] }, ...getDocs().map((doc) => ({ slug: doc.slug.split('/') }))];
 }
 
 export async function generateMetadata(props: {
   params: Promise<{ slug?: string[] }>;
 }): Promise<Metadata> {
-  const params = await props.params;
-  const page = source.getPage(params.slug);
-  if (!page) notFound();
+  const { slug } = await props.params;
+  const image = { url: `/docs-og/${(slug ?? []).join('/')}`, width: 1200, height: 630 };
+
+  if (!slug?.length) {
+    const title = 'Documentation';
+    const description =
+      'Architecture, product decisions, operational references, and implementation plans for Claire — published as we build.';
+    return {
+      title,
+      description,
+      openGraph: { title, description, images: [image] },
+      twitter: { card: 'summary_large_image', title, description, images: [image] },
+    };
+  }
+
+  const doc = getDoc(slug);
+  if (!doc) notFound();
 
   return {
-    title: page.data.title,
-    description: page.data.description,
+    title: doc.title,
+    description: doc.description,
+    openGraph: { title: doc.title, description: doc.description, type: 'article', images: [image] },
+    twitter: {
+      card: 'summary_large_image',
+      title: doc.title,
+      description: doc.description,
+      images: [image],
+    },
   };
 }

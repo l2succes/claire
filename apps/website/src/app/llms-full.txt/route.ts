@@ -1,12 +1,16 @@
 // SPDX-License-Identifier: Apache-2.0
-import { getLLMText } from '@/lib/get-llm-text';
-import { source } from '@/lib/source';
+import { getDocs } from '@/lib/docs';
+import { getDocText } from '@/lib/docs-text';
 
 export const revalidate = false;
 
-export async function GET() {
-  const scanned = await Promise.all(source.getPages().map(getLLMText));
-  return new Response(scanned.join('\n\n'), {
+/** Every document concatenated, for tools that want the whole corpus at once. */
+export function GET() {
+  const body = getDocs()
+    .map((doc) => `<!-- source: ${doc.url} -->\n\n${getDocText(doc.slug).markdown}`)
+    .join('\n\n---\n\n');
+
+  return new Response(body, {
     headers: { 'Content-Type': 'text/plain; charset=utf-8' },
   });
 }

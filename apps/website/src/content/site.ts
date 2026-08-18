@@ -8,6 +8,11 @@ export const primaryNavigation = [
 
 export const moreLinks = [
   { href: '/business', title: 'Business', body: 'A shared inbox for customer teams.' },
+  {
+    href: '/campaigns/close-the-loop',
+    title: 'Campaign',
+    body: 'Watch the Close your loops creative concept.',
+  },
   { href: '/docs', title: 'Docs', body: 'Set up the repo and run Claire yourself.' },
   { href: '/#open-source', title: 'Open source', body: 'Licenses, GitHub, and self-hosting.' },
   { href: '/faq', title: 'FAQ', body: 'Product, hosting, and contributor questions.' },
@@ -30,6 +35,7 @@ export const footerLinks = [
   { href: '/faq', label: 'FAQ' },
   { href: '/mockups/mobile', label: 'Mobile' },
   { href: '/mockups/desktop', label: 'Desktop' },
+  { href: '/campaigns/close-the-loop', label: 'Campaign' },
   { href: '/legal/privacy', label: 'Privacy' },
   { href: '/legal/terms', label: 'Terms' },
 ] as const;
