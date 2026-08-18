@@ -85,6 +85,16 @@ bun run secrets:provision:api-staging
 
 This creates `Railway / Staging`, reads only the staging Supabase item, and deploys the API with `MOCK_BRIDGE=true`. It is the safe path for fixture testing. Run it with `--rotate` only to replace the isolated API key set. Real tester platform connections require a separately provisioned staging Matrix/Synapse and bridge topology; never add live production sessions to this item.
 
+### EAS Preview
+
+Once the staging Supabase item is unique and current, update the client-readable preview anon key without printing it or placing it in a command argument:
+
+```sh
+bun run secrets:sync:eas-staging
+```
+
+The script creates a mode-`0600` temporary environment file, pushes only `EXPO_PUBLIC_SUPABASE_ANON_KEY` to EAS Preview, and removes the file even if the EAS command fails.
+
 ## Local commands
 
 Use 1Password references in ignored local files and execute commands with
