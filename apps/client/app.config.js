@@ -30,6 +30,10 @@ module.exports = ({ config }) => {
     ios: {
       ...config.ios,
       bundleIdentifier: identifier(),
+      infoPlist: {
+        ...config.ios?.infoPlist,
+        ITSAppUsesNonExemptEncryption: false,
+      },
     },
     android: {
       ...config.android,
