@@ -11,7 +11,7 @@ dockerfilePath = "Dockerfile"
 numReplicas = 1
 
 # Health check configuration
-healthcheckPath = "/health"
+healthcheckPath = "/healthz"
 healthcheckTimeout = 30
 
 # Restart policy

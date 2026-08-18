@@ -11,14 +11,14 @@ dotenv.config(); // fallback to CWD .env
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.string().default('3000').transform(Number),
-  
+
   // Supabase
   SUPABASE_URL: z.string().url(),
   SUPABASE_ANON_KEY: z.string(),
   SUPABASE_SERVICE_KEY: z.string(),
   DATABASE_URL: z.string().url(),
   DIRECT_DATABASE_URL: z.string().url().optional(),
-  
+
   // OpenAI
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_MODEL: z.string().default('gpt-4-turbo-preview'),
@@ -36,22 +36,23 @@ const envSchema = z.object({
   KIMI_API_KEY: z.string().optional(),
   KIMI_BASE_URL: z.string().url().default('https://api.moonshot.cn/v1'),
   KIMI_MODEL: z.string().default('moonshot-v1-32k'),
-  
+
   // Redis — Railway provides REDIS_URL; local dev uses REDIS_HOST/PORT
   REDIS_URL: z.string().optional(),
   REDIS_HOST: z.string().default('localhost'),
   REDIS_PORT: z.string().default('6379').transform(Number),
   REDIS_PASSWORD: z.string().optional(),
-  
+
   // WhatsApp
   WHATSAPP_SESSION_PATH: z.string().default('./session'),
   PUPPETEER_HEADLESS: z.string().default('false').transform((val) => val === 'true'),
-  
+
   // Security
   JWT_SECRET: z.string(),
   ENCRYPTION_KEY: z.string(),
   CORS_ORIGINS: z.string().optional(),
-  
+  HEALTHCHECK_TOKEN: z.string().min(32).optional(),
+
   // Monitoring
   SENTRY_DSN: z.string().url().optional(),
 
@@ -138,8 +139,11 @@ export const whatsappConfig = {
 
 export const serverConfig = {
   corsOrigins: config.CORS_ORIGINS
-    ? config.CORS_ORIGINS.split(',').map((origin) => origin.trim()).filter(Boolean)
-    : ['https://claire.app'],
+    ? config.CORS_ORIGINS.split(',')
+        .map((origin) => origin.trim())
+        .filter(Boolean)
+    : ['https://useclaire.co', 'https://www.useclaire.co', 'https://staging.useclaire.co'],
+  healthcheckToken: config.HEALTHCHECK_TOKEN,
 };
 
 export const openaiConfig = {

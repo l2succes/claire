@@ -1,5 +1,6 @@
 import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
+import Constants from 'expo-constants';
 import { supabase } from './supabase';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -7,14 +8,17 @@ WebBrowser.maybeCompleteAuthSession();
 /**
  * The redirect has to be derived by the host that initiated sign-in.
  *
- * On iOS and Android this is `claire://confirm`; on web and Electron it is
- * the current HTTPS/custom-scheme origin plus `/confirm`. Keeping this in one
- * place prevents email confirmation and Google OAuth from disagreeing about
- * their destination.
+ * On iOS and Android this is the generated app scheme plus `://confirm`; on
+ * web and Electron it is the current HTTPS/custom-scheme origin plus
+ * `/confirm`. Keeping this in one place prevents email confirmation and Google
+ * OAuth from disagreeing about their destination, and lets the staging app use
+ * its own `claire-staging://confirm` callback.
  */
 export function getAuthRedirectUri() {
+  const scheme = Constants.expoConfig?.scheme;
+
   return AuthSession.makeRedirectUri({
-    scheme: 'claire',
+    scheme: typeof scheme === 'string' ? scheme : 'claire',
     path: 'confirm',
   });
 }
