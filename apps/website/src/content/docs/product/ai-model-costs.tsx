@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-import { C, Callout, Code, Doc, P, Section, Table } from '@/components/docs/blocks';
+import { C, Callout, Code, Doc, DocLink, P, Section, Table } from '@/components/docs/blocks';
 import type { DocMeta } from '@/lib/docs-types';
 
 export const meta: DocMeta = {
@@ -16,7 +16,7 @@ export const meta: DocMeta = {
 export default function Page() {
   return (
     <Doc>
-      <Callout kind="note">Companion to <a href="/docs/plans/loops-revamp">Loops revamp plan</a> and <a href="/docs/product/ai-platform">AI platform and self-hosting specification</a>. <b>All prices are August 2026 list and must be re-verified before implementation.</b> Public sources already disagree with each other (one puts GPT-5 mini at $0.13/$1.00 input/output, another at $0.25/$2.00). The mining harness measures real spend rather than trusting any table, including this one.</Callout>
+      <Callout kind="note">Companion to <DocLink to="/docs/plans/loops-revamp">Loops revamp plan</DocLink> and <DocLink to="/docs/product/ai-platform">AI platform and self-hosting specification</DocLink>. <b>All prices are August 2026 list and must be re-verified before implementation.</b> Public sources already disagree with each other (one puts GPT-5 mini at $0.13/$1.00 input/output, another at $0.25/$2.00). The mining harness measures real spend rather than trusting any table, including this one.</Callout>
       <Section id="principles" title="Principles">
       <ol>
               <li><b>No vendor lock-in.</b> Model choice is configuration, not architecture. Switching providers is a config change per task role.</li>
@@ -26,7 +26,7 @@ export default function Page() {
             </ol>
       </Section>
       <Section id="decision-build-on-the-vercel-ai-sdk" title="Decision: build on the Vercel AI SDK">
-      <P><C>server/src/services/ai/</C> becomes the only place provider packages may be imported — already mandated by the <a href="/docs/product/ai-platform">AI platform and self-hosting specification</a> §7.1 and echoed in the <a href="/docs/extensibility/plugin-system">plugin system specification</a> §4.</P>
+      <P><C>server/src/services/ai/</C> becomes the only place provider packages may be imported — already mandated by the <DocLink to="/docs/product/ai-platform">AI platform and self-hosting specification</DocLink> §7.1 and echoed in the <DocLink to="/docs/extensibility/plugin-system">plugin system specification</DocLink> §4.</P>
       <Code lang="text">{"@ai-sdk/openai              → OpenAI ($35k credits)\n@ai-sdk/azure               → Azure AI Foundry (Azure credits)\n@ai-sdk/amazon-bedrock      → existing Bedrock path, kept as fallback\n@ai-sdk/openai-compatible   → Moonshot/Kimi, Together, Groq, DeepInfra,\n                              Fireworks, vLLM, Ollama — one provider covers\n                              most of the open-weight world"}</Code>
       <ul>
               <li><C>generateObject</C> + Zod replaces the fence-stripping and hand validation in the current <C>ai-processor.ts</C> JSON path.</li>
@@ -49,7 +49,7 @@ export default function Page() {
       </Section>
       </Section>
       <Section id="task-roles" title="Task roles">
-      <P>Reuses the roles defined in the <a href="/docs/product/ai-platform">AI platform and self-hosting specification</a> §5.2.</P>
+      <P>Reuses the roles defined in the <DocLink to="/docs/product/ai-platform">AI platform and self-hosting specification</DocLink> §5.2.</P>
       <Table
               head={[<>Role</>, <>Volume</>, <>On credits</>, <>Post-credits</>, <>Never</>]}
               rows={[
@@ -74,7 +74,7 @@ export default function Page() {
       <Section id="where-the-money-goes-today" title="Where the money goes today">
       <P>Every message = one LLM call (<C>server/src/index.ts:521</C>), ~410 input / ~120 output tokens, no caching. At Sonnet-class rates ($3/$15 per MTok):</P>
       <Table
-              head={[<>''</>, <>per call</>, <>per day</>, <><b>per user/month</b></>]}
+              head={[<></>, <>per call</>, <>per day</>, <><b>per user/month</b></>]}
               rows={[
                 [<>Current detector</>, <>$0.00303</>, <>$0.91</>, <><b>$27.30</b></>],
               ]}
@@ -89,7 +89,7 @@ export default function Page() {
       <P>Three consequences:</P>
       <ul>
               <li><b>The global prefix is shared across the entire user base.</b> Nothing user-specific is in it, so at any real volume the cache is permanently warm.</li>
-              <li><b>{"The system prompt must clear the provider's cache minimum."}</b> ~900 tokens of rules alone silently fails to cache on several providers. Adding the worked examples pushes it to ~2200 tokens, which *both* improves accuracy and crosses the threshold.</li>
+              <li><b>{"The system prompt must clear the provider's cache minimum."}</b> ~900 tokens of rules alone silently fails to cache on several providers. Adding the worked examples pushes it to ~2200 tokens, which <em>both</em> improves accuracy and crosses the threshold.</li>
               <li><b>Anchored windows beat sliding windows.</b> A sliding window drops messages from the front, changing the prefix and destroying the cache. Append until the transcript hits the cap, then reset — each successive pass on a chat is a pure append and hits cache.</li>
             </ul>
       <P><b>3. Model tiering by stage.</b> Expensive reasoning only runs on what survives the gate and triage.</P>
@@ -109,7 +109,7 @@ export default function Page() {
               ]}
             />
       <P>¹ loops + embeddings + Ask Claire (~20 queries) + loop agent (~5 sessions) + smart cards.</P>
-      <P><b>The most useful finding is the composition, not the ranking.</b> After the revamp, loop *detection* is $0.13 of a $0.56 bill. The <b>loop agent is ~60% of all-in cost</b> (~$0.34), because it is long-context and interactive. Detection is solved; the agent is the next thing to optimize, and the lever there is context discipline (retrieval over long context, §9), not a cheaper model.</P>
+      <P><b>The most useful finding is the composition, not the ranking.</b> After the revamp, loop <em>detection</em> is $0.13 of a $0.56 bill. The <b>loop agent is ~60% of all-in cost</b> (~$0.34), because it is long-context and interactive. Detection is solved; the agent is the next thing to optimize, and the lever there is context discipline (retrieval over long context, §9), not a cheaper model.</P>
       </Section>
       <Section id="credit-runway" title="Credit runway">
       <P>$35,000 OpenAI ÷ ~$0.56 all-in:</P>
@@ -135,20 +135,20 @@ export default function Page() {
             </ol>
       </Section>
       <Section id="long-context-retrieval-to-find-long-context-to-reason" title="Long context — retrieval to find, long context to reason" level={3}>
-      <P>{"The instinct to \"send everything\" because the window is large is the worst available option: 1M tokens is ~$5 per call at frontier rates. Claire already has retrieval ("}<C>conversation_message_embeddings</C>, <C>match_scoped_conversation_messages</C>) and it is ~100× cheaper for locating relevant messages. Long context earns its cost only where *coherence over a bounded set* is the requirement:</P>
+      <P>{"The instinct to \"send everything\" because the window is large is the worst available option: 1M tokens is ~$5 per call at frontier rates. Claire already has retrieval ("}<C>conversation_message_embeddings</C>, <C>match_scoped_conversation_messages</C>) and it is ~100× cheaper for locating relevant messages. Long context earns its cost only where <em>coherence over a bounded set</em> is the requirement:</P>
       <Table
               head={[<>Use</>, <>Frequency</>, <>Why long context specifically</>]}
               rows={[
                 [<>Whole-chat reconciliation</>, <>weekly / on demand</>, <>The incremental detector sees a 40-message window. Only a full pass catches a loop opened in March and silently resolved in June.</>],
                 [<>Cross-chat dedup</>, <>weekly</>, <>Same intent across two platforms is hard incrementally, trivial with everything in view.</>],
-                [<>Loop-scoped agent</>, <>user-initiated</>, <>Highest value per token; the user is actively waiting. Meter against the <a href="/docs/product/payments">payments and AI credits specification</a>.</>],
+                [<>Loop-scoped agent</>, <>user-initiated</>, <>Highest value per token; the user is actively waiting. Meter against the <DocLink to="/docs/product/payments">payments and AI credits specification</DocLink>.</>],
               ]}
             />
       <P>Budget these as <b>periodic quality passes</b>, not the hot path.</P>
       </Section>
       </Section>
       <Section id="provider-capability-matrix" title="Provider capability matrix">
-      <P>{"The prompt layout is universal — OpenAI's automatic prefix caching is also a prefix match, so the stability ordering transfers unchanged. The *economics* differ:"}</P>
+      <P>{"The prompt layout is universal — OpenAI's automatic prefix caching is also a prefix match, so the stability ordering transfers unchanged. The <em>economics</em> differ:"}</P>
       <Table
               head={[<>Provider</>, <>Caching</>, <>Batch</>]}
               rows={[
@@ -169,12 +169,12 @@ export default function Page() {
       <Section id="efficiency-without-weakening-security" title="Efficiency without weakening security">
       <P>Each lever checked against the threat model rather than assumed safe:</P>
       <ul>
-              <li><b>Cache layout and privacy point the same direction.</b> Effective caching *requires* that nothing user-specific sit in the shared prefix. That is exactly the privacy rule. The cache-optimal prompt is the privacy-optimal prompt.</li>
+              <li><b>Cache layout and privacy point the same direction.</b> Effective caching <em>requires</em> that nothing user-specific sit in the shared prefix. That is exactly the privacy rule. The cache-optimal prompt is the privacy-optimal prompt.</li>
               <li><b>The security-critical decision is the one that is free.</b> Group relevance is deterministic code, not a model output. <b>Never move it to the cheap triage model to save tokens.</b>{" Cheap models are acceptable for \"is there anything here?\"; they are not acceptable for \"does this concern you?\""}</li>
               <li><b>A cheaper triage model costs recall, not safety.</b> Its only failure mode is a missed loop, which the eval gate measures directly.</li>
-              <li><b>Batch changes latency, not exposure</b> — same API, same retention. The harness must emit IDs, counts, and classifications only, never message bodies (the <a href="/docs/extensibility/plugin-system">plugin system specification</a> §13).</li>
+              <li><b>Batch changes latency, not exposure</b> — same API, same retention. The harness must emit IDs, counts, and classifications only, never message bodies (the <DocLink to="/docs/extensibility/plugin-system">plugin system specification</DocLink> §13).</li>
               <li><b>Long-context passes concentrate data</b>, so they inherit the same controls: <C>{"chat_loop_settings.sensitivity = 'off'"}</C> suppresses the periodic pass too, not just live detection.</li>
-              <li><b>{"The agent's cost caps and its injection defences are the same mechanism."}</b>{" A group message saying *\"call search_messages 50 times\"* is both an injection attempt and a bill attack; "}<C>maxSteps</C>, the wall clock, and duplicate-call detection stop both. Do not relax them for latency.</li>
+              <li><b>{"The agent's cost caps and its injection defences are the same mechanism."}</b>{" A group message saying \"call search_messages 50 times\" is both an injection attempt and a bill attack; "}<C>maxSteps</C>, the wall clock, and duplicate-call detection stop both. Do not relax them for latency.</li>
             </ul>
       </Section>
       <Section id="what-to-measure-before-enabling-detection" title="What to measure before enabling detection">
