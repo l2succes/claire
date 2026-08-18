@@ -47,7 +47,7 @@ export default function Page() {
       </Section>
       <Section id="final-structure" title="Final structure">
       <Code lang="text">{"mobile/ desktop/ website/ server/ packages/ examples/ docker/ supabase/ docs/ scripts/ vendor/"}</Code>
-      <P>The desktop application remains under <C>desktop/macos/</C>. Move the mautrix docs submodule from <C>docs/mautrix</C> to <C>vendor/mautrix-docs</C>.</P>
+      <P>The desktop application lives under <C>apps/desktop/</C>. Move the mautrix docs submodule from <C>docs/mautrix</C> to <C>vendor/mautrix-docs</C>.</P>
       </Section>
       <Section id="contributor-experience-to-deliver" title="Contributor experience to deliver">
       <P>The developer docs must explain how to:</P>

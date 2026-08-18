@@ -18,7 +18,7 @@ export default function Page() {
       <P>Prepare Claire for an open-source launch through focused, reviewable migrations rather than one oversized change.</P>
       <P>Final top-level product structure:</P>
       <Code lang="text">{"claire/\n├── mobile/                  # Expo iOS, Android, and mobile web client\n├── desktop/                 # Desktop applications and native companion code\n│   └── macos/\n├── website/                 # Next.js marketing site, docs, mockups, Storybook\n├── server/                  # Bun API and messaging services\n├── packages/\n│   ├── design-system/       # Shared tokens, contracts, and platform-neutral assets\n│   ├── platform-catalog/    # Canonical connector metadata\n│   ├── plugin-sdk/          # Plugin types, runtime helpers, and test utilities\n│   └── shared-types/        # Shared API and domain contracts\n├── examples/\n│   └── plugins/             # Working example plugins\n├── docker/                  # Local infrastructure\n├── supabase/                # Database config and migrations\n├── docs/                    # Canonical Markdown/MDX documentation\n├── scripts/                 # Repository-wide development and release tooling\n└── vendor/\n    └── mautrix-docs/        # Optional upstream documentation submodule"}</Code>
-      <P><C>client/</C> becomes <C>mobile/</C>. <C>desktop/</C> remains the desktop boundary, preserving <C>desktop/macos/</C> for future desktop platforms. <C>landing/</C> is removed only after every useful design, mockup, asset, and interaction has been ported into <C>website/</C>.</P>
+      <P><C>client/</C> becomes <C>mobile/</C>. The supported desktop application lives in <C>apps/desktop/</C>. <C>landing/</C> is removed only after every useful design, mockup, asset, and interaction has been ported into <C>website/</C>.</P>
       </Section>
       <Section id="secure-and-license-the-repository" title="Secure and license the repository">
       <Section id="immediate-containment" title="Immediate containment" level={3}>
@@ -61,7 +61,7 @@ export default function Page() {
             </ul>
       <P>Expected commands:</P>
       <Code lang="bash">{"bun run dev\nbun run dev:server\nbun run dev:mobile\nbun run dev:desktop\nbun run dev:website\nbun run dev:plugin\nbun run test\nbun run lint\nbun run typecheck\nbun run check"}</Code>
-      <P>Add explicit Bun workspaces for <C>mobile</C>, <C>desktop/macos</C>, <C>website</C>, <C>server</C>, <C>packages/*</C>, and <C>examples/*</C>. Keep native CocoaPods/Bundler lockfiles. Consolidate JavaScript dependency management only after clean-install parity is proven.</P>
+      <P>Add explicit Bun workspaces for <C>apps/*</C>, <C>packages/*</C>, and <C>examples/*</C>. Consolidate JavaScript dependency management only after clean-install parity is proven.</P>
       <P>Move the mautrix documentation submodule from <C>docs/mautrix</C> to <C>vendor/mautrix-docs</C>; make it optional for normal contributors and required only for bridge work.</P>
       <P>Move connector definitions into <C>packages/platform-catalog</C>, consumed by server, website, mobile, and desktop. Add <C>packages/shared-types</C> only for genuine cross-runtime contracts.</P>
       </Section>
@@ -206,7 +206,7 @@ export default function Page() {
       <Section id="assumptions" title="Assumptions">
       <ul>
               <li>Top-level names are <C>mobile</C>, <C>desktop</C>, <C>website</C>, and <C>server</C>; no <C>apps/</C> wrapper is introduced.</li>
-              <li><C>desktop/macos/</C> remains nested for future desktop platforms.</li>
+              <li>The desktop application is <C>apps/desktop/</C>.</li>
               <li><C>landing/</C> is authoritative until fully ported.</li>
               <li>Root <C>docs/</C> is the canonical Markdown source consumed by Fumadocs.</li>
               <li>Old plans are consolidated or deleted after their durable decisions are preserved.</li>

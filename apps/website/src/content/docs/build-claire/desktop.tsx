@@ -4,7 +4,7 @@ import type { DocMeta } from '@/lib/docs-types';
 
 export const meta: DocMeta = {
   title: 'Desktop development',
-  description: 'Work on the macOS desktop app and the native companion.',
+  description: 'Work on the Electron desktop app.',
   section: 'build-claire',
   status: 'current',
   lastReviewed: '2026-08-15',
@@ -17,8 +17,8 @@ export default function Page() {
   return (
     <Doc>
       <P lede>
-        Desktop code stays under <C>desktop/macos/</C> so future platforms can be added beside it rather
-        than inside it.
+        Desktop code lives in <C>apps/desktop/</C>. It hosts the shared Expo web client in Electron for
+        macOS, Windows, and Linux.
       </P>
 
       <Section id="running" title="Running the app">

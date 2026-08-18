@@ -36,7 +36,7 @@ export default function Page() {
       >
         {`flowchart LR
   Mobile["mobile/"] --> Server["server/"]
-  Desktop["desktop/macos/"] --> Server
+  Desktop["apps/desktop/"] --> Server
   Server --> Supabase["Supabase / Postgres"]
   Server --> Redis["Redis"]
   Server --> Synapse["Synapse"]
@@ -48,7 +48,7 @@ export default function Page() {
       <Section id="pieces" title="The moving pieces">
         <Facts
           items={[
-            { label: 'Clients', value: 'React Native (Expo) on iOS and Android, React Native macOS on desktop' },
+            { label: 'Clients', value: 'React Native (Expo) on iOS and Android, with the shared web client hosted in Electron on desktop' },
             { label: 'API', value: 'Bun + Express on port 3001' },
             { label: 'Storage', value: 'Postgres via Supabase, with Redis for sessions and queues' },
             { label: 'Bridging', value: 'Synapse (Matrix homeserver) with one mautrix bridge per network' },
