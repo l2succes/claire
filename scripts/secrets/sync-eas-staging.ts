@@ -2,8 +2,9 @@ import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { OP_ACCOUNT_ID } from './op-account';
+
 const vault = 'Claire — Staging';
-const onePasswordAccount = 'J6NIRZ4PIJHXRF4SKPUJWROWAU';
 const title = 'Supabase / Staging';
 
 async function run(command: string[], options: { cwd?: string } = {}) {
@@ -16,7 +17,7 @@ async function run(command: string[], options: { cwd?: string } = {}) {
 
 async function main() {
   try {
-    await run(['op', 'signin', '--account', onePasswordAccount]);
+    await run(['op', 'signin', '--account', OP_ACCOUNT_ID]);
     await run(['op', 'whoami']);
   } catch {
     throw new Error(

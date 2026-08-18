@@ -3,7 +3,8 @@ import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const onePasswordAccount = 'J6NIRZ4PIJHXRF4SKPUJWROWAU';
+import { OP_ACCOUNT_ID } from './op-account';
+
 const requestedEnvironment = process.argv
   .find((argument) => argument.startsWith('--environment='))
   ?.split('=', 2)[1]
@@ -210,7 +211,7 @@ async function inventoryEnvironment(environment: (typeof environments)[number]) 
 
 async function main() {
   try {
-    await run(['op', 'signin', '--account', onePasswordAccount]);
+    await run(['op', 'signin', '--account', OP_ACCOUNT_ID]);
     await run(['op', 'whoami']);
   } catch {
     throw new Error(
