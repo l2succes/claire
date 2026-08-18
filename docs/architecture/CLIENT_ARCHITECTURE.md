@@ -4,10 +4,8 @@ How one codebase serves iOS, Android, the browser, and the desktop.
 
 ## The core idea
 
-Claire used to have two client implementations of the same product: the Expo app, and
-`desktop/macos/src/DesktopApp.tsx` — 1801 lines containing a complete second version of the
-inbox, promises, people, assistant, and settings screens. They drifted, because nothing stopped
-them.
+Claire previously had two client implementations of the same product: the Expo app and a separate
+React Native macOS app. They drifted because nothing stopped them.
 
 There is now one implementation. What varies between clients is not the product, it is:
 
@@ -71,7 +69,6 @@ claire/
 │   ├── platform-catalog/
 │   └── plugin-sdk/
 │
-├── desktop/macos/                # FROZEN. React Native macOS host, being retired.
 └── docs/  docker/  infra/  scripts/
 ```
 
@@ -178,8 +175,7 @@ bare "Element type is invalid" error. Matches `apps/client/services/mobile-cache
 ## Electron
 
 **Main is the new native module.** Credentials, and eventually iMessage bytes, live there and
-never reach the renderer — exactly as they never reached the React Native layer in
-`desktop/macos`. The renderer runs `contextIsolation: true`, `nodeIntegration: false`,
+never reach the renderer. The renderer runs `contextIsolation: true`, `nodeIntegration: false`,
 `sandbox: true`, and its whole privileged surface is `window.claireDesktop`.
 
 Two consequences worth knowing:

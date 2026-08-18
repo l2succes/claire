@@ -47,14 +47,20 @@ export const radius = { control: 12, card: 20, panel: 28, pill: 999 } as const;
 // These family names intentionally match the bundled font assets in
 // apps/client/assets/fonts. Native loads them through the expo-font plugin;
 // web declares matching @font-face rules in apps/client/app/+html.tsx.
-export const fonts = { sans: 'Public Sans', display: 'Inter', mono: 'DM Mono' } as const;
+// Claire’s interface is deliberately one-family at every scale. Public Sans
+// carries both body copy and large desktop titles; DM Mono remains reserved
+// for compact metadata and overlines.
+export const fonts = { sans: 'Public Sans', display: 'Public Sans', mono: 'DM Mono' } as const;
 
 /**
  * Breakpoints. `compact` is a phone, `expanded` is where the desktop shell
  * takes over — one number, referenced by both the Tamagui media config and
  * any layout that needs to branch imperatively.
  */
-export const breakpoints = { compact: 768, expanded: 1180 } as const;
+// Desktop starts at the Electron window minimum.  `wide` and `full` are
+// deliberately separate from the phone/tablet density breakpoints: they
+// describe when the desktop workspace can reveal its optional panes.
+export const breakpoints = { compact: 768, expanded: 900, wide: 1200, full: 1320 } as const;
 
 /**
  * Type scale at desktop density.

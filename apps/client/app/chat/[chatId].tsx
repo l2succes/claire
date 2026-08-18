@@ -21,6 +21,9 @@ import { Platform } from '../../types/platform';
 import { PlatformName } from '../../components/PlatformIcon';
 import { setActiveNotificationChat, syncNotificationBadge, updateNotificationPresence } from '../../services/notifications';
 import { colors, mobileType, radius, space } from '@claire/design-system';
+import { useIsDesktopLayout } from '@claire/design-system';
+import { host } from '@claire/host';
+import { DesktopInboxWorkspace } from '../../features/desktop/desktop-inbox-workspace';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { MobileAvatar, MobileIconButton } from '../../components/mobile/claire-mobile';
 import { cacheTimeline, cachedTimeline, usesNativeMobileCache } from '../../services/mobile-cache';
@@ -59,7 +62,7 @@ function InjectedBubble({
       { scale: 0.82 + 0.18 * progress.value },
     ],
   }));
-  return <Animated.View testID={testID} style={[style, motion]}>{children}</Animated.View>;
+  return <Animated.View testID={testID} style={[style, { alignItems: 'flex-start' }, motion]}>{children}</Animated.View>;
 }
 
 // An installed development client can lag behind the JavaScript bundle after a
@@ -100,7 +103,7 @@ function MessageHint({ label, testID, divider = true }: { label: string; testID?
     >
       <Text
         maxFontSizeMultiplier={1.2}
-        style={{ ...mobileType.label, color: colors.neutral[400], fontStyle: 'italic' }}
+        style={{ ...mobileType.label, color: colors.neutral[400], fontStyle: 'italic', textAlign: 'left' }}
       >
         {label}
       </Text>
@@ -126,7 +129,7 @@ function MessageBadge({ label, testID }: { label: string; testID?: string }) {
     >
       <Text
         maxFontSizeMultiplier={1.2}
-        style={{ ...mobileType.label, color: colors.neutral[600] }}
+        style={{ ...mobileType.label, color: colors.neutral[600], textAlign: 'left' }}
       >
         {label}
       </Text>
@@ -141,7 +144,7 @@ function MediaImage({ uri, messageId }: { uri: string; messageId: string }) {
     return (
       <View testID={`media-image-fallback-${messageId}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 12 }}>
         <AlertCircle size={16} color={colors.neutral[400]} />
-        <Text style={{ ...mobileType.bodySmall, color: colors.neutral[400] }}>Media unavailable</Text>
+        <Text style={{ ...mobileType.bodySmall, color: colors.neutral[400], textAlign: 'left' }}>Media unavailable</Text>
       </View>
     );
   }
@@ -166,7 +169,7 @@ function MediaVideo({ uri, messageId }: { uri: string; messageId: string }) {
     return (
       <View testID={`media-video-fallback-${messageId}`} style={{ width: 250, minHeight: 96, borderRadius: radius.control, marginBottom: 4, padding: space[3], gap: 6, backgroundColor: colors.neutral[100], alignItems: 'center', justifyContent: 'center' }}>
         <Video size={22} color={colors.neutral[600]} />
-        <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>Video attachment</Text>
+        <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600], textAlign: 'left' }}>Video attachment</Text>
         <Text numberOfLines={1} style={{ ...mobileType.label, color: colors.focus }}>Update Claire to play this video</Text>
       </View>
     );
@@ -279,7 +282,13 @@ function MediaAudioPlayer({ uri, messageId }: { uri: string; messageId: string }
   );
 }
 
-export default function ChatScreen() {
+export default function ChatRoute() {
+  const isDesktop = useIsDesktopLayout();
+  const { chatId } = useLocalSearchParams<{ chatId: string }>();
+  return isDesktop ? <DesktopInboxWorkspace selectedChatId={chatId} conversation={<ChatScreen embedded />} /> : <ChatScreen />;
+}
+
+export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
   const { chatId, contact_name, chat_name, platform, is_group, highlightMessageId, draft } = useLocalSearchParams<{
     chatId: string;
     contact_name: string;
@@ -315,6 +324,7 @@ export default function ChatScreen() {
   const [connectionRefreshing, setConnectionRefreshing] = useState(false);
   const platformChatIdRef = useRef<string | null>(null);
   const listRef = useRef<FlatList>(null);
+  const composerRef = useRef<import('react-native').TextInput>(null);
   const hasScrolledToHighlight = useRef(false);
 
   useEffect(() => {
@@ -434,6 +444,13 @@ export default function ChatScreen() {
     };
   }, [accessToken, chatId]);
 
+  useEffect(() => {
+    host.reportActiveConversation(chatId || null);
+    return () => host.reportActiveConversation(null);
+  }, [chatId]);
+
+  useEffect(() => host.onFocusComposer(() => composerRef.current?.focus()), []);
+
   // The realtime channel must live exactly as long as the open conversation.
   // Depending on these callbacks directly would tie its lifetime to their
   // identity instead: markConversationRead closes over connectedSessions and
@@ -531,7 +548,8 @@ export default function ChatScreen() {
     const session = connectedSessions.find(
       (s) => s.platform === (platform as Platform) && s.status === 'connected'
     );
-    if (!session) {
+    const localIMessage = platform === Platform.IMESSAGE && host.name === 'electron';
+    if (!session && !localIMessage) {
       setSendError(`Not connected to ${platform}. Reconnect it from Connections.`);
       return;
     }
@@ -557,8 +575,12 @@ export default function ChatScreen() {
 
     setSending(true);
     try {
-      const sent = await platformsApi.sendMessage(platform as Platform, session.id, platformChatId, text);
-      const confirmed = chatMessageFromSend(sent.message, optimistic);
+      const localResult = localIMessage ? await host.sendIMessage({ recipient: platformChatId, text }) : null;
+      if (localResult && !localResult.success) throw new Error(localResult.error);
+      const sent = localIMessage ? null : await platformsApi.sendMessage(platform as Platform, session!.id, platformChatId, text);
+      // The local companion scanner will reconcile the optimistic iMessage
+      // send with Messages' durable row. Keep it visible immediately.
+      const confirmed = sent ? chatMessageFromSend(sent.message, optimistic) : optimistic;
       setMessages((prev) => mergeChatMessage(prev, confirmed));
       if (user?.id && chatId) {
         void cacheTimeline(user.id, chatId, [{ ...confirmed, chat_id: chatId }]).catch(() => undefined);
@@ -612,7 +634,7 @@ export default function ChatScreen() {
           {caption.badge ? <MessageBadge label={caption.badge} testID={`media-badge-${item.id}`} /> : null}
           <MediaImage uri={imageUri} messageId={item.id} />
           {caption.text ? (
-            <Text style={{ ...mobileType.body, color: textColor, marginTop: 2 }}>{caption.text}</Text>
+            <Text style={{ ...mobileType.body, color: textColor, marginTop: 2, textAlign: 'left' }}>{caption.text}</Text>
           ) : null}
           {caption.hint ? <MessageHint label={caption.hint} testID={`media-hint-${item.id}`} /> : null}
         </View>
@@ -623,7 +645,7 @@ export default function ChatScreen() {
       return (
         <View testID={`media-image-${item.id}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
           <ImageIcon size={16} color={iconColor} />
-          <Text style={{ fontSize: 14, color: textColor }}>Photo</Text>
+          <Text style={{ fontSize: 14, color: textColor, textAlign: 'left' }}>Photo</Text>
         </View>
       );
     }
@@ -647,7 +669,7 @@ export default function ChatScreen() {
           <View>
             {caption.badge ? <MessageBadge label={caption.badge} testID={`media-badge-${item.id}`} /> : null}
             <MediaVideo uri={videoUri} messageId={item.id} />
-            {caption.text ? <Text style={{ fontSize: 14, color: textColor, marginTop: 2 }}>{caption.text}</Text> : null}
+            {caption.text ? <Text style={{ fontSize: 14, color: textColor, marginTop: 2, textAlign: 'left' }}>{caption.text}</Text> : null}
           </View>
         );
       }
@@ -657,7 +679,7 @@ export default function ChatScreen() {
       return (
         <View testID={`media-video-${item.id}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <Video size={16} color={iconColor} />
-          <Text style={{ fontSize: 14, color: textColor }}>
+          <Text style={{ fontSize: 14, color: textColor, textAlign: 'left' }}>
             {item.content || 'Video'}
           </Text>
         </View>
@@ -673,7 +695,7 @@ export default function ChatScreen() {
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2], width: 210 }}>
           <FileText size={18} color={documentUri ? colors.ink : iconColor} />
           <View style={{ flex: 1, minWidth: 0 }}>
-            <Text numberOfLines={1} style={{ ...mobileType.bodySmall, color: textColor }}>{label}</Text>
+            <Text numberOfLines={1} style={{ ...mobileType.bodySmall, color: textColor, textAlign: 'left' }}>{label}</Text>
             {documentUri ? (
               <Text style={{ ...mobileType.label, color: colors.neutral[400] }}>Tap to open</Text>
             ) : null}
@@ -699,7 +721,7 @@ export default function ChatScreen() {
       return (
         <View testID={`media-location-${item.id}`} style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}>
           <MapPin size={17} color={iconColor} />
-          <Text numberOfLines={2} style={{ ...mobileType.bodySmall, color: textColor }}>
+          <Text numberOfLines={2} style={{ ...mobileType.bodySmall, color: textColor, textAlign: 'left' }}>
             {caption.text || 'Shared a location'}
           </Text>
         </View>
@@ -712,7 +734,7 @@ export default function ChatScreen() {
     const body = parseMediaCaption(item.content, { dropSelfLinks: false });
     if (!body.badge && !body.hint) {
       return (
-        <Text style={{ ...mobileType.body, color: textColor }}>
+        <Text style={{ ...mobileType.body, color: textColor, textAlign: 'left' }}>
           {body.text ?? item.content}
         </Text>
       );
@@ -721,7 +743,7 @@ export default function ChatScreen() {
       <View>
         {body.badge ? <MessageBadge label={body.badge} testID={`text-badge-${item.id}`} /> : null}
         {body.text ? (
-          <Text style={{ ...mobileType.body, color: textColor }}>{body.text}</Text>
+          <Text style={{ ...mobileType.body, color: textColor, textAlign: 'left' }}>{body.text}</Text>
         ) : null}
         {body.hint ? <MessageHint label={body.hint} testID={`text-hint-${item.id}`} divider={!!(body.text || body.badge)} /> : null}
       </View>
@@ -772,7 +794,7 @@ export default function ChatScreen() {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.cream }} edges={['top']} testID="chat-screen">
+    <SafeAreaView style={{ flex: 1, minHeight: 0, backgroundColor: colors.cream }} edges={embedded ? [] : ['top']} testID="chat-screen">
       {/* Header */}
       <View style={{
         flexDirection: 'row',
@@ -785,7 +807,7 @@ export default function ChatScreen() {
         borderBottomColor: colors.neutral[200],
         backgroundColor: colors.cream,
       }}>
-        <MobileIconButton label="Back" onPress={() => router.back()}><ChevronLeft size={22} color={colors.ink} /></MobileIconButton>
+        {!embedded ? <MobileIconButton label="Back" onPress={() => router.back()}><ChevronLeft size={22} color={colors.ink} /></MobileIconButton> : null}
         <MobileAvatar
           name={displayName}
           size={40}
@@ -814,7 +836,7 @@ export default function ChatScreen() {
       </View> : <View style={{ height: space[2] }} />}
 
       <KeyboardAvoidingView
-        style={{ flex: 1 }}
+        style={{ flex: 1, minHeight: 0 }}
         behavior={RNPlatform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={0}
       >
@@ -834,6 +856,7 @@ export default function ChatScreen() {
             renderItem={renderMessage}
             keyExtractor={(item) => item.id}
             testID="chat-message-list"
+            style={{ flex: 1, minHeight: 0 }}
             contentContainerStyle={{ paddingVertical: space[3] }}
             keyboardShouldPersistTaps="handled"
             maintainVisibleContentPosition={{ minIndexForVisible: 0, autoscrollToTopThreshold: 80 }}
@@ -888,6 +911,7 @@ export default function ChatScreen() {
               replyOptionsVisible={showReplyOptions}
               onToggleReplyOptions={lastInbound ? () => setShowReplyOptions((open) => !open) : undefined}
               blurOnSubmit={false}
+              inputRef={composerRef}
             />
           )}
         </View>

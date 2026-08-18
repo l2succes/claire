@@ -58,15 +58,34 @@ function normalizeInboxMediaUrl(value: string): string | undefined {
   return /^https?:\/\//i.test(value) ? value : undefined;
 }
 
-function InboxConversationRow({ message, pinned, onPress, onLongPress }: { message: InboxMessage; pinned?: boolean; onPress: () => void; onLongPress: () => void }) {
+/** Shared conversation content for phone and desktop. The shell owns columns;
+ * this row owns identity, platform, media, read state, and preview semantics. */
+export function InboxConversationRow({
+  message,
+  pinned,
+  active = false,
+  layout = 'mobile',
+  onPress,
+  onLongPress,
+}: {
+  message: InboxMessage;
+  pinned?: boolean;
+  active?: boolean;
+  layout?: 'mobile' | 'desktop';
+  onPress: () => void;
+  onLongPress?: () => void;
+}) {
   const [imageFailed, setImageFailed] = useState(false);
   const [thumbFailed, setThumbFailed] = useState(false);
   const preview = conversationPreview(message);
   const name = message.chat_name || message.contact_name || 'Unknown conversation';
   const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase() || '?';
   const tone = avatarTones[[...name].reduce((total, character) => total + character.charCodeAt(0), 0) % avatarTones.length];
-  const rowHeight = pinned ? 92 : 76;
-  const inset = pinned ? space[3] : space[4];
+  const desktop = layout === 'desktop';
+  const rowHeight = pinned ? 92 : desktop ? 68 : 76;
+  const inset = pinned ? space[3] : desktop ? 8 : space[4];
+  const avatarSize = desktop ? 36 : 44;
+  const surface = active ? '#E6F57A' : pinned ? '#FFF8DC' : colors.paper;
 
   return (
     <Pressable
@@ -77,29 +96,30 @@ function InboxConversationRow({ message, pinned, onPress, onLongPress }: { messa
       onLongPress={onLongPress}
       style={{
         height: rowHeight,
-        marginHorizontal: pinned ? space[4] : 0,
-        marginTop: pinned ? space[2] : 0,
-        borderRadius: pinned ? 18 : 0,
+        marginHorizontal: pinned && !desktop ? space[4] : desktop ? 6 : 0,
+        marginTop: pinned ? space[2] : desktop ? 2 : 0,
+        marginBottom: desktop ? 2 : 0,
+        borderRadius: pinned && !desktop ? 18 : desktop && active ? 12 : 0,
         borderCurve: 'continuous',
-        borderWidth: pinned ? 1 : 0,
+        borderWidth: pinned && !desktop ? 1 : 0,
         borderColor: pinned ? '#E5D69A' : 'transparent',
-        borderBottomWidth: pinned ? 1 : 1,
+        borderBottomWidth: desktop ? 0 : 1,
         borderBottomColor: pinned ? '#E5D69A' : colors.neutral[200],
-        backgroundColor: pinned ? '#FFF8DC' : colors.paper,
+        backgroundColor: surface,
         overflow: 'hidden',
       }}
     >
-      <View style={{ position: 'absolute', left: inset, top: Math.round((rowHeight - 44) / 2), width: 44, height: 44 }}>
-        <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: tone, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ position: 'absolute', left: inset, top: Math.round((rowHeight - avatarSize) / 2), width: avatarSize, height: avatarSize }}>
+        <View style={{ width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2, backgroundColor: tone, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }}>
           {message.contact_avatar && !imageFailed
             ? <Image source={{ uri: message.contact_avatar }} style={{ width: 44, height: 44 }} contentFit="cover" transition={120} onError={() => setImageFailed(true)} />
             : <Text maxFontSizeMultiplier={1} style={{ ...mobileType.label, color: colors.ink }}>{initials}</Text>}
         </View>
-        {message.platform ? <View style={{ position: 'absolute', right: -3, bottom: -3, padding: 1, borderRadius: 11, borderWidth: 2, borderColor: pinned ? '#FFF8DC' : colors.paper, backgroundColor: colors.paper }}><PlatformBadge platform={message.platform} size={16} /></View> : null}
+        {message.platform ? <View style={{ position: 'absolute', right: -3, bottom: -3, padding: 1, borderRadius: 11, borderWidth: 2, borderColor: surface, backgroundColor: colors.paper }}><PlatformBadge platform={message.platform} size={16} /></View> : null}
       </View>
 
-      <View style={{ position: 'absolute', top: pinned ? 20 : 14, left: inset + 58, right: inset, gap: 3 }}>
-        <Text maxFontSizeMultiplier={1} selectable numberOfLines={1} style={{ paddingRight: 64, fontFamily: mobileType.body.fontFamily, fontSize: 17, lineHeight: 21, fontWeight: message.unread_count ? '700' : '600', color: colors.ink }}>{name}</Text>
+      <View style={{ position: 'absolute', top: pinned ? 20 : desktop ? 13 : 14, left: inset + avatarSize + (desktop ? 9 : 14), right: inset, gap: desktop ? 1 : 3 }}>
+        <Text maxFontSizeMultiplier={1} selectable numberOfLines={1} style={{ paddingRight: 54, fontFamily: mobileType.body.fontFamily, fontSize: desktop ? 14 : 17, lineHeight: desktop ? 17 : 21, fontWeight: message.unread_count ? '700' : '600', color: colors.ink }}>{name}</Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingRight: message.unread_count ? 36 : 0 }}>
           {preview.thumbnailUri && !thumbFailed ? (
             <Image
@@ -111,11 +131,11 @@ function InboxConversationRow({ message, pinned, onPress, onLongPress }: { messa
               testID={`inbox-preview-thumb-${message.chat_id}`}
             />
           ) : null}
-          <Text maxFontSizeMultiplier={1} selectable numberOfLines={1} style={{ flex: 1, fontFamily: mobileType.body.fontFamily, fontSize: 14, lineHeight: 19, color: colors.neutral[600], fontWeight: message.unread_count ? '500' : '400' }}>{preview.label}</Text>
+          <Text maxFontSizeMultiplier={1} selectable numberOfLines={1} style={{ flex: 1, fontFamily: mobileType.body.fontFamily, fontSize: desktop ? 12 : 14, lineHeight: desktop ? 15 : 19, color: colors.neutral[600], fontWeight: message.unread_count ? '500' : '400' }}>{preview.label}</Text>
         </View>
       </View>
-      <Text maxFontSizeMultiplier={1} selectable style={{ position: 'absolute', right: inset, top: pinned ? 21 : 16, fontFamily: mobileType.monoLabel.fontFamily, fontSize: 11, lineHeight: 14, letterSpacing: 0.4, color: colors.neutral[400] }}>{formatInboxTimestamp(message.timestamp)}</Text>
-      {message.unread_count ? <View style={{ position: 'absolute', right: inset, bottom: pinned ? 16 : 14, minWidth: 22, height: 22, paddingHorizontal: 5, borderRadius: 11, backgroundColor: colors.lime, alignItems: 'center', justifyContent: 'center' }}><Text maxFontSizeMultiplier={1} style={{ ...mobileType.label, color: colors.ink, fontVariant: ['tabular-nums'] }}>{message.unread_count}</Text></View> : null}
+      <Text maxFontSizeMultiplier={1} selectable style={{ position: 'absolute', right: inset, top: pinned ? 21 : desktop ? 13 : 16, fontFamily: mobileType.monoLabel.fontFamily, fontSize: desktop ? 9 : 11, lineHeight: desktop ? 12 : 14, letterSpacing: 0.4, color: colors.neutral[400] }}>{formatInboxTimestamp(message.timestamp)}</Text>
+      {message.unread_count ? <View style={{ position: 'absolute', right: inset, bottom: pinned ? 16 : desktop ? 10 : 14, minWidth: desktop ? 18 : 22, height: desktop ? 18 : 22, paddingHorizontal: 4, borderRadius: 11, backgroundColor: colors.lime, alignItems: 'center', justifyContent: 'center' }}><Text maxFontSizeMultiplier={1} style={{ ...mobileType.label, fontSize: desktop ? 9 : undefined, color: colors.ink, fontVariant: ['tabular-nums'] }}>{message.unread_count}</Text></View> : null}
     </Pressable>
   );
 }

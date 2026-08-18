@@ -12,8 +12,8 @@
   /* Body, UI, labels, buttons. */
   --font-sans: var(--font-public-sans), 'Public Sans', 'Avenir Next', Avenir, Helvetica, Arial,
     sans-serif;
-  /* Big titles only — h1/h2, hero display, screen titles. */
-  --font-display: var(--font-inter), Inter, 'Avenir Next', Avenir, Helvetica, Arial, sans-serif;
+  /* Public Sans is the display face too, so the product reads as one system. */
+  --font-display: var(--font-public-sans), 'Public Sans', 'Avenir Next', Avenir, Helvetica, Arial, sans-serif;
   --font-mono: var(--font-dm-mono), 'DM Mono', 'SFMono-Regular', Consolas, monospace;
   --text-xs: 0.75rem;
   --text-sm: 0.875rem;

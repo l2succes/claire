@@ -14,8 +14,9 @@ import { mockBackend, signIn } from './helpers/mock-backend.mjs';
 // Matches `breakpoints.expanded` in packages/tokens. Values sit either side of
 // it so a change to the token makes these fail loudly rather than silently
 // testing the wrong thing.
-const EXPANDED = { width: 1400, height: 900 };
-const COMPACT = { width: 900, height: 900 };
+const EXPANDED = { width: 1320, height: 900 };
+const DESKTOP = { width: 900, height: 900 };
+const COMPACT = { width: 899, height: 900 };
 
 test.describe('Claire desktop shell', () => {
   test.beforeEach(async ({ page }) => {
@@ -32,11 +33,29 @@ test.describe('Claire desktop shell', () => {
     await expect(page.getByTestId('desktop-nav-promises')).toBeVisible();
   });
 
+  test('starts the desktop workspace at the Electron minimum width', async ({ page }) => {
+    await page.setViewportSize(DESKTOP);
+    await signIn(page);
+    await expect(page.getByTestId('desktop-navigation-rail')).toBeVisible();
+    await page.getByTestId('desktop-nav-inbox').click();
+    await expect(page.getByTestId('desktop-inbox-workspace')).toBeVisible();
+    await expect(page.getByTestId('desktop-inspector-pane')).toHaveCount(0);
+  });
+
   test('hides the desktop chrome in a compact window', async ({ page }) => {
     await page.setViewportSize(COMPACT);
     await signIn(page);
 
     await expect(page.getByTestId('desktop-navigation-rail')).toHaveCount(0);
+  });
+
+  test('shows the inspector only in the full desktop workspace', async ({ page }) => {
+    await page.setViewportSize(DESKTOP);
+    await signIn(page);
+    await page.getByTestId('desktop-nav-inbox').click();
+    await expect(page.getByTestId('desktop-inspector-pane')).toHaveCount(0);
+    await page.setViewportSize(EXPANDED);
+    await expect(page.getByTestId('desktop-inspector-pane')).toBeVisible();
   });
 
   test('swaps shells when the window is resized, without losing the route', async ({ page }) => {
@@ -87,5 +106,23 @@ test.describe('Claire desktop shell', () => {
     await page.getByTestId('desktop-nav-people').click();
     await expect(page).toHaveURL(/contacts/);
     await expect(page.getByLabel('Back', { exact: true })).toHaveCount(0);
+  });
+
+  test('People filters by platform and searches names on desktop', async ({ page }) => {
+    await page.setViewportSize(EXPANDED);
+    await signIn(page);
+
+    await page.getByTestId('desktop-nav-people').click();
+    await expect(page.getByText('Alice', { exact: true })).toBeVisible();
+    await expect(page.getByText('Carol', { exact: true })).toBeVisible();
+
+    await page.getByTestId('people-platform-instagram').click();
+    await expect(page.getByText('Carol', { exact: true })).toBeVisible();
+    await expect(page.getByText('Alice', { exact: true })).toHaveCount(0);
+
+    await page.getByTestId('people-platform-all').click();
+    await page.getByTestId('contacts-search-input').fill('alice');
+    await expect(page.getByText('Alice', { exact: true })).toBeVisible();
+    await expect(page.getByText('Carol', { exact: true })).toHaveCount(0);
   });
 });

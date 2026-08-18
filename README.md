@@ -179,7 +179,7 @@ EAS environment variables are stored in the cloud — no `.env` file needed on C
 │       ├── routes/            # API routes
 │       └── config/            # Configuration
 ├── mobile/                    # Expo iOS, Android, and mobile web
-├── desktop/macos/             # Desktop app and native companion
+├── apps/desktop/              # Electron desktop app
 ├── website/                   # Marketing site, docs, Storybook
 ├── packages/                  # design-system, platform-catalog, plugin-sdk
 ├── examples/plugins/          # Local fixture plugins

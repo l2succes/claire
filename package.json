@@ -4,7 +4,6 @@
   "private": true,
   "workspaces": [
     "apps/*",
-    "desktop/macos",
     "packages/*",
     "examples/plugins/*"
   ],
@@ -62,8 +61,7 @@
     "desktop:prod": "cd apps/desktop && bun run prod",
     "desktop:prod:fresh": "cd apps/desktop && bun run prod:fresh",
     "desktop:package": "cd apps/desktop && bun run package",
-    "desktop:package:dev": "cd apps/desktop && bun run package:dev",
-    "desktop:macos": "cd desktop/macos && bun run start"
+    "desktop:package:dev": "cd apps/desktop && bun run package:dev"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",

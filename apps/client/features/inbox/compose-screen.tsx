@@ -149,7 +149,9 @@ export function ComposeScreen() {
             autoCapitalize="none"
             returnKeyType="search"
             maxFontSizeMultiplier={1}
-            style={{ flex: 1, minHeight: 22, padding: 0, ...mobileType.body, color: colors.ink }}
+            // React Native Web otherwise falls back to the browser's orange
+            // focus outline, which reads like a halo in the desktop compose view.
+            style={{ flex: 1, minHeight: 22, padding: 0, ...mobileType.body, color: colors.ink, outlineStyle: 'none', outlineWidth: 0 } as never}
           />
         </View>
 

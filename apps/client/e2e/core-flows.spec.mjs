@@ -39,16 +39,15 @@ test.describe('Core loop — mock backend', () => {
     await mockBackend(page);
   });
 
-  // 1. Auth — sign-in screen renders required fields
-  test('sign-in screen renders required fields', async ({ page }) => {
+  // 1. Auth — passwordless sign-in screen renders required fields
+  test('sign-in screen renders passwordless fields', async ({ page }) => {
     await page.goto('/signin');
 
     await expect(page.getByTestId('signin-screen')).toBeVisible();
     await expect(page.getByTestId('google-sign-in-signin')).toBeVisible();
     await page.getByTestId('signin-use-email').click();
     await expect(page.getByTestId('signin-email-input')).toBeVisible();
-    await expect(page.getByTestId('signin-password-input')).toBeVisible();
-    await expect(page.getByTestId('signin-submit')).toBeVisible();
+    await expect(page.getByTestId('signin-send-otp')).toBeVisible();
   });
 
   // 2. Inbox — messages screen shows seeded messages after sign-in
