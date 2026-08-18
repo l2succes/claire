@@ -34,6 +34,12 @@ apps/client/.env.production
 # Explicit catch-all for real .env files in any subdirectory
 **/.env.production
 **/.env.local
+# 1Password runtime references and operator manifests. The tracked examples
+# contain no credentials; local copies may contain vault/account metadata.
+.env.op
+**/.env.op
+ops/secrets/*.json
+!ops/secrets/*.example.json
 
 # IDE
 .vscode/
@@ -89,6 +95,8 @@ Thumbs.db
 
 # Leftover local trees after earlier client/ renames and worktree experiments.
 # Keep the native project in apps/client/ios (Xcode + Podfile); never commit Pods.
+/mobile/
+/website/
 /client/
 /wt-96/
 /turbo-fieldfare/

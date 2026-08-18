@@ -33,7 +33,8 @@ Claire client -> Supabase Auth -> Google -> Supabase Auth callback -> Claire cli
 
    | Host | Callback produced by Claire |
    | --- | --- |
-   | iOS / Android release build | `claire://confirm` |
+   | Production iOS / Android release build | `claire://confirm` |
+   | Staging iOS / Android release build | `claire-staging://confirm` |
    | Browser | `<current web origin>/confirm` |
    | Electron development | `http://localhost:<port>/confirm` |
    | Packaged Electron | `claire-app://app/confirm` |
@@ -76,6 +77,7 @@ In Supabase Auth URL Configuration (or, for the self-hosted stack,
 ```text
 https://app.claire.example/confirm
 claire://confirm
+claire-staging://confirm
 claire-app://app/confirm
 http://localhost:8081/confirm
 http://localhost:8083/confirm
@@ -120,7 +122,8 @@ Before release, test one existing account in every row:
 | --- | --- |
 | Browser Google login | Returns to the same browser origin's `/confirm` and reaches the dashboard when a platform is connected. |
 | Electron Google login | Returns to Electron's renderer `/confirm`; no external browser window is opened after completion. |
-| iOS / Android Google login | Returns through `claire://confirm` to the installed app. |
+| Production iOS / Android Google login | Returns through `claire://confirm` to the installed app. |
+| Staging iOS / Android Google login | Returns through `claire-staging://confirm` to Claire Staging. |
 | Add password after Google login | Email/password login returns the same `auth.users.id`, chats, and connected platform sessions. |
 | Login on a second client | The same account's chats and connected WhatsApp/Telegram/Instagram sessions are visible without reconnecting. |
 

@@ -60,7 +60,7 @@ export default function Page() {
               head={[<>Part</>, <>Status</>, <>Where</>]}
               rows={[
                 [<>3 · Prerequisite fixes</>, <><b>Done</b></>, <>reply/thread/mentions/<C>member_count</C> persisted, backfill guard, timezone</>],
-                [<>4 · Data model</>, <><b>Done</b></>, <><C>20260817020000</C>–<C>020400</C>, validated against PostgreSQL 15</>],
+                [<>4 · Data model</>, <><b>Done</b></>, <><C>20260817030000</C>–<C>030500</C>, validated against PostgreSQL 15</>],
                 [<>5 · Detection pipeline</>, <><b>Not built</b></>, <>gate, context, prompts, detector, reconciler, store, queue</>],
                 [<>6 · Relevance model</>, <><b>Done</b></>, <><C>apps/server/src/services/loops/relevance.ts</C></>],
                 [<>7 · Loop details page</>, <><b>Not built</b></>, <><C>apps/client/app/loops/[id].tsx</C></>],
