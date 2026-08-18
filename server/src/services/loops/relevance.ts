@@ -307,7 +307,10 @@ export function scoreRelevance(input: RelevanceInput): RelevanceResult {
   const personallyAddressed = mentioned || repliedToSelf;
   record('broadcast', audience >= 25 && !personallyAddressed, WEIGHTS.broadcast);
 
-  const noSelfSignal = !mentioned && !repliedToSelf && !secondPerson && !selfCommitted;
+  // A watch term counts as a tie to the user. It is an explicit standing
+  // instruction — "tell me about anything mentioning this" — so penalising it
+  // for not also naming them defeats the point of setting one.
+  const noSelfSignal = !mentioned && !repliedToSelf && !secondPerson && !selfCommitted && !watchHit;
   record('no_self_signal', noSelfSignal, WEIGHTS.no_self_signal,
     noSelfSignal ? 'Nothing ties this message to you' : undefined);
 

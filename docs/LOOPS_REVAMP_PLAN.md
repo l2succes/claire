@@ -477,6 +477,32 @@ Approval flow: tapping an action re-validates through `authorize()`; if approval
 
 ## 10. Corpus mining and eval
 
+### Built: the scenario eval harness
+
+```bash
+bun run eval:loops                          # full corpus, human-readable report
+cd server && bun run eval:loops --hand-authored   # worked examples only
+cd server && bun run eval:loops --seed 7 --per 6  # more generated volume
+cd server && bun run eval:loops --json out.json   # machine-readable
+cd server && bun run eval:loops --gates           # exit non-zero below release gates
+```
+
+It also runs inside `bun test`, so a metric regression breaks the build the same way a unit-test failure does. No database, no network, no API key — the relevance stage is deterministic, so a failure is always a real regression rather than model variance.
+
+**Three corpora, because they catch different things:**
+
+| | Purpose |
+|---|---|
+| **Hand-authored** (`HAND_AUTHORED`) | The worked examples from §2. Acceptance criteria, each stating *why* it matters. |
+| **Adversarial** (`ADVERSARIAL`) | Conflicting signals and messy language. Keeps the eval honest. |
+| **Generated** (`generateScenarios`) | Seeded combinatorial breadth across platform × group size × mention style. |
+
+**`knownLimitation` is the important mechanism.** Cases deterministic scoring cannot resolve — quoted commitments, jokes, first-name collisions — are marked with a written reason. They are reported but do not fail the build, *and an unexpected pass is also reported*, since that means the limitation is gone and the case should be promoted to an enforced expectation. This keeps the boundary between "scoring handles it" and "the model has to" visible rather than asserted, and it is where the extraction-stage prompt gets its requirements.
+
+Scenarios already carry `expectLoops` ground truth for the extraction stage, so the corpus does not need rewriting when the detector lands.
+
+### Still to build: mining real conversations
+
 ### `server/scripts/mine-loops.ts`
 
 Standalone, env-only, modeled on `server/scripts/sync-matrix-messages.ts:14-24`. Run with `cd server && bun run scripts/mine-loops.ts`.

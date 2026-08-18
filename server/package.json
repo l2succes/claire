@@ -13,7 +13,9 @@
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix",
     "typecheck": "tsc --noEmit",
-    "verify:schema": "bun run src/scripts/verify-schema.ts"
+    "verify:schema": "bun run src/scripts/verify-schema.ts",
+    "eval:loops": "bun run scripts/eval-loops.ts",
+    "eval:loops:gates": "bun run scripts/eval-loops.ts --gates --seed 42 --per 6"
   },
   "dependencies": {
     "@claire/platform-catalog": "workspace:*",

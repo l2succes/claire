@@ -15,6 +15,7 @@ cd "$(dirname "$0")/.."
 #   'promise' in desktop_sync_events        -> historical rows still validate
 #   LEGACY_LOOP_DETECTION_KEY               -> one-time AsyncStorage migration
 #   destinationForDesktopCommand shim       -> pre-rename native binaries
+#   "i promise" in the COMMISSIVE regex      -> ordinary English, not the feature
 ALLOW='Promise<|Promise\.|: Promise\b|new Promise|await Promise|Promise>|PromiseLike'
 
 # Local accumulators fed to Promise.all. Naming an array of pending work
@@ -41,6 +42,7 @@ MATCHES=$(grep -rn --binary-files=without-match \
   | grep -vE "$ALLOW_IDIOM" \
   | grep -vE "$PENDING_DELETION" \
   | grep -vE 'LEGACY_LOOP_DETECTION_KEY|claire\.settings\.promiseDetection' \
+  | grep -vE "i promise|I promise" \
   | grep -vE "=== 'promises'|pre-rename|before the rename|before the loops rename" \
   || true)
 

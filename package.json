@@ -52,7 +52,8 @@
     "docker:supabase:logs": "docker compose -f docker/supabase/docker-compose.supabase.yml logs -f",
     "docker:matrix": "docker compose -f docker/matrix/docker-compose.matrix.yml up -d",
     "docker:matrix:down": "docker compose -f docker/matrix/docker-compose.matrix.yml down",
-    "docker:matrix:logs": "docker compose -f docker/matrix/docker-compose.matrix.yml logs -f"
+    "docker:matrix:logs": "docker compose -f docker/matrix/docker-compose.matrix.yml logs -f",
+    "eval:loops": "cd server && bun run eval:loops"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",
