@@ -8,7 +8,7 @@
 
 import { supabase } from './supabase';
 import { API_BASE_URL } from './platforms';
-import type { LoopDetail, LoopItem } from './loop-types';
+import type { LoopAgentResult, LoopDetail, LoopItem } from './loop-types';
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const { data: { session } } = await supabase.auth.getSession();
@@ -48,6 +48,19 @@ export function snoozeLoop(id: string, until: string): Promise<LoopItem> {
   return request<LoopItem>(`/loops/${id}/snooze`, {
     method: 'POST',
     body: JSON.stringify({ snooze_until: until }),
+  });
+}
+
+/**
+ * Ask the loop-scoped agent a question.
+ *
+ * Whatever comes back is inert: the agent has no tool that sends a message or
+ * writes externally, so a draft or proposal here is only ever a suggestion.
+ */
+export function askLoopAgent(id: string, question: string): Promise<LoopAgentResult> {
+  return request<LoopAgentResult>(`/loops/${id}/agent/messages`, {
+    method: 'POST',
+    body: JSON.stringify({ question }),
   });
 }
 

@@ -104,3 +104,18 @@ export interface LoopDetail extends LoopItem {
   events?: LoopEvent[];
   participants?: LoopParticipant[];
 }
+
+export interface LoopProposal {
+  kind: 'draft_reply' | 'loop_update';
+  /** Drafted text. Never sent — the user copies it. */
+  text?: string;
+  changes?: Record<string, unknown>;
+  rationale: string;
+}
+
+export interface LoopAgentResult {
+  answer: string;
+  toolsUsed: string[];
+  proposal: LoopProposal | null;
+  stoppedBecause: 'completed' | 'step_limit' | 'no_provider' | 'error';
+}

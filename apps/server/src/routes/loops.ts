@@ -4,6 +4,8 @@ import { supabase, type DbRow } from '../services/supabase';
 import { validateRequest } from '../middleware/validation';
 import { requireAuth } from '../middleware/auth';
 import { logger } from '../utils/logger';
+import { runLoopAgent } from '../services/loops/loop-agent';
+
 
 const router = Router();
 
@@ -332,6 +334,37 @@ router.get(
       return res.json({ success: true, data: data ?? [] });
     } catch (error) {
       logger.error('Error in GET /loops/:id/events:', error);
+      return res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+  }
+);
+
+/**
+ * POST /loops/:id/agent/messages
+ *
+ * Ask Claire for help closing this loop. The agent can read and propose; it has
+ * no tool that sends a message or writes externally, so a proposal returned
+ * here is inert until the user acts on it.
+ */
+router.post(
+  '/:id/agent/messages',
+  requireAuth,
+  async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const question = typeof req.body?.question === 'string' ? req.body.question.trim() : '';
+      if (!question || question.length > 1000) {
+        return res.status(400).json({ success: false, error: 'A question of up to 1000 characters is required' });
+      }
+
+      const result = await runLoopAgent({ userId, loopId: req.params.id, question });
+      return res.json({ success: true, data: result });
+    } catch (error) {
+      logger.error('Error in POST /loops/:id/agent/messages:', error);
       return res.status(500).json({ success: false, error: 'Internal server error' });
     }
   }
