@@ -46,8 +46,16 @@ FROM base AS deps
 # Install from the workspace root: the server depends on
 # @claire/platform-catalog via a workspace dependency.
 COPY package.json bun.lockb ./
+COPY mobile/package.json ./mobile/package.json
+COPY desktop/macos/package.json ./desktop/macos/package.json
+COPY website/package.json ./website/package.json
 COPY server/package.json ./server/package.json
+COPY packages/chat-core/package.json ./packages/chat-core/package.json
+COPY packages/design-system/package.json ./packages/design-system/package.json
 COPY packages/platform-catalog/package.json ./packages/platform-catalog/package.json
+COPY packages/plugin-sdk/package.json ./packages/plugin-sdk/package.json
+COPY examples/plugins/calendar/package.json ./examples/plugins/calendar/package.json
+COPY examples/plugins/task-manager/package.json ./examples/plugins/task-manager/package.json
 
 # Install production dependencies
 # --ignore-scripts prevents better-sqlite3 from compiling native binaries in Docker
@@ -64,8 +72,16 @@ WORKDIR /app
 # Copy workspace manifests and install the server's build dependencies.
 # --ignore-scripts skips native module compilation (we only need types).
 COPY package.json bun.lockb ./
+COPY mobile/package.json ./mobile/package.json
+COPY desktop/macos/package.json ./desktop/macos/package.json
+COPY website/package.json ./website/package.json
 COPY server/package.json ./server/package.json
+COPY packages/chat-core/package.json ./packages/chat-core/package.json
+COPY packages/design-system/package.json ./packages/design-system/package.json
 COPY packages/platform-catalog/package.json ./packages/platform-catalog/package.json
+COPY packages/plugin-sdk/package.json ./packages/plugin-sdk/package.json
+COPY examples/plugins/calendar/package.json ./examples/plugins/calendar/package.json
+COPY examples/plugins/task-manager/package.json ./examples/plugins/task-manager/package.json
 RUN bun install --ignore-scripts --filter @claire/server
 
 # Copy source code, including the workspace package imported by the server.
