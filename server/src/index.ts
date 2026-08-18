@@ -639,9 +639,11 @@ async function initializePlatforms() {
   logger.info('Platform adapters initialized');
 }
 
-// Start server only after the self-hosted companion table is available. This
-// prevents the desktop client from seeing a live route backed by a stale schema.
-const serverReady = ensureCompanionSchema().then(() =>
+// Bind the liveness port before optional schema housekeeping. Database
+// migrations run as a separate deployment step, and blocking the listener on
+// a companion-table check makes an otherwise healthy process unavailable
+// during transient database startup or a fresh staging bootstrap.
+const serverReady = Promise.resolve(
   app.listen(PORT, async () => {
     logger.info(`Server running on port ${PORT} in ${config.NODE_ENV} mode`);
 
@@ -655,6 +657,10 @@ const serverReady = ensureCompanionSchema().then(() =>
     await initializePlatforms();
   })
 );
+
+void ensureCompanionSchema().catch((error) => {
+  logger.error('Companion schema bootstrap failed:', error);
+});
 
 // Graceful shutdown
 process.on('SIGTERM', async () => {
