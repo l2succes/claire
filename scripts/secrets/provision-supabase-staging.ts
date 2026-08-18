@@ -1,4 +1,7 @@
 import { randomBytes, randomUUID, webcrypto } from 'node:crypto';
+import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 const vault = 'Claire — Staging';
 const itemTitle = 'Supabase / Staging';
@@ -11,13 +14,21 @@ const studioService = 'Supabase Studio';
 type Credentials = Record<string, string>;
 type Item = { fields?: Array<{ label?: string; value?: string }> };
 type ItemIndex = { id: string; title: string };
+type ItemSection = { id: string; label: string };
 
-const credentialsSection = { id: 'credentials', label: 'Credentials' };
+function onePasswordId() {
+  const alphabet = 'abcdefghijklmnopqrstuvwxyz234567';
+  return Array.from(randomBytes(26), (byte) => alphabet[byte & 31]).join('');
+}
 
-function credentialField(label: string, value: string) {
+function credentialsSection(): ItemSection {
+  return { id: `Section_${onePasswordId()}`, label: 'Credentials' };
+}
+
+function credentialField(section: ItemSection, label: string, value: string) {
   return {
-    id: `credential_${label.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`,
-    section: { id: credentialsSection.id },
+    id: onePasswordId(),
+    section: { id: section.id, label: section.label },
     label,
     type: 'CONCEALED',
     value,
@@ -162,30 +173,35 @@ async function listItems() {
 }
 
 async function createAndVerifyItem(item: Record<string, unknown>, expectedLabels: string[]) {
-  // The stdin marker must be the first positional argument. Otherwise op creates
-  // the Login defaults and silently ignores the JSON template.
-  await run(
-    ['op', 'item', 'create', '-', '--category', 'login', '--vault', vault],
-    JSON.stringify(item),
-    true
-  );
-  const items = await listItems();
-  const created = items.filter((candidate) => candidate.title === item.title);
-  if (created.length !== 1) {
-    throw new Error(
-      `Could not uniquely locate the newly created 1Password item ${item.title}. No Railway credentials were changed.`
+  const directory = await mkdtemp(join(tmpdir(), 'claire-1password-item-'));
+  const templatePath = join(directory, 'item.json');
+  let output: string;
+  try {
+    await writeFile(templatePath, JSON.stringify(item), { mode: 0o600 });
+    await chmod(templatePath, 0o600);
+    output = await run(
+      ['op', 'item', 'create', '--template', templatePath, '--vault', vault],
+      undefined,
+      true
     );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
   }
+  const id = output.match(/^ID:\s*(\S+)$/m)?.[1];
+  if (!id)
+    throw new Error(
+      '1Password did not return an ID for the new item. No Railway credentials were changed.'
+    );
   const stored = JSON.parse(
-    await run(['op', 'item', 'get', created[0].id, '--vault', vault, '--format', 'json'])
+    await run(['op', 'item', 'get', id, '--vault', vault, '--format', 'json'])
   ) as Item;
   try {
     requireStoredFields(stored, expectedLabels);
   } catch (error) {
-    await run(['op', 'item', 'delete', created[0].id, '--vault', vault], undefined, true);
+    await run(['op', 'item', 'delete', id, '--vault', vault], undefined, true);
     throw error;
   }
-  return created[0].id;
+  return id;
 }
 
 async function main() {
@@ -224,11 +240,12 @@ async function main() {
     }
     credentials = await generateCredentials();
     const pendingTitle = `${itemTitle} (pending ${randomUUID()})`;
+    const section = credentialsSection();
     const item = {
       title: pendingTitle,
       category: 'LOGIN',
       urls: [{ label: 'website', primary: true, href: 'https://supabase.staging.useclaire.co' }],
-      sections: [credentialsSection],
+      sections: [section],
       fields: [
         {
           id: 'username',
@@ -237,7 +254,9 @@ async function main() {
           label: 'username',
           value: 'not-applicable',
         },
-        ...Object.entries(credentials).map(([label, value]) => credentialField(label, value)),
+        ...Object.entries(credentials).map(([label, value]) =>
+          credentialField(section, label, value)
+        ),
       ],
       tags: ['claire', 'staging', 'supabase'],
       notesPlain:

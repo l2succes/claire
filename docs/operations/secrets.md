@@ -73,7 +73,7 @@ bun run secrets:provision:staging --rotate-supabase
 
 This is the one-time recovery/bootstrap form. It generates a new complete staging Supabase key set locally, creates and reads back a concealed-field `Supabase / Staging` item in `Claire — Staging`, then replaces any earlier staging item only after that verification succeeds. It next provisions the fixture-only API and pushes the public anon key to EAS Preview. The wrapper stops on the first failure, so later steps never produce misleading downstream errors. It never prints secret values and intentionally targets the template's default `production`-named environment inside the separate `claire-staging` project; it does not target Claire production.
 
-After bootstrap, rerun the same workflow without the flag whenever you need to verify and re-sync staging: `bun run secrets:provision:staging`. It reuses the values already stored in 1Password; it does not rotate them. The scripts create every item from JSON on standard input with the required leading `-` marker, then verify the concealed fields before Railway or EAS is changed.
+After bootstrap, rerun the same workflow without the flag whenever you need to verify and re-sync staging: `bun run secrets:provision:staging`. It reuses the values already stored in 1Password; it does not rotate them. The scripts write each JSON item template to a mode-`0600` temporary file, have `op` create it from that file, remove it immediately, and verify every concealed field before Railway or EAS is changed.
 
 ### Fixture-only Claire API
 
