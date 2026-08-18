@@ -29,6 +29,7 @@
     "secrets:provision:api-staging": "bun run scripts/secrets/provision-api-staging.ts",
     "secrets:sync:eas-staging": "bun run scripts/secrets/sync-eas-staging.ts",
     "secrets:provision:staging": "bun run scripts/secrets/provision-staging.ts",
+    "secrets:store:supabase-studio": "bun run scripts/secrets/store-supabase-studio-access.ts",
     "dev:prod": "concurrently \"bun run dev:server\" \"bun run mobile:prod\"",
     "mobile:prod": "cd mobile && bun run start:prod",
     "mobile:prod:local": "cd mobile && bun run start:prod:local",

@@ -95,6 +95,22 @@ bun run secrets:sync:eas-staging
 
 The script creates a mode-`0600` temporary environment file, pushes only `EXPO_PUBLIC_SUPABASE_ANON_KEY` to EAS Preview, and removes the file even if the EAS command fails.
 
+### Supabase Studio operator access
+
+The Supabase gateway root serves Studio behind HTTP Basic Auth; it is separate
+from client API authentication. Copy the existing Railway gateway credentials
+into the dedicated 1Password items without rotating them:
+
+```sh
+bun run secrets:store:supabase-studio
+```
+
+This creates `Supabase Studio / Staging` and `Supabase Studio / Production` in
+their respective vaults, verifies that both concealed credentials were retained,
+and only then replaces an older copy. Use the website saved in each 1Password
+item to open Studio. Studio grants administrator-level database access, so do
+not share these items with app users or testers.
+
 ## Local commands
 
 Use 1Password references in ignored local files and execute commands with
