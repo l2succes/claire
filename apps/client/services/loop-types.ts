@@ -103,6 +103,8 @@ export interface LoopParticipant {
 export interface LoopDetail extends LoopItem {
   events?: LoopEvent[];
   participants?: LoopParticipant[];
+  /** Present only when a plugin has contributed to this loop. */
+  blocks?: LoopBlock[];
 }
 
 export interface LoopProposal {
@@ -119,3 +121,22 @@ export interface LoopAgentResult {
   proposal: LoopProposal | null;
   stoppedBecause: 'completed' | 'step_limit' | 'no_provider' | 'error';
 }
+
+/**
+ * Plugin-rendered blocks, mirroring packages/plugin-sdk/src/blocks.ts.
+ *
+ * Duplicated rather than imported because the client bundles for React Native
+ * and must not pull in the server-facing SDK. The server validates every field
+ * before persistence, so this type describes what has already been checked.
+ */
+export type LoopBlockIcon =
+  | 'calendar' | 'clock' | 'person' | 'link' | 'check' | 'warning' | 'document';
+
+export type LoopBlock =
+  | { kind: 'summary'; title: string; body: string; tone?: 'neutral' | 'positive' | 'warning' }
+  | { kind: 'facts'; title?: string; items: Array<{ label: string; value: string; icon?: LoopBlockIcon }> }
+  | { kind: 'datetime'; label: string; start: string; end?: string; timezone: string; allDay?: boolean; conflicts?: string[] }
+  | { kind: 'choice'; prompt: string; options: Array<{ id: string; label: string; capabilityId: string; input: Record<string, unknown> }> }
+  | { kind: 'action'; actionId: string; label: string; capabilityId: string; style: 'primary' | 'secondary' | 'destructive'; inputPreview: Array<{ label: string; value: string }>; requiresApproval: boolean; destination?: string }
+  | { kind: 'status'; state: 'pending' | 'awaiting_approval' | 'running' | 'succeeded' | 'failed'; label: string; detail?: string; receiptId?: string; undoActionId?: string }
+  | { kind: 'link'; label: string; url: string; host: string };

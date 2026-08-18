@@ -20,6 +20,7 @@ import {
   type LoopParticipant,
 } from '../../services/loops';
 import { LoopAgentPanel } from './loop-agent-panel';
+import { LoopBlocks } from './loop-blocks';
 import { LoopTimeline } from './loop-timeline';
 
 /**
@@ -367,6 +368,12 @@ export function LoopDetailScreen() {
                 <ParticipantRow key={participant.id} participant={participant} />
               ))}
             </View>
+          </Section>
+        ) : null}
+
+        {loop.blocks?.length ? (
+          <Section title="Actions">
+            <LoopBlocks blocks={loop.blocks} />
           </Section>
         ) : null}
 

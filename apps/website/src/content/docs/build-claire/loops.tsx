@@ -139,6 +139,11 @@ cd apps/server && bun test                          # the eval runs here too`}</
           head={['Path', 'What']}
           rows={[
             ['apps/server/src/services/loops/relevance.ts', 'Signal scoring and thresholds'],
+            ['apps/server/src/services/loops/loop-{gate,context,prompts,reconciler,detector,queue}.ts', 'The detection pipeline'],
+            ['apps/server/src/services/loops/loop-agent.ts', 'The loop-scoped agent (read and propose only)'],
+            ['apps/server/src/services/ai/', 'Provider registry and schema-validated output'],
+            ['apps/server/src/plugins/blocks/schema.ts', 'Plugin block validation'],
+            ['apps/client/features/loops/', 'List, details page, timeline, agent panel, block renderer'],
             ['apps/server/src/services/loops/eval/', 'Scenario types, generator, runner'],
             ['apps/server/scripts/eval-loops.ts', 'Evaluation CLI'],
             ['apps/server/src/routes/loops.ts', 'REST API'],
@@ -148,12 +153,81 @@ cd apps/server && bun test                          # the eval runs here too`}</
         />
       </Section>
 
+      <Section id="pipeline" title="The detection pipeline">
+        <P>
+          One pass over a chat is <C>gate → extract+reconcile → apply</C>. Scheduling is per
+          <em>chat</em> and debounced, not per message: a burst of twenty messages costs one pass
+          over the whole exchange rather than twenty passes over twenty fragments. That is what lets
+          one plan stay one loop as it evolves.
+        </P>
+        <Table
+          head={['Stage', 'Cost', 'What it does']}
+          rows={[
+            ['loop-gate.ts', 'free', 'Regex plus an open-loop check. A chat with a live loop always re-runs — otherwise resolutions are never noticed and nothing ever closes.'],
+            ['loop-context.ts', 'free', 'Windowing with overlap so a loop spanning the cursor stays coherent. Evidence attachment is idempotent in the database, so re-reading cannot duplicate.'],
+            ['loop-prompts.ts', 'one call', 'The model returns operations against already-open loops, not a list of loops.'],
+            ['loop-reconciler.ts', 'free', 'Pure guards. Decides what each operation is allowed to do.'],
+          ]}
+        />
+        <Callout kind="note" title="Why the model is asked for operations, not loops">
+          A model asked for “the commitments in this window” returns one per message. Asking for{' '}
+          <C>create</C>/<C>update</C>/<C>close</C> against loops it can already see is what turns a
+          row into a thread. Extraction and reconciliation share the call because they share a
+          transcript — splitting them doubles cost and lets the two stages disagree about what a
+          message meant.
+        </Callout>
+        <P>
+          Closes are guarded hardest: explicit cited evidence, confidence ≥ 0.75, and the chat’s{' '}
+          <C>auto_close</C>. Failing any of those, the close is recorded as a suggestion rather than
+          applied. A missed loop disappoints; a wrongly-closed loop is a broken promise.
+        </P>
+      </Section>
+
+      <Section id="agent" title="The loop agent">
+        <P>
+          The details page can ask Claire to help close a loop. Its safety property is{' '}
+          <strong>structural, not prompted</strong>: the four tools are two reads and two proposals,
+          and there is no tool that sends a message, writes externally, or mutates a row. A prompt
+          injection that fully succeeds can make Claire say something wrong; it cannot make Claire
+          do anything. Tests assert this against the source, so adding a sending tool later fails
+          the build.
+        </P>
+        <P>
+          The step cap, the wall clock, and output truncation are one mechanism doing two jobs — “call
+          search fifty times” is both an injection attempt and a bill.
+        </P>
+      </Section>
+
+      <Section id="blocks" title="Plugin blocks">
+        <P>
+          A plugin can contribute a small, fixed vocabulary of typed blocks to a loop. This is
+          deliberately the opposite of unrestricted UI: no styling, no markup, no nesting, no code.{' '}
+          <strong>The plugin supplies data; Claire owns rendering.</strong>
+        </P>
+        <P>
+          Validation runs server-side before persistence, never at render time — a renderer that
+          trusted the shape would be trusting the plugin, and every client would have to
+          re-implement the checks. Three rules carry the weight:{' '}
+          <C>requiresApproval</C> is computed from the installation’s manifest risk and overwrites
+          whatever the plugin supplied; <C>link.url</C> must be https with a host in the egress
+          allowlist, and the host is re-derived rather than accepted; and an unknown block kind is
+          rejected rather than ignored, so a newer plugin cannot smuggle a payload past an older
+          server.
+        </P>
+      </Section>
+
       <Section id="not-built" title="Not built yet">
         <P>
-          The windowed detection pipeline, the loop details page, the agent layer, and the plugin
-          runtime are specified in the <DocLink to="/docs/plans/loops-revamp" /> but not implemented. Detection
-          ships behind <C>LOOP_DETECTION_MODE=off</C> until the mining harness measures it against a
-          real corpus.
+          Detection ships behind <C>LOOP_DETECTION_MODE=off</C> until the mining harness measures it
+          against a real corpus — the per-call token count rises sharply and only measurement proves
+          the call-count reduction more than compensates.
+        </P>
+        <P>
+          Still specified in the <DocLink to="/docs/plans/loops-revamp" /> but not implemented: the
+          plugin <em>runtime</em> (registry, policy engine, gateway, approvals, receipts) behind the
+          block schema, the corpus-mining harness, cross-platform loop merging, and the transactional
+          outbox that trigger fan-out will need before any plugin performs a background external
+          write.
         </P>
       </Section>
     </Doc>
