@@ -26,7 +26,7 @@ export function ClaireThemeProvider({
   );
 }
 
-export type ClaireBreakpoint = 'compact' | 'medium' | 'expanded';
+export type ClaireBreakpoint = 'compact' | 'medium' | 'desktop' | 'wide' | 'full';
 
 /**
  * The current density bucket.
@@ -38,7 +38,9 @@ export type ClaireBreakpoint = 'compact' | 'medium' | 'expanded';
  */
 export function useClaireBreakpoint(): ClaireBreakpoint {
   const media = useMedia();
-  if (media.gtExpanded) return 'expanded';
+  if (media.gtFull) return 'full';
+  if (media.gtWide) return 'wide';
+  if (media.gtExpanded) return 'desktop';
   if (media.gtCompact) return 'medium';
   return 'compact';
 }

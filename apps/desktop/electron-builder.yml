@@ -1,6 +1,7 @@
 appId: com.claire.desktop
 productName: Claire
 copyright: Copyright © Claire contributors
+afterSign: scripts/after-sign.cjs
 
 directories:
   output: release/production
@@ -20,6 +21,9 @@ files:
   - build/icon.png
   - build/icon-dev.png
 
+# The signed Swift APNs helper is produced before packaging and signed by the
+# afterSign hook in release CI. Local builds retain Electron notifications.
+
 mac:
   category: public.app-category.social-networking
   target:
@@ -27,8 +31,16 @@ mac:
       arch: [arm64, x64]
     - target: zip
       arch: [arm64, x64]
-  # Unsigned for the spike. Signing and notarization are a separate step.
-  identity: null
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  extendInfo:
+    CFBundleDisplayName: Claire
+    CFBundleName: Claire
+  extraResources:
+    - from: native/macos/build/ClairePushHelper
+      to: ClairePushHelper
 
 win:
   target:

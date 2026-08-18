@@ -5,6 +5,8 @@ import {
   CheckBadgeIcon,
   Cog6ToothIcon,
   HomeIcon,
+  InboxIcon,
+  MagnifyingGlassIcon,
   SparklesIcon,
   UserGroupIcon,
 } from 'react-native-heroicons/outline';
@@ -45,7 +47,7 @@ export function DesktopChrome({ children }: { children: ReactNode }) {
       activeRoute={pathname}
       onNavigate={navigate}
       onSearch={(query) =>
-        router.push({ pathname: '/(tabs)/search', params: query ? { q: query } : {} } as never)
+        router.push({ pathname: '/search', params: query ? { q: query } : {} } as never)
       }
       onOpenConnections={() => router.push('/connections' as never)}
     >
@@ -56,33 +58,45 @@ export function DesktopChrome({ children }: { children: ReactNode }) {
 
 const DESTINATIONS: DesktopDestination[] = [
   {
-    route: '/(tabs)/dashboard',
+    route: '/dashboard',
     label: 'Home',
     icon: (props) => <HomeIcon {...props} />,
   },
   {
-    route: '/(tabs)/messages',
+    route: '/messages',
     label: 'Inbox',
-    icon: (props) => <ChatBubbleLeftRightIcon {...props} />,
+    activeRoutes: ['/chat'],
+    icon: (props) => <InboxIcon {...props} />,
   },
   {
-    route: '/(tabs)/promises',
+    route: '/search',
+    label: 'Search',
+    icon: (props) => <MagnifyingGlassIcon {...props} />,
+  },
+  {
+    route: '/promises',
     label: 'Promises',
     icon: (props) => <CheckBadgeIcon {...props} />,
   },
   {
-    route: '/(tabs)/ask-claire',
+    route: '/ask-claire',
     label: 'Ask Claire',
     icon: (props) => <SparklesIcon {...props} />,
   },
   {
-    route: '/(tabs)/contacts',
+    route: '/contacts',
     label: 'People',
     icon: (props) => <UserGroupIcon {...props} />,
+  },
+  {
+    route: '/connections',
+    label: 'Connections',
+    icon: (props) => <ChatBubbleLeftRightIcon {...props} />,
   },
   {
     route: '/settings',
     label: 'Settings',
     icon: (props) => <Cog6ToothIcon {...props} />,
+    placement: 'bottom',
   },
 ];

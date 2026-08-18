@@ -26,6 +26,7 @@ export default function ContactsScreen() {
   const [searchQuery, setSearchQuery] = useState(params.q || params.query || '');
   const [filter, setFilter] = useState<PeopleFilter>('all');
   const [platform, setPlatform] = useState<PlatformFilter>('all');
+  const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
   const [showPlatformFilter, setShowPlatformFilter] = useState(false);
   const user = useAuthStore(state => state.user);
   const debouncedSearchQuery = useDebouncedValue(searchQuery);
@@ -71,6 +72,19 @@ export default function ContactsScreen() {
     : platform !== 'all'
       ? 'Contacts from this account appear here as conversations sync.'
       : 'Contacts appear here as conversations sync.';
+
+  if (isDesktop) {
+    const selected = contacts.find((contact) => contact.id === selectedContactId) || contacts[0];
+    return <DesktopPeopleWorkspace
+      contacts={contacts}
+      selected={selected}
+      searchQuery={searchQuery}
+      loading={peopleQuery.isLoading}
+      onSearch={setSearchQuery}
+      onSelect={setSelectedContactId}
+      onOpen={openContact}
+    />;
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.paper }} testID="contacts-screen">
@@ -190,4 +204,46 @@ export default function ContactsScreen() {
       </Modal>
     </View>
   );
+}
+
+function DesktopPeopleWorkspace({ contacts, selected, searchQuery, loading, onSearch, onSelect, onOpen }: {
+  contacts: PersonContact[];
+  selected?: PersonContact;
+  searchQuery: string;
+  loading: boolean;
+  onSearch: (value: string) => void;
+  onSelect: (id: string) => void;
+  onOpen: (contact: PersonContact) => void;
+}) {
+  const name = selected ? selected.name || selected.inferred_name || selected.phone_number || 'Unknown person' : 'Choose a person';
+  const relationship = selected?.inferred_relationship || (selected?.is_group ? 'Group' : 'Uncategorized');
+  const platform = selected ? platformLabel(contactPlatform(selected)) : 'No conversation selected';
+  return <View style={{ flex: 1, flexDirection: 'row', minHeight: 0, backgroundColor: colors.cream }} testID="desktop-people-screen">
+    <View style={{ width: 274, flexShrink: 0, backgroundColor: colors.paper, borderRightWidth: 1, borderColor: colors.neutral[200], padding: space[3] }}>
+      <Text style={{ ...mobileType.screenTitle, color: colors.ink, marginBottom: space[3] }}>People</Text>
+      <MobileSearchField icon={<Search size={17} color={colors.neutral[600]} />} placeholder="Search people" value={searchQuery} onChangeText={onSearch} testID="contacts-search-input" />
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 4, paddingTop: space[3], paddingBottom: space[2] }}><Text style={{ ...mobileType.monoLabel, color: colors.neutral[600] }}>RECENT</Text><Text style={{ ...mobileType.monoLabel, color: colors.neutral[600] }}>A–Z</Text></View>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: space[3] }}>
+        {loading ? <PeopleSkeleton /> : contacts.map((contact) => {
+          const contactName = contact.name || contact.inferred_name || contact.phone_number || 'Unknown person';
+          const active = selected?.id === contact.id;
+          return <Pressable key={contact.id} onPress={() => onSelect(contact.id)} accessibilityRole="button" style={({ pressed }) => ({ opacity: pressed ? 0.74 : 1 })}><View style={{ minHeight: 62, flexDirection: 'row', alignItems: 'center', gap: space[2], padding: 8, borderRadius: 12, backgroundColor: active ? colors.lime : 'transparent' }}><MobileAvatar name={contactName} uri={contact.avatar_url} size={38} isGroup={contact.is_group} /><View style={{ flex: 1, minWidth: 0 }}><Text numberOfLines={1} style={{ ...mobileType.bodySmall, fontWeight: '700', color: colors.ink }}>{contactName}</Text><Text numberOfLines={1} style={{ ...mobileType.label, color: colors.neutral[600] }}>{contact.inferred_relationship || `${platformLabel(contactPlatform(contact))}`}</Text></View></View></Pressable>;
+        })}
+        {!loading && !contacts.length ? <MobileState title="No people yet" message="Contacts appear here as conversations sync." /> : null}
+      </ScrollView>
+    </View>
+    <ScrollView style={{ flex: 1, minWidth: 0 }} contentContainerStyle={{ padding: 30, paddingBottom: 54 }}>
+      {selected ? <>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[3], paddingBottom: 26, borderBottomWidth: 1, borderColor: colors.neutral[200] }}><MobileAvatar name={name} uri={selected.avatar_url} size={52} isGroup={selected.is_group} /><View style={{ flex: 1 }}><Text style={{ ...mobileType.sectionTitle, color: colors.ink }}>{name}</Text><Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{platform}{selected.phone_number ? ` · ${selected.phone_number}` : ''}</Text></View>{selected.chat ? <Pressable onPress={() => onOpen(selected)}><View style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 99, backgroundColor: colors.ink }}><Text style={{ ...mobileType.label, color: colors.paper }}>Open chat</Text></View></Pressable> : null}</View>
+        <Text style={{ ...mobileType.monoLabel, color: colors.neutral[600], marginTop: 26, marginBottom: 10 }}>RELATIONSHIP TYPE</Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 7 }}>{['Business', 'Client', 'Colleague', 'Mentor', 'Friend', 'Family', 'Other'].map((item) => <View key={item} style={{ borderWidth: 1, borderColor: item === relationship ? colors.ink : colors.neutral[200], borderRadius: 99, backgroundColor: item === relationship ? colors.lime : colors.paper, paddingHorizontal: 10, paddingVertical: 7 }}><Text style={{ ...mobileType.label, color: colors.ink }}>{item}</Text></View>)}</View>
+        <Text style={{ ...mobileType.monoLabel, color: colors.neutral[600], marginTop: 25, marginBottom: 10 }}>WHAT SHOULD CLAIRE REMEMBER?</Text>
+        <View style={{ minHeight: 128, borderWidth: 1, borderColor: colors.neutral[200], borderRadius: 14, padding: space[3], backgroundColor: colors.paper }}><Text style={{ ...mobileType.bodySmall, color: colors.ink }}>{selected.inferred_relationship ? `${name} is ${selected.inferred_relationship.toLowerCase()}. Keep replies personal, clear, and grounded in the context of this relationship.` : `Add a little context about ${name} to make Claire’s suggestions more personal.`}</Text></View>
+        <Text style={{ ...mobileType.monoLabel, color: colors.neutral[600], marginTop: 25, marginBottom: 10 }}>DEFAULT SUGGESTION TONE</Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 9 }}>{[['Warm + direct', 'Clear, human, confident'], ['Professional', 'Polished and concise'], ['Casual', 'Relaxed and natural'], ['Playful', 'Light and expressive']].map(([title, detail], index) => <View key={title} style={{ width: '47%', minHeight: 76, borderWidth: 1, borderColor: index === 0 ? colors.ink : colors.neutral[200], borderRadius: 13, backgroundColor: index === 0 ? colors.lavender : colors.paper, padding: 11 }}><Text style={{ ...mobileType.bodySmall, fontWeight: '700', color: colors.ink }}>{title}</Text><Text style={{ ...mobileType.label, color: colors.neutral[600] }}>{detail}</Text></View>)}</View>
+        <Pressable style={{ alignSelf: 'flex-start', marginTop: 22 }}><View style={{ paddingHorizontal: 14, paddingVertical: 10, borderRadius: 11, backgroundColor: colors.ink }}><Text style={{ ...mobileType.label, color: colors.paper }}>Save relationship memory</Text></View></Pressable>
+      </> : <MobileState title="Choose a person" message="Select someone to work with relationship memory." />}
+    </ScrollView>
+    <View style={{ width: 270, flexShrink: 0, borderLeftWidth: 1, borderColor: colors.neutral[200], backgroundColor: colors.paper, padding: space[4] }}><Text style={{ ...mobileType.monoLabel, color: colors.neutral[600] }}>LIVE PREVIEW</Text><Text style={{ ...mobileType.sectionTitle, color: colors.ink, marginTop: 9 }}>See how Claire{`\n`}will help with {selected ? name.split(' ')[0] : 'them'}.</Text><View style={{ marginTop: 18, padding: space[3], borderRadius: 14, backgroundColor: colors.lavender }}><Text style={{ ...mobileType.monoLabel, color: colors.ink }}>REPLY SUGGESTION</Text><Text style={{ ...mobileType.bodySmall, color: colors.ink, marginTop: 8 }}>“I’ve got it. I’ll keep this concise and make sure the next step is clear.”</Text><View style={{ alignSelf: 'flex-start', marginTop: 12, paddingHorizontal: 8, paddingVertical: 5, borderWidth: 1, borderColor: colors.ink, borderRadius: 99 }}><Text style={{ ...mobileType.label, color: colors.ink }}>Looks right</Text></View></View><View style={{ marginTop: 22, paddingTop: 18, borderTopWidth: 1, borderColor: colors.neutral[200] }}><Text style={{ ...mobileType.monoLabel, color: colors.neutral[600] }}>CLAIRE WILL PRIORITIZE</Text><Text style={{ ...mobileType.bodySmall, fontWeight: '700', color: colors.ink, marginTop: 8 }}>Relationship context</Text><Text style={{ ...mobileType.label, color: colors.neutral[600] }}>Tone, history, and commitments that matter here.</Text></View></View>
+  </View>;
 }
