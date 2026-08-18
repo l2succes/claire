@@ -199,11 +199,53 @@ export const MOCK_LOOPS = [
     message_id: 'chatmsg-1',
     chat_id: 'mock-chat-wa-alice',
     content: "I'll send you the report by Friday",
+    title: "Send Alice the report",
+    state_summary: 'Agreed to send it by Friday.',
+    thread_state: 'agreed',
+    kind: 'commitment',
+    owner: 'me',
+    from_me: true,
+    priority: 'medium',
     deadline: new Date(Date.now() + 86400_000 * 3).toISOString(),
+    deadline_precision: 'day',
+    snoozed_until: null,
     status: 'open',
     platform: 'whatsapp',
+    relevance: 1,
+    relevance_signals: { reasons: ['You committed to this yourself'], hardPass: 'self_commitment' },
+    evidence_count: 1,
+    source: 'detector',
     created_at: new Date(Date.now() - 3700_000).toISOString(),
   },
+];
+
+/** Timeline for loop-1, so the details page has a history to render. */
+export const MOCK_LOOP_EVENTS = [
+  {
+    id: 'loop-event-1',
+    kind: 'created',
+    actor: 'detector',
+    message_id: 'chatmsg-1',
+    summary: 'Agreed to send the report by Friday.',
+    payload: { threadState: 'agreed' },
+    confidence: 0.93,
+    occurred_at: new Date(Date.now() - 3700_000).toISOString(),
+  },
+  {
+    id: 'loop-event-2',
+    kind: 'evidence',
+    actor: 'detector',
+    message_id: 'chatmsg-1',
+    summary: "I'll send you the report by Friday",
+    payload: {},
+    confidence: null,
+    occurred_at: new Date(Date.now() - 3600_000).toISOString(),
+  },
+];
+
+export const MOCK_LOOP_PARTICIPANTS = [
+  { id: 'loop-participant-1', display_name: 'You', contact_id: null, is_self: true, role: 'owner', evidence: null },
+  { id: 'loop-participant-2', display_name: 'Alice (WA)', contact_id: null, is_self: false, role: 'counterparty', evidence: null },
 ];
 
 // Represents the source-message fallback used for legacy loop rows that
@@ -784,6 +826,84 @@ export async function mockBackend(page) {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true }) });
     } else {
       await route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ error: `Unhandled assistant route ${method} ${path}` }) });
+    }
+  });
+
+  // Server API: /loops. Distinct from the PostgREST reads handled under
+  // /rest/v1 — same table, different response envelope.
+  let mockLoops = MOCK_LOOPS.map((loop) => ({ ...loop }));
+  await page.route('**/loops**', async (route) => {
+    const url = new URL(route.request().url());
+    const path = url.pathname;
+    const method = route.request().method();
+
+    // The app's own URLs are /loops and /loops/:id, so this pattern also
+    // matches the page navigation itself. Serving API JSON for a document
+    // request renders the payload as the page instead of loading the app.
+    if (route.request().resourceType() === 'document') {
+      await route.fallback();
+      return;
+    }
+
+    // PostgREST reads of the same table belong to the /rest/v1 handler.
+    if (path.includes('/rest/v1/')) {
+      await route.fallback();
+      return;
+    }
+
+    const json = (data, status = 200) =>
+      route.fulfill({
+        status,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: status < 400, data }),
+      });
+
+    const detailMatch = path.match(/\/loops\/([^/]+)$/);
+    const snoozeMatch = path.match(/\/loops\/([^/]+)\/snooze$/);
+    const eventsMatch = path.match(/\/loops\/([^/]+)\/events$/);
+
+    if (path.endsWith('/loops') && method === 'GET') {
+      await json(mockLoops.map((loop) => ({ ...loop, ...MOCK_LOOP_SOURCE_MESSAGES[0] , id: loop.id, status: loop.status })));
+    } else if (eventsMatch && method === 'GET') {
+      await json(MOCK_LOOP_EVENTS);
+    } else if (snoozeMatch && method === 'POST') {
+      const body = JSON.parse(route.request().postData() || '{}');
+      const id = snoozeMatch[1];
+      // Snooze must leave `deadline` untouched.
+      mockLoops = mockLoops.map((loop) =>
+        loop.id === id ? { ...loop, snoozed_until: body.snooze_until, status: 'snoozed' } : loop,
+      );
+      await json(mockLoops.find((loop) => loop.id === id));
+    } else if (detailMatch && method === 'GET') {
+      const loop = mockLoops.find((item) => item.id === detailMatch[1]);
+      if (!loop) {
+        await json(null, 404);
+        return;
+      }
+      const include = new Set((url.searchParams.get('include') || '').split(',').filter(Boolean));
+      await json({
+        ...loop,
+        ...MOCK_LOOP_SOURCE_MESSAGES[0],
+        id: loop.id,
+        status: loop.status,
+        ...(include.has('events') ? { events: MOCK_LOOP_EVENTS } : {}),
+        ...(include.has('participants') ? { participants: MOCK_LOOP_PARTICIPANTS } : {}),
+      });
+    } else if (detailMatch && method === 'PATCH') {
+      const body = JSON.parse(route.request().postData() || '{}');
+      const id = detailMatch[1];
+      mockLoops = mockLoops.map((loop) => (loop.id === id ? { ...loop, ...body } : loop));
+      await json(mockLoops.find((loop) => loop.id === id));
+    } else if (detailMatch && method === 'DELETE') {
+      mockLoops = mockLoops.filter((loop) => loop.id !== detailMatch[1]);
+      await json(null);
+    } else if (path.endsWith('/loops') && method === 'POST') {
+      const body = JSON.parse(route.request().postData() || '{}');
+      const created = { ...MOCK_LOOPS[0], id: `loop-${mockLoops.length + 1}`, ...body, status: 'open' };
+      mockLoops = [created, ...mockLoops];
+      await json(created, 201);
+    } else {
+      await json({ error: `Unhandled loops route ${method} ${path}` }, 404);
     }
   });
 

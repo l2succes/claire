@@ -396,7 +396,7 @@ test.describe('Core loop — mock backend', () => {
   });
 
   // 6d. Loops are conversation-first: tapping a card opens its chat to reply.
-  test('Loops screen opens the linked conversation from a loop card', async ({ page }) => {
+  test('Loops screen opens the loop details page from a loop card', async ({ page }) => {
     await signIn(page);
 
     await page.getByTestId('tab-loops').click();
@@ -409,7 +409,33 @@ test.describe('Core loop — mock backend', () => {
 
     await expect(page.getByTestId('loop-contact-name-loop-1')).toHaveText('Alice (WA)');
     await expect(page.getByTestId('loop-contact-avatar-loop-1')).toBeVisible();
+
+    // The card opens the loop, not the chat: snooze, history, and delete live
+    // on the details page, and jumping to the conversation skipped all of it.
     await page.getByTestId('loop-item-loop-1').click();
+    await expect(page.getByTestId('loop-detail-screen')).toBeVisible({ timeout: 8_000 });
+    await expect(page).toHaveURL(/loops\/loop-1/);
+  });
+
+  test('Loop details page shows the narrative, history, and people', async ({ page }) => {
+    await signIn(page);
+    await page.goto('/loops/loop-1');
+
+    await expect(page.getByTestId('loop-detail-screen')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId('loop-detail-title')).toHaveText('Send Alice the report');
+    // state_summary is the evolving narrative — the most useful new field.
+    await expect(page.getByTestId('loop-detail-summary')).toBeVisible();
+    await expect(page.getByTestId('loop-detail-state')).toContainText('Agreed');
+    await expect(page.getByTestId('loop-timeline')).toBeVisible();
+    await expect(page.locator('[data-testid^="loop-event-"]')).toHaveCount(2);
+  });
+
+  test('Loop details page opens the conversation as a secondary action', async ({ page }) => {
+    await signIn(page);
+    await page.goto('/loops/loop-1');
+
+    await expect(page.getByTestId('loop-detail-screen')).toBeVisible({ timeout: 10_000 });
+    await page.getByTestId('loop-detail-open-chat').click();
     await expect(page.getByTestId('chat-screen')).toBeVisible({ timeout: 8_000 });
     await expect(page).toHaveURL(/chat\/mock-chat-wa-alice/);
   });

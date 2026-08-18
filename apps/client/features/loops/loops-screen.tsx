@@ -83,8 +83,11 @@ export function LoopsScreen() {
     return (
       <Pressable
         testID={`loop-item-${item.id}`}
-        onPress={() => item.chat_id ? router.push({ pathname: '/chat/[chatId]', params: { chatId: item.chat_id, contact_name: group ? '' : name, chat_name: name, platform: item.platform || item.chat?.platform || '', is_group: group ? '1' : '0' } }) : undefined}
-        accessibilityRole={item.chat_id ? 'button' : undefined}
+        // Opens the loop, not the chat. Jumping straight into the conversation
+        // meant snooze, notes, history, and delete had nowhere to live.
+        // "Open conversation" is now a secondary action inside the detail page.
+        onPress={() => router.push({ pathname: '/loops/[id]', params: { id: item.id } })}
+        accessibilityRole="button"
         style={({ pressed }) => ({ flexDirection: 'row', gap: space[3], paddingVertical: space[3], borderBottomWidth: 1, borderBottomColor: colors.neutral[200], opacity: pressed ? 0.65 : 1 })}
       >
         <Pressable
@@ -98,8 +101,8 @@ export function LoopsScreen() {
         <View style={{ flex: 1, minWidth: 0, gap: 5 }}>
           <Text selectable style={{ ...mobileType.body, fontWeight: '700', color: colors.ink, textDecorationLine: item.status === 'done' ? 'line-through' : 'none' }}>{item.content}</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}>
-            <View style={{ width: 25, height: 25, borderRadius: 13, backgroundColor: group ? colors.sky : colors.blush, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }}>{avatar ? <Image source={{ uri: avatar }} style={{ width: 25, height: 25 }} /> : group ? <UsersRound size={13} color={colors.neutral[600]} /> : <UserRound size={13} color={colors.neutral[600]} />}</View>
-            <Text selectable numberOfLines={1} style={{ ...mobileType.bodySmall, flex: 1, color: colors.neutral[600] }}>{name}</Text>
+            <View testID={`loop-contact-avatar-${item.id}`} style={{ width: 25, height: 25, borderRadius: 13, backgroundColor: group ? colors.sky : colors.blush, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }}>{avatar ? <Image source={{ uri: avatar }} style={{ width: 25, height: 25 }} /> : group ? <UsersRound size={13} color={colors.neutral[600]} /> : <UserRound size={13} color={colors.neutral[600]} />}</View>
+            <Text testID={`loop-contact-name-${item.id}`} selectable numberOfLines={1} style={{ ...mobileType.bodySmall, flex: 1, color: colors.neutral[600] }}>{name}</Text>
             {item.chat_id ? <MessageCircle size={14} color={colors.neutral[400]} /> : null}
           </View>
         </View>

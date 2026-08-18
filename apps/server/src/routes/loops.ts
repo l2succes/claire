@@ -212,8 +212,15 @@ router.get(
 );
 
 /**
- * GET /loops/:id
- * Get a single loop by ID (must belong to the authenticated user).
+ * GET /loops/:id?include=events,participants
+ *
+ * The details-page call. `include` is opt-in so the list screen's per-row
+ * fetches stay cheap, and so the timeline — which can be long — is only paid
+ * for when something is going to render it.
+ *
+ * Conversation hydration runs here too. The list endpoint has always done it
+ * and the detail endpoint never did, which meant opening a loop lost the very
+ * chat context that makes it readable.
  */
 router.get(
   '/:id',
@@ -233,9 +240,98 @@ router.get(
         return res.status(404).json({ success: false, error: 'Loop not found' });
       }
 
-      return res.json({ success: true, data: loop });
+      const include = new Set(
+        String(req.query.include ?? '')
+          .split(',')
+          .map((part) => part.trim())
+          .filter(Boolean),
+      );
+
+      const [hydrated] = await hydrateLoopConversations(userId, [loop as LoopConversationRow]);
+      const data: Record<string, unknown> = { ...hydrated };
+
+      if (include.has('events')) {
+        // Ascending: the timeline reads as a story, oldest first.
+        const { data: events, error } = await supabase
+          .from('loop_events')
+          .select('id, kind, actor, message_id, summary, payload, confidence, occurred_at')
+          .eq('loop_id', id)
+          .eq('user_id', userId)
+          .order('occurred_at', { ascending: true })
+          .order('id', { ascending: true })
+          .limit(200);
+
+        if (error) {
+          logger.warn('Failed to load loop events', { loopId: id, error: error.message });
+        }
+        data.events = events ?? [];
+      }
+
+      if (include.has('participants')) {
+        const { data: participants, error } = await supabase
+          .from('loop_participants')
+          .select('id, display_name, contact_id, is_self, role, evidence')
+          .eq('loop_id', id)
+          .eq('user_id', userId);
+
+        if (error) {
+          logger.warn('Failed to load loop participants', { loopId: id, error: error.message });
+        }
+        data.participants = participants ?? [];
+      }
+
+      return res.json({ success: true, data });
     } catch (error) {
       logger.error('Error in GET /loops/:id:', error);
+      return res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+  }
+);
+
+/**
+ * GET /loops/:id/events
+ *
+ * Keyset-paginated timeline for loops whose history outgrows the 200 the detail
+ * endpoint inlines.
+ */
+router.get(
+  '/:id/events',
+  requireAuth,
+  validateRequest(getLoopSchema),
+  async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { id } = req.params;
+      if (!(await getOwnedLoop(id, userId))) {
+        return res.status(404).json({ success: false, error: 'Loop not found' });
+      }
+
+      const limit = Math.min(Number(req.query.limit) || 50, 200);
+      let query = supabase
+        .from('loop_events')
+        .select('id, kind, actor, message_id, summary, payload, confidence, occurred_at')
+        .eq('loop_id', id)
+        .eq('user_id', userId)
+        .order('occurred_at', { ascending: true })
+        .order('id', { ascending: true })
+        .limit(limit);
+
+      const after = typeof req.query.after === 'string' ? req.query.after : null;
+      if (after) query = query.gt('occurred_at', after);
+
+      const { data, error } = await query;
+      if (error) {
+        logger.warn('Failed to page loop events', { loopId: id, error: error.message });
+        return res.status(500).json({ success: false, error: 'Failed to load events' });
+      }
+
+      return res.json({ success: true, data: data ?? [] });
+    } catch (error) {
+      logger.error('Error in GET /loops/:id/events:', error);
       return res.status(500).json({ success: false, error: 'Internal server error' });
     }
   }
