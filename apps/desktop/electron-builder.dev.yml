@@ -9,6 +9,9 @@ extends: electron-builder.yml
 appId: com.claire.desktop.dev
 productName: Claire Dev
 
+mac:
+  identity: null
+
 directories:
   output: release/dev
 

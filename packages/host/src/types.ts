@@ -20,6 +20,37 @@ export type ClaireNotification = {
   chatId?: string;
 };
 
+export type ClaireEncryptedCacheInfo = {
+  available: boolean;
+  byteLength: number;
+  updatedAt: string | null;
+};
+
+export type ClaireCompanionStatus = {
+  hostPlatform: 'macos' | 'windows' | 'linux' | 'browser' | 'native';
+  imessage: 'unavailable' | 'needs_permission' | 'ready';
+  encryptedCache: ClaireEncryptedCacheInfo;
+  pushHelper: 'unsupported' | 'not_configured' | 'ready';
+};
+
+export type ClaireIMessageSendRequest = {
+  recipient: string;
+  text: string;
+};
+
+export type ClaireIMessageSendResult = { success: true } | { success: false; error: string };
+
+export type ClaireInstagramLoginRequest = {
+  /** Ephemeral, authenticated server context. Never persisted by the host. */
+  apiUrl: string;
+  accessToken: string;
+};
+
+export type ClaireInstagramLoginResult = { success: boolean; error?: string };
+export type ClairePushSetupRequest = { apiUrl: string; accessToken: string };
+export type ClaireCompanionSetupRequest = { apiUrl: string; accessToken: string; userId: string };
+export type ClaireCompanionSetupResult = { success: boolean; error?: string; deviceId?: string };
+
 export type ClaireHostCapabilities = {
   /** Unread total can be mirrored on a Dock/taskbar badge. */
   badge: boolean;
@@ -31,6 +62,8 @@ export type ClaireHostCapabilities = {
   nativeWindow: boolean;
   /** Values given to `secureSet` are held by an OS keystore, not just the page. */
   secureStorage: boolean;
+  /** An encrypted per-user desktop snapshot can be stored by the host. */
+  encryptedCache: boolean;
 };
 
 export type ClaireHost = {
@@ -83,4 +116,15 @@ export type ClaireHost = {
   secureGet(key: string): Promise<string | null>;
   secureSet(key: string, value: string): Promise<boolean>;
   secureDelete(key: string): Promise<void>;
+
+  getCompanionStatus(): Promise<ClaireCompanionStatus>;
+  readEncryptedCache(userId: string): Promise<string | null>;
+  writeEncryptedCache(userId: string, value: string): Promise<boolean>;
+  clearEncryptedCache(userId: string): Promise<void>;
+  getEncryptedCacheInfo(userId: string): Promise<ClaireEncryptedCacheInfo>;
+  startInstagramLogin(request: ClaireInstagramLoginRequest): Promise<ClaireInstagramLoginResult>;
+  sendIMessage(request: ClaireIMessageSendRequest): Promise<ClaireIMessageSendResult>;
+  openSystemSettings(section: 'full_disk_access' | 'automation'): Promise<void>;
+  configurePushNotifications(request: ClairePushSetupRequest): Promise<void>;
+  configureCompanion(request: ClaireCompanionSetupRequest): Promise<ClaireCompanionSetupResult>;
 };

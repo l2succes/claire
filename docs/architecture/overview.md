@@ -13,7 +13,7 @@ last-reviewed: 2026-08-15
 ```mermaid
 flowchart LR
   Mobile["mobile/"] --> Server["server/"]
-  Desktop["desktop/macos/"] --> Server
+  Desktop["apps/desktop/"] --> Server
   Server --> Supabase["Supabase / Postgres"]
   Server --> Redis["Redis"]
   Server --> Synapse["Synapse"]

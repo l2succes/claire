@@ -24,6 +24,7 @@ export const host: ClaireHost = {
     imessage: false,
     nativeWindow: false,
     secureStorage: false,
+    encryptedCache: false,
   },
 
   setBadgeCount() {
@@ -69,6 +70,19 @@ export const host: ClaireHost = {
   async secureDelete() {
     // No-op.
   },
+
+  async getCompanionStatus() {
+    return { hostPlatform: 'native', imessage: 'unavailable', encryptedCache: { available: false, byteLength: 0, updatedAt: null }, pushHelper: 'unsupported' };
+  },
+  async readEncryptedCache() { return null; },
+  async writeEncryptedCache() { return false; },
+  async clearEncryptedCache() {},
+  async getEncryptedCacheInfo() { return { available: false, byteLength: 0, updatedAt: null }; },
+  async startInstagramLogin() { return { success: false, error: 'Instagram setup requires Claire Desktop.' }; },
+  async sendIMessage() { return { success: false, error: 'iMessage sending requires Claire Desktop on a Mac.' }; },
+  async openSystemSettings() {},
+  async configurePushNotifications() {},
+  async configureCompanion() { return { success: false, error: 'iMessage setup requires Claire Desktop on a Mac.' }; },
 
   async getPreference(key: string) {
     try {

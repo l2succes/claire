@@ -1,4 +1,4 @@
-import type { ClaireHost, ClaireNotification } from './types';
+import type { ClaireHost, ClaireNotification, ClaireCompanionStatus, ClaireEncryptedCacheInfo, ClaireIMessageSendRequest, ClaireIMessageSendResult, ClaireInstagramLoginRequest, ClaireInstagramLoginResult, ClairePushSetupRequest, ClaireCompanionSetupRequest, ClaireCompanionSetupResult } from './types';
 
 /**
  * Web host — covers both a plain browser tab and the Electron renderer.
@@ -14,7 +14,7 @@ import type { ClaireHost, ClaireNotification } from './types';
 type DesktopBridge = {
   platform: string;
   version: string;
-  capabilities: { badge: boolean; notifications: boolean; imessage: boolean; secureStorage: boolean };
+  capabilities: { badge: boolean; notifications: boolean; imessage: boolean; secureStorage: boolean; encryptedCache: boolean };
   setBadgeCount(count: number): void;
   notify(payload: ClaireNotification): void;
   openExternal(url: string): void;
@@ -23,6 +23,16 @@ type DesktopBridge = {
   secureGet(key: string): Promise<string | null>;
   secureSet(key: string, value: string): Promise<boolean>;
   secureDelete(key: string): Promise<void>;
+  getCompanionStatus(): Promise<ClaireCompanionStatus>;
+  readEncryptedCache(userId: string): Promise<string | null>;
+  writeEncryptedCache(userId: string, value: string): Promise<boolean>;
+  clearEncryptedCache(userId: string): Promise<void>;
+  getEncryptedCacheInfo(userId: string): Promise<ClaireEncryptedCacheInfo>;
+  startInstagramLogin(request: ClaireInstagramLoginRequest): Promise<ClaireInstagramLoginResult>;
+  sendIMessage(request: ClaireIMessageSendRequest): Promise<ClaireIMessageSendResult>;
+  openSystemSettings(section: 'full_disk_access' | 'automation'): Promise<void>;
+  configurePushNotifications(request: ClairePushSetupRequest): Promise<void>;
+  configureCompanion(request: ClaireCompanionSetupRequest): Promise<ClaireCompanionSetupResult>;
   openConversationWindow(chatId: string): void;
   reportActiveConversation(chatId: string | null): void;
   onNavigate(callback: (target: string) => void): () => void;
@@ -52,6 +62,7 @@ export const host: ClaireHost = {
       imessage: Boolean(desktop?.capabilities.imessage),
       nativeWindow: Boolean(desktop),
       secureStorage: Boolean(desktop?.capabilities.secureStorage),
+      encryptedCache: Boolean(desktop?.capabilities.encryptedCache),
     };
   },
 
@@ -145,5 +156,26 @@ export const host: ClaireHost = {
     } catch {
       // Private-mode storage limits must not break a preference write.
     }
+  },
+
+  async getCompanionStatus() {
+    return bridge()?.getCompanionStatus() ?? { hostPlatform: 'browser', imessage: 'unavailable', encryptedCache: { available: false, byteLength: 0, updatedAt: null }, pushHelper: 'unsupported' };
+  },
+  async readEncryptedCache(userId: string) { return bridge()?.readEncryptedCache(userId) ?? null; },
+  async writeEncryptedCache(userId: string, value: string) { return bridge()?.writeEncryptedCache(userId, value) ?? false; },
+  async clearEncryptedCache(userId: string) { await bridge()?.clearEncryptedCache(userId); },
+  async getEncryptedCacheInfo(userId: string) { return bridge()?.getEncryptedCacheInfo(userId) ?? { available: false, byteLength: 0, updatedAt: null }; },
+  async startInstagramLogin(request: ClaireInstagramLoginRequest) { return bridge()?.startInstagramLogin(request) ?? { success: false, error: 'Instagram setup requires Claire Desktop.' }; },
+  async sendIMessage(request: ClaireIMessageSendRequest) { return bridge()?.sendIMessage(request) ?? { success: false, error: 'iMessage sending requires Claire Desktop on a Mac.' }; },
+  async openSystemSettings(section: 'full_disk_access' | 'automation') { await bridge()?.openSystemSettings(section); },
+  async configurePushNotifications(request: ClairePushSetupRequest) {
+    // A renderer can update before its Electron main process during Fast
+    // Refresh. Treat a missing newer IPC handler as unavailable, never as a
+    // user-facing crash; the next main-process restart retries registration.
+    try { await bridge()?.configurePushNotifications(request); } catch { /* stale desktop main */ }
+  },
+  async configureCompanion(request: ClaireCompanionSetupRequest) {
+    try { return await bridge()?.configureCompanion(request) ?? { success: false, error: 'iMessage setup requires Claire Desktop on a Mac.' }; }
+    catch { return { success: false, error: 'Restart Claire Desktop to finish iMessage setup.' }; }
   },
 };

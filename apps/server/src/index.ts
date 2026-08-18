@@ -31,6 +31,7 @@ import contactRoutes from './routes/contacts';
 import deviceRoutes from './routes/devices';
 import searchRoutes from './routes/search';
 import desktopSyncRoutes from './routes/desktop-sync';
+import handoffRoutes from './routes/handoffs';
 import { ensureCompanionSchema } from './services/companion-schema';
 import { platformManager } from './adapters';
 import { aiProcessor } from './services/ai-processor';
@@ -110,6 +111,7 @@ app.use('/contacts', contactRoutes);
 app.use('/devices', deviceRoutes);
 app.use('/search', searchRoutes);
 app.use('/desktop', desktopSyncRoutes);
+app.use('/handoffs', handoffRoutes);
 app.use('/auto-reply', autoReplyRoutes);
 
 // GoTrue sends an OAuth authorization code to its configured site URL when a

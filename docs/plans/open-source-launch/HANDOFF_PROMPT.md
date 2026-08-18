@@ -40,7 +40,7 @@ Implement in focused phases:
 mobile/ desktop/ website/ server/ packages/ examples/ docker/ supabase/ docs/ scripts/ vendor/
 ```
 
-The desktop application remains under `desktop/macos/`. Move the mautrix docs submodule from `docs/mautrix` to `vendor/mautrix-docs`.
+The desktop application lives under `apps/desktop/`. Move the mautrix docs submodule from `docs/mautrix` to `vendor/mautrix-docs`.
 
 ## Contributor experience to deliver
 
