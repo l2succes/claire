@@ -9,6 +9,19 @@ const environment = 'production';
 const studioService = 'Supabase Studio';
 
 type Credentials = Record<string, string>;
+type Item = { fields?: Array<{ label?: string; value?: string }> };
+
+const credentialsSection = { id: 'credentials', label: 'Credentials' };
+
+function credentialField(label: string, value: string) {
+  return {
+    id: `credential_${label.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`,
+    section: { id: credentialsSection.id },
+    label,
+    type: 'CONCEALED',
+    value,
+  };
+}
 
 function base64Url(bytes: Uint8Array) {
   return Buffer.from(bytes)
@@ -22,7 +35,9 @@ function fixedWidthP256Part(value: string | undefined) {
   if (!value) throw new Error('P-256 key export is missing a required component.');
   const bytes = Buffer.from(value, 'base64url');
   if (bytes.length > 32) throw new Error('P-256 key export has an invalid component length.');
-  return base64Url(bytes.length === 32 ? bytes : Buffer.concat([Buffer.alloc(32 - bytes.length), bytes]));
+  return base64Url(
+    bytes.length === 32 ? bytes : Buffer.concat([Buffer.alloc(32 - bytes.length), bytes])
+  );
 }
 
 async function signHs256(payload: Record<string, unknown>, secret: string) {
@@ -33,7 +48,7 @@ async function signHs256(payload: Record<string, unknown>, secret: string) {
     Buffer.from(secret),
     { name: 'HMAC', hash: 'SHA-256' },
     false,
-    ['sign'],
+    ['sign']
   );
   const signature = await webcrypto.subtle.sign('HMAC', key, Buffer.from(`${header}.${body}`));
   return `${header}.${body}.${base64Url(new Uint8Array(signature))}`;
@@ -45,7 +60,7 @@ async function signEs256(payload: Record<string, unknown>, key: CryptoKey, kid: 
   const signature = await webcrypto.subtle.sign(
     { name: 'ECDSA', hash: 'SHA-256' },
     key,
-    Buffer.from(`${header}.${body}`),
+    Buffer.from(`${header}.${body}`)
   );
   return `${header}.${body}.${base64Url(new Uint8Array(signature))}`;
 }
@@ -56,17 +71,21 @@ async function generateCredentials(): Promise<Credentials> {
   const jwtSecret = randomBytes(30).toString('base64');
   const anonPayload = { role: 'anon', iss: 'supabase', iat: now, exp: expires };
   const servicePayload = { role: 'service_role', iss: 'supabase', iat: now, exp: expires };
-  const pair = await webcrypto.subtle.generateKey(
-    { name: 'ECDSA', namedCurve: 'P-256' },
-    true,
-    ['sign', 'verify'],
-  );
+  const pair = await webcrypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, [
+    'sign',
+    'verify',
+  ]);
   const privateJwk = (await webcrypto.subtle.exportKey('jwk', pair.privateKey)) as JsonWebKey;
   const kid = randomUUID();
   const hs256Jwk = { kty: 'oct', k: base64Url(Buffer.from(jwtSecret)), alg: 'HS256' };
   const jwtKeys = [
     {
-      kty: 'EC', kid, use: 'sig', key_ops: ['sign', 'verify'], alg: 'ES256', ext: true,
+      kty: 'EC',
+      kid,
+      use: 'sig',
+      key_ops: ['sign', 'verify'],
+      alg: 'ES256',
+      ext: true,
       crv: privateJwk.crv,
       x: fixedWidthP256Part(privateJwk.x),
       y: fixedWidthP256Part(privateJwk.y),
@@ -93,7 +112,11 @@ async function generateCredentials(): Promise<Credentials> {
 }
 
 async function run(command: string[], stdin?: string, showDiagnostic = false) {
-  const process = Bun.spawn(command, { stdin: stdin === undefined ? 'ignore' : 'pipe', stdout: 'pipe', stderr: 'pipe' });
+  const process = Bun.spawn(command, {
+    stdin: stdin === undefined ? 'ignore' : 'pipe',
+    stdout: 'pipe',
+    stderr: 'pipe',
+  });
   if (stdin !== undefined) {
     process.stdin.write(stdin);
     process.stdin.end();
@@ -101,10 +124,24 @@ async function run(command: string[], stdin?: string, showDiagnostic = false) {
   const exitCode = await process.exited;
   const stdout = await new Response(process.stdout).text();
   if (exitCode !== 0) {
-    const diagnostic = showDiagnostic ? `\n${(await new Response(process.stderr).text()).trim()}` : '';
+    const diagnostic = showDiagnostic
+      ? `\n${(await new Response(process.stderr).text()).trim()}`
+      : '';
     throw new Error(`Command failed: ${command.slice(0, 2).join(' ')}${diagnostic}`);
   }
   return stdout;
+}
+
+function requireStoredFields(item: Item, expectedLabels: string[]) {
+  const stored = new Set(
+    item.fields?.filter((candidate) => candidate.value).map((candidate) => candidate.label) ?? []
+  );
+  const missing = expectedLabels.filter((label) => !stored.has(label));
+  if (missing.length > 0) {
+    throw new Error(
+      `1Password did not retain required concealed fields: ${missing.join(', ')}. No Railway credentials were changed.`
+    );
+  }
 }
 
 async function main() {
@@ -112,21 +149,26 @@ async function main() {
     await run(['op', 'whoami']);
   } catch {
     throw new Error(
-      '1Password CLI is not signed in for this terminal. Run: eval "$(op signin --account my)" and then rerun this command in the same terminal.',
+      '1Password CLI is not signed in for this terminal. Run: eval "$(op signin --account my)" and then rerun this command in the same terminal.'
     );
   }
   const rotate = process.argv.includes('--rotate');
-  const items = JSON.parse(await run(['op', 'item', 'list', '--vault', vault, '--format', 'json'])) as Array<{
+  const items = JSON.parse(
+    await run(['op', 'item', 'list', '--vault', vault, '--format', 'json'])
+  ) as Array<{
     id: string;
     title: string;
   }>;
   const matchingItems = items.filter((item) => item.title === itemTitle);
   if (matchingItems.length > 0) {
-    if (!rotate) throw new Error(`${itemTitle} already exists. Refusing to replace staging credentials.`);
+    if (!rotate)
+      throw new Error(`${itemTitle} already exists. Refusing to replace staging credentials.`);
     for (const item of matchingItems) {
       await run(['op', 'item', 'delete', item.id, '--vault', vault], undefined, true);
     }
-    console.log(`Moved ${matchingItems.length} previous staging credential item(s) to the 1Password trash before rotation.`);
+    console.log(
+      `Moved ${matchingItems.length} previous staging credential item(s) to the 1Password trash before rotation.`
+    );
   }
 
   const credentials = await generateCredentials();
@@ -134,29 +176,85 @@ async function main() {
     title: itemTitle,
     category: 'LOGIN',
     urls: [{ label: 'website', primary: true, href: 'https://supabase.staging.useclaire.co' }],
+    sections: [credentialsSection],
     fields: [
-      { id: 'username', type: 'STRING', purpose: 'USERNAME', label: 'username', value: 'not-applicable' },
-      ...Object.entries(credentials).map(([label, value]) => ({ label, type: 'CONCEALED', value })),
+      {
+        id: 'username',
+        type: 'STRING',
+        purpose: 'USERNAME',
+        label: 'username',
+        value: 'not-applicable',
+      },
+      ...Object.entries(credentials).map(([label, value]) => credentialField(label, value)),
     ],
     tags: ['claire', 'staging', 'supabase'],
-    notesPlain: 'Generated locally by scripts/secrets/provision-supabase-staging.ts. Source of record for the isolated Railway project claire-staging.',
+    notesPlain:
+      'Generated locally by scripts/secrets/provision-supabase-staging.ts. Source of record for the isolated Railway project claire-staging.',
   };
 
-  await run(['op', 'item', 'create', '--category', 'login', '--title', itemTitle, '--vault', vault, '-'], JSON.stringify(item), true);
+  await run(
+    ['op', 'item', 'create', '--category', 'login', '--title', itemTitle, '--vault', vault, '-'],
+    JSON.stringify(item),
+    true
+  );
+  const stored = JSON.parse(
+    await run(['op', 'item', 'get', itemTitle, '--vault', vault, '--format', 'json'])
+  ) as Item;
+  requireStoredFields(stored, Object.keys(credentials));
   console.log('Stored the staging Supabase credentials in 1Password.');
   console.log('Syncing 9 staging credentials to Railway...');
   await Promise.all(
     Object.entries(credentials).map(([key, value]) =>
-      run(['railway', 'variable', 'set', key, '--stdin', '--skip-deploys', '--service', studioService, '--environment', environment, '--project', projectId], value),
-    ),
+      run(
+        [
+          'railway',
+          'variable',
+          'set',
+          key,
+          '--stdin',
+          '--skip-deploys',
+          '--service',
+          studioService,
+          '--environment',
+          environment,
+          '--project',
+          projectId,
+        ],
+        value
+      )
+    )
   );
   console.log('Requesting dependent service redeploys...');
   await Promise.all(
-    ['Supabase Studio', 'Envoy', 'Gotrue Auth', 'Postgrest', 'Supabase Realtime', 'Supabase Storage', 'Supavisor'].map((service) =>
-      run(['railway', 'redeploy', '--yes', '--service', service, '--environment', environment, '--project', projectId], undefined, true),
-    ),
+    [
+      'Supabase Studio',
+      'Envoy',
+      'Gotrue Auth',
+      'Postgrest',
+      'Supabase Realtime',
+      'Supabase Storage',
+      'Supavisor',
+    ].map((service) =>
+      run(
+        [
+          'railway',
+          'redeploy',
+          '--yes',
+          '--service',
+          service,
+          '--environment',
+          environment,
+          '--project',
+          projectId,
+        ],
+        undefined,
+        true
+      )
+    )
   );
-  console.log('Configured Railway from 1Password-backed staging credentials and redeployed dependent services.');
+  console.log(
+    'Configured Railway from 1Password-backed staging credentials and redeployed dependent services.'
+  );
 }
 
 await main();
