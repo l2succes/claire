@@ -10,6 +10,7 @@ const targets = [
     vault: 'Claire — Staging',
     title: 'Supabase Studio / Staging',
     url: 'https://supabase.staging.useclaire.co',
+    fallbackUrl: undefined,
     projectId: '03f719da-7c4a-4bdb-9e17-0137924c024b',
     railwayService: 'Envoy',
   },
@@ -18,6 +19,7 @@ const targets = [
     vault: 'Claire — Production',
     title: 'Supabase Studio / Production',
     url: 'https://supabase.useclaire.co',
+    fallbackUrl: 'https://kong-production-2679.up.railway.app',
     projectId: '34d5012c-b592-49ac-9d99-6f1353c0b338',
     railwayService: 'Kong',
   },
@@ -90,7 +92,12 @@ async function storeTarget(target: (typeof targets)[number]) {
       JSON.stringify({
         title: pendingTitle,
         category: 'LOGIN',
-        urls: [{ label: 'website', primary: true, href: target.url }],
+        urls: [
+          { label: 'website', primary: true, href: target.url },
+          ...(target.fallbackUrl
+            ? [{ label: 'Railway temporary access', href: target.fallbackUrl }]
+            : []),
+        ],
         fields: [
           {
             id: 'username',
