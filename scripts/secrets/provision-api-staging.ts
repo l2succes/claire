@@ -53,6 +53,46 @@ function field(item: Item, label: string) {
   return value;
 }
 
+function requireStoredFields(item: Item, expectedLabels: string[]) {
+  const stored = new Set(
+    item.fields?.filter((candidate) => candidate.value).map((candidate) => candidate.label) ?? []
+  );
+  const missing = expectedLabels.filter((label) => !stored.has(label));
+  if (missing.length > 0) {
+    throw new Error(
+      `1Password did not retain required concealed fields: ${missing.join(', ')}. No Railway credentials were changed.`
+    );
+  }
+}
+
+async function listItems() {
+  return JSON.parse(
+    await run(['op', 'item', 'list', '--vault', vault, '--format', 'json'])
+  ) as ItemIndex[];
+}
+
+async function createAndVerifyItem(item: Record<string, unknown>, expectedLabels: string[]) {
+  // The stdin marker must be the first positional argument. Otherwise op creates
+  // the Login defaults and silently ignores the JSON template.
+  await run(['op', 'item', 'create', '-', '--vault', vault], JSON.stringify(item), true);
+  const created = (await listItems()).filter((candidate) => candidate.title === item.title);
+  if (created.length !== 1) {
+    throw new Error(
+      `Could not uniquely locate the newly created 1Password item ${item.title}. No Railway credentials were changed.`
+    );
+  }
+  const stored = JSON.parse(
+    await run(['op', 'item', 'get', created[0].id, '--vault', vault, '--format', 'json'])
+  ) as Item;
+  try {
+    requireStoredFields(stored, expectedLabels);
+  } catch (error) {
+    await run(['op', 'item', 'delete', created[0].id, '--vault', vault], undefined, true);
+    throw error;
+  }
+  return created[0].id;
+}
+
 async function main() {
   try {
     await run(['op', 'whoami']);
@@ -63,9 +103,7 @@ async function main() {
   }
 
   const rotate = process.argv.includes('--rotate');
-  const items = JSON.parse(
-    await run(['op', 'item', 'list', '--vault', vault, '--format', 'json'])
-  ) as ItemIndex[];
+  const items = await listItems();
   const sourceItems = items.filter((item) => item.title === sourceTitle);
   if (sourceItems.length !== 1) {
     throw new Error(
@@ -73,28 +111,42 @@ async function main() {
     );
   }
   const existingTargets = items.filter((item) => item.title === targetTitle);
-  if (existingTargets.length > 0 && !rotate) {
+  if (existingTargets.length > 1 && !rotate) {
     throw new Error(
-      `${targetTitle} already exists. Use --rotate only for a deliberate staging API credential rotation.`
+      `Expected exactly one ${targetTitle} item in ${vault}; found ${existingTargets.length}. Use --rotate to replace duplicates.`
     );
-  }
-  if (rotate) {
-    for (const item of existingTargets)
-      await run(['op', 'item', 'delete', item.id, '--vault', vault], undefined, true);
   }
 
   const source = JSON.parse(
     await run(['op', 'item', 'get', sourceItems[0].id, '--format', 'json'])
   ) as Item;
-  const variables = {
+  const supabaseVariables = {
     SUPABASE_ANON_KEY: field(source, 'ANON_KEY'),
     SUPABASE_SERVICE_KEY: field(source, 'SERVICE_ROLE_KEY'),
-    JWT_SECRET: randomSecret(),
-    ENCRYPTION_KEY: randomSecret(),
-    HEALTHCHECK_TOKEN: randomSecret(),
   };
+  let variables: Record<string, string>;
+  if (existingTargets.length === 1 && !rotate) {
+    const existing = JSON.parse(
+      await run(['op', 'item', 'get', existingTargets[0].id, '--vault', vault, '--format', 'json'])
+    ) as Item;
+    variables = {
+      ...supabaseVariables,
+      JWT_SECRET: field(existing, 'JWT_SECRET'),
+      ENCRYPTION_KEY: field(existing, 'ENCRYPTION_KEY'),
+      HEALTHCHECK_TOKEN: field(existing, 'HEALTHCHECK_TOKEN'),
+    };
+    console.log('Verified and reusing the existing staging API credentials from 1Password.');
+  } else {
+    variables = {
+      ...supabaseVariables,
+      JWT_SECRET: randomSecret(),
+      ENCRYPTION_KEY: randomSecret(),
+      HEALTHCHECK_TOKEN: randomSecret(),
+    };
+  }
+  const pendingTitle = `${targetTitle} (pending ${randomBytes(8).toString('hex')})`;
   const item = {
-    title: targetTitle,
+    title: pendingTitle,
     category: 'LOGIN',
     sections: [credentialsSection],
     fields: [
@@ -111,9 +163,18 @@ async function main() {
     notesPlain:
       'Fixture-mode Claire API only. Do not add production platform sessions, OAuth secrets, Matrix admin tokens, or production data.',
   };
+  const pendingItemId = await createAndVerifyItem(item, Object.keys(variables));
+  for (const existing of existingTargets) {
+    await run(['op', 'item', 'delete', existing.id, '--vault', vault], undefined, true);
+  }
+  if (existingTargets.length > 0) {
+    console.log(
+      `Moved ${existingTargets.length} previous staging API credential item(s) to the 1Password trash after the replacement was verified.`
+    );
+  }
   await run(
-    ['op', 'item', 'create', '--category', 'login', '--title', targetTitle, '--vault', vault, '-'],
-    JSON.stringify(item),
+    ['op', 'item', 'edit', pendingItemId, '--vault', vault, '--title', targetTitle],
+    undefined,
     true
   );
   console.log('Stored isolated staging API credentials in 1Password.');

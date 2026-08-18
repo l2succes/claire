@@ -65,15 +65,15 @@ after reviewing the changed variables.
 
 ### Isolated staging Supabase
 
-After the Railway Supabase template has been deployed into `claire-staging`, run this only from an operator terminal with an active `op` session:
+After the Railway Supabase template has been deployed into `claire-staging`, use the single staging command from an operator terminal with an active `op` session:
 
 ```sh
-bun run secrets:provision:supabase-staging
+bun run secrets:provision:staging --rotate-supabase
 ```
 
-The command generates the complete JWT/key set locally, creates the concealed-field item `Supabase / Staging` in `Claire — Staging`, then sends runtime copies to only the `Supabase Studio` service in the isolated Railway project and redeploys its dependent staging services. It refuses to overwrite an existing item and never prints secret values. It intentionally targets the template's default `production`-named environment inside the separate `claire-staging` project; it does not target Claire production.
+This is the one-time recovery/bootstrap form. It generates a new complete staging Supabase key set locally, creates and reads back a concealed-field `Supabase / Staging` item in `Claire — Staging`, then replaces any earlier staging item only after that verification succeeds. It next provisions the fixture-only API and pushes the public anon key to EAS Preview. The wrapper stops on the first failure, so later steps never produce misleading downstream errors. It never prints secret values and intentionally targets the template's default `production`-named environment inside the separate `claire-staging` project; it does not target Claire production.
 
-If a failed initial deployment needs a complete staging-key rotation, use `bun run secrets:provision:supabase-staging --rotate`. This moves the previous staging-only 1Password item to the recoverable 1Password trash, writes a replacement item with the same name, and redeploys the isolated staging services.
+After bootstrap, rerun the same workflow without the flag whenever you need to verify and re-sync staging: `bun run secrets:provision:staging`. It reuses the values already stored in 1Password; it does not rotate them. The scripts create every item from JSON on standard input with the required leading `-` marker, then verify the concealed fields before Railway or EAS is changed.
 
 ### Fixture-only Claire API
 

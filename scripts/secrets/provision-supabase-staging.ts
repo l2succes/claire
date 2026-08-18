@@ -10,6 +10,7 @@ const studioService = 'Supabase Studio';
 
 type Credentials = Record<string, string>;
 type Item = { fields?: Array<{ label?: string; value?: string }> };
+type ItemIndex = { id: string; title: string };
 
 const credentialsSection = { id: 'credentials', label: 'Credentials' };
 
@@ -144,6 +145,45 @@ function requireStoredFields(item: Item, expectedLabels: string[]) {
   }
 }
 
+function readCredentials(item: Item, labels: string[]): Credentials {
+  requireStoredFields(item, labels);
+  return Object.fromEntries(
+    labels.map((label) => [
+      label,
+      item.fields?.find((candidate) => candidate.label === label)?.value!,
+    ])
+  );
+}
+
+async function listItems() {
+  return JSON.parse(
+    await run(['op', 'item', 'list', '--vault', vault, '--format', 'json'])
+  ) as ItemIndex[];
+}
+
+async function createAndVerifyItem(item: Record<string, unknown>, expectedLabels: string[]) {
+  // The stdin marker must be the first positional argument. Otherwise op creates
+  // the Login defaults and silently ignores the JSON template.
+  await run(['op', 'item', 'create', '-', '--vault', vault], JSON.stringify(item), true);
+  const items = await listItems();
+  const created = items.filter((candidate) => candidate.title === item.title);
+  if (created.length !== 1) {
+    throw new Error(
+      `Could not uniquely locate the newly created 1Password item ${item.title}. No Railway credentials were changed.`
+    );
+  }
+  const stored = JSON.parse(
+    await run(['op', 'item', 'get', created[0].id, '--vault', vault, '--format', 'json'])
+  ) as Item;
+  try {
+    requireStoredFields(stored, expectedLabels);
+  } catch (error) {
+    await run(['op', 'item', 'delete', created[0].id, '--vault', vault], undefined, true);
+    throw error;
+  }
+  return created[0].id;
+}
+
 async function main() {
   try {
     await run(['op', 'whoami']);
@@ -153,55 +193,68 @@ async function main() {
     );
   }
   const rotate = process.argv.includes('--rotate');
-  const items = JSON.parse(
-    await run(['op', 'item', 'list', '--vault', vault, '--format', 'json'])
-  ) as Array<{
-    id: string;
-    title: string;
-  }>;
+  const items = await listItems();
   const matchingItems = items.filter((item) => item.title === itemTitle);
-  if (matchingItems.length > 0) {
-    if (!rotate)
-      throw new Error(`${itemTitle} already exists. Refusing to replace staging credentials.`);
-    for (const item of matchingItems) {
-      await run(['op', 'item', 'delete', item.id, '--vault', vault], undefined, true);
+  let credentials: Credentials;
+  if (matchingItems.length === 1 && !rotate) {
+    const stored = JSON.parse(
+      await run(['op', 'item', 'get', matchingItems[0].id, '--vault', vault, '--format', 'json'])
+    ) as Item;
+    credentials = readCredentials(stored, [
+      'JWT_SECRET',
+      'ANON_KEY',
+      'SERVICE_ROLE_KEY',
+      'SUPABASE_PUBLISHABLE_KEY',
+      'SUPABASE_SECRET_KEY',
+      'ANON_KEY_ASYMMETRIC',
+      'SERVICE_ROLE_KEY_ASYMMETRIC',
+      'JWT_KEYS',
+      'JWT_JWKS',
+    ]);
+    console.log('Verified and reusing the existing staging Supabase credentials from 1Password.');
+  } else {
+    if (matchingItems.length > 1 && !rotate) {
+      throw new Error(
+        `Expected exactly one ${itemTitle} item in ${vault}; found ${matchingItems.length}. Use --rotate to replace duplicates.`
+      );
     }
-    console.log(
-      `Moved ${matchingItems.length} previous staging credential item(s) to the 1Password trash before rotation.`
+    credentials = await generateCredentials();
+    const pendingTitle = `${itemTitle} (pending ${randomUUID()})`;
+    const item = {
+      title: pendingTitle,
+      category: 'LOGIN',
+      urls: [{ label: 'website', primary: true, href: 'https://supabase.staging.useclaire.co' }],
+      sections: [credentialsSection],
+      fields: [
+        {
+          id: 'username',
+          type: 'STRING',
+          purpose: 'USERNAME',
+          label: 'username',
+          value: 'not-applicable',
+        },
+        ...Object.entries(credentials).map(([label, value]) => credentialField(label, value)),
+      ],
+      tags: ['claire', 'staging', 'supabase'],
+      notesPlain:
+        'Generated locally by scripts/secrets/provision-supabase-staging.ts. Source of record for the isolated Railway project claire-staging.',
+    };
+    const pendingItemId = await createAndVerifyItem(item, Object.keys(credentials));
+    for (const existing of matchingItems) {
+      await run(['op', 'item', 'delete', existing.id, '--vault', vault], undefined, true);
+    }
+    if (matchingItems.length > 0) {
+      console.log(
+        `Moved ${matchingItems.length} previous staging credential item(s) to the 1Password trash after the replacement was verified.`
+      );
+    }
+    await run(
+      ['op', 'item', 'edit', pendingItemId, '--vault', vault, '--title', itemTitle],
+      undefined,
+      true
     );
+    console.log('Stored the staging Supabase credentials in 1Password.');
   }
-
-  const credentials = await generateCredentials();
-  const item = {
-    title: itemTitle,
-    category: 'LOGIN',
-    urls: [{ label: 'website', primary: true, href: 'https://supabase.staging.useclaire.co' }],
-    sections: [credentialsSection],
-    fields: [
-      {
-        id: 'username',
-        type: 'STRING',
-        purpose: 'USERNAME',
-        label: 'username',
-        value: 'not-applicable',
-      },
-      ...Object.entries(credentials).map(([label, value]) => credentialField(label, value)),
-    ],
-    tags: ['claire', 'staging', 'supabase'],
-    notesPlain:
-      'Generated locally by scripts/secrets/provision-supabase-staging.ts. Source of record for the isolated Railway project claire-staging.',
-  };
-
-  await run(
-    ['op', 'item', 'create', '--category', 'login', '--title', itemTitle, '--vault', vault, '-'],
-    JSON.stringify(item),
-    true
-  );
-  const stored = JSON.parse(
-    await run(['op', 'item', 'get', itemTitle, '--vault', vault, '--format', 'json'])
-  ) as Item;
-  requireStoredFields(stored, Object.keys(credentials));
-  console.log('Stored the staging Supabase credentials in 1Password.');
   console.log('Syncing 9 staging credentials to Railway...');
   await Promise.all(
     Object.entries(credentials).map(([key, value]) =>
