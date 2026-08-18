@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const vault = 'Claire — Staging';
+const onePasswordAccount = 'J6NIRZ4PIJHXRF4SKPUJWROWAU';
 const title = 'Supabase / Staging';
 
 async function run(command: string[], options: { cwd?: string } = {}) {
@@ -15,18 +16,25 @@ async function run(command: string[], options: { cwd?: string } = {}) {
 
 async function main() {
   try {
+    await run(['op', 'signin', '--account', onePasswordAccount]);
     await run(['op', 'whoami']);
   } catch {
-    throw new Error('1Password CLI is not signed in. Run: eval "$(op signin --account my)" and rerun this command.');
+    throw new Error(
+      '1Password CLI could not authenticate with the 1Password desktop app. Unlock 1Password, approve its CLI prompt if shown, then rerun this command.'
+    );
   }
 
-  const items = JSON.parse(await run(['op', 'item', 'list', '--vault', vault, '--format', 'json'])) as Array<{
+  const items = JSON.parse(
+    await run(['op', 'item', 'list', '--vault', vault, '--format', 'json'])
+  ) as Array<{
     id: string;
     title: string;
   }>;
   const matches = items.filter((item) => item.title === title);
   if (matches.length !== 1) {
-    throw new Error(`Expected exactly one ${title} item in ${vault}; found ${matches.length}. Run the Supabase staging rotation first.`);
+    throw new Error(
+      `Expected exactly one ${title} item in ${vault}; found ${matches.length}. Run the Supabase staging rotation first.`
+    );
   }
   const item = JSON.parse(await run(['op', 'item', 'get', matches[0].id, '--format', 'json'])) as {
     fields?: Array<{ label?: string; value?: string }>;

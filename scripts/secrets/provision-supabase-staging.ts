@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const vault = 'Claire — Staging';
+const onePasswordAccount = 'J6NIRZ4PIJHXRF4SKPUJWROWAU';
 const itemTitle = 'Supabase / Staging';
 const projectId = '03f719da-7c4a-4bdb-9e17-0137924c024b';
 // Railway templates always deploy into the project default environment. This
@@ -206,10 +207,11 @@ async function createAndVerifyItem(item: Record<string, unknown>, expectedLabels
 
 async function main() {
   try {
+    await run(['op', 'signin', '--account', onePasswordAccount]);
     await run(['op', 'whoami']);
   } catch {
     throw new Error(
-      '1Password CLI is not signed in for this terminal. Run: eval "$(op signin --account my)" and then rerun this command in the same terminal.'
+      '1Password CLI could not authenticate with the 1Password desktop app. Unlock 1Password, approve its CLI prompt if shown, then rerun this command.'
     );
   }
   const rotate = process.argv.includes('--rotate');
