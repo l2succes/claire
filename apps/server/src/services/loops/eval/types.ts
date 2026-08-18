@@ -13,7 +13,7 @@
  * Only stage 1 exists today. Scenarios already carry `expectLoops` so the
  * corpus does not have to be rewritten when the detector lands.
  *
- * See docs/LOOPS_REVAMP_PLAN.md §10.
+ * See /docs/plans/loops-revamp §10.
  */
 
 import type { LoopSensitivity, ParticipantRef, SelfIdentity } from '../relevance';

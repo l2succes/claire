@@ -11,12 +11,12 @@
  *  1. **Deterministic.** No model call. It costs nothing, it is auditable, and
  *     it does not change behavior when the provider is swapped. Getting this
  *     wrong surfaces other people's business to the user, so it must not be a
- *     model output. See docs/AI_MODEL_SELECTION_AND_COSTS.md §3.
+ *     model output. See /docs/product/ai-model-costs §3.
  *  2. **Pure.** No I/O. Every branch is table-testable.
  *  3. **Explainable.** Every decision returns the signals that produced it,
  *     stored on the loop so "why didn't Claire catch this?" is answerable.
  *
- * See docs/LOOPS_REVAMP_PLAN.md §6.
+ * See /docs/plans/loops-revamp §6.
  */
 
 import { loopSemanticsFor, type LoopSensitivity } from '@claire/platform-catalog';

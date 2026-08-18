@@ -1,7 +1,7 @@
 -- Loop revamp prerequisites: persist three ingest fields that the adapters
 -- already compute and then silently drop, plus a user-level timezone.
 --
--- See docs/LOOPS_REVAMP_PLAN.md §3. Each of these is load-bearing for the
+-- See /docs/plans/loops-revamp §3. Each of these is load-bearing for the
 -- relevance model: without them, "does this group message concern me?" has to
 -- fall back to text matching, which does not generalize across platforms.
 

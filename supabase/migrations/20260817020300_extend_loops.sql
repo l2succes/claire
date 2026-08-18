@@ -1,5 +1,5 @@
 -- Extend loops from "one row per detected message" to a thread of intent that
--- opens, evolves, and closes. See docs/LOOPS_REVAMP_PLAN.md §4.
+-- opens, evolves, and closes. See /docs/plans/loops-revamp §4.
 --
 -- Runs after the rename migration so `loops` and the new platform_type values
 -- both exist.

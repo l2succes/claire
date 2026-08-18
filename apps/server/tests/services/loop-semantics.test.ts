@@ -3,7 +3,7 @@
  *
  * This table is what keeps `if (platform === 'slack')` out of the detector, so
  * the properties worth testing are the ones the pipeline depends on rather than
- * the literal values. See docs/LOOPS_REVAMP_PLAN.md §11.
+ * the literal values. See /docs/plans/loops-revamp §11.
  */
 
 import { describe, it, expect } from 'bun:test';

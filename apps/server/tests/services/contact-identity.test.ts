@@ -4,7 +4,7 @@
  * Mention resolution is load-bearing for the loops relevance model: it is what
  * answers "was I named in this group message?" on platforms where the rendered
  * text gives no usable signal (WhatsApp writes phone numbers, Slack writes
- * display names). See docs/LOOPS_REVAMP_PLAN.md §6.
+ * display names). See /docs/plans/loops-revamp §6.
  *
  * Pure functions, no mocking required.
  */

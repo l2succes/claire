@@ -1,5 +1,5 @@
 -- Tables that turn a loop from a row into a thread of intent.
--- See docs/LOOPS_REVAMP_PLAN.md §4.
+-- See /docs/plans/loops-revamp §4.
 
 -- loop_events -----------------------------------------------------------------
 -- Append-only timeline: every piece of evidence, state change, plugin action,

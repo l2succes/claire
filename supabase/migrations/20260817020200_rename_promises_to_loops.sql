@@ -10,7 +10,7 @@
 -- in the next migration, so a view would misreport both, could not carry the
 -- sync trigger, and would need security_invoker to avoid bypassing RLS.
 --
--- See docs/LOOPS_REVAMP_PLAN.md §4.
+-- See /docs/plans/loops-revamp §4.
 
 ALTER TABLE public.promises RENAME TO loops;
 

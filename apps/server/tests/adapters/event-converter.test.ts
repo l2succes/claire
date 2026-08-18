@@ -4,7 +4,7 @@
  * These four fields (reply target, thread root, mentions, member count) are all
  * computed by the bridge and were historically dropped before the database
  * write. They are what the loops relevance model uses to answer "does this
- * group message concern me?" — see docs/LOOPS_REVAMP_PLAN.md §3.
+ * group message concern me?" — see /docs/plans/loops-revamp §3.
  *
  * The matrix-js-sdk Room/MatrixEvent surfaces are duck-typed to the small
  * subset the converter actually reads.

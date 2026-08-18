@@ -103,4 +103,4 @@ A plugin receives the **structured loop only** — title, owner, deadline, parti
 
 ## Not built yet
 
-The windowed detection pipeline, the loop details page, the agent layer, and the plugin runtime are specified in `docs/LOOPS_REVAMP_PLAN.md` but not implemented. Detection ships behind `LOOP_DETECTION_MODE=off` until the eval measures it against a real corpus.
+The windowed detection pipeline, the loop details page, the agent layer, and the plugin runtime are specified in the [Loops revamp plan](/docs/plans/loops-revamp) but not implemented. Detection ships behind `LOOP_DETECTION_MODE=off` until the eval measures it against a real corpus.

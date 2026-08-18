@@ -3,7 +3,7 @@
  *
  * The loop pipeline must contain no `if (platform === 'slack')` branches — every
  * platform difference lives here as data, so adding a bridge never means editing
- * the detector. See docs/LOOPS_REVAMP_PLAN.md §11.
+ * the detector. See /docs/plans/loops-revamp §11.
  *
  * Platforms absent from the override table get DEFAULT_LOOP_SEMANTICS, which is
  * chosen to be the safe reading: handle-style mentions, no broadcast syntax,

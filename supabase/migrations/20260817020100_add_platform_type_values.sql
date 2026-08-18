@@ -8,7 +8,7 @@
 -- The enum is the wrong shape for a set that grows with the product roadmap:
 -- packages/platform-catalog already lists 17 platforms and every addition pays
 -- this two-migration tax. Tracked as a follow-up to convert `platform` to TEXT
--- validated against the catalog. See docs/LOOPS_REVAMP_PLAN.md §11.
+-- validated against the catalog. See /docs/plans/loops-revamp §11.
 
 ALTER TYPE platform_type ADD VALUE IF NOT EXISTS 'slack';
 ALTER TYPE platform_type ADD VALUE IF NOT EXISTS 'signal';

@@ -170,7 +170,7 @@ export function runCorpus(scenarios: LoopScenario[]): EvalSummary {
 }
 
 /**
- * Release gates from docs/LOOPS_REVAMP_PLAN.md §10.
+ * Release gates from /docs/plans/loops-revamp §10.
  *
  * Group-suppression accuracy is the headline: it is where the current detector
  * fails. False positives are weighted harder than false negatives throughout —

@@ -151,7 +151,7 @@ cd apps/server && bun test                          # the eval runs here too`}</
       <Section id="not-built" title="Not built yet">
         <P>
           The windowed detection pipeline, the loop details page, the agent layer, and the plugin
-          runtime are specified in <C>docs/LOOPS_REVAMP_PLAN.md</C> but not implemented. Detection
+          runtime are specified in the <DocLink to="/docs/plans/loops-revamp" /> but not implemented. Detection
           ships behind <C>LOOP_DETECTION_MODE=off</C> until the mining harness measures it against a
           real corpus.
         </P>

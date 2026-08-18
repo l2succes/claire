@@ -1,7 +1,7 @@
 /**
  * Relevance scoring — "does this group message concern the user?"
  *
- * The worked examples in docs/LOOPS_REVAMP_PLAN.md §2 are the acceptance
+ * The worked examples in /docs/plans/loops-revamp §2 are the acceptance
  * criteria; each is reproduced here. Pure functions, no mocking.
  */
 
