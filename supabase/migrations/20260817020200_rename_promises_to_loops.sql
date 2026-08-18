@@ -35,6 +35,9 @@ END $$;
 ALTER INDEX IF EXISTS public.idx_promises_user_status RENAME TO idx_loops_user_status;
 ALTER INDEX IF EXISTS public.idx_promises_deadline    RENAME TO idx_loops_deadline;
 ALTER INDEX IF EXISTS public.idx_promises_platform    RENAME TO idx_loops_platform;
+-- Added by the people/search migration, which runs just before this one. The
+-- index follows the table rename automatically but keeps its old name.
+ALTER INDEX IF EXISTS public.idx_promises_content_trgm RENAME TO idx_loops_content_trgm;
 
 DROP POLICY IF EXISTS "Users can manage own promises" ON public.loops;
 CREATE POLICY "Users can manage own loops" ON public.loops FOR ALL

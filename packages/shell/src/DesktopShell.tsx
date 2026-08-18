@@ -1,14 +1,7 @@
 import React, { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { TextInput } from 'react-native';
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react-native';
 import { View } from '@tamagui/core';
-import {
-  ClaireIconButton,
-  ClaireText,
-  colors,
-  fonts,
-  space,
-} from '@claire/design-system';
+import { ClaireIconButton, ClaireText, colors } from '@claire/design-system';
 import { host } from '@claire/host';
 import { DragRegion } from './DragRegion';
 
@@ -42,15 +35,11 @@ export function DesktopShell({
   destinations,
   activeRoute,
   onNavigate,
-  onSearch,
-  onOpenConnections,
 }: {
   children: ReactNode;
   destinations: DesktopDestination[];
   activeRoute: string;
   onNavigate: (route: string) => void;
-  onSearch: (query: string) => void;
-  onOpenConnections: () => void;
 }) {
   const [collapsed, setCollapsed] = useState(false);
 
@@ -82,8 +71,6 @@ export function DesktopShell({
         collapsed={collapsed}
         railWidth={railWidth}
         onToggleNavigation={toggleCollapsed}
-        onSearch={onSearch}
-        onOpenConnections={onOpenConnections}
       />
       <View flex={1} flexDirection="row" minHeight={0}>
         <NavigationRail
@@ -105,17 +92,11 @@ function DesktopTitleBar({
   collapsed,
   railWidth,
   onToggleNavigation,
-  onSearch,
-  onOpenConnections,
 }: {
   collapsed: boolean;
   railWidth: number;
   onToggleNavigation: () => void;
-  onSearch: (query: string) => void;
-  onOpenConnections: () => void;
 }) {
-  const [query, setQuery] = useState('');
-
   return (
     <DragRegion height={TITLE_BAR_HEIGHT}>
       <View
@@ -158,78 +139,10 @@ function DesktopTitleBar({
           </View>
         </DragRegion>
 
-        <DragRegion draggable={false} flex={1}>
-          <View flex={1} alignItems="center" justifyContent="center" paddingHorizontal="$3">
-            <View
-              width="56%"
-              minWidth={240}
-              maxWidth={560}
-              height={32}
-              paddingLeft="$2"
-              paddingRight={3}
-              borderWidth={1}
-              borderColor="$neutral200"
-              borderRadius={10}
-              backgroundColor="$neutral50"
-              flexDirection="row"
-              alignItems="center"
-              columnGap="$1"
-            >
-              <TextInput
-                accessibilityLabel="Search everything"
-                value={query}
-                onChangeText={setQuery}
-                onSubmitEditing={() => onSearch(query)}
-                placeholder="Search everything"
-                placeholderTextColor={colors.neutral[400]}
-                returnKeyType="search"
-                testID="desktop-search-input"
-                style={{
-                  flex: 1,
-                  minWidth: 0,
-                  height: 30,
-                  color: colors.ink,
-                  fontFamily: fonts.sans,
-                  fontSize: 13,
-                  lineHeight: 18,
-                  paddingTop: 6,
-                  paddingBottom: 6,
-                  paddingHorizontal: space[1],
-                }}
-              />
-              <View
-                minWidth={28}
-                height={24}
-                paddingHorizontal={5}
-                alignItems="center"
-                justifyContent="center"
-                borderRadius={7}
-                backgroundColor="$paper"
-                borderWidth={1}
-                borderColor="$neutral200"
-              >
-                <ClaireText variant="monoLabel" color="$neutral600" fontSize={10}>
-                  ⌘K
-                </ClaireText>
-              </View>
-            </View>
-          </View>
-        </DragRegion>
+        {/* Flexible spacer. Search lives behind ⌘K and connections in Settings,
+            so neither needs permanent chrome here. */}
+        <DragRegion draggable={false} flex={1} />
 
-        <DragRegion draggable={false}>
-          <View flexDirection="row" alignItems="center" paddingRight="$3" columnGap="$2">
-            <ClaireIconButton
-              accessibilityLabel="Open connections"
-              onPress={onOpenConnections}
-              width={32}
-              height={32}
-              borderRadius={10}
-              testID="desktop-open-connections"
-            >
-              <ClaireText variant="label">+</ClaireText>
-            </ClaireIconButton>
-          </View>
-        </DragRegion>
 
         <View
           style={{ pointerEvents: 'none' }}

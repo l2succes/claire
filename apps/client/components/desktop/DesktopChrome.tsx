@@ -44,10 +44,6 @@ export function DesktopChrome({ children }: { children: ReactNode }) {
       destinations={DESTINATIONS}
       activeRoute={pathname}
       onNavigate={navigate}
-      onSearch={(query) =>
-        router.push({ pathname: '/(tabs)/search', params: query ? { q: query } : {} } as never)
-      }
-      onOpenConnections={() => router.push('/connections' as never)}
     >
       {children}
     </DesktopShell>

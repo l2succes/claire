@@ -27,7 +27,6 @@ test.describe('Claire desktop shell', () => {
     await signIn(page);
 
     await expect(page.getByTestId('desktop-navigation-rail')).toBeVisible();
-    await expect(page.getByTestId('desktop-search-input')).toBeVisible();
     await expect(page.getByTestId('desktop-nav-inbox')).toBeVisible();
     await expect(page.getByTestId('desktop-nav-loops')).toBeVisible();
   });

@@ -46,6 +46,34 @@ The harness also runs today with `--fixtures` and no database at all.
 
 ---
 
+## Implementation status
+
+Audited against the tree on 2026-08-17. Paths reflect the `apps/*` restructure.
+
+| Part | Status | Where |
+|---|---|---|
+| 3 · Prerequisite fixes | **Done** | reply/thread/mentions/`member_count` persisted, backfill guard, timezone |
+| 4 · Data model | **Done** | `20260817020000`–`020400`, validated against PostgreSQL 15 |
+| 5 · Detection pipeline | **Not built** | gate, context, prompts, detector, reconciler, store, queue |
+| 6 · Relevance model | **Done** | `apps/server/src/services/loops/relevance.ts` |
+| 7 · Loop details page | **Not built** | `apps/client/app/loops/[id].tsx` |
+| 8 · Plugin bridge | **Not built** | `apps/server/src/plugins/` |
+| 9 · Agentic layer | **Not built** | needs the AI SDK provider registry first |
+| 10 · Eval harness | **Done** | `eval/` + `scripts/eval-loops.ts`, runs in CI |
+| 10 · Mining real conversations | **Not built** | blocked on Railway credentials |
+| 11 · Cross-platform | **Partial** | `loopSemantics` + Slack enum done; other bridges unwired |
+| 12 · Documentation | **Done** | `/mockups/loops`, `docs/guides/loops.md` |
+
+Detection stays behind `LOOP_DETECTION_MODE=off` until the mining harness measures it against a real corpus.
+
+### Deferred deliberately
+
+- **`identity.ts`** — self-alias resolution is inlined in the relevance tests. It becomes a real module when the detector needs it against live data.
+- **`server/src/services/message-queue.ts`** — dead in full (nothing imports it), kept as the Bull reference for `loop-queue.ts`.
+- **`promise-detector.ts`** — still the live detector, writing to `loops` with the new vocabulary. Deleted when the pipeline lands.
+
+---
+
 ## 2. Worked examples
 
 The review artifact for detector behavior. These become the fixture corpus in `server/tests/fixtures/loops/*.jsonl` and the content of the documentation mockup (Part 10).

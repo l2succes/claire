@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Claire — How Loops work</title>
+    <meta
+      name="description"
+      content="How Claire decides what you need to follow up on: threads of intent, what it deliberately ignores, and how loops become real actions through plugins."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@600;700&family=Public+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./tokens.css" />
+    <link rel="stylesheet" href="./loop-mockups.css" />
+    <link rel="icon" href="/assets/brand/claire-app-icon.svg" type="image/svg+xml" />
+  </head>
+  <body>
+    <header class="doc-header">
+      <a class="brand" href="/" target="_top">
+        <img class="brand-mark" src="/assets/brand/claire-app-icon-lime.svg" alt="" />
+        claire <span>/ loops</span>
+      </a>
+      <nav aria-label="Product references">
+        <a href="/mockups/mobile" target="_top">Mobile</a>
+        <a href="/mockups/desktop" target="_top">Desktop</a>
+        <a href="/mockups/loops" target="_top" aria-current="page">Loops</a>
+        <a href="/mockups/plugins" target="_top">Plugins</a>
+      </nav>
+    </header>
+
+    <main>
+      <!-- ------------------------------------------------------ hero -->
+      <section class="hero" id="top">
+        <div>
+          <div class="overline">Claire · Loops</div>
+          <h1>A loop is a thread,<br /><em>not a task.</em></h1>
+          <p class="lede">
+            A loop is one thing you still owe someone, or that someone still owes you. It opens
+            when a conversation creates an obligation, changes as the conversation changes, and
+            closes when the conversation resolves it — as a single item, not a pile of fragments.
+          </p>
+        </div>
+        <aside class="hero-aside">
+          <p>
+            Most of what happens in your group chats is not yours. The hardest part of this
+            feature is not finding commitments. It is knowing which ones are about you.
+          </p>
+        </aside>
+      </section>
+
+      <!-- ------------------------------------------------- lifecycle -->
+      <section id="lifecycle">
+        <div class="overline">01 / The life of a loop</div>
+        <h2>One row, six changes.</h2>
+        <p>
+          Plans are not made in one message. They get proposed, negotiated, confirmed, amended,
+          and finished. A system that reads messages one at a time sees six unrelated
+          commitments here. Claire keeps one loop and updates it.
+        </p>
+
+        <div class="rail" role="list" aria-label="How a single loop changes over time">
+          <article class="state" role="listitem">
+            <span class="state-when">Mon 09:12</span>
+            <span class="state-name">Proposed</span>
+            <p class="state-msg"><b>Priya</b>We should catch up — coffee next week?</p>
+            <p class="state-note">
+              Opened, but not on your list. An idea is not yet a commitment.
+            </p>
+          </article>
+
+          <article class="state" role="listitem">
+            <span class="state-when">Mon 09:20</span>
+            <span class="state-name">Negotiating</span>
+            <p class="state-msg"><b>You</b>Yes! Tuesday or Wednesday?</p>
+            <p class="state-note">Same loop. Two candidate days, still nothing to act on.</p>
+          </article>
+
+          <article class="state" role="listitem">
+            <span class="state-when">Tue 18:03</span>
+            <span class="state-name">Pending</span>
+            <p class="state-msg"><b>Priya</b>Wednesday works. 3pm?</p>
+            <p class="state-note">A time appears, but nobody has agreed to it yet.</p>
+          </article>
+
+          <article class="state is-actionable" role="listitem">
+            <span class="state-when">Tue 18:05</span>
+            <span class="state-name">Agreed</span>
+            <p class="state-msg"><b>You</b>Perfect, see you Wed at 3.</p>
+            <p class="state-note">
+              Now it is real. This is the first moment Claire offers to put it in your calendar.
+            </p>
+          </article>
+
+          <article class="state is-actionable" role="listitem">
+            <span class="state-when">Wed 14:47</span>
+            <span class="state-name">Amended</span>
+            <p class="state-msg"><b>Priya</b>Running 15 late!</p>
+            <p class="state-note">
+              Still the same loop. The calendar event is updated, not duplicated.
+            </p>
+          </article>
+
+          <article class="state is-done" role="listitem">
+            <span class="state-when">Wed 17:30</span>
+            <span class="state-name">Resolved</span>
+            <p class="state-msg"><b>You</b>Great seeing you</p>
+            <p class="state-note">Closed by the conversation. You never had to tick anything.</p>
+          </article>
+        </div>
+
+        <div class="callout">
+          <p>
+            <strong>Why the early states stay quiet.</strong> “How about Tuesday?” is not a plan.
+            Surfacing it would fill your list with things nobody has committed to. A loop only
+            becomes actionable — and only then can a plugin offer to do something about it — once
+            the conversation actually agrees.
+          </p>
+        </div>
+      </section>
+
+      <!-- --------------------------------------------------- ignoring -->
+      <section id="ignored">
+        <div class="overline">02 / What Claire ignores</div>
+        <h2>Being useful in a group means staying quiet.</h2>
+        <p>
+          In a group chat, most commitments are between other people. Claire scores every
+          candidate against a fixed set of signals before it will show you anything. The score
+          is deterministic — no model decides this — so the same message always gets the same
+          answer, and the answer can be explained.
+        </p>
+
+        <div class="grid-2">
+          <article class="panel is-suppressed">
+            <span class="verdict no">Not your loop</span>
+            <div class="msg"><b>Aunt Rita</b>Sam, can you pick up the cake on Saturday?</div>
+            <div class="msg"><b>Sam</b>Yep, I got it.</div>
+            <ul class="signals">
+              <li class="signal neg">named someone else</li>
+              <li class="signal neg">no mention of you</li>
+              <li class="signal neg">not a reply to you</li>
+            </ul>
+            <p class="state-note">
+              A real commitment, correctly ignored. It was made by someone else, to someone else.
+            </p>
+          </article>
+
+          <article class="panel is-surfaced">
+            <span class="verdict yes">Your loop</span>
+            <div class="msg"><b>Aunt Rita</b>@you are you bringing the drinks?</div>
+            <div class="msg"><b>You</b>yeah I'll grab them Friday</div>
+            <ul class="signals">
+              <li class="signal pass">you committed</li>
+              <li class="signal pos">you were mentioned</li>
+            </ul>
+            <p class="state-note">
+              Your own words bind you. Committing to something is enough on its own, whatever
+              the size of the group.
+            </p>
+          </article>
+
+          <article class="panel is-suppressed">
+            <span class="verdict no">Not your loop</span>
+            <div class="msg"><b>Dana</b>@channel standup moved to 10 tomorrow</div>
+            <ul class="signals">
+              <li class="signal neg">addressed to everyone</li>
+              <li class="signal neg">large channel</li>
+            </ul>
+            <p class="state-note">
+              <code>@channel</code> mentions everyone, which is evidence a message is
+              <em>not</em> aimed at you. Reading it as a mention would turn every announcement
+              into a task.
+            </p>
+          </article>
+
+          <article class="panel is-surfaced">
+            <span class="verdict yes">Your loop</span>
+            <div class="msg"><b>Dana</b>@here — @you can you own the migration doc?</div>
+            <ul class="signals">
+              <li class="signal pos">you were mentioned</li>
+              <li class="signal neg">broadcast present</li>
+            </ul>
+            <p class="state-note">
+              A personal mention inside a broadcast still reaches you. Being in a busy channel
+              never cancels out someone naming you directly.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <!-- ------------------------------------------------ sensitivity -->
+      <section id="sensitivity">
+        <div class="overline">03 / Per-conversation control</div>
+        <h2>You decide how closely Claire watches.</h2>
+        <p>
+          The default is deliberately conservative. Some conversations deserve more attention
+          than that, and some deserve none — so the threshold is a per-chat setting rather than
+          a global one.
+        </p>
+
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Setting</th>
+              <th scope="col">What surfaces</th>
+              <th scope="col">Good for</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>off</code></td>
+              <td>Nothing, ever — including things you commit to yourself.</td>
+              <td>Chats you never want tracked.</td>
+            </tr>
+            <tr>
+              <td><code>low</code></td>
+              <td>Only unambiguous cases: you were named, or you committed.</td>
+              <td>High-traffic channels you skim.</td>
+            </tr>
+            <tr>
+              <td><code>normal</code></td>
+              <td>The balanced default. Suppresses work assigned to other people.</td>
+              <td>Most conversations.</td>
+            </tr>
+            <tr>
+              <td><code>high</code></td>
+              <td>
+                Also surfaces unclaimed work — “someone needs to own this” — for you to claim or
+                dismiss.
+              </td>
+              <td>A project channel you are responsible for.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="callout">
+          <p>
+            Group chats start at <code>normal</code>, but channel-based platforms like Slack
+            start at <code>low</code>. A work channel produces far more traffic than a family
+            group and almost none of it is addressed to any one person — so you opt channels
+            <em>in</em>, rather than having to opt a firehose <em>out</em>.
+          </p>
+        </div>
+      </section>
+
+      <!-- ---------------------------------------------------- plugins -->
+      <section id="plugins">
+        <div class="overline">04 / Loops meet plugins</div>
+        <h2>From noticing to doing.</h2>
+        <p>
+          A loop that only reminds you is a nicer to-do list. A loop becomes useful when it can
+          actually be closed — the calendar event created, the task filed, the reply drafted.
+          Plugins are how that happens, and every step keeps you in control.
+        </p>
+
+        <div class="flow">
+          <div class="flow-step"><small>01</small>Conversation</div>
+          <span class="flow-arrow">→</span>
+          <div class="flow-step"><small>02</small>Loop reaches <code>agreed</code></div>
+          <span class="flow-arrow">→</span>
+          <div class="flow-step gate"><small>03</small>Plugin proposes an action</div>
+          <span class="flow-arrow">→</span>
+          <div class="flow-step human"><small>04</small>You approve it</div>
+          <span class="flow-arrow">→</span>
+          <div class="flow-step"><small>05</small>Receipt, with undo</div>
+        </div>
+
+        <div class="grid-2" style="margin-top: var(--space-6)">
+          <article class="panel">
+            <h3>Detection is not permission</h3>
+            <p>
+              Noticing a date in a message never authorises creating an event. A plugin can
+              propose; only you can approve. Anything that leaves Claire — an invite, a message,
+              a shared note — always shows you the exact fields and destination first.
+            </p>
+          </article>
+          <article class="panel">
+            <h3>Plugins can open loops too</h3>
+            <p>
+              It runs both ways. A calendar plugin that sees an unanswered invite for tomorrow
+              can open a loop for it, even though no message ever mentioned it.
+            </p>
+          </article>
+          <article class="panel">
+            <h3>What a plugin can see</h3>
+            <p>
+              By default a plugin receives the structured loop — title, owner, deadline,
+              participant names — and not your raw messages. Sending message text requires a
+              separate, explicit grant.
+            </p>
+          </article>
+          <article class="panel">
+            <h3>Everything is reversible</h3>
+            <p>
+              Every action writes a receipt showing what was done and where. You can undo it,
+              disable the rule, or disconnect the account entirely.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <!-- --------------------------------------------------- anatomy -->
+      <section id="anatomy">
+        <div class="overline">05 / Anatomy of a loop</div>
+        <h2>What you see when you open one.</h2>
+        <p>
+          The details page answers three questions: what is this, where did it come from, and
+          what can I do about it.
+        </p>
+
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Part</th>
+              <th scope="col">What it tells you</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>State</td>
+              <td>
+                Open, waiting, snoozed, or done — plus who owes the next move, and when it is
+                due. Snoozing moves the reminder without erasing the date you actually agreed to.
+              </td>
+            </tr>
+            <tr>
+              <td>Summary</td>
+              <td>One line describing where the loop stands right now, updated as it changes.</td>
+            </tr>
+            <tr>
+              <td>Timeline</td>
+              <td>
+                The messages that created and changed it, in order, each linking back to the
+                conversation. Nothing is asserted without the evidence for it.
+              </td>
+            </tr>
+            <tr>
+              <td>People</td>
+              <td>Who is involved, and which of them owns it.</td>
+            </tr>
+            <tr>
+              <td>Actions</td>
+              <td>What a connected plugin offers — always as a proposal you approve.</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- ------------------------------------------------ principles -->
+      <section id="principles">
+        <div class="overline">06 / What we hold to</div>
+        <h2>The rules behind the behaviour.</h2>
+        <div class="grid-2">
+          <article class="panel">
+            <h3>Silence is never resolution</h3>
+            <p>
+              Claire closes a loop only on explicit evidence that it happened, was cancelled, or
+              stopped mattering. A conversation going quiet is not proof of anything, and a
+              wrongly-closed loop is a broken promise.
+            </p>
+          </article>
+          <article class="panel">
+            <h3>A missed loop beats a wrong one</h3>
+            <p>
+              When it is unsure, Claire stays quiet. One wrong item makes you doubt every other
+              item in the list; a missed one is a gap you can still fill yourself.
+            </p>
+          </article>
+          <article class="panel">
+            <h3>Your edits win</h3>
+            <p>
+              Change a deadline or an owner and Claire will not quietly overwrite it. It can
+              suggest a change, and you decide.
+            </p>
+          </article>
+          <article class="panel">
+            <h3>Messages are data, not instructions</h3>
+            <p>
+              Text arriving from other people can never change what Claire is allowed to do,
+              what needs your approval, or where an action is sent — no matter what it says.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <footer>
+        <p>
+          Implementation detail lives in
+          <code>docs/LOOPS_REVAMP_PLAN.md</code>; provider and cost strategy in
+          <code>docs/AI_MODEL_SELECTION_AND_COSTS.md</code>. The permission and approval model
+          shared with plugins is specified in <code>docs/CLAIRE_PLUGIN_SYSTEM_SPEC.md</code>.
+        </p>
+      </footer>
+    </main>
+  </body>
+</html>

@@ -12,6 +12,7 @@ const pages = [
   ['architecture/overview.md', 'Architecture'],
   ['guides/mobile.md', 'Guides'],
   ['guides/desktop.md', 'Guides'],
+  ['guides/loops.md', 'Guides'],
   ['guides/plugins.md', 'Guides'],
   ['guides/testing.md', 'Guides'],
   ['guides/self-hosting.md', 'Guides'],
@@ -35,6 +36,7 @@ Claire is an AI-native multi-chat client. These pages are the public contributor
 - [Architecture overview](/docs/architecture/overview)
 - [Mobile](/docs/guides/mobile)
 - [Desktop](/docs/guides/desktop)
+- [How Loops work](/docs/guides/loops)
 - [Plugin development](/docs/guides/plugins)
 - [Testing](/docs/guides/testing)
 - [Self-hosting](/docs/guides/self-hosting)
