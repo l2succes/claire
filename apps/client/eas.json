@@ -15,6 +15,7 @@
     },
     "staging": {
       "distribution": "internal",
+      "channel": "staging",
       "environment": "preview",
       "env": {
         "APP_VARIANT": "staging",
@@ -26,6 +27,7 @@
     },
     "production": {
       "distribution": "internal",
+      "channel": "production",
       "environment": "production",
       "env": {
         "APP_VARIANT": "production",

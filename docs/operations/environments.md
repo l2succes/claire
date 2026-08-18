@@ -41,11 +41,11 @@ production. Expo Prebuild (Continuous Native Generation) generates the iOS and
 Android projects from `apps/client/app.config.js`; those generated directories
 are intentionally not tracked in Git.
 
-| Build profile | App shown on the phone | iOS bundle ID / Android package | EAS environment |
-| --- | --- | --- | --- |
-| `development` | Claire Dev | `com.claire.app.dev` | `development` |
-| `staging` | Claire Staging | `com.claire.app.staging` | `preview` |
-| `production` | Claire | `com.claire.app` | `production` |
+| Build profile | App shown on the phone | iOS bundle ID / Android package | EAS environment | Update channel |
+| --- | --- | --- | --- | --- |
+| `development` | Claire Dev | `com.claire.app.dev` | `development` | — |
+| `staging` | Claire Staging | `com.claire.app.staging` | `preview` | `staging` |
+| `production` | Claire | `com.claire.app` | `production` | `production` |
 
 The distinct identifiers let Claire Staging and Claire run side by side on the
 same phone. Each app has an isolated local session/cache and an environment
@@ -78,6 +78,26 @@ For a physical device, register it with EAS first, then open the EAS build's
 install link on that device. Use `production-store` only for an App Store or
 TestFlight submission; it is deliberately separate from the installable
 internal `production` profile.
+
+## Over-the-air updates
+
+Release builds check EAS Update when they launch, download a compatible update
+in the background, and apply it after the next restart. Publish a JavaScript,
+asset, or other non-native change to the channel that matches the installed
+build:
+
+```sh
+cd apps/client
+bun run update:staging
+bun run update:production
+```
+
+The commands use the current Git commit message for the update message. Test a
+staging update on a staging build before publishing the same change to
+production. Updates cannot change native code, native dependencies, permissions,
+or app configuration; make a new EAS build for those changes. The runtime is
+keyed to the Expo `version`, so bump that version and build a new binary before
+shipping an update that requires a different native runtime.
 
 See [Expo and EAS mobile builds](./expo-builds.md) for device registration,
 local Prebuild commands, private installation, and build recovery.
