@@ -74,7 +74,11 @@ async function listItems() {
 async function createAndVerifyItem(item: Record<string, unknown>, expectedLabels: string[]) {
   // The stdin marker must be the first positional argument. Otherwise op creates
   // the Login defaults and silently ignores the JSON template.
-  await run(['op', 'item', 'create', '-', '--vault', vault], JSON.stringify(item), true);
+  await run(
+    ['op', 'item', 'create', '-', '--category', 'login', '--vault', vault],
+    JSON.stringify(item),
+    true
+  );
   const created = (await listItems()).filter((candidate) => candidate.title === item.title);
   if (created.length !== 1) {
     throw new Error(
