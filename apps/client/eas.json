@@ -8,22 +8,33 @@
       "distribution": "internal",
       "environment": "development",
       "env": {
+        "APP_VARIANT": "development",
         "EXPO_PUBLIC_ENV": "development",
         "EXPO_PUBLIC_API_URL": "http://localhost:3001"
       }
     },
-    "preview": {
+    "staging": {
       "distribution": "internal",
       "environment": "preview",
       "env": {
+        "APP_VARIANT": "staging",
         "EXPO_PUBLIC_ENV": "staging"
       }
     },
+    "preview": {
+      "extends": "staging"
+    },
     "production": {
+      "distribution": "internal",
       "environment": "production",
       "env": {
+        "APP_VARIANT": "production",
         "EXPO_PUBLIC_ENV": "production"
       }
+    },
+    "production-store": {
+      "extends": "production",
+      "distribution": "store"
     }
   },
   "submit": {

@@ -37,8 +37,24 @@ available.
 ## Mobile clients
 
 The EAS `preview` environment is Claire staging and EAS `production` is Claire
-production. Mobile builds load their public routing values from EAS, not from
-Git. Set only these client-readable values there:
+production. Expo Prebuild (Continuous Native Generation) generates the iOS and
+Android projects from `apps/client/app.config.js`; those generated directories
+are intentionally not tracked in Git.
+
+| Build profile | App shown on the phone | iOS bundle ID / Android package | EAS environment |
+| --- | --- | --- | --- |
+| `development` | Claire Dev | `com.claire.app.dev` | `development` |
+| `staging` | Claire Staging | `com.claire.app.staging` | `preview` |
+| `production` | Claire | `com.claire.app` | `production` |
+
+The distinct identifiers let Claire Staging and Claire run side by side on the
+same phone. Each app has an isolated local session/cache and an environment
+specific OAuth callback (`claire-staging://confirm` or `claire://confirm`).
+Do not add a production/staging switch inside a distributed binary: endpoint
+and authentication isolation must be selected by the build profile.
+
+Mobile builds load their public routing values from EAS, not from Git. Set only
+these client-readable values there:
 
 - `EXPO_PUBLIC_API_URL`
 - `EXPO_PUBLIC_SUPABASE_URL`
@@ -54,6 +70,11 @@ credential to EAS public variables.
 ```sh
 cd apps/client
 bun run start:staging
-bun run build:preview
+bun run build:staging
 bun run build:prod
 ```
+
+For a physical device, register it with EAS first, then open the EAS build's
+install link on that device. Use `production-store` only for an App Store or
+TestFlight submission; it is deliberately separate from the installable
+internal `production` profile.
