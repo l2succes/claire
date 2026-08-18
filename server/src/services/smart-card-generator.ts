@@ -82,13 +82,18 @@ Be warm and genuine. Personal conversations deserve thoughtful, not transactiona
 };
 
 class SmartCardGenerator {
-  private openai: OpenAI;
+  private openai: OpenAI | null;
 
   constructor() {
-    this.openai = new OpenAI({ apiKey: config.OPENAI_API_KEY });
+    this.openai = config.OPENAI_API_KEY ? new OpenAI({ apiKey: config.OPENAI_API_KEY }) : null;
   }
 
   async generateCards(chatId: string, userId: string): Promise<GeneratedCard[]> {
+    if (!this.openai) {
+      logger.debug('Skipping smart card generation because OpenAI is not configured');
+      return [];
+    }
+
     // Fetch category
     const { data: categoryRow } = await supabase
       .from('chat_categories')
@@ -124,15 +129,17 @@ class SmartCardGenerator {
 
     const messagesText = (messages || [])
       .reverse()
-      .map((m: DbRow) => `${m.from_me ? 'Me' : (m.contact_name || 'Them')}: ${m.content}`)
+      .map((m: DbRow) => `${m.from_me ? 'Me' : m.contact_name || 'Them'}: ${m.content}`)
       .join('\n');
 
-    const profileJson = profile ? JSON.stringify({
-      name: profile.display_name,
-      location: profile.location,
-      key_facts: profile.key_facts,
-      relationship_context: profile.relationship_context,
-    }) : '{}';
+    const profileJson = profile
+      ? JSON.stringify({
+          name: profile.display_name,
+          location: profile.location,
+          key_facts: profile.key_facts,
+          relationship_context: profile.relationship_context,
+        })
+      : '{}';
 
     const systemPrompt = `${SYSTEM_PROMPT_BASE}\n\n${CATEGORY_PROMPTS[category]}`;
     const userPrompt = `Category: ${category}\nContact profile: ${profileJson}\nRecent messages (last ${messages?.length || 0}):\n${messagesText}`;
@@ -154,11 +161,12 @@ class SmartCardGenerator {
       const rawCards: GeneratedCard[] = parsed.cards || [];
 
       // Validate cards
-      const validCards = rawCards.filter(card =>
-        VALID_CARD_TYPES.includes(card.card_type) &&
-        card.title &&
-        card.title.length <= 60 &&
-        typeof card.priority === 'number'
+      const validCards = rawCards.filter(
+        (card) =>
+          VALID_CARD_TYPES.includes(card.card_type) &&
+          card.title &&
+          card.title.length <= 60 &&
+          typeof card.priority === 'number'
       );
 
       // Persist to DB: clear old non-acted-on cards, then insert new ones
@@ -172,7 +180,7 @@ class SmartCardGenerator {
 
       if (validCards.length > 0) {
         await supabase.from('smart_cards').insert(
-          validCards.map(card => ({
+          validCards.map((card) => ({
             user_id: userId,
             chat_id: chatId,
             card_type: card.card_type,
@@ -184,7 +192,9 @@ class SmartCardGenerator {
         );
       }
 
-      logger.info(`Generated ${validCards.length} smart cards for chat ${chatId} (category: ${category})`);
+      logger.info(
+        `Generated ${validCards.length} smart cards for chat ${chatId} (category: ${category})`
+      );
       return validCards;
     } catch (error) {
       logger.error('Error generating smart cards:', error);
