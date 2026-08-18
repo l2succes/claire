@@ -129,7 +129,12 @@ export function HomeScreen() {
       time: formatInboxTimestamp(message.timestamp),
       kind: 'message' as const,
       urgent: 'score' in message && typeof message.score === 'number' && message.score >= 70,
-      onPress: () => router.push({ pathname: '/chat/[chatId]', params: { chatId: message.chat_id, contact_name: message.contact_name || '', chat_name: message.chat_name || '', platform: message.platform || '', is_group: message.is_group ? '1' : '0', highlightMessageId: message.id } }),
+      // No highlightMessageId: these rows are always a conversation's newest
+      // message, so it is already the last bubble. Ringing it in focus blue
+      // marks the obvious and reads as an unexplained state. The highlight is
+      // for search results and assistant citations, where the message is buried
+      // in history and the reader needs to be told which one they were sent to.
+      onPress: () => router.push({ pathname: '/chat/[chatId]', params: { chatId: message.chat_id, contact_name: message.contact_name || '', chat_name: message.chat_name || '', platform: message.platform || '', is_group: message.is_group ? '1' : '0' } }),
     }; }),
     ...openPromises.slice(0, Math.max(0, 4 - Math.min(urgent.length, 3))).map(promise => ({
       key: `promise-${promise.id}`,
