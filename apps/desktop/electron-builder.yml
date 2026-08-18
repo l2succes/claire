@@ -1,0 +1,59 @@
+appId: com.claire.desktop
+productName: Claire
+copyright: Copyright © Claire contributors
+afterSign: scripts/after-sign.cjs
+
+directories:
+  output: release/production
+  buildResources: build
+
+# build/icon.png — the lime field with the ink mark, matching the mobile icon.
+icon: build/icon.png
+
+# `dist-main` is the compiled main/preload; `renderer` is the
+# `expo export -p web` output produced by `bun run bundle:renderer`.
+files:
+  - dist-main/**/*
+  - renderer/**/*
+  - package.json
+  # BrowserWindow({ icon }) reads these at runtime on Windows and Linux.
+  # macOS takes the window icon from the bundle instead.
+  - build/icon.png
+  - build/icon-dev.png
+
+# The signed Swift APNs helper is produced before packaging and signed by the
+# afterSign hook in release CI. Local builds retain Electron notifications.
+
+mac:
+  category: public.app-category.social-networking
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+    - target: zip
+      arch: [arm64, x64]
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  extendInfo:
+    CFBundleDisplayName: Claire
+    CFBundleName: Claire
+  extraResources:
+    - from: native/macos/build/ClairePushHelper
+      to: ClairePushHelper
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+
+linux:
+  category: Network
+  target:
+    - target: AppImage
+      arch: [x64]
+
+# `claire://` is the Expo deep-link scheme, reserved here for OAuth callbacks.
+protocols:
+  - name: Claire
+    schemes: [claire]

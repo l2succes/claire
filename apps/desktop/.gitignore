@@ -1,0 +1,4 @@
+dist-main/
+renderer/
+release/
+native/macos/build/

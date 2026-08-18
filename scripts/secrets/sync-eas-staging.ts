@@ -47,7 +47,7 @@ async function main() {
   try {
     await writeFile(envFile, `EXPO_PUBLIC_SUPABASE_ANON_KEY=${anonKey}\n`, { mode: 0o600 });
     await chmod(envFile, 0o600);
-    await run(['eas', 'env:push', 'preview', '--path', envFile, '--force'], { cwd: 'mobile' });
+    await run(['eas', 'env:push', 'preview', '--path', envFile, '--force'], { cwd: 'apps/client' });
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

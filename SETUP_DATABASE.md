@@ -16,20 +16,17 @@ Local defaults from the Docker stack:
 - Database: `postgresql://postgres:postgres@localhost:54322/postgres`
 - Studio: `http://localhost:8000` (Kong) or the Studio port published by the compose file
 
-## Cloud or self-hosted Supabase
+## Railway / self-hosted production
 
-1. Copy `server/.env.example` to `server/.env` and set `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, and `DATABASE_URL` from your project.
-2. Open the SQL Editor in your Supabase dashboard.
-3. Paste and run `supabase/migrations/20250806092049_initial_schema.sql`.
-4. Repeat for later files in `supabase/migrations/` in timestamp order.
-
-Or use the CLI:
+Set `DIRECT_DATABASE_URL` to Railway's direct `postgresql://...` connection string. Railway's TCP proxy requires `?sslmode=disable`, then use the Supabase CLI to apply the migrations:
 
 ```bash
-bunx supabase login
-bunx supabase link --project-ref <your-project-ref>
-bunx supabase db push
+export DIRECT_DATABASE_URL='postgresql://…?sslmode=disable'
+bun run db:push:railway:dry-run
+bun run db:push:railway
 ```
+
+Do not use `supabase link` for Railway: it links a Supabase-hosted project. `db push --db-url` connects directly to the Railway Postgres database and records applied migrations there.
 
 ## Scripted setup
 

@@ -14,7 +14,7 @@ maintainer is added.
 
 ## Vercel
 
-The `claire-landing` project builds from `website/`, with dependencies
+The `claire-landing` project builds from `apps/website/`, with dependencies
 installed from the monorepo root. Its production branch is `production`; the
 apex domain and `www` redirect are configured. `staging.useclaire.co` is
 attached to the Preview environment for `main`, and its DNS record is managed
@@ -52,7 +52,7 @@ Never add a service-role key, database password, OAuth secret, or any operator
 credential to EAS public variables.
 
 ```sh
-cd mobile
+cd apps/client
 bun run start:staging
 bun run build:preview
 bun run build:prod

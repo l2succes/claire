@@ -1,0 +1,64 @@
+{
+  "name": "@claire/website",
+  "version": "0.1.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "build-docs": "bun run scripts/build-docs.ts",
+    "extract-docs": "bun run scripts/extract-docs-text.ts",
+    "sync-campaign": "bun run scripts/sync-campaign.ts",
+    "sync-mockups": "bun run scripts/sync-mockups.ts",
+    "predev": "bun run sync-campaign && bun run build-docs && bun run extract-docs",
+    "dev": "next dev --port 3000",
+    "prebuild": "bun run sync-campaign && bun run build-docs && bun run extract-docs",
+    "build": "next build",
+    "start": "next start --port 3000",
+    "prelint": "bun run build-docs && bun run extract-docs",
+    "lint": "eslint .",
+    "pretypecheck": "bun run build-docs && bun run extract-docs",
+    "typecheck": "tsc --noEmit",
+    "storybook": "storybook dev -p 6006",
+    "build-storybook": "storybook build"
+  },
+  "dependencies": {
+    "@ai-sdk/openai": "^4.0.42",
+    "@claire/design-system": "workspace:*",
+    "@claire/platform-catalog": "workspace:*",
+    "@claire/tokens": "workspace:*",
+    "@heroicons/react": "^2.2.0",
+    "ai": "^7.0.66",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "mermaid": "^11.12.0",
+    "minisearch": "^7.2.0",
+    "next": "^16.3.1",
+    "next-themes": "^0.4.6",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "react-native-web": "^0.21.0",
+    "shiki": "^4.4.3",
+    "tailwind-merge": "^3.3.1"
+  },
+  "devDependencies": {
+    "@storybook/addon-a11y": "^10.5.8",
+    "@storybook/addon-docs": "^10.5.8",
+    "@storybook/nextjs-vite": "^10.5.8",
+    "@tailwindcss/postcss": "^4.1.12",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "eslint": "^9.0.0",
+    "eslint-config-next": "^16.3.1",
+    "node-html-parser": "^9.0.1",
+    "storybook": "^10.5.8",
+    "tailwindcss": "^4.1.12",
+    "typescript": "^5.9.0"
+  },
+  "nx": {
+    "tags": [
+      "scope:web",
+      "type:app"
+    ]
+  }
+}

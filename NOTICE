@@ -12,7 +12,6 @@ See LICENSE and LICENSES/ for the full texts.
 Third-party notices
 -------------------
 - Heroicons: MIT License. See landing/HEROICONS-LICENSE.txt and website attributions.
-- Hermes engine (vendored with the macOS desktop app): see desktop/macos/hermes-engine/LICENSE.
 - mautrix documentation (optional submodule under vendor/mautrix-docs): copyright the mautrix authors.
 - Platform marks (WhatsApp, Telegram, Instagram, and others) are trademarks of their respective owners and are used only for identification.
 

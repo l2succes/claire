@@ -1,0 +1,103 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+
+/*
+ * Semantic theme layer.
+ *
+ * `tokens.css` holds the raw Claire palette, which is shared verbatim with
+ * mobile and desktop and must stay theme-agnostic. This file maps that palette
+ * onto role-based tokens (surface / text / border / accent) and provides the
+ * dark counterpart, so a surface can opt into dark mode by setting
+ * `data-theme="dark"` without any component knowing which theme is active.
+ *
+ * Import this only where dark mode is wanted. The marketing pages deliberately
+ * stay light-only and import `tokens.css` alone.
+ */
+
+:root,
+[data-theme='light'] {
+  color-scheme: light;
+
+  --surface-page: var(--claire-cream);
+  --surface-raised: var(--claire-paper);
+  --surface-sunken: var(--neutral-100);
+  --surface-hover: rgb(16 18 15 / 4%);
+  --surface-inverse: var(--claire-ink);
+  --surface-scrim: rgb(16 18 15 / 45%);
+
+  --border-subtle: var(--neutral-200);
+  --border-strong: var(--neutral-400);
+
+  --text-primary: var(--claire-ink);
+  --text-secondary: var(--neutral-600);
+  --text-muted: var(--neutral-400);
+  --text-inverse: var(--claire-paper);
+
+  --accent: var(--claire-lime);
+  --accent-hover: var(--claire-lime-hover);
+  --accent-contrast: var(--claire-ink);
+  --accent-soft: rgb(223 255 100 / 34%);
+
+  --status-current: var(--success);
+  --status-draft: var(--warning);
+  --status-archived: var(--neutral-400);
+
+  /* Code surfaces are dark in both themes: a terminal reads as a terminal. */
+  --code-surface: #1a1e19;
+  --code-surface-raised: #232821;
+  --code-border: #363d33;
+  --code-text: #e8ece3;
+  --code-muted: #8e9787;
+
+  /* Docs use a tighter radius scale than marketing; large pill radii read as
+     toy-like on dense reference content. */
+  --docs-radius-code: 6px;
+  --docs-radius-card: 10px;
+  --docs-radius-panel: 14px;
+  --docs-radius-pill: 999px;
+
+  --docs-shadow-card: 0 1px 2px rgb(16 18 15 / 6%);
+  --docs-shadow-raised: 0 8px 28px rgb(16 18 15 / 8%);
+  --docs-shadow-overlay: 0 24px 64px rgb(16 18 15 / 22%);
+
+  --docs-measure: 74ch;
+  --docs-sidebar-width: 17.5rem;
+  --docs-toc-width: 15rem;
+}
+
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  --surface-page: #141713;
+  --surface-raised: #1b1f1a;
+  --surface-sunken: #101310;
+  --surface-hover: rgb(244 241 234 / 6%);
+  --surface-inverse: var(--claire-cream);
+  --surface-scrim: rgb(6 8 6 / 62%);
+
+  --border-subtle: #2c3229;
+  --border-strong: #414839;
+
+  --text-primary: #eef1e9;
+  --text-secondary: #a8b0a0;
+  --text-muted: #7c8476;
+  --text-inverse: var(--claire-ink);
+
+  --accent: var(--claire-lime);
+  --accent-hover: #e8ff8c;
+  --accent-contrast: var(--claire-ink);
+  --accent-soft: rgb(223 255 100 / 14%);
+
+  --status-current: #5cc08c;
+  --status-draft: #e0a15c;
+  --status-archived: #7c8476;
+
+  --code-surface: #101310;
+  --code-surface-raised: #171b16;
+  --code-border: #2c3229;
+  --code-text: #e8ece3;
+  --code-muted: #8e9787;
+
+  --docs-shadow-card: 0 1px 2px rgb(0 0 0 / 32%);
+  --docs-shadow-raised: 0 8px 28px rgb(0 0 0 / 42%);
+  --docs-shadow-overlay: 0 24px 64px rgb(0 0 0 / 58%);
+}

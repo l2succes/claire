@@ -1,8 +1,0 @@
-.next
-.source
-storybook-static
-node_modules
-*.tsbuildinfo
-.env
-.env.local
-content/docs

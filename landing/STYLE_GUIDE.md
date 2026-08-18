@@ -52,7 +52,7 @@ Scale:
 - Body: Public Sans 400, 1rem / 1.5. Large intro copy uses 1.125rem.
 - Labels: DM Mono 500, 0.75rem or smaller, 0.08–0.12em tracking.
 
-Fallbacks are Avenir Next/Helvetica for sans and SFMono/Consolas for mono. The website loads these faces in `website/src/app/layout.tsx`; the native apps bundle static TTFs from `mobile/assets/fonts/` and `desktop/macos/assets/fonts/`. All three families are SIL OFL 1.1.
+Fallbacks are Avenir Next/Helvetica for sans and SFMono/Consolas for mono. The website loads these faces in `website/src/app/layout.tsx`; the mobile app bundles static TTFs from `mobile/assets/fonts/`, while the Electron app uses the shared web client. All three families are SIL OFL 1.1.
 
 ## Foundations
 

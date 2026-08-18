@@ -1,0 +1,8 @@
+.next
+storybook-static
+node_modules
+*.tsbuildinfo
+.env
+.env.local
+src/generated
+public/docs-search-index.json

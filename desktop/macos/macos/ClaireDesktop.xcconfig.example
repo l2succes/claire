@@ -1,8 +1,0 @@
-// Copy values into CI/Xcode build settings for signed desktop builds.
-// The Supabase anon key is intentionally public; never put a service-role key
-// or a bridge credential in the desktop bundle.
-CLAIRE_URL_SCHEME = https:
-CLAIRE_URL_SLASH = /
-CLAIRE_API_URL = $(CLAIRE_URL_SCHEME)$(CLAIRE_URL_SLASH)$(CLAIRE_URL_SLASH)api.example.com
-CLAIRE_SUPABASE_URL = $(CLAIRE_URL_SCHEME)$(CLAIRE_URL_SLASH)$(CLAIRE_URL_SLASH)project.supabase.co
-CLAIRE_SUPABASE_ANON_KEY = your-public-supabase-anon-key

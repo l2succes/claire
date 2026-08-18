@@ -28,9 +28,9 @@ lerna-debug.log*
 .env.test.local
 .env.production.local
 # Expo overrides / local backups that may hold real URLs / tokens
-mobile/.env.override
-mobile/.env.local.backup
-mobile/.env.production
+apps/client/.env.override
+apps/client/.env.local.backup
+apps/client/.env.production
 # Explicit catch-all for real .env files in any subdirectory
 **/.env.production
 **/.env.local
@@ -93,8 +93,14 @@ Thumbs.db
 .claude/*
 !.claude/commands/
 
-# Leftover local trees after client/ → mobile/ and worktree experiments.
-# Keep the native project in mobile/ios (Xcode + Podfile); never commit Pods.
+# Leftover local trees after earlier client/ renames and worktree experiments.
+# Keep the native project in apps/client/ios (Xcode + Podfile); never commit Pods.
 /client/
 /wt-96/
 /turbo-fieldfare/
+
+# NX local cache and daemon state
+.nx/
+
+# Tamagui compiler cache
+.tamagui/

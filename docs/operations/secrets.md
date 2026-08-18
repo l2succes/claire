@@ -140,10 +140,10 @@ Use 1Password references in ignored local files and execute commands with
 `op run`; do not export long-lived secrets into the shell:
 
 ```sh
-op run --env-file=server/.env.op -- bun --cwd server run dev
+op run --env-file=apps/server/.env.op -- bun --cwd apps/server run dev
 ```
 
-`server/.env.op` is local-only and may contain references such as
+`apps/server/.env.op` is local-only and may contain references such as
 `SUPABASE_SERVICE_KEY=op://Claire%20%E2%80%94%20Staging/Railway%20%2F%20Staging/SUPABASE_SERVICE_KEY`.
 
 ## Rotation and review

@@ -29,7 +29,7 @@ Mock mode does not require WhatsApp, Telegram, Instagram, Matrix, Supabase Cloud
 |---|---|
 | Website and docs | `website/`, `docs/` |
 | Mobile | `mobile/` |
-| Desktop | `desktop/macos/` |
+| Desktop | `apps/desktop/` |
 | Server | `server/` |
 | Connectors | `packages/platform-catalog/`, `server/src/adapters/` |
 | Plugins | `packages/plugin-sdk/`, `examples/plugins/` |
