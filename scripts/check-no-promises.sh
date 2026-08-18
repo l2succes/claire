@@ -23,9 +23,10 @@ ALLOW='Promise<|Promise\.|: Promise\b|new Promise|await Promise|Promise>|Promise
 # "promises" is the ordinary JS idiom and has nothing to do with the feature.
 ALLOW_IDIOM='(const|let) promises\b|promises\.push\(|promises\.length|, promises\b|\(promises\)'
 
-# Files removed wholesale by the detection-pipeline work. Renaming symbols in a
-# module that is about to be deleted is churn, so they are excluded until then.
-PENDING_DELETION='apps/server/src/services/promise-detector\.ts|apps/server/src/services/message-queue\.ts|promiseDetector'
+# The revamp plan documents the rename itself, so it has to be able to write the
+# old name. Excluded by path rather than by pattern: any OTHER doc saying
+# "promise" is still a real finding.
+PLAN_DOCS='apps/website/src/content/docs/plans/loops-revamp\.tsx'
 
 MATCHES=$(grep -rn --binary-files=without-match \
   --exclude-dir=node_modules \
@@ -42,7 +43,7 @@ MATCHES=$(grep -rn --binary-files=without-match \
   apps/desktop/src apps/website/src/content/docs 2>/dev/null \
   | grep -vE "$ALLOW" \
   | grep -vE "$ALLOW_IDIOM" \
-  | grep -vE "$PENDING_DELETION" \
+  | grep -vE "$PLAN_DOCS" \
   | grep -vE 'LEGACY_LOOP_DETECTION_KEY|claire\.settings\.promiseDetection' \
   | grep -vE "i promise|I promise|product promise|not a promise that|a broken promise" \
   | grep -vE "=== 'promises'|pre-rename|before the rename|before the loops rename" \

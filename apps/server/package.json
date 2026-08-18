@@ -18,11 +18,15 @@
     "eval:loops:gates": "bun run scripts/eval-loops.ts --gates --seed 42 --per 6"
   },
   "dependencies": {
-    "@claire/platform-catalog": "workspace:*",
+    "@ai-sdk/azure": "^4.0.43",
+    "@ai-sdk/openai": "^4.0.42",
+    "@ai-sdk/openai-compatible": "^3.0.31",
     "@anthropic-ai/bedrock-sdk": "^0.27.0",
     "@aws-sdk/client-s3": "^3.922.0",
+    "@claire/platform-catalog": "workspace:*",
     "@sentry/node": "^10.62.0",
     "@supabase/supabase-js": "^2.39.1",
+    "ai": "^7.0.66",
     "bull": "^4.11.5",
     "chokidar": "^5.0.0",
     "cors": "^2.8.5",

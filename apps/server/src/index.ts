@@ -38,7 +38,7 @@ import { aiProcessor } from './services/ai-processor';
 import { conversationAssistant } from './services/conversation-assistant';
 import { voiceProfileService } from './services/voice-profile-service';
 import { incomingContactId, resolveMentions } from './services/contact-identity';
-import { promiseDetector } from './services/promise-detector';
+import { scheduleChat } from './services/loops/loop-queue';
 import { autoReplyEngine } from './services/auto-reply-engine';
 import { notificationDeliveryService } from './services/notification-delivery';
 import { Platform, PlatformStatus } from './adapters/types';
@@ -526,11 +526,18 @@ async function initializePlatforms() {
             .catch((err) => logger.debug('Voice profile refresh skipped:', (err as Error).message));
         }
 
-        // Detect and persist loops (fire-and-forget, both inbound and outbound).
-        // Backfill is excluded: history replays would re-run detection over every
-        // archived message, which is both expensive and produces stale loops.
-        if (savedMsg?.id && !isBackfill && message.content?.trim()) {
-          promiseDetector.detectPromises(savedMsg.id, message.content, message.userId, message.isFromMe)
+        // Schedule loop detection for this chat (fire-and-forget).
+        //
+        // Scheduling is per-CHAT and debounced, not per-message: a burst of
+        // twenty messages costs one detection pass over the whole exchange
+        // rather than twenty passes over twenty fragments. That is what lets one
+        // plan stay one loop as it evolves.
+        //
+        // Backfill is excluded: replaying history would re-run detection over
+        // every archived message, which is expensive and produces stale loops.
+        // `chat.id` is the database UUID; message.chatId is the platform's id.
+        if (savedMsg?.id && !isBackfill && message.content?.trim() && chat?.id) {
+          void scheduleChat(message.userId, chat.id)
             .catch((err) => logger.debug('Loop detection skipped:', (err as Error).message));
         }
 
