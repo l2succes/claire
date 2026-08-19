@@ -42,6 +42,27 @@ import {
   PersistedMatrixSessionRow,
   toPersistedMatrixSession,
 } from './session-persistence';
+import { logger } from '../../utils/logger';
+
+interface MatrixSdkLogger {
+  trace(...args: unknown[]): void;
+  debug(...args: unknown[]): void;
+  info(...args: unknown[]): void;
+  warn(...args: unknown[]): void;
+  error(...args: unknown[]): void;
+  getChild(namespace: string): MatrixSdkLogger;
+}
+
+// matrix-js-sdk's default logger includes request URLs and Matrix identifiers.
+// Keep diagnostic signal without handing that metadata to infrastructure logs.
+const matrixSdkLogger: MatrixSdkLogger = {
+  trace: () => undefined,
+  debug: () => undefined,
+  info: () => undefined,
+  warn: () => logger.warn('Matrix SDK warning'),
+  error: () => logger.error('Matrix SDK error'),
+  getChild: () => matrixSdkLogger,
+};
 
 export interface MatrixSessionConfig {
   platform: Platform;
@@ -289,6 +310,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
       baseUrl: this.config.homeserverUrl,
       accessToken: this.config.adminAccessToken,
       userId: this.config.botUserId || `@claire_bot:${this.config.serverName}`,
+      logger: matrixSdkLogger,
     });
 
     // Setup event handlers BEFORE starting client so we capture initial sync events
