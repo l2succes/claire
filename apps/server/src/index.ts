@@ -642,10 +642,6 @@ async function initializePlatforms() {
   // Initialize all registered adapters (after handler is registered so backfill is captured)
   await platformManager.initialize();
 
-  // This starts only after Matrix adapters have initialized, so the first
-  // reading measures the real bridge topology rather than startup noise.
-  operationsMonitor.start();
-
   logger.info('Platform adapters initialized');
 }
 
@@ -669,6 +665,11 @@ const serverReady = Promise.resolve(
 
     // Start promise reminder scheduler
     reminderScheduler.start();
+
+    // Matrix room registration may backfill a substantial history. The
+    // watchdog must not wait for that optional work, or a slow bridge startup
+    // would leave production unmonitored exactly when it needs observation.
+    setTimeout(() => operationsMonitor.start(), 10_000);
 
     // Initialize platforms
     await initializePlatforms();
