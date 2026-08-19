@@ -17,3 +17,22 @@ export function classifyMessageFreshness(
   }
   return { status: 'unknown', summary: 'No recent traffic baseline; freshness cannot be inferred' };
 }
+
+export function classifyBridgeSessions(
+  connected: number,
+  disconnected: number,
+): { status: OperationsStatus; summary: string } {
+  if (connected === 0 && disconnected > 0) {
+    return { status: 'critical', summary: 'No durable bridge sessions are connected' };
+  }
+  if (disconnected > 0) {
+    return {
+      status: 'warning',
+      summary: `${connected} durable bridge session(s) connected; ${disconnected} require attention`,
+    };
+  }
+  if (connected > 0) {
+    return { status: 'healthy', summary: `${connected} durable bridge session(s) connected` };
+  }
+  return { status: 'unknown', summary: 'No messaging accounts are connected' };
+}
