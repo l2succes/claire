@@ -3,7 +3,7 @@ import { pushNotificationService } from './push-notification';
 import { redis } from './redis';
 import { type DbRow, supabase } from './supabase';
 import { logger } from '../utils/logger';
-import { classifyMessageFreshness } from './operations-health';
+import { classifyBridgeSessions, classifyMessageFreshness } from './operations-health';
 
 export type OperationsStatus = 'healthy' | 'warning' | 'critical' | 'unknown';
 
@@ -102,10 +102,7 @@ class OperationsMonitor {
     if (error) return { component: 'bridge_sessions', status: 'critical', summary: 'Could not read durable bridge sessions', details: { error: error.code || 'query_failed' } };
     const connected = (data || []).filter((row: DbRow) => row.status === 'connected').length;
     const disconnected = (data || []).filter((row: DbRow) => row.status === 'disconnected' || row.status === 'failed').length;
-    if (connected === 0 && disconnected > 0) {
-      return { component: 'bridge_sessions', status: 'critical', summary: 'No durable bridge sessions are connected', details: { connected, disconnected } };
-    }
-    return { component: 'bridge_sessions', status: connected > 0 ? 'healthy' : 'unknown', summary: connected > 0 ? `${connected} durable bridge session(s) connected` : 'No messaging accounts are connected', details: { connected, disconnected } };
+    return { component: 'bridge_sessions', ...classifyBridgeSessions(connected, disconnected), details: { connected, disconnected } };
   }
 
   private async checkMessageFlow(): Promise<OperationsComponentCheck[]> {
