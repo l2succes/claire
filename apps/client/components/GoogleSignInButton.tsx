@@ -63,9 +63,10 @@ export function GoogleSignInButton({ mode, variant = 'default' }: GoogleSignInBu
         {loading ? (
           <ActivityIndicator size="small" color={colors.paper} />
         ) : (
-          <Text style={{ ...mobileType.body, color: colors.paper, fontWeight: '700' }}>
-            Continue with Google
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <Ionicons name="logo-google" size={20} color={colors.paper} />
+            <Text style={{ ...mobileType.body, color: colors.paper, fontWeight: '700' }}>Continue with Google</Text>
+          </View>
         )}
       </TouchableOpacity>
     );
