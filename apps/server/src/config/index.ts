@@ -55,6 +55,9 @@ const envSchema = z.object({
 
   // Monitoring
   SENTRY_DSN: z.string().url().optional(),
+  OPS_ALERT_USER_IDS: z.string().optional(),
+  OPS_MONITOR_INTERVAL_SECONDS: z.string().default('60').transform(Number),
+  OPS_MESSAGE_FRESHNESS_MINUTES: z.string().default('120').transform(Number),
 
   // Direct APNs delivery for the native macOS client.
   APNS_KEY_ID: z.string().optional(),
@@ -144,6 +147,13 @@ export const serverConfig = {
         .filter(Boolean)
     : ['https://useclaire.co', 'https://www.useclaire.co', 'https://staging.useclaire.co'],
   healthcheckToken: config.HEALTHCHECK_TOKEN,
+  operations: {
+    alertUserIds: config.OPS_ALERT_USER_IDS
+      ? config.OPS_ALERT_USER_IDS.split(',').map((id) => id.trim()).filter(Boolean)
+      : [],
+    monitorIntervalSeconds: Math.max(30, config.OPS_MONITOR_INTERVAL_SECONDS),
+    messageFreshnessMinutes: Math.max(15, config.OPS_MESSAGE_FRESHNESS_MINUTES),
+  },
 };
 
 export const openaiConfig = {

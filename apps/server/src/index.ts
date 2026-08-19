@@ -27,6 +27,7 @@ import seedRoutes from './routes/seed';
 import promiseRoutes from './routes/promises';
 import pushTokenRoutes from './routes/push-tokens';
 import notificationDeviceRoutes from './routes/notification-devices';
+import operationsRoutes from './routes/operations';
 import contactRoutes from './routes/contacts';
 import deviceRoutes from './routes/devices';
 import searchRoutes from './routes/search';
@@ -37,8 +38,10 @@ import { platformManager } from './adapters';
 import { aiProcessor } from './services/ai-processor';
 import { conversationAssistant } from './services/conversation-assistant';
 import { voiceProfileService } from './services/voice-profile-service';
+<<<<<<< HEAD
 import { incomingContactId } from './services/contact-identity';
 import { promiseDetector } from './services/promise-detector';
+import { operationsMonitor } from './services/operations-monitor';
 import { autoReplyEngine } from './services/auto-reply-engine';
 import { notificationDeliveryService } from './services/notification-delivery';
 import { Platform, PlatformStatus } from './adapters/types';
@@ -110,6 +113,7 @@ app.use('/seed', seedRoutes);
 app.use('/promises', promiseRoutes);
 app.use('/push-tokens', pushTokenRoutes);
 app.use('/notification-devices', notificationDeviceRoutes);
+app.use('/operations', operationsRoutes);
 app.use('/contacts', contactRoutes);
 app.use('/devices', deviceRoutes);
 app.use('/search', searchRoutes);
@@ -637,6 +641,10 @@ async function initializePlatforms() {
 
   // Initialize all registered adapters (after handler is registered so backfill is captured)
   await platformManager.initialize();
+
+  // This starts only after Matrix adapters have initialized, so the first
+  // reading measures the real bridge topology rather than startup noise.
+  operationsMonitor.start();
 
   logger.info('Platform adapters initialized');
 }
