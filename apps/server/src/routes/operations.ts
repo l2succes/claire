@@ -4,6 +4,7 @@ import { operationsMonitor } from '../services/operations-monitor';
 import { type DbRow, supabase } from '../services/supabase';
 import { recordOperationsAudit } from '../services/operations-audit';
 import { operationsTelemetry } from '../services/operations-telemetry';
+import { getOperationsBridgeSnapshot } from '../services/operations-bridges';
 
 const router = Router();
 
@@ -54,6 +55,16 @@ router.get('/telemetry', requireAuth, requireOperationsAccess, async (req: Reque
     return res.json(telemetry);
   } catch {
     return res.status(500).json({ error: 'Could not load Operations telemetry' });
+  }
+});
+
+router.get('/bridges', requireAuth, requireOperationsAccess, async (req: Request, res: Response) => {
+  try {
+    const bridges = await getOperationsBridgeSnapshot();
+    if (req.user?.id) void recordOperationsAudit({ actorUserId: req.user.id, action: 'bridges_viewed' });
+    return res.json(bridges);
+  } catch {
+    return res.status(500).json({ error: 'Could not load platform bridge health' });
   }
 });
 
