@@ -1,5 +1,7 @@
 apps/server/sessions/
 docker/
+apps/client/
+apps/website/
 docs/
 after_settings_tap.png
 *.png

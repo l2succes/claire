@@ -38,7 +38,6 @@ import { platformManager } from './adapters';
 import { aiProcessor } from './services/ai-processor';
 import { conversationAssistant } from './services/conversation-assistant';
 import { voiceProfileService } from './services/voice-profile-service';
-<<<<<<< HEAD
 import { incomingContactId } from './services/contact-identity';
 import { promiseDetector } from './services/promise-detector';
 import { operationsMonitor } from './services/operations-monitor';
