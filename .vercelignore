@@ -10,7 +10,6 @@ apps/desktop
 apps/server
 docker
 examples
-landing
 vendor
 .agents
 .codex
