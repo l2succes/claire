@@ -1,17 +1,25 @@
 import { Router, Request, Response } from 'express';
-import { serverConfig } from '../config';
 import { requireAuth } from '../middleware/auth';
 import { operationsMonitor } from '../services/operations-monitor';
 import { type DbRow, supabase } from '../services/supabase';
 
 const router = Router();
 
-function requireOperationsAccess(req: Request, res: Response, next: () => void): void {
-  const userId = req.user?.id;
-  if (!userId || !serverConfig.operations.alertUserIds.includes(userId)) {
-    res.status(403).json({ error: 'Operations access is not configured for this account' });
-    return;
+async function requireOperationsAccess(req: Request, res: Response, next: () => void): Promise<void> {
+  try {
+    const email = typeof req.user?.email === 'string' ? req.user.email.trim().toLowerCase() : '';
+    if (!email) { res.status(403).json({ error: 'A verified email is required for Operations access' }); return; }
+    const { data, error } = await supabase.from('operations_admins').select('role').eq('email', email).maybeSingle();
+    if (error || !data) { res.status(403).json({ error: 'This email is not allowed to access Operations' }); return; }
+    req.user.operationsRole = data.role;
+    next();
+  } catch {
+    res.status(500).json({ error: 'Could not verify Operations access' });
   }
+}
+
+function requireOperationsOwner(req: Request, res: Response, next: () => void): void {
+  if (req.user?.operationsRole !== 'owner') { res.status(403).json({ error: 'Owner access is required' }); return; }
   next();
 }
 
@@ -31,6 +39,33 @@ router.get('/incidents', requireAuth, requireOperationsAccess, async (_req: Requ
     .limit(100);
   if (error) return res.status(500).json({ error: 'Could not load operations incidents' });
   return res.json({ incidents: (data || []).map((row: DbRow) => row) });
+});
+
+router.get('/admins', requireAuth, requireOperationsAccess, async (_req: Request, res: Response) => {
+  const { data, error } = await supabase.from('operations_admins').select('id,email,role,created_at').order('email');
+  if (error) return res.status(500).json({ error: 'Could not load Operations access list' });
+  return res.json({ admins: data || [] });
+});
+
+router.post('/admins', requireAuth, requireOperationsAccess, requireOperationsOwner, async (req: Request, res: Response) => {
+  const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+  const role = req.body?.role === 'owner' || req.body?.role === 'operator' ? req.body.role : 'viewer';
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'A valid email is required' });
+  const { data, error } = await supabase.from('operations_admins').upsert({ email, role, updated_at: new Date().toISOString() }, { onConflict: 'email' }).select('id,email,role,created_at').single();
+  if (error) return res.status(500).json({ error: 'Could not update Operations access list' });
+  return res.status(201).json({ admin: data });
+});
+
+router.delete('/admins/:id', requireAuth, requireOperationsAccess, requireOperationsOwner, async (req: Request, res: Response) => {
+  const { data: target, error: targetError } = await supabase.from('operations_admins').select('id,role').eq('id', req.params.id).maybeSingle();
+  if (targetError || !target) return res.status(404).json({ error: 'Access entry was not found' });
+  if (target.role === 'owner') {
+    const { count } = await supabase.from('operations_admins').select('id', { count: 'exact', head: true }).eq('role', 'owner');
+    if ((count || 0) <= 1) return res.status(409).json({ error: 'Keep at least one Operations owner' });
+  }
+  const { error } = await supabase.from('operations_admins').delete().eq('id', req.params.id);
+  if (error) return res.status(500).json({ error: 'Could not remove Operations access' });
+  return res.status(204).send();
 });
 
 export default router;
