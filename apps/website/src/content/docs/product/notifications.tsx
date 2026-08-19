@@ -13,7 +13,7 @@ export const meta: DocMeta = {
     summary: 'Deliver reliable mobile and macOS message notifications with production acceptance coverage.',
     issue: 'https://github.com/l2succes/claire/issues/110',
   },
-  related: ['/docs/product/roadmap'],
+  related: ['/docs/product/roadmap', '/docs/plans/conversation-notification-controls'],
 };
 
 export default function Page() {
