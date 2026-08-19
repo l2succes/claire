@@ -50,6 +50,9 @@ const envSchema = z.object({
   // Security
   JWT_SECRET: z.string(),
   ENCRYPTION_KEY: z.string(),
+  // During a rotation, new values use ENCRYPTION_KEY while reads may fall
+  // back to this one previous key. Remove it after all active TTLs expire.
+  ENCRYPTION_KEY_PREVIOUS: z.string().optional(),
   CORS_ORIGINS: z.string().optional(),
   HEALTHCHECK_TOKEN: z.string().min(32).optional(),
 

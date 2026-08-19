@@ -4,6 +4,7 @@ import { redis } from './redis';
 import { type DbRow, supabase } from './supabase';
 import { logger } from '../utils/logger';
 import { classifyBridgeSessions, classifyMessageFreshness } from './operations-health';
+import { sanitizeOperationsDetails } from './operations-privacy';
 
 export type OperationsStatus = 'healthy' | 'warning' | 'critical' | 'unknown';
 
@@ -141,7 +142,7 @@ class OperationsMonitor {
     for (const check of checks) {
       const observedAt = new Date().toISOString();
       const { error } = await supabase.from('operations_component_checks').upsert({
-        component: check.component, status: check.status, summary: check.summary, details: check.details, observed_at: observedAt, updated_at: observedAt,
+        component: check.component, status: check.status, summary: check.summary.slice(0, 240), details: sanitizeOperationsDetails(check.details), observed_at: observedAt, updated_at: observedAt,
       }, { onConflict: 'component' });
       if (error) throw error;
       await this.reconcileIncident(check);
@@ -159,7 +160,7 @@ class OperationsMonitor {
     }
     const isNew = !existing || existing.status !== 'open';
     const { data: incident, error } = await supabase.from('operations_incidents').upsert({
-      fingerprint, component: check.component, severity, title: check.summary, details: check.details, status: 'open',
+      fingerprint, component: check.component, severity, title: check.summary.slice(0, 240), details: sanitizeOperationsDetails(check.details), status: 'open',
       ...(isNew ? { first_detected_at: now, resolved_at: null } : {}), last_detected_at: now, updated_at: now,
     }, { onConflict: 'fingerprint' }).select('id,last_alerted_at').single();
     if (error || !incident) throw error || new Error('Could not persist operational incident');

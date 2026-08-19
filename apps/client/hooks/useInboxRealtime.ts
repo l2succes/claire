@@ -11,6 +11,20 @@ import {
 } from './useInboxMessages';
 import { Platform } from '../types/platform';
 
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001';
+
+// Keep Operations' client signal intentionally content-free. The server HMACs
+// the account ID and rejects message identifiers or arbitrary event payloads.
+async function reportClientState(state: 'connected' | 'disconnected' | 'acknowledged', platform = 'mock') {
+  const { data } = await supabase.auth.getSession();
+  if (!data.session?.access_token) return;
+  await fetch(`${API_BASE_URL}/telemetry/client-state`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${data.session.access_token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ state, platform }),
+  });
+}
+
 // Exactly one live channel is guaranteed structurally, not by a mount flag:
 // every effect run sweeps any predecessor via dropInboxChannels and then opens
 // a topic no other subscriber can collide with. A boolean guard would instead
@@ -50,6 +64,7 @@ export function useInboxRealtime(userId?: string) {
     const channel = supabase.channel(topic);
     channel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `user_id=eq.${userId}` }, ({ new: row }) => {
       const message = row as InboxRealtimeRow;
+      if (message.platform) void reportClientState('acknowledged', message.platform);
       if (!message.from_me) {
         notifyWebMessageUpdate(
           message.contact_name || 'New message',
@@ -74,6 +89,7 @@ export function useInboxRealtime(userId?: string) {
       if (cancelled) return;
       console.info('[Inbox] realtime:status', { status, hasError: !!error });
       if (status === 'SUBSCRIBED') {
+        void reportClientState('connected');
         startFallback(60_000);
         return;
       }
@@ -85,6 +101,7 @@ export function useInboxRealtime(userId?: string) {
     return () => {
       cancelled = true;
       if (fallbackTimer) clearInterval(fallbackTimer);
+      void reportClientState('disconnected');
       void supabase.removeChannel(channel);
     };
   }, [queryClient, userId]);

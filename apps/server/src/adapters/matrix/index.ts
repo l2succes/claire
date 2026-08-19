@@ -19,6 +19,7 @@ import {
 } from 'matrix-js-sdk';
 import { BasePlatformAdapter } from '../base-adapter';
 import { supabase, type DbRow } from '../../services/supabase';
+import { operationsTelemetry } from '../../services/operations-telemetry';
 import {
   Platform,
   AuthMethod,
@@ -394,6 +395,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
 
       const sender = event.getSender();
       const eventId = event.getId();
+      const observedAt = Date.now();
 
       // Skip the local timeline echo of SDK sends (persist happens in sendMessage).
       // When double-puppeting is disabled, every bot-sender event is an SDK send.
@@ -440,6 +442,29 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
         selfGhostIds,
         matrixUserId
       );
+
+      // Matrix receives bridged provider events after mautrix has translated
+      // them. These events prove arrival at both observable boundaries; the
+      // values persisted below are HMAC references only, never Matrix IDs.
+      const direction = unifiedMessage.isFromMe ? 'outbound' as const : 'inbound' as const;
+      void operationsTelemetry.record({
+        traceSource: unifiedMessage.platformMessageId,
+        userId: session.userId,
+        platform: chatInfo.platform,
+        direction,
+        stage: 'bridge',
+        outcome: 'accepted',
+        durationMs: Date.now() - observedAt,
+      });
+      void operationsTelemetry.record({
+        traceSource: unifiedMessage.platformMessageId,
+        userId: session.userId,
+        platform: chatInfo.platform,
+        direction,
+        stage: 'matrix',
+        outcome: 'accepted',
+        durationMs: Date.now() - observedAt,
+      });
 
       this.emitPlatformEvent('message', chatInfo.sessionId, unifiedMessage);
     });
@@ -1051,6 +1076,15 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
       isRead: true,
       hasMedia: !!message.media?.length,
     };
+
+    void operationsTelemetry.record({
+      traceSource: eventId,
+      userId: session.userId,
+      platform,
+      direction: 'outbound',
+      stage: 'matrix',
+      outcome: 'accepted',
+    });
 
     this.emitPlatformEvent('message', sessionId, unifiedMessage);
     return unifiedMessage;

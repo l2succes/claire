@@ -98,7 +98,7 @@ export class RealtimeSyncService extends EventEmitter {
    * Handle user broadcast events
    */
   private handleUserBroadcast(userId: string, payload: any) {
-    logger.debug(`Broadcast for user ${userId}:`, payload.event);
+    logger.debug('Realtime event broadcast', { event: payload.event });
     
     // Buffer messages for batching
     if (payload.event.startsWith('message:')) {

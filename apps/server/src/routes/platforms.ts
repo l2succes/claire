@@ -18,6 +18,7 @@ import { BridgeHttpClient } from '../adapters/matrix/bridge-http-client';
 import { loginWithCredentials, submitTwoFactorCode } from '../services/instagram-login';
 import { platformCatalog, platformCatalogVersion } from '../platform-catalog';
 import { supabase, type DbRow } from '../services/supabase';
+import { operationsTelemetry } from '../services/operations-telemetry';
 
 // Railway services cannot reach each other through localhost. Railway does not
 // inject NODE_ENV by default, so its public-domain marker is also used to
@@ -1004,15 +1005,40 @@ router.post('/:platform/send', async (req: Request, res: Response) => {
       });
     }
 
+    const startedAt = Date.now();
+    try {
     const message = await adapter.sendMessage(sessionId, chatId, {
       content,
       replyToMessageId,
+    });
+
+    void operationsTelemetry.record({
+      traceSource: message.platformMessageId || `outbound:${sessionId}:${Date.now()}`,
+      userId,
+      platform,
+      direction: 'outbound',
+      stage: 'api',
+      outcome: 'accepted',
+      durationMs: Date.now() - startedAt,
     });
 
     return res.json({
       success: true,
       message,
     });
+    } catch (error) {
+      void operationsTelemetry.record({
+        traceSource: `outbound:${sessionId}:${Math.floor(startedAt / 1000)}`,
+        userId,
+        platform,
+        direction: 'outbound',
+        stage: 'api',
+        outcome: 'failed',
+        durationMs: Date.now() - startedAt,
+        errorClass: 'provider',
+      });
+      throw error;
+    }
   } catch (error) {
     logger.error('Error sending message:', error);
     return res.status(500).json({

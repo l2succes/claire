@@ -288,7 +288,7 @@ class ContactInferenceService {
         created_at: new Date().toISOString(),
       });
       
-      logger.info(`Stored inference for contact ${contactId}: ${inferredName} (${inferredRelationship})`);
+      logger.info('Stored contact inference');
     } catch (error) {
       logger.error('Error storing contact inference:', error);
     }
@@ -334,7 +334,7 @@ class ContactInferenceService {
         .eq('whatsapp_id', contactId)
         .eq('user_id', userId);
       
-      logger.info(`Confirmed inference for contact ${contactId}`);
+      logger.info('Confirmed contact inference');
     } catch (error) {
       logger.error('Error confirming inference:', error);
     }

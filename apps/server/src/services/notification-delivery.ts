@@ -4,6 +4,7 @@ import { supabase } from './supabase';
 import { notificationPresence } from './notification-presence';
 import { apnsNotificationProvider, expoNotificationProvider, type NotificationPayload, type ProviderResult } from './notification-providers';
 import { logger } from '../utils/logger';
+import { operationsTelemetry } from './operations-telemetry';
 
 interface NotificationDevice {
   id: string;
@@ -30,6 +31,7 @@ interface DeliveryJob {
   deliveryId: string;
   device: NotificationDevice;
   payload: NotificationPayload;
+  telemetry: { userId: string; platform: string; traceSource: string };
 }
 
 interface ReceiptJob {
@@ -37,6 +39,7 @@ interface ReceiptJob {
   deliveryId: string;
   deviceId: string;
   receiptId: string;
+  telemetry: DeliveryJob['telemetry'];
 }
 
 type NotificationJob = DeliveryJob | ReceiptJob;
@@ -135,7 +138,21 @@ export class NotificationDeliveryService {
           url: `claire://chat/${event.chatId}?messageId=${event.messageId}`,
         },
       };
-      await this.queue!.add({ kind: 'delivery', deliveryId: delivery.id, device, payload }, { jobId: `message:${event.messageId}:device:${device.id}` });
+      await this.queue!.add({
+        kind: 'delivery',
+        deliveryId: delivery.id,
+        device,
+        payload,
+        telemetry: { userId: event.userId, platform: event.platform, traceSource: event.messageId },
+      }, { jobId: `message:${event.messageId}:device:${device.id}` });
+      void operationsTelemetry.record({
+        traceSource: event.messageId,
+        userId: event.userId,
+        platform: event.platform,
+        direction: 'inbound',
+        stage: 'push',
+        outcome: 'accepted',
+      });
       queued += 1;
     }
     return queued;
@@ -143,27 +160,27 @@ export class NotificationDeliveryService {
 
   private async process(job: Job<NotificationJob>): Promise<void> {
     if (job.data.kind === 'receipt') return this.processReceipt(job.data);
-    const { deliveryId, device, payload } = job.data;
+    const { deliveryId, device, payload, telemetry } = job.data;
     const provider = device.provider === 'expo' ? expoNotificationProvider : device.provider === 'apns' ? apnsNotificationProvider : null;
     if (!provider) {
-      await this.recordResult(deliveryId, device.id, { state: 'failed', errorCode: 'unsupported_provider' }, job.attemptsMade + 1);
+      await this.recordResult(deliveryId, device.id, { state: 'failed', errorCode: 'unsupported_provider' }, job.attemptsMade + 1, telemetry);
       return;
     }
     const result = await provider.send(device.token, payload);
-    await this.recordResult(deliveryId, device.id, result, job.attemptsMade + 1);
+    await this.recordResult(deliveryId, device.id, result, job.attemptsMade + 1, telemetry);
     if (result.state === 'submitted' && result.receiptId && device.provider === 'expo') {
-      await this.queue!.add({ kind: 'receipt', deliveryId, deviceId: device.id, receiptId: result.receiptId }, { delay: 15 * 60_000, attempts: 4, backoff: { type: 'exponential', delay: 60_000 }, jobId: `receipt:${result.receiptId}` });
+      await this.queue!.add({ kind: 'receipt', deliveryId, deviceId: device.id, receiptId: result.receiptId, telemetry }, { delay: 15 * 60_000, attempts: 4, backoff: { type: 'exponential', delay: 60_000 }, jobId: `receipt:${result.receiptId}` });
     }
     if (result.retryable) throw new Error(result.errorCode || 'Transient notification provider failure');
   }
 
   private async processReceipt(job: ReceiptJob): Promise<void> {
     const result = await expoNotificationProvider.getReceipt(job.receiptId);
-    await this.recordResult(job.deliveryId, job.deviceId, result, undefined);
+    await this.recordResult(job.deliveryId, job.deviceId, result, undefined, job.telemetry);
     if (result.state === 'submitted' || result.retryable) throw new Error(result.errorCode || 'Expo receipt is not ready');
   }
 
-  private async recordResult(deliveryId: string, deviceId: string, result: ProviderResult, attempts?: number): Promise<void> {
+  private async recordResult(deliveryId: string, deviceId: string, result: ProviderResult, attempts?: number, telemetry?: DeliveryJob['telemetry']): Promise<void> {
     const now = new Date().toISOString();
     await supabase.from('notification_deliveries').update({
       state: result.state,
@@ -177,6 +194,18 @@ export class NotificationDeliveryService {
       ...(result.state === 'failed' ? { failed_at: now } : {}),
       updated_at: now,
     }).eq('id', deliveryId);
+    if (telemetry) {
+      void operationsTelemetry.record({
+        traceSource: telemetry.traceSource,
+        userId: telemetry.userId,
+        platform: telemetry.platform,
+        direction: 'inbound',
+        stage: 'push',
+        outcome: result.state === 'failed' ? 'failed' : result.state === 'delivered' ? 'acknowledged' : 'published',
+        retryCount: attempts ? Math.max(0, attempts - 1) : 0,
+        errorClass: result.state === 'failed' ? 'provider' : undefined,
+      });
+    }
     if (result.invalidToken) await supabase.from('notification_devices').update({ enabled: false, updated_at: now }).eq('id', deviceId);
   }
 }

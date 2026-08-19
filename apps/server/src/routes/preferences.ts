@@ -5,6 +5,7 @@ import { validateRequest } from '../middleware/validation';
 import { supabase } from '../services/supabase';
 import { logger } from '../utils/logger';
 import { voiceProfileService } from '../services/voice-profile-service';
+import { aiProcessingDisclosure, isAiProcessingEnabled } from '../services/ai-policy';
 
 const router = Router();
 
@@ -30,6 +31,7 @@ const updatePreferencesSchema = z.object({
         notify_messages: z.boolean().optional(),
         notify_promises: z.boolean().optional(),
         notify_ai_suggestions: z.boolean().optional(),
+        ai_enabled: z.boolean().optional(),
         desktop_appearance: z.object({
           theme: z.enum(['system', 'light', 'dark']).optional(),
           density: z.enum(['comfortable', 'compact']).optional(),
@@ -117,6 +119,11 @@ router.put(
   }
 );
 
+router.get('/privacy', requireAuth, async (req: Request, res: Response) => {
+  if (!req.user?.id) return res.status(401).json({ error: 'User not authenticated' });
+  return res.json({ success: true, data: { ...aiProcessingDisclosure(), enabled: await isAiProcessingEnabled(req.user.id) } });
+});
+
 router.get('/account', requireAuth, async (req: Request, res: Response) => {
   if (!req.user?.id) return res.status(401).json({ error: 'User not authenticated' });
   const { data, error } = await supabase.from('users')
@@ -179,6 +186,7 @@ router.delete('/voice-profiles/:language', requireAuth, async (req: Request, res
 router.post('/voice-profiles/rebuild', requireAuth, async (req: Request, res: Response) => {
   try {
     if (!req.user?.id) return res.status(401).json({ error: 'User not authenticated' });
+    if (!await isAiProcessingEnabled(req.user.id)) return res.status(403).json({ error: 'AI processing is disabled for this account' });
     if (!voiceProfileService.isConfigured) return res.status(503).json({ error: 'AI is not configured' });
     return res.status(202).json({ success: true, data: await voiceProfileService.rebuild(req.user.id) });
   } catch (error) {

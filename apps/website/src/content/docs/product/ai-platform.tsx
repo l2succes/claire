@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-import { C, Callout, Code, Doc, P, Section, Table } from '@/components/docs/blocks';
+import { C, Callout, Code, Doc, DocLink, P, Section, Table } from '@/components/docs/blocks';
 import type { DocMeta } from '@/lib/docs-types';
 
 export const meta: DocMeta = {
@@ -14,7 +14,7 @@ export const meta: DocMeta = {
     summary: "Define verified self-hosted, local-model, and managed-AI product boundaries.",
   },
   hero: { kind: 'mockup', surface: 'mobile', screen: 'ai-and-privacy', caption: 'AI behaviour and privacy controls' },
-  related: ['/docs/product/payments', '/docs/product/security'],
+  related: ['/docs/product/payments', '/docs/product/security', '/docs/product/end-to-end-encryption'],
 };
 
 export default function Page() {
@@ -378,6 +378,11 @@ export default function Page() {
               <li>“Open source” until a repository license exists.</li>
             </ul>
       <P>The disclosure shown before enabling a provider should name each processor in the selected path. Provider retention and training claims should link to current provider terms rather than being copied into static Claire marketing text.</P>
+      <P>
+        Managed AI requires Claire to process selected message content. It is compatible with a
+        hardened trusted-service model, but not with an unqualified end-to-end-encryption claim; see
+        the <DocLink to="/docs/product/end-to-end-encryption">E2EE research boundary</DocLink>.
+      </P>
       </Section>
       <Section id="current-code-audit-and-migration" title="Current-code audit and migration">
       <P>Claire already has the beginning of a provider abstraction, but provider choice is inconsistent:</P>
