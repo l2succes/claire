@@ -1366,6 +1366,195 @@ mark {
   font-size: 8px;
   margin: 0;
 }
+.account-attention-banner {
+  display: flex;
+  gap: 11px;
+  border: 1px solid #d99c38;
+  background: #fff0d5;
+  border-radius: 16px;
+  padding: 13px;
+  margin-bottom: 14px;
+}
+.attention-icon {
+  width: 29px;
+  height: 29px;
+  flex: 0 0 29px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: #df9f37;
+  color: var(--claire-ink);
+  font-weight: 700;
+}
+.account-attention-banner h2 {
+  font-size: 16px;
+  letter-spacing: -0.04em;
+  margin: 3px 0;
+}
+.account-attention-banner p,
+.recovery-copy p {
+  margin: 0;
+  color: var(--neutral-600);
+  font-size: 8px;
+  line-height: 1.4;
+}
+.connection-health-card {
+  border: 1px solid var(--neutral-200);
+  border-radius: 16px;
+  overflow: hidden;
+  background: white;
+}
+.connection-health-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border-bottom: 1px solid var(--neutral-200);
+}
+.connection-health-head > div:nth-child(2) {
+  flex: 1;
+}
+.connection-health-head b {
+  display: block;
+  font-size: 11px;
+}
+.connection-health-head p {
+  margin: 2px 0 0;
+  color: var(--neutral-600);
+  font-size: 8px;
+}
+.attention-label {
+  color: #9d6300;
+  font: 7px var(--font-mono);
+  letter-spacing: 0.07em;
+}
+.connection-fact {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--neutral-200);
+  font-size: 8px;
+}
+.connection-fact:last-child {
+  border-bottom: 0;
+}
+.connection-fact span {
+  color: var(--neutral-600);
+}
+.connection-fact b {
+  text-align: right;
+  font-size: 8px;
+}
+.recovery-copy {
+  margin: 15px 2px 12px;
+}
+.recovery-copy b {
+  display: block;
+  margin-bottom: 3px;
+  font-size: 10px;
+}
+.reconnect-primary,
+.reconnect-secondary {
+  width: 100%;
+  height: 43px;
+  border-radius: 14px;
+  font-size: 10px;
+  font-weight: 700;
+}
+.reconnect-primary {
+  border: 1px solid var(--claire-ink);
+  background: var(--claire-ink);
+  color: var(--claire-lime);
+}
+.reconnect-secondary {
+  border: 0;
+  background: transparent;
+  color: var(--neutral-600);
+  height: 33px;
+  font-weight: 500;
+}
+.reconnect-screen {
+  padding: 15px 21px 20px;
+  display: flex;
+  flex-direction: column;
+}
+.reconnect-back {
+  align-self: flex-start;
+  margin-bottom: 19px;
+}
+.reconnect-platform-mark {
+  width: 49px;
+  height: 49px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  color: white;
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 24px;
+}
+.reconnect-screen h2 {
+  font-size: 29px;
+  line-height: 0.98;
+  letter-spacing: -0.06em;
+  margin: 8px 0 11px;
+}
+.reconnect-intro {
+  color: var(--neutral-600);
+  font-size: 10px;
+  line-height: 1.45;
+  margin: 0;
+}
+.reconnect-steps {
+  margin: 21px 0 14px;
+}
+.reconnect-step {
+  display: flex;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--neutral-200);
+  color: var(--neutral-600);
+}
+.reconnect-step i {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--neutral-200);
+  border-radius: 50%;
+  font: 8px var(--font-mono);
+  font-style: normal;
+}
+.reconnect-step.active {
+  color: var(--claire-ink);
+}
+.reconnect-step.active i {
+  border-color: var(--claire-ink);
+  background: var(--claire-lime);
+}
+.reconnect-step b {
+  display: block;
+  font-size: 9px;
+}
+.reconnect-step p {
+  margin: 2px 0 0;
+  font-size: 8px;
+  line-height: 1.35;
+}
+.reconnect-privacy {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: auto 0 9px;
+  color: var(--neutral-600);
+  font-size: 8px;
+}
+.reconnect-privacy i {
+  width: 17px;
+  height: 17px;
+}
 .compose-to {
   display: flex;
   align-items: center;

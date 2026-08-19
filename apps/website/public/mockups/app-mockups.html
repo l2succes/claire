@@ -51,7 +51,7 @@
             <span class="primary">Home</span><span class="primary">Inbox</span
             ><span class="primary">Promises</span><span class="primary">Search</span
             ><span>Chat</span><span>Contact memory</span><span>Compose</span><span>Settings</span
-            ><span>Accounts</span>
+            ><span>Accounts</span><span>Account attention</span><span>Reconnect</span>
           </div>
         </aside>
       </section>
@@ -98,6 +98,11 @@
             <span>08 / CONTROL</span>
             <h3>Settings & privacy</h3>
             <p>Accounts, AI behavior, notifications, data controls.</p>
+          </article>
+          <article class="map-card">
+            <span>09 / RECOVER</span>
+            <h3>Account attention</h3>
+            <p>Clear sync status, safe reconnect, and confirmation.</p>
           </article>
         </div>
       </section>
@@ -878,8 +883,78 @@ Maya is my product lead. Be concise and warm. Avoid over-explaining, and always 
               The same connection UI works during onboarding and later from Settings.
             </p>
           </article>
+          <article class="screen-case" data-kind="setup" data-screen="account-attention">
+            <div class="screen-meta"><b>13 / ACCOUNT ATTENTION</b><span>IN-APP RECOVERY</span></div>
+            <claire-phone>
+              <div class="island"></div>
+              <div class="status"><span>9:41</span><span>● ◒</span></div>
+              <div class="screen no-tab">
+                <div class="app-title">
+                  <button class="round-button">‹</button>
+                  <h3>Connected accounts</h3>
+                  <button class="round-button" aria-label="Help">?</button>
+                </div>
+                <div class="account-attention-banner">
+                  <div class="attention-icon">!</div>
+                  <div>
+                    <span class="tiny-label">ACTION NEEDED</span>
+                    <h2>Instagram needs attention</h2>
+                    <p>Your last sync was 4 days ago. New Instagram messages may be missing.</p>
+                  </div>
+                </div>
+                <div class="connection-health-card">
+                  <div class="connection-health-head">
+                    <div class="account-icon ig">I</div>
+                    <div><b>Instagram</b><p>Connection needs to be refreshed</p></div>
+                    <span class="attention-label">ATTENTION</span>
+                  </div>
+                  <div class="connection-fact"><span>Last successful sync</span><b>4 days ago</b></div>
+                  <div class="connection-fact"><span>What this affects</span><b>New Instagram messages</b></div>
+                  <div class="connection-fact"><span>Your conversations</span><b>Stay in Claire</b></div>
+                </div>
+                <div class="recovery-copy">
+                  <b>A quick, private reconnect.</b>
+                  <p>We’ll open a secure Meta sign-in. Claire never sees or stores your password.</p>
+                </div>
+                <button class="reconnect-primary">Reconnect Instagram</button>
+                <button class="reconnect-secondary">Not now</button>
+              </div>
+            </claire-phone>
+            <p class="screen-note">
+              A user-facing warning explains impact in plain language, preserves trust, and offers a
+              single recovery action without exposing bridge internals.
+            </p>
+          </article>
+          <article class="screen-case" data-kind="setup" data-screen="reconnect-instagram">
+            <div class="screen-meta"><b>14 / RECONNECT INSTAGRAM</b><span>GUIDED FLOW</span></div>
+            <claire-phone>
+              <div class="island"></div>
+              <div class="status"><span>9:41</span><span>● ◒</span></div>
+              <div class="screen no-tab reconnect-screen">
+                <button class="round-button reconnect-back">‹</button>
+                <div class="reconnect-platform-mark ig">I</div>
+                <div class="tiny-label">RECONNECT INSTAGRAM</div>
+                <h2>Get your messages flowing again.</h2>
+                <p class="reconnect-intro">
+                  Instagram asked for a fresh sign-in. This usually takes less than a minute.
+                </p>
+                <div class="reconnect-steps">
+                  <div class="reconnect-step active"><i>1</i><div><b>Sign in securely</b><p>Continue to Meta in a protected browser.</p></div></div>
+                  <div class="reconnect-step"><i>2</i><div><b>Reconnect your bridge</b><p>Claire restores the connection automatically.</p></div></div>
+                  <div class="reconnect-step"><i>3</i><div><b>Confirm sync</b><p>We’ll let you know when messages are flowing.</p></div></div>
+                </div>
+                <div class="reconnect-privacy"><i data-heroicon="shield-check"></i><span>You can disconnect Instagram at any time from Settings.</span></div>
+                <button class="reconnect-primary">Continue to Meta</button>
+                <button class="reconnect-secondary">Cancel</button>
+              </div>
+            </claire-phone>
+            <p class="screen-note">
+              Recovery uses a short, consent-based handoff: explain why, use the platform’s secure
+              sign-in, restore the bridge, then confirm success in Claire.
+            </p>
+          </article>
           <article class="screen-case" data-kind="setup" data-screen="settings">
-            <div class="screen-meta"><b>13 / SETTINGS</b><span>PROFILE ENTRY</span></div>
+            <div class="screen-meta"><b>15 / SETTINGS</b><span>PROFILE ENTRY</span></div>
             <claire-phone>
               <div class="island"></div>
               <div class="status"><span>9:41</span><span>● ◒</span></div>
@@ -965,7 +1040,7 @@ Maya is my product lead. Be concise and warm. Avoid over-explaining, and always 
             </p>
           </article>
           <article class="screen-case" data-kind="setup" data-screen="ai-and-privacy">
-            <div class="screen-meta"><b>14 / AI & PRIVACY</b><span>SETTINGS STACK</span></div>
+            <div class="screen-meta"><b>16 / AI & PRIVACY</b><span>SETTINGS STACK</span></div>
             <claire-phone>
               <div class="island"></div>
               <div class="status"><span>9:41</span><span>● ◒</span></div>
