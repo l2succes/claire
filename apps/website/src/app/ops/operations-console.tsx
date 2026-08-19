@@ -10,6 +10,7 @@ type Admin = { id: string; email: string; role: 'owner' | 'operator' | 'viewer';
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.useclaire.co';
+const operationsOAuthCallbackUrl = 'https://useclaire.co/ops/confirm';
 const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 
 const statusTone: Record<Check['status'], string> = { healthy: 'bg-mint', warning: 'bg-lime', critical: 'bg-coral text-paper', unknown: 'bg-neutral-200' };
@@ -49,7 +50,7 @@ export function OperationsConsole() {
   useEffect(() => { void load(); }, [load]);
 
   const health = useMemo(() => checks.some((check) => check.status === 'critical') ? 'needs attention' : checks.some((check) => check.status === 'warning') ? 'watching' : 'healthy', [checks]);
-  const signIn = async () => { if (!supabase) return; await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: `${window.location.origin}/ops/confirm` } }); };
+  const signIn = async () => { if (!supabase) return; await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: operationsOAuthCallbackUrl } }); };
   const refresh = async () => { await request('/snapshot/refresh', { method: 'POST' }); await load(); };
   const addAdmin = async (event: React.FormEvent) => { event.preventDefault(); if (!email) return; await request('/admins', { method: 'POST', body: JSON.stringify({ email, role: 'viewer' }) }); setEmail(''); await load(); };
   const removeAdmin = async (id: string) => { await request(`/admins/${id}`, { method: 'DELETE' }); await load(); };
