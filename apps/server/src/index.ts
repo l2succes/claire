@@ -649,8 +649,15 @@ const serverReady = Promise.resolve(
   app.listen(PORT, async () => {
     logger.info(`Server running on port ${PORT} in ${config.NODE_ENV} mode`);
 
-    // Start session monitor
-    sessionMonitor.start();
+    // The legacy session monitor probes direct WhatsApp-web.js clients. In
+    // Matrix mode those clients intentionally do not exist; running it would
+    // misclassify healthy mautrix sessions as disconnected and overwrite the
+    // durable bridge-session mapping needed after a restart.
+    if (!matrixConfig.enabled && !mockBridgeConfig.enabled) {
+      sessionMonitor.start();
+    } else {
+      logger.info('Skipping direct session monitor in Matrix/mock bridge mode');
+    }
 
     // Start promise reminder scheduler
     reminderScheduler.start();
