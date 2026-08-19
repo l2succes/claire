@@ -1,14 +1,12 @@
-import { View, Text, KeyboardAvoidingView, Platform as RNPlatform, Pressable, ScrollView } from 'react-native';
-import { useState } from 'react';
+import { View, Text, Pressable, ScrollView } from 'react-native';
+import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GoogleSignInButton } from '../../components/GoogleSignInButton';
 import { ClaireMark } from '../../components/claire/mark';
 import { colors, mobileType, space, type, useIsDesktopLayout } from '@claire/design-system';
-import { EmailOtpForm } from '../../features/auth/email-otp-form';
 
 export default function SigninScreen() {
   const insets = useSafeAreaInsets();
-  const [showEmail, setShowEmail] = useState(false);
 
   // Stacked on a phone; side by side once there is width to fill. Without the
   // split, a desktop window stretches the two sign-in buttons across the whole
@@ -39,7 +37,7 @@ export default function SigninScreen() {
           <Pressable
             testID="signin-use-email"
             accessibilityRole="button"
-            onPress={() => setShowEmail((current) => !current)}
+            onPress={() => router.push('/(auth)/email')}
             style={{
               minHeight: 52,
               borderRadius: 22,
@@ -51,11 +49,9 @@ export default function SigninScreen() {
             }}
           >
             <Text style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>
-              {showEmail ? 'Hide email sign in' : 'Use email instead'}
+              Continue with email
             </Text>
           </Pressable>
-
-          {showEmail ? <EmailOtpForm /> : null}
 
       <Text style={{ ...mobileType.label, color: colors.neutral[600], textAlign: 'center', marginTop: space[2] }}>
         Your messages are never used to train shared AI models.
@@ -81,11 +77,7 @@ export default function SigninScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: colors.sky }}
-      behavior={RNPlatform.OS === 'ios' ? 'padding' : 'height'}
-      testID="signin-screen"
-    >
+    <View style={{ flex: 1, backgroundColor: colors.sky }} testID="signin-screen">
       <ScrollView
         contentContainerStyle={{ flexGrow: 1 }}
         keyboardShouldPersistTaps="handled"
@@ -94,6 +86,6 @@ export default function SigninScreen() {
         {brandPanel}
         {authPanel}
       </ScrollView>
-    </KeyboardAvoidingView>
+    </View>
   );
 }

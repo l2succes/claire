@@ -27,6 +27,7 @@ import seedRoutes from './routes/seed';
 import promiseRoutes from './routes/promises';
 import pushTokenRoutes from './routes/push-tokens';
 import notificationDeviceRoutes from './routes/notification-devices';
+import operationsRoutes from './routes/operations';
 import contactRoutes from './routes/contacts';
 import deviceRoutes from './routes/devices';
 import searchRoutes from './routes/search';
@@ -39,6 +40,7 @@ import { conversationAssistant } from './services/conversation-assistant';
 import { voiceProfileService } from './services/voice-profile-service';
 import { incomingContactId } from './services/contact-identity';
 import { promiseDetector } from './services/promise-detector';
+import { operationsMonitor } from './services/operations-monitor';
 import { autoReplyEngine } from './services/auto-reply-engine';
 import { notificationDeliveryService } from './services/notification-delivery';
 import { Platform, PlatformStatus } from './adapters/types';
@@ -110,6 +112,7 @@ app.use('/seed', seedRoutes);
 app.use('/promises', promiseRoutes);
 app.use('/push-tokens', pushTokenRoutes);
 app.use('/notification-devices', notificationDeviceRoutes);
+app.use('/operations', operationsRoutes);
 app.use('/contacts', contactRoutes);
 app.use('/devices', deviceRoutes);
 app.use('/search', searchRoutes);
@@ -649,11 +652,23 @@ const serverReady = Promise.resolve(
   app.listen(PORT, async () => {
     logger.info(`Server running on port ${PORT} in ${config.NODE_ENV} mode`);
 
-    // Start session monitor
-    sessionMonitor.start();
+    // The legacy session monitor probes direct WhatsApp-web.js clients. In
+    // Matrix mode those clients intentionally do not exist; running it would
+    // misclassify healthy mautrix sessions as disconnected and overwrite the
+    // durable bridge-session mapping needed after a restart.
+    if (!matrixConfig.enabled && !mockBridgeConfig.enabled) {
+      sessionMonitor.start();
+    } else {
+      logger.info('Skipping direct session monitor in Matrix/mock bridge mode');
+    }
 
     // Start promise reminder scheduler
     reminderScheduler.start();
+
+    // Matrix room registration may backfill a substantial history. The
+    // watchdog must not wait for that optional work, or a slow bridge startup
+    // would leave production unmonitored exactly when it needs observation.
+    setTimeout(() => operationsMonitor.start(), 10_000);
 
     // Initialize platforms
     await initializePlatforms();
