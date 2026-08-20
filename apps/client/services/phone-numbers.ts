@@ -29,13 +29,25 @@ export function isOpaqueWhatsAppLid(value: string | null | undefined): boolean {
   return /^lid[-:]?\d+$/i.test(sourcePhone(value));
 }
 
+/** WhatsApp's bridge fallback is a privacy mask, not a usable phone number. */
+export function isRedactedPhoneFallback(value: string | null | undefined): boolean {
+  const source = sourcePhone(value || '');
+  return Boolean(source) && /^[+0-9\s().•*-]+$/.test(source) && /[•*]/.test(source);
+}
+
+/** A bridge display-name fallback containing only a phone number (optionally suffixed with `(WA)`). */
+export function isPhoneNumberFallback(value: string | null | undefined): boolean {
+  const source = sourcePhone(value || '').replace(/\s*\(WA\)\s*$/i, '');
+  return /^\+?[0-9][0-9\s().-]{6,}$/.test(source);
+}
+
 /** Human-readable number for the relationship-memory surface. */
 export function formatPhoneNumber(value: string | null | undefined): string {
   if (!value) return '';
   const source = sourcePhone(value);
   // Never turn an opaque WhatsApp LID into a plausible-looking number. That
   // would mislead someone into thinking it is a callable contact detail.
-  if (isOpaqueWhatsAppLid(source)) return '';
+  if (isOpaqueWhatsAppLid(source) || isRedactedPhoneFallback(source)) return '';
   const parsed = parsePhoneNumberFromString(source, deviceCountry());
   if (parsed?.isValid()) return parsed.formatInternational();
 

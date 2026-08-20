@@ -35,4 +35,22 @@ describe('contact display', () => {
       })
     ).toBe('WhatsApp contact');
   });
+
+  it('does not use WhatsApp privacy masks as a People name', () => {
+    expect(
+      displayPersonName({
+        platform: Platform.WHATSAPP,
+        name: '+1••••••04',
+      })
+    ).toBe('WhatsApp contact');
+  });
+
+  it('does not use a WhatsApp phone fallback as a People name', () => {
+    expect(
+      displayPersonName({
+        platform: Platform.WHATSAPP,
+        name: '+1 415 555 2671 (WA)',
+      })
+    ).toBe('WhatsApp contact');
+  });
 });

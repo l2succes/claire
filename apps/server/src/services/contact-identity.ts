@@ -11,6 +11,16 @@ export function isOpaqueWhatsAppLid(value: string | null | undefined): boolean {
   return /^lid[-:]?\d+$/.test(source);
 }
 
+/**
+ * mautrix uses a privacy-preserving phone mask when WhatsApp has not supplied
+ * a profile name. It is useful bridge metadata, but it is neither a person's
+ * name nor a phone number Claire can display or search as an identity.
+ */
+export function isRedactedPhoneFallback(value: string | null | undefined): boolean {
+  const source = value?.trim() || '';
+  return Boolean(source) && /^[+0-9\s().•*-]+$/.test(source) && /[•*]/.test(source);
+}
+
 /** Return a real phone-shaped platform identifier, never a WhatsApp LID. */
 export function phoneNumberFromPlatformContactId(
   platform: Platform,
@@ -52,7 +62,13 @@ export function displayNameFromBridge(
   platformContactId: string | null | undefined
 ): string | null {
   const name = candidate?.trim() || '';
-  if (!name || (platform === Platform.WHATSAPP && isOpaqueWhatsAppLid(name))) return null;
+  if (
+    !name ||
+    (platform === Platform.WHATSAPP &&
+      (isOpaqueWhatsAppLid(name) || isRedactedPhoneFallback(name)))
+  ) {
+    return null;
+  }
   const contactId = platformContactId?.trim() || '';
   const normalizedName = name.replace(/[^a-z0-9]/gi, '').toLowerCase();
   const normalizedContactId = contactId.replace(/[^a-z0-9]/gi, '').toLowerCase();

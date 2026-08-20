@@ -1,5 +1,10 @@
 import { Platform } from '../types/platform';
-import { formatPhoneNumber, isOpaqueWhatsAppLid } from './phone-numbers';
+import {
+  formatPhoneNumber,
+  isOpaqueWhatsAppLid,
+  isPhoneNumberFallback,
+  isRedactedPhoneFallback,
+} from './phone-numbers';
 
 /**
  * Customer-facing contact label. Matrix/WhatsApp LIDs are intentionally
@@ -13,7 +18,15 @@ export function displayContactName(
 ): string {
   const name = value?.trim() || '';
   const isWhatsApp = platform === Platform.WHATSAPP || platform === 'whatsapp';
-  if (name && (!isWhatsApp || !isOpaqueWhatsAppLid(name))) return name;
+  if (
+    name &&
+    (!isWhatsApp ||
+      (!isOpaqueWhatsAppLid(name) &&
+        !isRedactedPhoneFallback(name) &&
+        !isPhoneNumberFallback(name)))
+  ) {
+    return name;
+  }
   return formatPhoneNumber(phone) || (isWhatsApp ? 'WhatsApp contact' : fallback);
 }
 
@@ -35,7 +48,14 @@ export function displayPersonName(
   const name = contact.name?.trim() || contact.inferred_name?.trim() || '';
   const username = contact.username?.trim().replace(/^@+/, '') || '';
   const isWhatsApp = contact.platform === Platform.WHATSAPP || contact.platform === 'whatsapp';
-  const visibleName = name && (!isWhatsApp || !isOpaqueWhatsAppLid(name)) ? name : '';
+  const visibleName =
+    name &&
+    (!isWhatsApp ||
+      (!isOpaqueWhatsAppLid(name) &&
+        !isRedactedPhoneFallback(name) &&
+        !isPhoneNumberFallback(name)))
+      ? name
+      : '';
   return visibleName || (username ? `@${username}` : '') ||
     formatPhoneNumber(contact.phone_number) ||
     (isWhatsApp
