@@ -4,6 +4,7 @@ import {
   displayNameFromBridge,
   incomingContactId,
   isOpaqueWhatsAppLid,
+  isRedactedPhoneFallback,
   phoneNumberFromBridgeIdentifiers,
   phoneNumberFromPlatformContactId,
 } from './contact-identity';
@@ -25,6 +26,13 @@ describe('incoming contact identity', () => {
     expect(isOpaqueWhatsAppLid('lid-192204836479059')).toBe(true);
     expect(phoneNumberFromPlatformContactId(Platform.WHATSAPP, 'lid-192204836479059')).toBeNull();
     expect(displayNameFromBridge('lid-192204836479059', Platform.WHATSAPP, 'lid-192204836479059')).toBeNull();
+  });
+
+  test('does not turn WhatsApp privacy-masked numbers into names', () => {
+    expect(isRedactedPhoneFallback('+1••••••04')).toBe(true);
+    expect(
+      displayNameFromBridge('+1••••••04', Platform.WHATSAPP, 'lid-192204836479059')
+    ).toBeNull();
   });
 
   test('keeps a genuine bridge profile name and phone-number contact ID', () => {

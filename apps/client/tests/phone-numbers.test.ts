@@ -2,6 +2,8 @@ import {
   formatPhoneNumber,
   formatPhoneNumberInput,
   isOpaqueWhatsAppLid,
+  isPhoneNumberFallback,
+  isRedactedPhoneFallback,
   normalizePhoneNumber,
 } from '../services/phone-numbers';
 
@@ -25,5 +27,15 @@ describe('phone number formatting', () => {
   it('does not present a WhatsApp LID as a phone number', () => {
     expect(isOpaqueWhatsAppLid('lid-192204836479059')).toBe(true);
     expect(formatPhoneNumber('lid-192204836479059')).toBe('');
+  });
+
+  it('does not treat a WhatsApp privacy mask as a usable number', () => {
+    expect(isRedactedPhoneFallback('+1••••••04')).toBe(true);
+    expect(formatPhoneNumber('+1••••••04')).toBe('');
+  });
+
+  it('recognizes a bridge phone fallback even when it has a WhatsApp suffix', () => {
+    expect(isPhoneNumberFallback('+1 415 555 2671 (WA)')).toBe(true);
+    expect(isPhoneNumberFallback('Luc')).toBe(false);
   });
 });
