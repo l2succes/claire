@@ -113,9 +113,7 @@ export class PushNotificationService {
       for (let i = 0; i < tickets.length; i++) {
         const ticket = tickets[i];
         if (ticket.status === 'error') {
-          logger.warn(`Push ticket error for token ${validTokens[i]}: ${ticket.message}`, {
-            details: ticket.details,
-          });
+          logger.warn('Push ticket error', { errorCode: ticket.details?.error || 'provider_error' });
           // Remove tokens that are no longer registered
           if (ticket.details?.error === 'DeviceNotRegistered') {
             await this.removeToken(validTokens[i]);
@@ -149,7 +147,7 @@ export class PushNotificationService {
       throw new Error('Failed to register push token');
     }
 
-    logger.info(`Push token registered for user ${userId}`);
+    logger.info('Push token registered');
   }
 
   /**
@@ -193,7 +191,7 @@ export class PushNotificationService {
     if (error) {
       logger.warn('Failed to remove stale push token:', error);
     } else {
-      logger.info(`Removed stale push token: ${token.slice(0, 30)}…`);
+      logger.info('Removed stale push token');
     }
   }
 }

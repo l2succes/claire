@@ -46,7 +46,9 @@ class ClairePhone extends HTMLElement {
   }
 
   updateScale() {
-    const requested = Number(this.getAttribute('scale') || 1);
+    // The gallery is a reading tool, not a contact sheet. Render mockups
+    // larger than their physical point size whenever the column permits it.
+    const requested = Number(this.getAttribute('scale') || 1.25);
     const safeRequested = Number.isFinite(requested) && requested > 0 ? requested : 1;
     const frameWidth = 409;
     const available = this.parentElement?.getBoundingClientRect().width || frameWidth * safeRequested;

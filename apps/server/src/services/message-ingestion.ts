@@ -103,7 +103,7 @@ export class MessageIngestionService extends EventEmitter {
         isFromMe: message.fromMe,
       });
 
-      logger.info(`Message ingested: ${message.id._serialized}`);
+      logger.info('Direct-platform message ingested');
     } catch (error) {
       logger.error('Error handling incoming message:', error);
     } finally {

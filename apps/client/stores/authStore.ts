@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../services/supabase';
 import { deregisterNotificationDevice } from '../services/notifications';
 
@@ -22,6 +23,31 @@ interface AuthState {
   updateUser: (user: Partial<User>) => void;
 }
 
+function userFromSession(session: Session): User {
+  return {
+    id: session.user.id,
+    email: session.user.email || '',
+    name: session.user.user_metadata?.name,
+    avatar_url: session.user.user_metadata?.avatar_url,
+  };
+}
+
+async function currentSession(): Promise<Session | null> {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) return null;
+
+  // Native storage can restore an access token whose refresh timer stopped
+  // while iOS suspended Claire. Refresh before exposing it to API consumers.
+  const expiresSoon = !session.expires_at || session.expires_at * 1000 <= Date.now() + 60_000;
+  if (!expiresSoon) return session;
+
+  const { data, error } = await supabase.auth.refreshSession();
+  if (!error && data.session) return data.session;
+  return session;
+}
+
 export const useAuthStore = create<AuthState>((set, get) => ({
   isAuthenticated: false,
   isLoading: true,
@@ -33,20 +59,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ isLoading: true });
       
       // Check for existing session
-      const { data: { session } } = await supabase.auth.getSession();
+      const session = await currentSession();
       
       if (session) {
-        const user = {
-          id: session.user.id,
-          email: session.user.email || '',
-          name: session.user.user_metadata?.name,
-          avatar_url: session.user.user_metadata?.avatar_url,
-        };
-
         set({ 
           isAuthenticated: true, 
           token: session.access_token,
-          user,
+          user: userFromSession(session),
           isLoading: false 
         });
       } else {
@@ -56,17 +75,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // Listen to auth changes
       supabase.auth.onAuthStateChange((event, session) => {
         if (session) {
-          const user = {
-            id: session.user.id,
-            email: session.user.email || '',
-            name: session.user.user_metadata?.name,
-            avatar_url: session.user.user_metadata?.avatar_url,
-          };
-
           set({ 
             isAuthenticated: true, 
             token: session.access_token,
-            user,
+            user: userFromSession(session),
           });
         } else {
           set({ 

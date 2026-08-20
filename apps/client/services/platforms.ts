@@ -5,7 +5,7 @@
  * Handles authentication, connection management, and messaging for all platforms.
  */
 
-import axios, { AxiosError } from 'axios';
+import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios';
 import { supabase } from './supabase';
 import {
   Platform,
@@ -62,11 +62,44 @@ const api = axios.create({
   },
 });
 
+type RetriableRequest = InternalAxiosRequestConfig & {
+  _claireAuthRefreshAttempted?: boolean;
+};
+
+let sessionRefresh: Promise<string | null> | null = null;
+
+async function refreshAccessToken(): Promise<string | null> {
+  if (!sessionRefresh) {
+    sessionRefresh = supabase.auth
+      .refreshSession()
+      .then(({ data, error }) => {
+        if (error || !data.session?.access_token) return null;
+        return data.session.access_token;
+      })
+      .finally(() => {
+        sessionRefresh = null;
+      });
+  }
+  return sessionRefresh;
+}
+
+async function currentAccessToken(): Promise<string | null> {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session?.access_token) return null;
+
+  // Refresh shortly before expiry instead of allowing the first authenticated
+  // request after a backgrounded period to fail visibly.
+  const expiresSoon = !session.expires_at || session.expires_at * 1000 <= Date.now() + 60_000;
+  return expiresSoon ? (await refreshAccessToken()) || session.access_token : session.access_token;
+}
+
 // Add auth token to all requests
 api.interceptors.request.use(async (config) => {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (session?.access_token) {
-    config.headers.Authorization = `Bearer ${session.access_token}`;
+  const accessToken = await currentAccessToken();
+  if (accessToken) {
+    config.headers.Authorization = `Bearer ${accessToken}`;
   }
   return config;
 });
@@ -74,7 +107,17 @@ api.interceptors.request.use(async (config) => {
 // Handle response errors
 api.interceptors.response.use(
   (response) => response,
-  (error: AxiosError<{ error?: string; message?: string }>) => {
+  async (error: AxiosError<{ error?: string; message?: string }>) => {
+    const request = error.config as RetriableRequest | undefined;
+    if (error.response?.status === 401 && request && !request._claireAuthRefreshAttempted) {
+      request._claireAuthRefreshAttempted = true;
+      const accessToken = await refreshAccessToken();
+      if (accessToken) {
+        request.headers.Authorization = `Bearer ${accessToken}`;
+        return api.request(request);
+      }
+    }
+
     const message = error.response?.data?.error
       || error.response?.data?.message
       || error.message
@@ -231,6 +274,50 @@ export const platformsApi = {
     const response = await api.post<{ success: boolean; message: unknown }>(
       `/platforms/${platform}/send`,
       { sessionId, chatId, content, replyToMessageId }
+    );
+    return response.data;
+  },
+
+  /** Add a native platform reaction through Claire's Matrix bridge. */
+  async reactToMessage(
+    platform: Platform,
+    sessionId: string,
+    chatId: string,
+    messageId: string,
+    emoji: string
+  ): Promise<{ success: boolean; reaction: unknown; alreadyReacted?: boolean }> {
+    const response = await api.post<{ success: boolean; reaction: unknown; alreadyReacted?: boolean }>(
+      `/platforms/${platform}/reactions`,
+      { sessionId, chatId, messageId, emoji }
+    );
+    return response.data;
+  },
+
+  /**
+   * Send a reviewed local recording as an audio stream. It is intentionally a
+   * separate binary route so an encoded message body never lands in request
+   * logs or competes with the JSON request-size limit.
+   */
+  async sendVoiceMessage(
+    platform: Platform,
+    sessionId: string,
+    chatId: string,
+    voice: { uri: string; mimeType: string; durationSeconds: number },
+    replyToMessageId?: string
+  ): Promise<{ success: boolean; message: unknown }> {
+    const localFile = await fetch(voice.uri);
+    if (!localFile.ok) throw new Error('The recorded voice note is no longer available. Record it again.');
+    const audio = await localFile.blob();
+    if (!audio.size) throw new Error('The recording was empty. Try again.');
+    if (audio.size > 8 * 1024 * 1024) throw new Error('Voice notes must be 8 MB or smaller.');
+
+    const response = await api.post<{ success: boolean; message: unknown }>(
+      `/platforms/${platform}/voice`,
+      audio,
+      {
+        params: { sessionId, chatId, replyToMessageId, durationSeconds: voice.durationSeconds },
+        headers: { 'Content-Type': voice.mimeType },
+      }
     );
     return response.data;
   },

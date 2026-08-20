@@ -162,7 +162,7 @@ export class MockBridgeAdapter extends EventEmitter implements IPlatformAdapter 
       hasMedia: false,
     };
     this.sentMessages.push(sent);
-    logger.debug(`[MockBridge] sendMessage to ${chatId}: "${message.content}"`);
+    logger.debug('[MockBridge] sending message');
     return sent;
   }
 

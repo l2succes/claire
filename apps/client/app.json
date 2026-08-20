@@ -18,7 +18,8 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.claire.app",
       "infoPlist": {
-        "NSCameraUsageDescription": "This app uses the camera to scan QR codes for WhatsApp login."
+        "NSCameraUsageDescription": "This app uses the camera to scan QR codes for WhatsApp login.",
+        "ITSAppUsesNonExemptEncryption": false
       },
       "appleTeamId": "T74H9G4334"
     },
@@ -64,6 +65,14 @@
       "expo-web-browser",
       "expo-video",
       [
+        "expo-audio",
+        {
+          "microphonePermission": "Allow Claire to access your microphone so you can record voice notes.",
+          "enableBackgroundRecording": false,
+          "enableBackgroundPlayback": true
+        }
+      ],
+      [
         "expo-sqlite",
         {
           "useSQLCipher": true
@@ -80,6 +89,12 @@
       "eas": {
         "projectId": "366bc316-ee01-407b-b681-dd8eed7d02be"
       }
+    },
+    "updates": {
+      "url": "https://u.expo.dev/366bc316-ee01-407b-b681-dd8eed7d02be"
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
     }
   }
 }

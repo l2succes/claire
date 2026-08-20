@@ -1,0 +1,56 @@
+import {
+  formatIncompletePhoneNumber,
+  getCountries,
+  parsePhoneNumberFromString,
+  type CountryCode,
+} from 'libphonenumber-js';
+
+const countries = new Set<CountryCode>(getCountries());
+
+function deviceCountry(): CountryCode {
+  const locale = Intl.DateTimeFormat().resolvedOptions().locale || '';
+  const country = locale
+    .split(/[-_]/)
+    .reverse()
+    .find((part) => /^[A-Za-z]{2}$/.test(part))
+    ?.toUpperCase() as CountryCode | undefined;
+
+  return country && countries.has(country) ? country : 'US';
+}
+
+/** Remove a Matrix address suffix while preserving an E.164 phone number. */
+function sourcePhone(value: string) {
+  return value.trim().split('@')[0] || value.trim();
+}
+
+/** Human-readable number for the relationship-memory surface. */
+export function formatPhoneNumber(value: string | null | undefined): string {
+  if (!value) return '';
+  const source = sourcePhone(value);
+  const parsed = parsePhoneNumberFromString(source, deviceCountry());
+  if (parsed?.isValid()) return parsed.formatInternational();
+
+  // Keep partially entered values useful, but never invent an E.164 value.
+  return formatIncompletePhoneNumber(source, deviceCountry()) || source;
+}
+
+/**
+ * Blaze's phone input behavior: apply the international/national mask while
+ * characters are added, but keep the raw edit when someone is deleting a
+ * separator so the cursor and backspace behave naturally on mobile.
+ */
+export function formatPhoneNumberInput(nextValue: string, previousValue: string): string {
+  if (!nextValue) return '';
+  const formatted = formatIncompletePhoneNumber(nextValue, deviceCountry());
+  return nextValue.length > previousValue.length && /\d$/.test(formatted)
+    ? formatted
+    : nextValue;
+}
+
+/** Canonical storage form. A non-empty invalid number intentionally returns null. */
+export function normalizePhoneNumber(value: string): string | null {
+  const source = sourcePhone(value);
+  if (!source) return null;
+  const parsed = parsePhoneNumberFromString(source, deviceCountry());
+  return parsed?.isValid() ? parsed.number : null;
+}

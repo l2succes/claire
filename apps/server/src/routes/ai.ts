@@ -7,8 +7,18 @@ import { validateRequest } from '../middleware/validation';
 import { requireAuth } from '../middleware/auth';
 import { logger } from '../utils/logger';
 import { supabase, type DbRow } from '../services/supabase';
+import { isAiProcessingEnabled } from '../services/ai-policy';
 
 const router = Router();
+
+async function requireAiProcessing(req: Request, res: Response, next: () => void): Promise<void> {
+  if (!req.user?.id) { res.status(401).json({ error: 'User not authenticated' }); return; }
+  if (!await isAiProcessingEnabled(req.user.id)) {
+    res.status(403).json({ success: false, error: 'AI processing is disabled for this account' });
+    return;
+  }
+  next();
+}
 
 // Schema validators
 const generateResponseSchema = z.object({
@@ -67,6 +77,7 @@ const getAnalyticsSchema = z.object({
  */
 router.post('/responses/generate', 
   requireAuth,
+  requireAiProcessing,
   validateRequest(generateResponseSchema),
   async (req: Request, res: Response) => {
     try {
@@ -125,6 +136,7 @@ router.post('/responses/generate',
 /** Explain the latest text and its surrounding conversation without drafting or sending a message. */
 router.post('/conversations/explain',
   requireAuth,
+  requireAiProcessing,
   validateRequest(explainConversationSchema),
   async (req: Request, res: Response) => {
     try {
@@ -202,7 +214,7 @@ router.get('/assistant/conversations/:chatId', requireAuth, async (req: Request,
   }
 });
 
-router.post('/assistant/conversations/:chatId/messages', requireAuth, validateRequest(assistantQuestionSchema), async (req: Request, res: Response) => {
+router.post('/assistant/conversations/:chatId/messages', requireAuth, requireAiProcessing, validateRequest(assistantQuestionSchema), async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ error: 'User not authenticated' });
@@ -228,7 +240,7 @@ router.delete('/assistant/conversations/:chatId', requireAuth, async (req: Reque
   }
 });
 
-router.post('/assistant/threads/:threadId/messages', requireAuth, validateRequest(assistantQuestionSchema), async (req: Request, res: Response) => {
+router.post('/assistant/threads/:threadId/messages', requireAuth, requireAiProcessing, validateRequest(assistantQuestionSchema), async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ error: 'User not authenticated' });
@@ -242,7 +254,7 @@ router.post('/assistant/threads/:threadId/messages', requireAuth, validateReques
 });
 
 /** Cited semantic search without adding noise to persisted Ask Claire threads. */
-router.post('/search', requireAuth, validateRequest(aiSearchSchema), async (req: Request, res: Response) => {
+router.post('/search', requireAuth, requireAiProcessing, validateRequest(aiSearchSchema), async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ error: 'User not authenticated' });
@@ -286,7 +298,7 @@ router.get('/assistant/index/status', requireAuth, async (req: Request, res: Res
   }
 });
 
-router.post('/assistant/index', requireAuth, async (req: Request, res: Response) => {
+router.post('/assistant/index', requireAuth, requireAiProcessing, async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ error: 'User not authenticated' });
@@ -376,6 +388,7 @@ router.get('/analytics',
  */
 router.post('/analyze/sentiment',
   requireAuth,
+  requireAiProcessing,
   async (req: Request, res: Response) => {
     try {
       const { content } = req.body;
@@ -408,6 +421,7 @@ router.post('/analyze/sentiment',
  */
 router.post('/analyze/topics',
   requireAuth,
+  requireAiProcessing,
   async (req: Request, res: Response) => {
     try {
       const { content } = req.body;
@@ -496,6 +510,7 @@ router.delete('/cache/user',
  */
 router.get('/morning-brief',
   requireAuth,
+  requireAiProcessing,
   async (req: Request, res: Response) => {
     try {
       const userId = req.user?.id;
@@ -598,6 +613,7 @@ router.get('/morning-brief',
  */
 router.get('/group-summary/:chatId',
   requireAuth,
+  requireAiProcessing,
   async (req: Request, res: Response) => {
     try {
       const userId = req.user?.id;

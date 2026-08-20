@@ -4,11 +4,12 @@
  * API endpoints for managing messaging platform connections.
  */
 
-import { Router, Request, Response } from 'express';
+import express, { Router, Request, Response } from 'express';
 import {
   platformManager,
   Platform,
   PlatformStatus,
+  MessageContentType,
 } from '../adapters';
 import { MatrixBridgeAdapter } from '../adapters/matrix';
 import { platformConfig } from '../config';
@@ -18,6 +19,7 @@ import { BridgeHttpClient } from '../adapters/matrix/bridge-http-client';
 import { loginWithCredentials, submitTwoFactorCode } from '../services/instagram-login';
 import { platformCatalog, platformCatalogVersion } from '../platform-catalog';
 import { supabase, type DbRow } from '../services/supabase';
+import { operationsTelemetry } from '../services/operations-telemetry';
 
 // Railway services cannot reach each other through localhost. Railway does not
 // inject NODE_ENV by default, so its public-domain marker is also used to
@@ -950,8 +952,223 @@ router.get('/:platform/chats/:sessionId', async (req: Request, res: Response) =>
 });
 
 /**
+ * POST /platforms/:platform/voice
+ *
+ * The reviewed recording is streamed as an audio body, not JSON/base64. This
+ * keeps message media out of structured request logs and gives the endpoint a
+ * hard, auditable size limit before it reaches a bridge.
+ */
+router.post(
+  '/:platform/reactions',
+  async (req: Request, res: Response) => {
+    try {
+      const { platform } = req.params;
+      const { sessionId, chatId, messageId, emoji: rawEmoji } = req.body as Record<string, unknown>;
+      const userId = req.user?.id;
+      const emoji = typeof rawEmoji === 'string' ? rawEmoji.normalize('NFC').trim() : '';
+
+      if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });
+      if (
+        typeof sessionId !== 'string' ||
+        typeof chatId !== 'string' ||
+        typeof messageId !== 'string' ||
+        !emoji ||
+        Array.from(emoji).length > 8 ||
+        [...emoji].some((character) => {
+          const code = character.charCodeAt(0);
+          return code < 32 || code === 127;
+        })
+      ) {
+        return res.status(400).json({
+          success: false,
+          error: 'Session, conversation, message, and a valid emoji are required',
+        });
+      }
+
+      const adapter = platformManager.getAdapter(platform as Platform);
+      if (!adapter) return res.status(404).json({ success: false, error: 'Platform not available' });
+      if (!adapter.capabilities.canReactToMessages || !adapter.sendReaction) {
+        return res.status(400).json({
+          success: false,
+          error: 'Platform does not support message reactions',
+        });
+      }
+
+      const session = await adapter.getSession(sessionId);
+      if (!session || session.userId !== userId) {
+        return res.status(404).json({ success: false, error: 'Session not found' });
+      }
+      if (session.status !== PlatformStatus.CONNECTED) {
+        return res.status(400).json({ success: false, error: 'Session not connected' });
+      }
+
+      // The target Matrix event ID is not an authorization boundary. Resolve
+      // it through the caller's Claire chat before asking the bridge to act.
+      const { data: chat, error: chatError } = await supabase
+        .from('chats')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('platform', platform)
+        .eq('platform_chat_id', chatId)
+        .maybeSingle();
+      if (chatError) throw chatError;
+      if (!chat) return res.status(404).json({ success: false, error: 'Conversation not found' });
+
+      const { data: target, error: targetError } = await supabase
+        .from('messages')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('chat_id', chat.id)
+        .eq('platform_message_id', messageId)
+        .maybeSingle();
+      if (targetError) throw targetError;
+      if (!target) return res.status(404).json({ success: false, error: 'Message not found' });
+
+      // Tapping the same reaction twice must never create two provider events.
+      const { data: existing, error: existingError } = await supabase
+        .from('message_reactions')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('message_id', target.id)
+        .eq('reactor_id', 'self')
+        .eq('emoji', emoji)
+        .maybeSingle();
+      if (existingError) throw existingError;
+      if (existing) return res.json({ success: true, reaction: existing, alreadyReacted: true });
+
+      const startedAt = Date.now();
+      const sent = await adapter.sendReaction(sessionId, chatId, messageId, emoji);
+      const { data: reaction, error: reactionError } = await supabase
+        .from('message_reactions')
+        .insert({
+          user_id: userId,
+          message_id: target.id,
+          platform_event_id: sent.platformEventId,
+          emoji,
+          from_me: true,
+          reactor_id: 'self',
+        })
+        .select('*')
+        .single();
+      if (reactionError) throw reactionError;
+
+      void operationsTelemetry.record({
+        traceSource: sent.platformEventId,
+        userId,
+        platform,
+        direction: 'outbound',
+        stage: 'api',
+        outcome: 'accepted',
+        durationMs: Date.now() - startedAt,
+      });
+      return res.json({ success: true, reaction });
+    } catch (error) {
+      logger.error('Error sending message reaction:', error);
+      return res.status(500).json({
+        success: false,
+        error: (error as Error).message || 'Failed to send reaction',
+      });
+    }
+  }
+);
+
+router.post(
+  '/:platform/voice',
+  express.raw({ type: ['audio/*', 'application/octet-stream'], limit: '8mb' }),
+  async (req: Request, res: Response) => {
+    try {
+      const { platform } = req.params;
+      const { sessionId, chatId, replyToMessageId } = req.query as Record<string, string | undefined>;
+      const userId = req.user?.id;
+      const mimeType = (req.header('content-type') || '').split(';')[0].trim().toLowerCase();
+
+      if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });
+      if (!sessionId || !chatId || !Buffer.isBuffer(req.body) || req.body.length === 0) {
+        return res.status(400).json({ success: false, error: 'Session, conversation, and audio are required' });
+      }
+      if (!/^audio\/(?:mp4|m4a|aac|ogg|webm|mpeg|wav)$/i.test(mimeType)) {
+        return res.status(415).json({ success: false, error: 'Unsupported voice-note format' });
+      }
+
+      const adapter = platformManager.getAdapter(platform as Platform);
+      if (!adapter) return res.status(404).json({ success: false, error: 'Platform not available' });
+      const session = await adapter.getSession(sessionId);
+      if (!session || session.userId !== userId) {
+        return res.status(404).json({ success: false, error: 'Session not found' });
+      }
+      if (session.status !== PlatformStatus.CONNECTED) {
+        return res.status(400).json({ success: false, error: 'Session not connected' });
+      }
+      if (!adapter.capabilities.canSendVoice || !adapter.capabilities.canSendMedia) {
+        return res.status(400).json({ success: false, error: 'Platform does not support voice notes' });
+      }
+      if (replyToMessageId && !adapter.capabilities.canReplyToMessages) {
+        return res.status(400).json({ success: false, error: 'Platform does not support replying to a specific message' });
+      }
+
+      if (replyToMessageId) {
+        const { data: chat, error: chatError } = await supabase
+          .from('chats')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('platform', platform)
+          .eq('platform_chat_id', chatId)
+          .maybeSingle();
+        if (chatError) throw chatError;
+        const { data: replyTarget, error: replyError } = await supabase
+          .from('messages')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('chat_id', chat?.id || '')
+          .eq('platform_message_id', replyToMessageId)
+          .maybeSingle();
+        if (replyError) throw replyError;
+        if (!replyTarget) {
+          return res.status(400).json({ success: false, error: 'Reply target is unavailable in this conversation' });
+        }
+      }
+
+      const startedAt = Date.now();
+      try {
+        const message = await adapter.sendMessage(sessionId, chatId, {
+          content: 'Voice message',
+          contentType: MessageContentType.VOICE,
+          replyToMessageId,
+          media: [{ type: MessageContentType.VOICE, data: req.body, mimeType, fileName: 'voice-note.m4a' }],
+        });
+        void operationsTelemetry.record({
+          traceSource: message.platformMessageId || `voice:${sessionId}:${Date.now()}`,
+          userId,
+          platform,
+          direction: 'outbound',
+          stage: 'api',
+          outcome: 'accepted',
+          durationMs: Date.now() - startedAt,
+        });
+        return res.json({ success: true, message });
+      } catch (error) {
+        void operationsTelemetry.record({
+          traceSource: `voice:${sessionId}:${Math.floor(startedAt / 1000)}`,
+          userId,
+          platform,
+          direction: 'outbound',
+          stage: 'api',
+          outcome: 'failed',
+          durationMs: Date.now() - startedAt,
+          errorClass: 'provider',
+        });
+        throw error;
+      }
+    } catch (error) {
+      logger.error('Error sending voice note:', error);
+      return res.status(500).json({ success: false, error: 'Failed to send voice note' });
+    }
+  }
+);
+
+/**
  * POST /platforms/:platform/send
- * Send a message via a platform
+ * Send a text message via a platform
  */
 router.post('/:platform/send', async (req: Request, res: Response) => {
   try {
@@ -1004,15 +1221,77 @@ router.post('/:platform/send', async (req: Request, res: Response) => {
       });
     }
 
+    if (replyToMessageId && !adapter.capabilities.canReplyToMessages) {
+      return res.status(400).json({
+        success: false,
+        error: 'Platform does not support replying to a specific message',
+      });
+    }
+
+    // A Matrix event ID is globally shaped but it is not an authorization
+    // boundary. Only allow a reply relation that targets a message belonging
+    // to this user and this exact Claire chat; otherwise a crafted request
+    // could quote an event from another conversation.
+    if (replyToMessageId) {
+      const { data: chat, error: chatError } = await supabase
+        .from('chats')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('platform', platform)
+        .eq('platform_chat_id', chatId)
+        .maybeSingle();
+      if (chatError) throw chatError;
+
+      const { data: replyTarget, error: replyError } = await supabase
+        .from('messages')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('chat_id', chat?.id || '')
+        .eq('platform_message_id', replyToMessageId)
+        .maybeSingle();
+      if (replyError) throw replyError;
+      if (!replyTarget) {
+        return res.status(400).json({
+          success: false,
+          error: 'Reply target is unavailable in this conversation',
+        });
+      }
+    }
+
+    const startedAt = Date.now();
+    try {
     const message = await adapter.sendMessage(sessionId, chatId, {
       content,
       replyToMessageId,
+    });
+
+    void operationsTelemetry.record({
+      traceSource: message.platformMessageId || `outbound:${sessionId}:${Date.now()}`,
+      userId,
+      platform,
+      direction: 'outbound',
+      stage: 'api',
+      outcome: 'accepted',
+      durationMs: Date.now() - startedAt,
     });
 
     return res.json({
       success: true,
       message,
     });
+    } catch (error) {
+      void operationsTelemetry.record({
+        traceSource: `outbound:${sessionId}:${Math.floor(startedAt / 1000)}`,
+        userId,
+        platform,
+        direction: 'outbound',
+        stage: 'api',
+        outcome: 'failed',
+        durationMs: Date.now() - startedAt,
+        errorClass: 'provider',
+      });
+      throw error;
+    }
   } catch (error) {
     logger.error('Error sending message:', error);
     return res.status(500).json({

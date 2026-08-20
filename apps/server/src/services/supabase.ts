@@ -241,7 +241,7 @@ export class RealtimeService {
           filter: filter ? `${filter.column}=eq.${filter.value}` : undefined,
         },
         (payload) => {
-          logger.info(`Realtime event on ${table}:`, payload);
+          logger.info('Realtime database event received', { table });
           if (callback) callback(payload);
         }
       )

@@ -31,6 +31,15 @@ function resolveKey(overrideKey?: string): Buffer {
   return toKeyBuffer(raw);
 }
 
+function resolveDecryptionKeys(overrideKey?: string): Buffer[] {
+  if (overrideKey) return [toKeyBuffer(overrideKey)];
+  const keys = [process.env.ENCRYPTION_KEY, process.env.ENCRYPTION_KEY_PREVIOUS]
+    .filter((key): key is string => typeof key === 'string' && key.trim().length > 0)
+    .map((key) => toKeyBuffer(key.trim()));
+  if (!keys.length) return [resolveKey()];
+  return keys;
+}
+
 /**
  * Encrypt a plaintext string.
  * Returns a colon-separated string: `<iv>:<authTag>:<ciphertext>` (all hex).
@@ -63,14 +72,19 @@ export function decrypt(ciphertext: string, keyStr?: string): string {
     throw new Error('Invalid encrypted format: expected <iv>:<authTag>:<data>');
   }
   const [ivHex, authTagHex, dataHex] = parts;
-  const key = resolveKey(keyStr);
   const iv = Buffer.from(ivHex, 'hex');
   const authTag = Buffer.from(authTagHex, 'hex');
   const data = Buffer.from(dataHex, 'hex');
-
-  const decipher = createDecipheriv(ALGORITHM, key, iv);
-  decipher.setAuthTag(authTag);
-
-  const decrypted = Buffer.concat([decipher.update(data), decipher.final()]);
-  return decrypted.toString('utf8');
+  let lastError: unknown;
+  for (const key of resolveDecryptionKeys(keyStr)) {
+    try {
+      const decipher = createDecipheriv(ALGORITHM, key, iv);
+      decipher.setAuthTag(authTag);
+      const decrypted = Buffer.concat([decipher.update(data), decipher.final()]);
+      return decrypted.toString('utf8');
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
 }

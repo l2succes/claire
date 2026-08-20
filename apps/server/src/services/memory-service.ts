@@ -79,7 +79,7 @@ export class MemoryService {
     if (error) {
       logger.error('Failed to upsert contact memory:', error);
     } else {
-      logger.debug(`Memory stored: ${contactId}/${key} = "${value}" (conf=${confidence})`);
+      logger.debug('Contact memory stored', { confidence });
     }
   }
 

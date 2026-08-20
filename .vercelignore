@@ -1,0 +1,17 @@
+# Claire's Vercel project has apps/website as its Root Directory. Keep the
+# upload focused on sources required for that build; this also prevents local
+# dependency trees and native artifacts from exceeding Vercel's file limit.
+**/node_modules
+**/.next
+**/.expo
+**/dist
+apps/client
+apps/desktop
+apps/server
+docker
+examples
+vendor
+.agents
+.codex
+.vercel
+apps/website/.vercel

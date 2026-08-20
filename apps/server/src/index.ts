@@ -28,6 +28,7 @@ import promiseRoutes from './routes/promises';
 import pushTokenRoutes from './routes/push-tokens';
 import notificationDeviceRoutes from './routes/notification-devices';
 import operationsRoutes from './routes/operations';
+import telemetryRoutes from './routes/telemetry';
 import contactRoutes from './routes/contacts';
 import deviceRoutes from './routes/devices';
 import searchRoutes from './routes/search';
@@ -41,8 +42,10 @@ import { voiceProfileService } from './services/voice-profile-service';
 import { incomingContactId } from './services/contact-identity';
 import { promiseDetector } from './services/promise-detector';
 import { operationsMonitor } from './services/operations-monitor';
+import { operationsTelemetry } from './services/operations-telemetry';
 import { autoReplyEngine } from './services/auto-reply-engine';
 import { notificationDeliveryService } from './services/notification-delivery';
+import { isAiProcessingEnabled } from './services/ai-policy';
 import { Platform, PlatformStatus } from './adapters/types';
 import { whatsappAdapter } from './adapters/whatsapp';
 import { telegramAdapter } from './adapters/telegram';
@@ -98,7 +101,21 @@ app.use(
 );
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-app.use(morgan('combined', { stream }));
+// Keep HTTP diagnostics useful without recording search terms, OAuth values,
+// or other query parameters that can contain private data.
+app.use(
+  morgan(
+    (tokens, req, res) =>
+      [
+        tokens.method(req, res),
+        req.path,
+        tokens.status(req, res),
+        tokens.res(req, res, 'content-length') || '-',
+        `${tokens['response-time'](req, res)} ms`,
+      ].join(' '),
+    { stream }
+  )
+);
 
 // Routes
 app.use('/auth', authRateLimit, authRoutes);
@@ -113,6 +130,7 @@ app.use('/promises', promiseRoutes);
 app.use('/push-tokens', pushTokenRoutes);
 app.use('/notification-devices', notificationDeviceRoutes);
 app.use('/operations', operationsRoutes);
+app.use('/telemetry', telemetryRoutes);
 app.use('/contacts', contactRoutes);
 app.use('/devices', deviceRoutes);
 app.use('/search', searchRoutes);
@@ -373,12 +391,23 @@ async function initializePlatforms() {
 
   // Setup unified message handler BEFORE initialize so backfill is captured
   platformManager.onMessage(async (message) => {
-    logger.debug(`Message received from ${message.platform}: ${message.id}`);
+    logger.debug('Platform message received', { platform: message.platform });
 
     // Skip WhatsApp status broadcasts
     if (message.chatId === 'status@broadcast' || message.platformMetadata?.isStatus) {
       return;
     }
+
+    const receivedAt = Date.now();
+    const direction = message.isFromMe ? ('outbound' as const) : ('inbound' as const);
+    void operationsTelemetry.record({
+      traceSource: message.platformMessageId,
+      userId: message.userId,
+      platform: message.platform,
+      direction,
+      stage: 'api',
+      outcome: 'accepted',
+    });
 
     try {
       // Fast-path: skip duplicate messages (backfill replay) without touching the DB further
@@ -403,7 +432,8 @@ async function initializePlatforms() {
         return; // already processed — skip chat/AI/contact upserts
       }
 
-      logger.info(`New message from ${message.platform}: ${message.platformMessageId}`);
+      logger.info('New platform message accepted', { platform: message.platform });
+      const aiProcessingEnabled = await isAiProcessingEnabled(message.userId);
 
       // 1. Upsert chat record to get its UUID
       const { data: chat, error: chatError } = await supabase
@@ -467,6 +497,28 @@ async function initializePlatforms() {
         await supabase.from('chats').update({ contact_id: contactId }).eq('id', chat.id);
       }
 
+      // A bridge may deliver a reply before its referenced message (especially
+      // during history backfill). Preserve the platform identifier either way,
+      // and link the local UUID as soon as it is available for fast quote
+      // rendering in the clients.
+      let replyToInternalMessageId: string | null = null;
+      if (message.replyToMessageId) {
+        const { data: replyTarget, error: replyTargetError } = await supabase
+          .from('messages')
+          .select('id')
+          .eq('user_id', message.userId)
+          .eq('chat_id', chat.id)
+          .eq('platform_message_id', message.replyToMessageId)
+          .maybeSingle();
+        if (replyTargetError) {
+          logger.debug('Could not resolve reply target during message ingest', {
+            platform: message.platform,
+          });
+        } else {
+          replyToInternalMessageId = replyTarget?.id || null;
+        }
+      }
+
       // 2. Insert message record (ignoreDuplicates as a safety net)
       const { data: savedMsg, error: msgError } = await supabase
         .from('messages')
@@ -486,6 +538,8 @@ async function initializePlatforms() {
             contact_id: contactId,
             contact_name: message.isFromMe ? null : message.senderName || null,
             contact_phone: message.isFromMe ? null : senderContactId,
+            reply_to_message_id: replyToInternalMessageId,
+            reply_to_platform_message_id: message.replyToMessageId || null,
             metadata: message.platformMetadata || null,
             media_url: (() => {
               const mediaUrl = message.platformMetadata?.mediaUrl;
@@ -511,8 +565,46 @@ async function initializePlatforms() {
 
       if (msgError) {
         logger.error('Failed to upsert message:', msgError);
+        void operationsTelemetry.record({
+          traceSource: message.platformMessageId,
+          userId: message.userId,
+          platform: message.platform,
+          direction,
+          stage: 'database',
+          outcome: 'failed',
+          durationMs: Date.now() - receivedAt,
+          errorClass: 'dependency',
+        });
       } else {
-        logger.debug(`Message saved: ${message.platformMessageId}`);
+        logger.debug('Platform message persisted', { platform: message.platform });
+
+        // Resolve replies which arrived before this source message. The update
+        // is intentionally scoped by account and chat so a platform identifier
+        // can never cross a conversation boundary.
+        if (savedMsg?.id) {
+          const { error: replyResolutionError } = await supabase
+            .from('messages')
+            .update({ reply_to_message_id: savedMsg.id })
+            .eq('user_id', message.userId)
+            .eq('chat_id', chat.id)
+            .eq('reply_to_platform_message_id', message.platformMessageId)
+            .is('reply_to_message_id', null);
+          if (replyResolutionError) {
+            logger.debug('Could not reconcile deferred reply references', {
+              platform: message.platform,
+            });
+          }
+        }
+
+        void operationsTelemetry.record({
+          traceSource: message.platformMessageId,
+          userId: message.userId,
+          platform: message.platform,
+          direction,
+          stage: 'database',
+          outcome: 'persisted',
+          durationMs: Date.now() - receivedAt,
+        });
 
         if (!message.isFromMe && !isBackfill && savedMsg?.id) {
           const { error: unreadError } = await supabase.rpc('increment_chat_unread', {
@@ -542,6 +634,7 @@ async function initializePlatforms() {
           !message.isFromMe &&
           savedMsg?.id &&
           message.content?.trim() &&
+          aiProcessingEnabled &&
           aiProcessor.isConfigured
         ) {
           const chatType = message.chatType === 'group' ? 'group' : 'individual';
@@ -551,7 +644,12 @@ async function initializePlatforms() {
         }
 
         // Keep the global Ask Claire index current for new text/caption rows.
-        if (savedMsg?.id && message.content?.trim() && conversationAssistant.isConfigured) {
+        if (
+          savedMsg?.id &&
+          message.content?.trim() &&
+          aiProcessingEnabled &&
+          conversationAssistant.isConfigured
+        ) {
           void conversationAssistant
             .indexMessage({
               id: savedMsg.id,
@@ -576,6 +674,7 @@ async function initializePlatforms() {
           savedMsg?.id &&
           message.isFromMe &&
           message.content?.trim() &&
+          aiProcessingEnabled &&
           voiceProfileService.isConfigured
         ) {
           void voiceProfileService
@@ -584,7 +683,7 @@ async function initializePlatforms() {
         }
 
         // Detect and persist promises (fire-and-forget, both inbound and outbound)
-        if (savedMsg?.id && message.content?.trim()) {
+        if (savedMsg?.id && message.content?.trim() && aiProcessingEnabled) {
           promiseDetector
             .detectPromises(savedMsg.id, message.content, message.userId, message.isFromMe)
             .catch((err) => logger.debug('Promise detection skipped:', (err as Error).message));
@@ -603,9 +702,9 @@ async function initializePlatforms() {
             })
             .then(async (result) => {
               if (result.fired && result.reply) {
-                logger.info(
-                  `Auto-reply rule "${result.ruleName}" fired — reply queued for chat ${message.chatId}`
-                );
+                logger.info('Auto-reply rule fired and reply queued', {
+                  platform: message.platform,
+                });
                 try {
                   const sessions = await platformManager.getUserSessions(message.userId);
                   const session = sessions.find(
@@ -621,9 +720,9 @@ async function initializePlatforms() {
                       { content: result.reply }
                     );
                   } else {
-                    logger.warn(
-                      `Auto-reply: no active session for user ${message.userId} on ${message.platform}`
-                    );
+                    logger.warn('Auto-reply skipped because no active session exists', {
+                      platform: message.platform,
+                    });
                   }
                 } catch (err) {
                   logger.warn('Auto-reply send failed:', (err as Error).message);
@@ -635,6 +734,16 @@ async function initializePlatforms() {
       }
     } catch (err) {
       logger.error('Error saving message to DB:', err);
+      void operationsTelemetry.record({
+        traceSource: message.platformMessageId,
+        userId: message.userId,
+        platform: message.platform,
+        direction,
+        stage: 'api',
+        outcome: 'failed',
+        durationMs: Date.now() - receivedAt,
+        errorClass: 'dependency',
+      });
     }
   });
 
