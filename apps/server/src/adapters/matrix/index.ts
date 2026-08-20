@@ -46,6 +46,9 @@ import {
 import { logger } from '../../utils/logger';
 import {
   displayNameFromBridge,
+  incomingContactId,
+  isOpaqueWhatsAppLid,
+  phoneNumberFromBridgeIdentifiers,
   phoneNumberFromPlatformContactId,
 } from '../../services/contact-identity';
 
@@ -123,6 +126,13 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
   private readonly doublePuppetEnabled: boolean = process.env.ENABLE_DOUBLE_PUPPETING === 'true';
   // Event IDs that this server sent (to avoid double-counting bot's own sends as incoming)
   private localSentEventIds: Set<string> = new Set();
+  // Contact identity lookups are bridge-local, but can occur for every Matrix
+  // event in a busy room. Coalesce identical requests so a single LID never
+  // turns into a burst of provisioning calls.
+  private readonly contactIdentityLookups = new Map<
+    string,
+    Promise<import('./types').ResolvedBridgeContactIdentity | null>
+  >();
   private durableSessionStorageAvailable = true;
 
   /**
@@ -233,6 +243,65 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     }
   }
 
+  /** Resolve provider metadata without ever treating a routing identifier as display data. */
+  private async resolveRemoteContactIdentity(
+    platform: Platform,
+    platformContactId: string,
+    session: PlatformSession
+  ): Promise<import('./types').ResolvedBridgeContactIdentity | null> {
+    const platformUserId = session.platformUserId || session.phoneNumber;
+    if (!this.config.resolveContactIdentity || !platformUserId) return null;
+    // WhatsApp phone ghosts already contain the canonical phone number. LIDs
+    // are the only current provider identifier that requires a remote lookup.
+    if (platform !== Platform.WHATSAPP || !isOpaqueWhatsAppLid(platformContactId)) return null;
+
+    const key = `${platform}:${platformUserId}:${platformContactId}`;
+    const existing = this.contactIdentityLookups.get(key);
+    if (existing) return existing;
+
+    const lookup = this.config
+      .resolveContactIdentity(platform, platformContactId, platformUserId)
+      .catch(() => {
+        // Identity enrichment is best effort. Message delivery must retain its
+        // normal path if a bridge is temporarily unavailable.
+        this.contactIdentityLookups.delete(key);
+        return null;
+      });
+    this.contactIdentityLookups.set(key, lookup);
+    return lookup;
+  }
+
+  private async enrichRemoteMessageContact(
+    message: UnifiedMessage,
+    session: PlatformSession
+  ): Promise<void> {
+    if (message.isFromMe) return;
+    const platformContactId = incomingContactId(message);
+    if (!platformContactId) return;
+
+    const identity = await this.resolveRemoteContactIdentity(
+      message.platform,
+      platformContactId,
+      session
+    );
+    if (!identity) return;
+
+    const displayName = displayNameFromBridge(
+      identity.displayName,
+      message.platform,
+      platformContactId
+    );
+    if (displayName) message.senderName = displayName;
+
+    const phoneNumber = phoneNumberFromBridgeIdentifiers([identity.phoneNumber]);
+    if (phoneNumber) {
+      message.platformMetadata = {
+        ...message.platformMetadata,
+        contactPhone: phoneNumber,
+      };
+    }
+  }
+
   private mediaProxyPath(mediaUrl: unknown): string | null {
     if (typeof mediaUrl !== 'string' || !mediaUrl) return null;
     if (mediaUrl.startsWith('/media/')) return mediaUrl;
@@ -287,7 +356,11 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
       ? displayNameFromBridge(message.senderName, message.platform, contact.platformContactId)
       : null;
     const contactPhone = contact
-      ? phoneNumberFromPlatformContactId(message.platform, contact.platformContactId)
+      ? phoneNumberFromBridgeIdentifiers([
+          typeof message.platformMetadata?.contactPhone === 'string'
+            ? message.platformMetadata.contactPhone
+            : undefined,
+        ]) || phoneNumberFromPlatformContactId(message.platform, contact.platformContactId)
       : null;
     let contactId: string | null = null;
     if (!message.isFromMe && contact) {
@@ -515,6 +588,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
         selfGhostIds,
         matrixUserId
       );
+      await this.enrichRemoteMessageContact(unifiedMessage, session);
 
       // Matrix receives bridged provider events after mautrix has translated
       // them. These events prove arrival at both observable boundaries; the
@@ -1384,6 +1458,26 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
           avatarUrl,
           session.userId
         );
+
+        if (contact) {
+          const identity = await this.resolveRemoteContactIdentity(
+            contact.platform,
+            contact.platformContactId,
+            session
+          );
+          if (identity) {
+            const resolvedName = displayNameFromBridge(
+              identity.displayName,
+              contact.platform,
+              contact.platformContactId
+            );
+            if (resolvedName) contact.displayName = resolvedName;
+            const resolvedPhone = phoneNumberFromBridgeIdentifiers([identity.phoneNumber]);
+            if (resolvedPhone) contact.phoneNumber = resolvedPhone;
+            if (identity.username) contact.username = identity.username;
+            if (identity.avatarUrl) contact.avatarUrl = identity.avatarUrl;
+          }
+        }
 
         if (contact && !contacts.some((c) => c.platformContactId === contact.platformContactId)) {
           contacts.push(contact);

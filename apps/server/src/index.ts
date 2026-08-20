@@ -42,6 +42,7 @@ import { voiceProfileService } from './services/voice-profile-service';
 import {
   displayNameFromBridge,
   incomingContactId,
+  phoneNumberFromBridgeIdentifiers,
   phoneNumberFromPlatformContactId,
 } from './services/contact-identity';
 import { promiseDetector } from './services/promise-detector';
@@ -371,6 +372,25 @@ async function initializePlatforms() {
           const resolved = await bridge.resolveIdentifier(platformUserId, platformUserId);
           return resolved.mxid ? [resolved.mxid] : [];
         },
+        resolveContactIdentity: async (platform, platformContactId, platformUserId) => {
+          if (platform !== Platform.WHATSAPP || !process.env.WHATSAPP_BRIDGE_SECRET) {
+            return null;
+          }
+          const bridge = new BridgeHttpClient(
+            process.env.WHATSAPP_BRIDGE_URL || 'http://mautrixwhatsapp.railway.internal:29318',
+            process.env.WHATSAPP_BRIDGE_SECRET,
+            process.env.WHATSAPP_BRIDGE_USER_ID || '@claire_bot:claire.local'
+          );
+          const resolved = await bridge.resolveIdentifier(platformContactId, platformUserId);
+          return {
+            displayName: resolved.name,
+            phoneNumber: phoneNumberFromBridgeIdentifiers([
+              ...(resolved.identifiers || []),
+              resolved.id,
+            ]) || undefined,
+            avatarUrl: resolved.avatar_url,
+          };
+        },
       });
 
       platformManager.setMatrixMode(matrixAdapter);
@@ -444,6 +464,11 @@ async function initializePlatforms() {
       // the bridge has not supplied one; omitting it preserves a previously
       // learned name on conflict instead of overwriting it with a LID.
       const senderContactId = incomingContactId(message);
+      const resolvedContactPhone = phoneNumberFromBridgeIdentifiers([
+        typeof message.platformMetadata?.contactPhone === 'string'
+          ? message.platformMetadata.contactPhone
+          : undefined,
+      ]);
       const chatDisplayName =
         message.chatType === 'group'
           ? message.chatName || message.chatId
@@ -490,10 +515,9 @@ async function initializePlatforms() {
           message.platform,
           platformContactId
         );
-        const contactPhone = phoneNumberFromPlatformContactId(
-          message.platform,
-          platformContactId
-        );
+        const contactPhone =
+          resolvedContactPhone ||
+          phoneNumberFromPlatformContactId(message.platform, platformContactId);
         {
           const { data: contact, error: contactError } = await supabase
             .from('contacts')
@@ -593,7 +617,8 @@ async function initializePlatforms() {
               : displayNameFromBridge(message.senderName, message.platform, senderContactId),
             contact_phone: message.isFromMe
               ? null
-              : phoneNumberFromPlatformContactId(message.platform, senderContactId),
+              : resolvedContactPhone ||
+                phoneNumberFromPlatformContactId(message.platform, senderContactId),
             reply_to_message_id: replyToInternalMessageId,
             reply_to_platform_message_id: message.replyToMessageId || null,
             metadata: message.platformMetadata || null,

@@ -29,7 +29,10 @@ telegram:
 
 bridge:
     username_template: "_telegram_{{.}}"
-    displayname_template: "{{.Name}} (TG)"
+    # Prefer Telegram's profile name, then its @username. `.Name` is not a
+    # current mautrix-telegram profile field, which can leave Claire with an
+    # opaque identifier instead of the name Telegram provides.
+    displayname_template: '{{if .Deleted}}Deleted account {{.UserID}}{{else}}{{or .FullName .Username "Telegram user"}}{{end}} (TG)'
     command_prefix: "!tg"
 
     permissions:
