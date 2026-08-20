@@ -4,6 +4,7 @@ import {
   displayNameFromBridge,
   incomingContactId,
   isOpaqueWhatsAppLid,
+  phoneNumberFromBridgeIdentifiers,
   phoneNumberFromPlatformContactId,
 } from './contact-identity';
 
@@ -29,5 +30,15 @@ describe('incoming contact identity', () => {
   test('keeps a genuine bridge profile name and phone-number contact ID', () => {
     expect(displayNameFromBridge('Lucas', Platform.WHATSAPP, '15165551212')).toBe('Lucas');
     expect(phoneNumberFromPlatformContactId(Platform.WHATSAPP, '15165551212')).toBe('15165551212');
+  });
+
+  test('extracts a canonical number from trusted bridge identifiers, never an LID', () => {
+    expect(
+      phoneNumberFromBridgeIdentifiers([
+        'lid-192204836479059',
+        '15165551212@s.whatsapp.net',
+      ])
+    ).toBe('+15165551212');
+    expect(phoneNumberFromBridgeIdentifiers(['lid-192204836479059'])).toBeNull();
   });
 });

@@ -57,6 +57,8 @@ describe('BridgeHttpClient identifier resolution', () => {
       request = new Request(input, init);
       return new Response(JSON.stringify({
         id: '15166100494',
+        name: 'Bridge profile name',
+        identifiers: ['15166100494@s.whatsapp.net'],
         mxid: '@whatsapp_15166100494:claire.local',
       }), { status: 200, headers: { 'content-type': 'application/json' } });
     };
@@ -71,6 +73,8 @@ describe('BridgeHttpClient identifier resolution', () => {
       const result = await client.resolveIdentifier('+15166100494', '15166100494');
 
       expect(result.mxid).toBe('@whatsapp_15166100494:claire.local');
+      expect(result.name).toBe('Bridge profile name');
+      expect(result.identifiers).toEqual(['15166100494@s.whatsapp.net']);
       expect(request?.method).toBe('GET');
       expect(new URL(request!.url).pathname).toBe(
         '/_matrix/provision/v3/resolve_identifier/%2B15166100494'

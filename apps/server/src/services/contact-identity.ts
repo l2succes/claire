@@ -23,6 +23,25 @@ export function phoneNumberFromPlatformContactId(
 }
 
 /**
+ * Extract an E.164 phone number from bridge-owned identifiers. mautrix can
+ * return a plain number, an E.164 number, or a WhatsApp JID such as
+ * `15165551212@s.whatsapp.net`. This is intentionally strict: bridge IDs and
+ * LIDs must never be mistaken for phone numbers.
+ */
+export function phoneNumberFromBridgeIdentifiers(
+  identifiers: Array<string | null | undefined>
+): string | null {
+  for (const identifier of identifiers) {
+    if (!identifier) continue;
+    const source = identifier.trim().replace(/^tel:/i, '').split('@')[0];
+    if (isOpaqueWhatsAppLid(source)) continue;
+    const digits = source.replace(/^\+/, '');
+    if (/^\d{7,15}$/.test(digits)) return `+${digits}`;
+  }
+  return null;
+}
+
+/**
  * Keep bridge fallbacks out of customer-facing names. The bridge profile name
  * wins whenever it is meaningful; names which merely repeat the Matrix/bridge
  * identifier are deliberately treated as unavailable.
