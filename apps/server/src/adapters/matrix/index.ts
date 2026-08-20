@@ -44,6 +44,10 @@ import {
   toPersistedMatrixSession,
 } from './session-persistence';
 import { logger } from '../../utils/logger';
+import {
+  displayNameFromBridge,
+  phoneNumberFromPlatformContactId,
+} from '../../services/contact-identity';
 
 interface MatrixSdkLogger {
   trace(...args: unknown[]): void;
@@ -245,14 +249,11 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
   /** Do not replace a known name with the bridge's phone-number fallback. */
   private contactNameForStorage(
     displayName: string | undefined,
-    platformContactId: string
+    platformContactId: string,
+    platform: Platform
   ): string | null {
     const name = displayName ? this.userMapper.cleanDisplayName(displayName) : '';
-    if (!name) return null;
-    const normalizedId = platformContactId.replace(/[^a-z0-9]/gi, '').toLowerCase();
-    const normalizedName = name.replace(/[^a-z0-9]/gi, '').toLowerCase();
-    if (normalizedName === normalizedId || /^[+\d().\s-]+$/.test(name)) return null;
-    return name;
+    return displayNameFromBridge(name, platform, platformContactId);
   }
 
   /** Correct rows already written by an older sender/media conversion path. */
@@ -282,6 +283,12 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
       replyToInternalMessageId = replyTarget?.id || null;
     }
     const contact = this.userMapper.ghostUserToPlatformContact(message.senderId);
+    const contactName = contact
+      ? displayNameFromBridge(message.senderName, message.platform, contact.platformContactId)
+      : null;
+    const contactPhone = contact
+      ? phoneNumberFromPlatformContactId(message.platform, contact.platformContactId)
+      : null;
     let contactId: string | null = null;
     if (!message.isFromMe && contact) {
       const { data: contactRow } = await supabase
@@ -297,8 +304,8 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
       .from('messages')
       .update({
         from_me: message.isFromMe,
-        contact_name: message.isFromMe ? null : message.senderName || null,
-        contact_phone: message.isFromMe ? null : contact?.platformContactId || null,
+        contact_name: message.isFromMe ? null : contactName,
+        contact_phone: message.isFromMe ? null : contactPhone,
         contact_id: contactId,
         is_group: message.chatType === 'group',
         type: message.contentType,
@@ -313,11 +320,15 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     if (error)
       this.log('warn', `Failed to repair Matrix message ${message.platformMessageId}`, { error });
     else {
+      const repairedChatName =
+        message.chatType === 'group'
+          ? message.chatName || message.chatId
+          : displayNameFromBridge(message.chatName, message.platform, message.chatId) || contactName;
       const { error: chatError } = await supabase
         .from('chats')
         .update({
           is_group: message.chatType === 'group',
-          name: message.chatName || message.chatId,
+          ...(repairedChatName ? { name: repairedChatName } : {}),
         })
         .eq('id', existing.chat_id);
       if (chatError)
@@ -1640,16 +1651,21 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
         )
           continue;
 
-        const name = this.contactNameForStorage(contact.displayName, contact.platformContactId);
+        const name = this.contactNameForStorage(
+          contact.displayName,
+          contact.platformContactId,
+          contact.platform
+        );
+        const phoneNumber =
+          contact.phoneNumber ||
+          phoneNumberFromPlatformContactId(contact.platform, contact.platformContactId);
         const payload: DbRow = {
           user_id: session.userId,
           platform: contact.platform,
           platform_contact_id: contact.platformContactId,
           whatsapp_id: contact.platformContactId,
           avatar_url: contact.avatarUrl || null,
-          phone_number:
-            contact.phoneNumber ||
-            (/^\d+$/.test(contact.platformContactId) ? contact.platformContactId : null),
+          ...(phoneNumber ? { phone_number: phoneNumber } : {}),
           ...(contact.username ? { username: contact.username } : {}),
           // Omitting an unknown name is intentional: on conflict Supabase then
           // preserves a real name that was learned from an earlier sync.
@@ -1659,7 +1675,25 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
           .from('contacts')
           .upsert(payload, { onConflict: 'user_id,platform,platform_contact_id' });
 
-        if (!error) synced++;
+        if (!error) {
+          synced++;
+          // A contact profile can arrive after room history. Propagate its
+          // verified bridge display name to an existing direct chat so an old
+          // LID/anonymous fallback is repaired without waiting for a new
+          // message event.
+          if (name) {
+            const { error: chatNameError } = await supabase
+              .from('chats')
+              .update({ name })
+              .eq('user_id', session.userId)
+              .eq('platform', contact.platform)
+              .eq('platform_chat_id', contact.platformContactId)
+              .eq('is_group', false);
+            if (chatNameError) {
+              this.log('warn', `Failed to sync contact name to chat`, { chatNameError });
+            }
+          }
+        }
       }
 
       this.log('info', `Synced ${synced} contacts for session ${sessionId}`);

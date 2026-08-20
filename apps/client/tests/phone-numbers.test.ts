@@ -1,6 +1,7 @@
 import {
   formatPhoneNumber,
   formatPhoneNumberInput,
+  isOpaqueWhatsAppLid,
   normalizePhoneNumber,
 } from '../services/phone-numbers';
 
@@ -19,5 +20,10 @@ describe('phone number formatting', () => {
 
   it('does not manufacture a canonical value for an invalid number', () => {
     expect(normalizePhoneNumber('+52 931 193 75748')).toBeNull();
+  });
+
+  it('does not present a WhatsApp LID as a phone number', () => {
+    expect(isOpaqueWhatsAppLid('lid-192204836479059')).toBe(true);
+    expect(formatPhoneNumber('lid-192204836479059')).toBe('');
   });
 });
