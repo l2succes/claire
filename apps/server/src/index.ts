@@ -39,7 +39,11 @@ import { platformManager } from './adapters';
 import { aiProcessor } from './services/ai-processor';
 import { conversationAssistant } from './services/conversation-assistant';
 import { voiceProfileService } from './services/voice-profile-service';
-import { incomingContactId } from './services/contact-identity';
+import {
+  displayNameFromBridge,
+  incomingContactId,
+  phoneNumberFromPlatformContactId,
+} from './services/contact-identity';
 import { promiseDetector } from './services/promise-detector';
 import { operationsMonitor } from './services/operations-monitor';
 import { operationsTelemetry } from './services/operations-telemetry';
@@ -435,6 +439,17 @@ async function initializePlatforms() {
       logger.info('New platform message accepted', { platform: message.platform });
       const aiProcessingEnabled = await isAiProcessingEnabled(message.userId);
 
+      // A WhatsApp LID is an opaque bridge identifier, not a contact name or
+      // number. Prefer the real bridge profile name and omit the field when
+      // the bridge has not supplied one; omitting it preserves a previously
+      // learned name on conflict instead of overwriting it with a LID.
+      const senderContactId = incomingContactId(message);
+      const chatDisplayName =
+        message.chatType === 'group'
+          ? message.chatName || message.chatId
+          : displayNameFromBridge(message.chatName, message.platform, message.chatId) ||
+            displayNameFromBridge(message.senderName, message.platform, senderContactId);
+
       // 1. Upsert chat record to get its UUID
       const { data: chat, error: chatError } = await supabase
         .from('chats')
@@ -444,7 +459,7 @@ async function initializePlatforms() {
             whatsapp_chat_id: message.chatId,
             platform_chat_id: message.chatId,
             platform: message.platform,
-            name: message.chatName || message.chatId,
+            ...(chatDisplayName ? { name: chatDisplayName } : {}),
             is_group: message.chatType === 'group',
             last_message_at: message.timestamp,
           },
@@ -467,9 +482,18 @@ async function initializePlatforms() {
       // inbox a stable avatar/name relationship instead of trying to infer it
       // from the latest message row on every render.
       let contactId: string | null = null;
-      const senderContactId = incomingContactId(message);
+      let storedContactName: string | null = null;
       if (senderContactId) {
         const platformContactId = senderContactId;
+        const contactName = displayNameFromBridge(
+          message.senderName,
+          message.platform,
+          platformContactId
+        );
+        const contactPhone = phoneNumberFromPlatformContactId(
+          message.platform,
+          platformContactId
+        );
         {
           const { data: contact, error: contactError } = await supabase
             .from('contacts')
@@ -479,22 +503,50 @@ async function initializePlatforms() {
                 platform: message.platform,
                 platform_contact_id: platformContactId,
                 whatsapp_id: platformContactId,
-                name: message.senderName || platformContactId,
-                phone_number: /^\d+$/.test(platformContactId) ? platformContactId : null,
+                ...(contactName ? { name: contactName } : {}),
+                ...(contactPhone ? { phone_number: contactPhone } : {}),
               },
               { onConflict: 'user_id,platform,platform_contact_id' }
             )
-            .select('id')
+            .select('id, name')
             .single();
           if (contactError) {
             logger.debug('Failed to upsert contact:', contactError);
           } else {
             contactId = contact?.id || null;
+            storedContactName = displayNameFromBridge(
+              contact?.name,
+              message.platform,
+              platformContactId
+            );
           }
         }
       }
       if (contactId && message.chatType === 'individual') {
         await supabase.from('chats').update({ contact_id: contactId }).eq('id', chat.id);
+      }
+      if (message.chatType === 'individual' && !chatDisplayName) {
+        // Outgoing messages do not have a remote sender to upsert above, and
+        // some bridges only learn the profile name during contact sync. Reuse
+        // that canonical record to repair a previously anonymous chat.
+        let resolvedName = storedContactName;
+        if (!resolvedName) {
+          const { data: knownContact } = await supabase
+            .from('contacts')
+            .select('name')
+            .eq('user_id', message.userId)
+            .eq('platform', message.platform)
+            .eq('platform_contact_id', message.chatId)
+            .maybeSingle();
+          resolvedName = displayNameFromBridge(
+            knownContact?.name,
+            message.platform,
+            message.chatId
+          );
+        }
+        if (resolvedName) {
+          await supabase.from('chats').update({ name: resolvedName }).eq('id', chat.id);
+        }
       }
 
       // A bridge may deliver a reply before its referenced message (especially
@@ -536,8 +588,12 @@ async function initializePlatforms() {
             timestamp: message.timestamp,
             is_group: message.chatType === 'group',
             contact_id: contactId,
-            contact_name: message.isFromMe ? null : message.senderName || null,
-            contact_phone: message.isFromMe ? null : senderContactId,
+            contact_name: message.isFromMe
+              ? null
+              : displayNameFromBridge(message.senderName, message.platform, senderContactId),
+            contact_phone: message.isFromMe
+              ? null
+              : phoneNumberFromPlatformContactId(message.platform, senderContactId),
             reply_to_message_id: replyToInternalMessageId,
             reply_to_platform_message_id: message.replyToMessageId || null,
             metadata: message.platformMetadata || null,

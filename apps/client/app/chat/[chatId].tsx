@@ -42,6 +42,7 @@ import { useConversationSettingsStore } from '../../stores/conversationSettingsS
 import { GroupChatSummary } from '../../components/GroupChatSummary';
 import { Platform } from '../../types/platform';
 import { PlatformName } from '../../components/PlatformIcon';
+import { displayContactName } from '../../services/contact-display';
 import {
   setActiveNotificationChat,
   syncNotificationBadge,
@@ -487,7 +488,7 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
   const displayName =
     is_group === '1'
       ? chat_name || contact_name || 'Group'
-      : contact_name || chat_name || 'Unknown';
+      : displayContactName(contact_name || chat_name, platform, undefined, 'Contact');
   const activeSession = connectedSessions.find(
     (session) => session.platform === (platform as Platform) && session.status === 'connected'
   );

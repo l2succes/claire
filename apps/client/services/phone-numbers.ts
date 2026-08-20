@@ -23,10 +23,19 @@ function sourcePhone(value: string) {
   return value.trim().split('@')[0] || value.trim();
 }
 
+/** A WhatsApp LID is a routing identifier, not a telephone number. */
+export function isOpaqueWhatsAppLid(value: string | null | undefined): boolean {
+  if (!value) return false;
+  return /^lid[-:]?\d+$/i.test(sourcePhone(value));
+}
+
 /** Human-readable number for the relationship-memory surface. */
 export function formatPhoneNumber(value: string | null | undefined): string {
   if (!value) return '';
   const source = sourcePhone(value);
+  // Never turn an opaque WhatsApp LID into a plausible-looking number. That
+  // would mislead someone into thinking it is a callable contact detail.
+  if (isOpaqueWhatsAppLid(source)) return '';
   const parsed = parsePhoneNumberFromString(source, deviceCountry());
   if (parsed?.isValid()) return parsed.formatInternational();
 

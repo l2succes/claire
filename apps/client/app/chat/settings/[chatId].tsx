@@ -13,6 +13,7 @@ import { PlatformBadge } from '../../../components/PlatformIcon';
 import { Platform } from '../../../types/platform';
 import type { ChatCategory } from '../../../types/conversationSettings';
 import { formatPhoneNumber, formatPhoneNumberInput, normalizePhoneNumber } from '../../../services/phone-numbers';
+import { displayContactName } from '../../../services/contact-display';
 
 const TONES = [
   { key: 'warm', title: 'Warm + direct', description: 'Clear, human, confident' },
@@ -46,13 +47,16 @@ export default function ConversationSettingsScreen() {
   const { settings, fetchSettings, setCategory, updateProfile, refreshInsights } = useConversationSettingsStore();
   const chatSettings = settings[chatId];
   const isLoading = chatSettings?.isLoading ?? true;
-  const displayName = is_group === '1' ? (chat_name || contact_name || 'Group') : (contact_name || chat_name || 'Unknown');
   const [sourcePhone, setSourcePhone] = useState('');
   const [details, setDetails] = useState({ phone: '', email: '', location: '' });
   const [memory, setMemory] = useState('');
   const [instruction, setInstruction] = useState('');
   const [tone, setTone] = useState<ToneKey | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const displayName =
+    is_group === '1'
+      ? chat_name || contact_name || 'Group'
+      : displayContactName(contact_name || chat_name, platform, sourcePhone, 'Contact');
 
   useEffect(() => { if (chatId) void fetchSettings(chatId); }, [chatId, fetchSettings]);
 
