@@ -1,17 +1,66 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { ActivityIndicator, Pressable, Text, TextInput, View, type StyleProp, type TextInputProps, type ViewStyle } from 'react-native';
-import Animated, { FadeInDown, FadeOutUp, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
-import { AtSign, Filter, List, MessageCircle, Plus, Search, SendHorizonal, Smile, Sparkles, Trash2, ArrowUpRight } from 'lucide-react-native';
+import {
+  ActivityIndicator,
+  Pressable,
+  Text,
+  TextInput,
+  View,
+  type StyleProp,
+  type TextInputProps,
+  type ViewStyle,
+} from 'react-native';
+import Animated, {
+  FadeInDown,
+  FadeOutUp,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
+import {
+  AtSign,
+  Filter,
+  List,
+  MessageCircle,
+  Plus,
+  Search,
+  SendHorizonal,
+  Smile,
+  Sparkles,
+  Trash2,
+  ArrowUpRight,
+} from 'lucide-react-native';
 import { colors, mobileType, radius, space } from '@claire/design-system';
 import type { ChatPlusDefault } from '../../stores/chatPreferencesStore';
+import { VoiceNoteControl, type VoiceNoteDraft } from './voice-note-control';
 
 const CONTROL = 36;
 
 export const ASK_TOOLS = [
-  { id: 'catch-me-up', label: 'Catch me up', description: 'Summarize recent conversations.', prompt: 'Catch me up on the conversations that need my attention.' },
-  { id: 'open-loops', label: 'Find open loops', description: 'Open loops and questions.', prompt: 'What promises, questions, or plans are still unresolved?' },
-  { id: 'tone', label: 'Check the tone', description: 'Warm, direct, or playful.', prompt: 'What patterns do you notice in the tone of my recent conversations? Distinguish observations from inference.' },
-  { id: 'find', label: 'Find something', description: 'Search messages and plans.', prompt: 'Help me find something I remember saying or receiving.' },
+  {
+    id: 'catch-me-up',
+    label: 'Catch me up',
+    description: 'Summarize recent conversations.',
+    prompt: 'Catch me up on the conversations that need my attention.',
+  },
+  {
+    id: 'open-loops',
+    label: 'Find open loops',
+    description: 'Open loops and questions.',
+    prompt: 'What promises, questions, or plans are still unresolved?',
+  },
+  {
+    id: 'tone',
+    label: 'Check the tone',
+    description: 'Warm, direct, or playful.',
+    prompt:
+      'What patterns do you notice in the tone of my recent conversations? Distinguish observations from inference.',
+  },
+  {
+    id: 'find',
+    label: 'Find something',
+    description: 'Search messages and plans.',
+    prompt: 'Help me find something I remember saying or receiving.',
+  },
 ] as const;
 
 const toolIcons = {
@@ -33,7 +82,19 @@ type ComposerAction = {
 
 function ComposerMenu({ items, testID }: { items: ComposerAction[]; testID?: string }) {
   return (
-    <Animated.View entering={FadeInDown.duration(180).springify().damping(18)} exiting={FadeOutUp.duration(120)} testID={testID} style={{ marginBottom: space[2], overflow: 'hidden', borderRadius: radius.card, borderWidth: 1, borderColor: colors.ink, backgroundColor: colors.paper }}>
+    <Animated.View
+      entering={FadeInDown.duration(180).springify().damping(18)}
+      exiting={FadeOutUp.duration(120)}
+      testID={testID}
+      style={{
+        marginBottom: space[2],
+        overflow: 'hidden',
+        borderRadius: radius.card,
+        borderWidth: 1,
+        borderColor: colors.ink,
+        backgroundColor: colors.paper,
+      }}
+    >
       {items.map((item, index) => (
         <Pressable
           key={item.id}
@@ -42,12 +103,42 @@ function ComposerMenu({ items, testID }: { items: ComposerAction[]; testID?: str
           disabled={item.disabled}
           onPress={item.onPress}
           testID={`composer-action-${item.id}`}
-          style={{ flexDirection: 'row', alignItems: 'center', gap: space[3], paddingHorizontal: space[3], paddingVertical: 11, borderBottomWidth: index < items.length - 1 ? 1 : 0, borderBottomColor: colors.neutral[200], opacity: item.disabled ? 0.55 : 1 }}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: space[3],
+            paddingHorizontal: space[3],
+            paddingVertical: 11,
+            borderBottomWidth: index < items.length - 1 ? 1 : 0,
+            borderBottomColor: colors.neutral[200],
+            opacity: item.disabled ? 0.55 : 1,
+          }}
         >
-          {item.icon ? <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: colors.neutral[100], alignItems: 'center', justifyContent: 'center' }}>{item.icon}</View> : null}
+          {item.icon ? (
+            <View
+              style={{
+                width: 26,
+                height: 26,
+                borderRadius: 13,
+                backgroundColor: colors.neutral[100],
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              {item.icon}
+            </View>
+          ) : null}
           <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={{ ...mobileType.label, color: item.destructive ? colors.danger : colors.ink }}>{item.label}</Text>
-            {item.description ? <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{item.description}</Text> : null}
+            <Text
+              style={{ ...mobileType.label, color: item.destructive ? colors.danger : colors.ink }}
+            >
+              {item.label}
+            </Text>
+            {item.description ? (
+              <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>
+                {item.description}
+              </Text>
+            ) : null}
           </View>
         </Pressable>
       ))}
@@ -83,6 +174,8 @@ function ComposerBar({
   addActive,
   chips,
   menu,
+  voiceReview,
+  trailingControl,
   inputTestID,
   sendTestID,
   inputRef,
@@ -101,6 +194,10 @@ function ComposerBar({
   addActive?: boolean;
   chips?: ReactNode;
   menu?: ReactNode;
+  /** Compact review state lives above the composer; never in the timeline. */
+  voiceReview?: ReactNode;
+  /** A small host action immediately beside the text input (for example, mic). */
+  trailingControl?: ReactNode;
   inputTestID?: string;
   sendTestID?: string;
   inputRef?: React.RefObject<TextInput | null>;
@@ -111,7 +208,22 @@ function ComposerBar({
     <View style={style}>
       {chips}
       {menu}
-      <View style={{ minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6, paddingHorizontal: 8, borderWidth: 1, borderColor: colors.neutral[200], borderRadius: 18, backgroundColor: colors.paper, boxShadow: '0 5px 15px rgba(16,18,15,0.08)' }}>
+      {voiceReview}
+      <View
+        style={{
+          minHeight: 48,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 8,
+          paddingVertical: 6,
+          paddingHorizontal: 8,
+          borderWidth: 1,
+          borderColor: colors.neutral[200],
+          borderRadius: 18,
+          backgroundColor: colors.paper,
+          boxShadow: '0 5px 15px rgba(16,18,15,0.08)',
+        }}
+      >
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={addAccessibilityLabel}
@@ -120,7 +232,14 @@ function ComposerBar({
           onLongPress={onAddLongPress}
           delayLongPress={320}
           testID={addTestID}
-          style={{ width: CONTROL, height: CONTROL, borderRadius: 12, backgroundColor: addActive ? colors.lime : colors.neutral[100], alignItems: 'center', justifyContent: 'center' }}
+          style={{
+            width: CONTROL,
+            height: CONTROL,
+            borderRadius: 12,
+            backgroundColor: addActive ? colors.lime : colors.neutral[100],
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
         >
           {addIcon}
         </Pressable>
@@ -129,21 +248,41 @@ function ComposerBar({
           {...inputProps}
           value={value}
           onChangeText={onChangeText}
-          placeholder={inputProps.placeholder || (variant === 'ask' ? 'Ask about a message, plan, or @person…' : 'Write a message…')}
+          placeholder={
+            inputProps.placeholder ||
+            (variant === 'ask' ? 'Ask about a message, plan, or @person…' : 'Write a message…')
+          }
           placeholderTextColor={colors.neutral[400]}
           multiline
           maxFontSizeMultiplier={1}
           textAlignVertical="center"
           testID={inputTestID}
-          style={{ flex: 1, minHeight: CONTROL, maxHeight: 110, paddingHorizontal: space[1], paddingTop: 8, paddingBottom: 8, ...mobileType.body, color: colors.ink }}
+          style={{
+            flex: 1,
+            minHeight: CONTROL,
+            maxHeight: 110,
+            paddingHorizontal: space[1],
+            paddingTop: 8,
+            paddingBottom: 8,
+            ...mobileType.body,
+            color: colors.ink,
+          }}
         />
+        {trailingControl}
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={variant === 'ask' ? 'Ask Claire' : 'Send message'}
           disabled={!armed}
           onPress={onSend}
           testID={sendTestID}
-          style={{ width: CONTROL, height: CONTROL, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: armed ? colors.ink : colors.neutral[200] }}
+          style={{
+            width: CONTROL,
+            height: CONTROL,
+            borderRadius: 12,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: armed ? colors.ink : colors.neutral[200],
+          }}
         >
           {sending ? <ActivityIndicator size="small" color={colors.lime} /> : sendIcon}
         </Pressable>
@@ -152,24 +291,45 @@ function ComposerBar({
   );
 }
 
-export function AskToolGrid({ onSelect, scoped }: { onSelect: (prompt: string) => void; scoped?: boolean }) {
+export function AskToolGrid({
+  onSelect,
+  scoped,
+}: {
+  onSelect: (prompt: string) => void;
+  scoped?: boolean;
+}) {
   return (
     <View testID="ask-tool-grid" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space[3] }}>
       {ASK_TOOLS.map((tool) => {
         const Icon = toolIcons[tool.id];
-        const description = scoped && tool.id === 'find' ? 'Search just this chat.' : tool.description;
+        const description =
+          scoped && tool.id === 'find' ? 'Search just this chat.' : tool.description;
         return (
           <Pressable
             key={tool.id}
             accessibilityRole="button"
             onPress={() => onSelect(tool.id === 'find' && scoped ? 'Find ' : tool.prompt)}
             testID={`claire-tool-${tool.id}`}
-            style={{ width: '47.8%', minHeight: 132, justifyContent: 'space-between', padding: space[3], borderRadius: radius.card, borderCurve: 'continuous', borderWidth: 1, borderColor: colors.neutral[400], backgroundColor: 'rgba(255,255,255,0.5)' }}
+            style={{
+              width: '47.8%',
+              minHeight: 132,
+              justifyContent: 'space-between',
+              padding: space[3],
+              borderRadius: radius.card,
+              borderCurve: 'continuous',
+              borderWidth: 1,
+              borderColor: colors.neutral[400],
+              backgroundColor: 'rgba(255,255,255,0.5)',
+            }}
           >
             <Icon size={22} color={colors.ink} strokeWidth={2.2} />
             <View style={{ gap: 3 }}>
-              <Text style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>{tool.label}</Text>
-              <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{description}</Text>
+              <Text style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>
+                {tool.label}
+              </Text>
+              <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>
+                {description}
+              </Text>
             </View>
           </Pressable>
         );
@@ -186,8 +346,11 @@ export function ChatComposer({
   plusDefault = 'menu',
   replyOptionsVisible = false,
   onToggleReplyOptions,
+  accessory,
   style,
   inputRef,
+  voiceEnabled = false,
+  onSendVoice,
   ...inputProps
 }: Omit<TextInputProps, 'style'> & {
   onSend: () => void;
@@ -195,8 +358,12 @@ export function ChatComposer({
   plusDefault?: ChatPlusDefault;
   replyOptionsVisible?: boolean;
   onToggleReplyOptions?: () => void;
+  /** A message-level control, such as the active native reply target. */
+  accessory?: ReactNode;
   style?: StyleProp<ViewStyle>;
   inputRef?: React.RefObject<TextInput | null>;
+  voiceEnabled?: boolean;
+  onSendVoice?: (draft: VoiceNoteDraft) => Promise<void>;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const toggleMenu = () => setMenuOpen((open) => !open);
@@ -204,41 +371,80 @@ export function ChatComposer({
     setMenuOpen(false);
     onToggleReplyOptions?.();
   };
-  const onAddPress = () => plusDefault === 'menu' ? toggleMenu() : toggleReplyOptions();
-  const onAddLongPress = () => plusDefault === 'menu' ? toggleReplyOptions() : toggleMenu();
+  const onAddPress = () => (plusDefault === 'menu' ? toggleMenu() : toggleReplyOptions());
+  const onAddLongPress = () => (plusDefault === 'menu' ? toggleReplyOptions() : toggleMenu());
   const actions: ComposerAction[] = [
-    ...(onToggleReplyOptions ? [{
-      id: 'reply-options',
-      label: replyOptionsVisible ? 'Hide reply options' : 'Reply options',
-      description: replyOptionsVisible ? 'Put Claire’s drafts away.' : 'Claire drafts a few ways to answer.',
-      icon: <Sparkles size={13} color={colors.ink} />,
-      onPress: toggleReplyOptions,
-    }] : []),
-    { id: 'photo', label: 'Attach a photo', description: 'Coming soon.', disabled: true, icon: <Plus size={13} color={colors.neutral[600]} />, onPress: () => undefined },
-    { id: 'file', label: 'Attach a file', description: 'Coming soon.', disabled: true, icon: <Plus size={13} color={colors.neutral[600]} />, onPress: () => undefined },
+    ...(onToggleReplyOptions
+      ? [
+          {
+            id: 'reply-options',
+            label: replyOptionsVisible ? 'Hide reply options' : 'Reply options',
+            description: replyOptionsVisible
+              ? 'Put Claire’s drafts away.'
+              : 'Claire drafts a few ways to answer.',
+            icon: <Sparkles size={13} color={colors.ink} />,
+            onPress: toggleReplyOptions,
+          },
+        ]
+      : []),
+    {
+      id: 'photo',
+      label: 'Attach a photo',
+      description: 'Coming soon.',
+      disabled: true,
+      icon: <Plus size={13} color={colors.neutral[600]} />,
+      onPress: () => undefined,
+    },
+    {
+      id: 'file',
+      label: 'Attach a file',
+      description: 'Coming soon.',
+      disabled: true,
+      icon: <Plus size={13} color={colors.neutral[600]} />,
+      onPress: () => undefined,
+    },
   ];
   const armed = Boolean(value?.toString().trim()) && !sending;
-  return (
+  const composer = (voiceReview?: ReactNode, voiceTrigger?: ReactNode) => (
     <ComposerBar
       variant="chat"
       value={value}
       onChangeText={onChangeText}
-      onSend={() => { setMenuOpen(false); onSend(); }}
+      onSend={() => {
+        setMenuOpen(false);
+        onSend();
+      }}
       sending={sending}
       onAddPress={onAddPress}
       onAddLongPress={onAddLongPress}
       addIcon={<PlusToggle open={menuOpen} />}
-      sendIcon={<SendHorizonal size={18} color={armed ? colors.lime : colors.neutral[400]} strokeWidth={2.2} />}
+      sendIcon={
+        <SendHorizonal
+          size={18}
+          color={armed ? colors.lime : colors.neutral[400]}
+          strokeWidth={2.2}
+        />
+      }
       addAccessibilityLabel={plusDefault === 'menu' ? 'Chat actions' : 'Reply options'}
       addTestID="chat-composer-add"
       addActive={menuOpen}
+      chips={accessory}
       menu={menuOpen ? <ComposerMenu items={actions} testID="chat-composer-menu" /> : null}
+      voiceReview={voiceReview}
+      trailingControl={voiceTrigger}
       inputTestID="chat-input"
       inputRef={inputRef}
       sendTestID="chat-send-button"
       style={style}
       {...inputProps}
     />
+  );
+
+  if (!onSendVoice) return composer();
+  return (
+    <VoiceNoteControl enabled={voiceEnabled} sending={sending} onSend={onSendVoice}>
+      {({ trigger, review }) => composer(review, trigger)}
+    </VoiceNoteControl>
   );
 }
 
@@ -278,14 +484,63 @@ export function AskComposer({
     action?.();
   };
   const actions: ComposerAction[] = [
-    { id: 'tag', label: 'Tag a person', description: 'Focus Claire on someone with @.', icon: <AtSign size={13} color={colors.ink} />, onPress: () => close(onTagPerson) },
-    { id: 'platform', label: 'Filter by platform', description: 'WhatsApp, Telegram, Instagram, or all.', icon: <Filter size={13} color={colors.ink} />, onPress: () => close(onFilterPlatform) },
-    { id: 'focus', label: 'Focus a chat', description: 'Stay inside one conversation.', icon: <MessageCircle size={13} color={colors.ink} />, onPress: () => close(onFocusChat) },
-    { id: 'loops', label: 'Find open loops', description: 'Open loops, questions, and plans.', icon: <ArrowUpRight size={13} color={colors.ink} />, onPress: () => close(onFindLoops) },
-    { id: 'tone', label: 'Check the tone', description: 'Observation, then a matching line.', icon: <Smile size={13} color={colors.ink} />, onPress: () => close(onCheckTone) },
-    { id: 'find', label: 'Find something', description: 'Search messages and plans.', icon: <Search size={13} color={colors.ink} />, onPress: () => close(onFindSomething) },
-    { id: 'clear', label: 'Clear this conversation', description: 'Wipe turns. Keep the thread.', icon: <List size={13} color={colors.ink} />, onPress: () => close(onClear) },
-    { id: 'delete', label: 'Delete thread', description: 'Remove it from Recent.', destructive: true, icon: <Trash2 size={13} color={colors.danger} />, onPress: () => close(onDelete) },
+    {
+      id: 'tag',
+      label: 'Tag a person',
+      description: 'Focus Claire on someone with @.',
+      icon: <AtSign size={13} color={colors.ink} />,
+      onPress: () => close(onTagPerson),
+    },
+    {
+      id: 'platform',
+      label: 'Filter by platform',
+      description: 'WhatsApp, Telegram, Instagram, or all.',
+      icon: <Filter size={13} color={colors.ink} />,
+      onPress: () => close(onFilterPlatform),
+    },
+    {
+      id: 'focus',
+      label: 'Focus a chat',
+      description: 'Stay inside one conversation.',
+      icon: <MessageCircle size={13} color={colors.ink} />,
+      onPress: () => close(onFocusChat),
+    },
+    {
+      id: 'loops',
+      label: 'Find open loops',
+      description: 'Open loops, questions, and plans.',
+      icon: <ArrowUpRight size={13} color={colors.ink} />,
+      onPress: () => close(onFindLoops),
+    },
+    {
+      id: 'tone',
+      label: 'Check the tone',
+      description: 'Observation, then a matching line.',
+      icon: <Smile size={13} color={colors.ink} />,
+      onPress: () => close(onCheckTone),
+    },
+    {
+      id: 'find',
+      label: 'Find something',
+      description: 'Search messages and plans.',
+      icon: <Search size={13} color={colors.ink} />,
+      onPress: () => close(onFindSomething),
+    },
+    {
+      id: 'clear',
+      label: 'Clear this conversation',
+      description: 'Wipe turns. Keep the thread.',
+      icon: <List size={13} color={colors.ink} />,
+      onPress: () => close(onClear),
+    },
+    {
+      id: 'delete',
+      label: 'Delete thread',
+      description: 'Remove it from Recent.',
+      destructive: true,
+      icon: <Trash2 size={13} color={colors.danger} />,
+      onPress: () => close(onDelete),
+    },
   ].filter((item) => {
     if (item.id === 'tag') return Boolean(onTagPerson);
     if (item.id === 'platform') return Boolean(onFilterPlatform);
@@ -303,11 +558,20 @@ export function AskComposer({
       variant="ask"
       value={value}
       onChangeText={onChangeText}
-      onSend={() => { setMenuOpen(false); onSend(); }}
+      onSend={() => {
+        setMenuOpen(false);
+        onSend();
+      }}
       sending={sending}
       onAddPress={() => setMenuOpen((open) => !open)}
       addIcon={<PlusToggle open={menuOpen} />}
-      sendIcon={<SendHorizonal size={18} color={value?.toString().trim() && !sending ? colors.lime : colors.neutral[400]} strokeWidth={2.2} />}
+      sendIcon={
+        <SendHorizonal
+          size={18}
+          color={value?.toString().trim() && !sending ? colors.lime : colors.neutral[400]}
+          strokeWidth={2.2}
+        />
+      }
       addAccessibilityLabel="Claire chat actions"
       addActive={menuOpen}
       chips={chips}

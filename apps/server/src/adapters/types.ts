@@ -283,6 +283,13 @@ export interface IPlatformAdapter {
 
   // Messaging
   sendMessage(sessionId: string, chatId: string, message: OutgoingMessage): Promise<UnifiedMessage>;
+  /** Optional while direct bridges add provider-native reaction support. */
+  sendReaction?(
+    sessionId: string,
+    chatId: string,
+    messageId: string,
+    emoji: string
+  ): Promise<{ platformEventId: string }>;
   markAsRead(sessionId: string, chatId: string, messageId: string): Promise<void>;
 
   // Contacts & Chats

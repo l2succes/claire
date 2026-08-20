@@ -65,6 +65,14 @@
       "expo-web-browser",
       "expo-video",
       [
+        "expo-audio",
+        {
+          "microphonePermission": "Allow Claire to access your microphone so you can record voice notes.",
+          "enableBackgroundRecording": false,
+          "enableBackgroundPlayback": true
+        }
+      ],
+      [
         "expo-sqlite",
         {
           "useSQLCipher": true

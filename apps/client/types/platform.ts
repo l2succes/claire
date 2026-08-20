@@ -42,6 +42,8 @@ export interface PlatformCapabilities {
   canSendVoice: boolean;
   canSendStickers: boolean;
   canSendReactions: boolean;
+  /** Reply support is transport-specific; use this instead of guessing by platform. */
+  canReplyToMessages: boolean;
   canReadReceipts: boolean;
   canDeleteMessages: boolean;
   canEditMessages: boolean;

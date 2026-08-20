@@ -104,5 +104,9 @@ Thumbs.db
 # NX local cache and daemon state
 .nx/
 
+# Vercel CLI project links are machine-local account metadata.
+.vercel/
+**/.vercel/
+
 # Tamagui compiler cache
 .tamagui/

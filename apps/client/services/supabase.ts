@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AppState, Platform } from 'react-native';
 import { platformCapabilities } from '../utils/platformCapabilities';
 
 /**
@@ -24,3 +25,17 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     flowType: platformCapabilities.isWeb ? 'implicit' : 'pkce',
   },
 });
+
+// Supabase does not automatically run refresh timers while a React Native app
+// is backgrounded. Resume them explicitly when Claire returns to foreground so
+// a previously valid session is not sent to the API after its short-lived JWT
+// has expired.
+if (Platform.OS !== 'web') {
+  const syncAuthRefresh = (state: string) => {
+    if (state === 'active') supabase.auth.startAutoRefresh();
+    else supabase.auth.stopAutoRefresh();
+  };
+
+  syncAuthRefresh(AppState.currentState);
+  AppState.addEventListener('change', syncAuthRefresh);
+}

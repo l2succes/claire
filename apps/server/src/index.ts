@@ -103,13 +103,19 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Keep HTTP diagnostics useful without recording search terms, OAuth values,
 // or other query parameters that can contain private data.
-app.use(morgan((tokens, req, res) => [
-  tokens.method(req, res),
-  req.path,
-  tokens.status(req, res),
-  tokens.res(req, res, 'content-length') || '-',
-  `${tokens['response-time'](req, res)} ms`,
-].join(' '), { stream }));
+app.use(
+  morgan(
+    (tokens, req, res) =>
+      [
+        tokens.method(req, res),
+        req.path,
+        tokens.status(req, res),
+        tokens.res(req, res, 'content-length') || '-',
+        `${tokens['response-time'](req, res)} ms`,
+      ].join(' '),
+    { stream }
+  )
+);
 
 // Routes
 app.use('/auth', authRateLimit, authRoutes);
@@ -393,7 +399,7 @@ async function initializePlatforms() {
     }
 
     const receivedAt = Date.now();
-    const direction = message.isFromMe ? 'outbound' as const : 'inbound' as const;
+    const direction = message.isFromMe ? ('outbound' as const) : ('inbound' as const);
     void operationsTelemetry.record({
       traceSource: message.platformMessageId,
       userId: message.userId,
@@ -491,6 +497,28 @@ async function initializePlatforms() {
         await supabase.from('chats').update({ contact_id: contactId }).eq('id', chat.id);
       }
 
+      // A bridge may deliver a reply before its referenced message (especially
+      // during history backfill). Preserve the platform identifier either way,
+      // and link the local UUID as soon as it is available for fast quote
+      // rendering in the clients.
+      let replyToInternalMessageId: string | null = null;
+      if (message.replyToMessageId) {
+        const { data: replyTarget, error: replyTargetError } = await supabase
+          .from('messages')
+          .select('id')
+          .eq('user_id', message.userId)
+          .eq('chat_id', chat.id)
+          .eq('platform_message_id', message.replyToMessageId)
+          .maybeSingle();
+        if (replyTargetError) {
+          logger.debug('Could not resolve reply target during message ingest', {
+            platform: message.platform,
+          });
+        } else {
+          replyToInternalMessageId = replyTarget?.id || null;
+        }
+      }
+
       // 2. Insert message record (ignoreDuplicates as a safety net)
       const { data: savedMsg, error: msgError } = await supabase
         .from('messages')
@@ -510,6 +538,8 @@ async function initializePlatforms() {
             contact_id: contactId,
             contact_name: message.isFromMe ? null : message.senderName || null,
             contact_phone: message.isFromMe ? null : senderContactId,
+            reply_to_message_id: replyToInternalMessageId,
+            reply_to_platform_message_id: message.replyToMessageId || null,
             metadata: message.platformMetadata || null,
             media_url: (() => {
               const mediaUrl = message.platformMetadata?.mediaUrl;
@@ -547,6 +577,25 @@ async function initializePlatforms() {
         });
       } else {
         logger.debug('Platform message persisted', { platform: message.platform });
+
+        // Resolve replies which arrived before this source message. The update
+        // is intentionally scoped by account and chat so a platform identifier
+        // can never cross a conversation boundary.
+        if (savedMsg?.id) {
+          const { error: replyResolutionError } = await supabase
+            .from('messages')
+            .update({ reply_to_message_id: savedMsg.id })
+            .eq('user_id', message.userId)
+            .eq('chat_id', chat.id)
+            .eq('reply_to_platform_message_id', message.platformMessageId)
+            .is('reply_to_message_id', null);
+          if (replyResolutionError) {
+            logger.debug('Could not reconcile deferred reply references', {
+              platform: message.platform,
+            });
+          }
+        }
+
         void operationsTelemetry.record({
           traceSource: message.platformMessageId,
           userId: message.userId,
@@ -585,7 +634,8 @@ async function initializePlatforms() {
           !message.isFromMe &&
           savedMsg?.id &&
           message.content?.trim() &&
-          aiProcessingEnabled && aiProcessor.isConfigured
+          aiProcessingEnabled &&
+          aiProcessor.isConfigured
         ) {
           const chatType = message.chatType === 'group' ? 'group' : 'individual';
           aiProcessor
@@ -594,7 +644,12 @@ async function initializePlatforms() {
         }
 
         // Keep the global Ask Claire index current for new text/caption rows.
-        if (savedMsg?.id && message.content?.trim() && aiProcessingEnabled && conversationAssistant.isConfigured) {
+        if (
+          savedMsg?.id &&
+          message.content?.trim() &&
+          aiProcessingEnabled &&
+          conversationAssistant.isConfigured
+        ) {
           void conversationAssistant
             .indexMessage({
               id: savedMsg.id,
@@ -619,7 +674,8 @@ async function initializePlatforms() {
           savedMsg?.id &&
           message.isFromMe &&
           message.content?.trim() &&
-          aiProcessingEnabled && voiceProfileService.isConfigured
+          aiProcessingEnabled &&
+          voiceProfileService.isConfigured
         ) {
           void voiceProfileService
             .markSentMessage(message.userId)
@@ -646,7 +702,9 @@ async function initializePlatforms() {
             })
             .then(async (result) => {
               if (result.fired && result.reply) {
-                logger.info('Auto-reply rule fired and reply queued', { platform: message.platform });
+                logger.info('Auto-reply rule fired and reply queued', {
+                  platform: message.platform,
+                });
                 try {
                   const sessions = await platformManager.getUserSessions(message.userId);
                   const session = sessions.find(
@@ -662,7 +720,9 @@ async function initializePlatforms() {
                       { content: result.reply }
                     );
                   } else {
-                    logger.warn('Auto-reply skipped because no active session exists', { platform: message.platform });
+                    logger.warn('Auto-reply skipped because no active session exists', {
+                      platform: message.platform,
+                    });
                   }
                 } catch (err) {
                   logger.warn('Auto-reply send failed:', (err as Error).message);

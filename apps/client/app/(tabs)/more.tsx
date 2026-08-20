@@ -1,12 +1,18 @@
-import { LegacyMoreScreen } from '../../features/more/legacy-more-screen';
+import { useEffect } from 'react';
+import { router } from 'expo-router';
+import { useMoreSheet } from '../../hooks/useMoreSheet';
 
 /**
- * The More tab no longer navigates here: `app/(tabs)/_layout.tsx` intercepts the
- * tab press and opens `MoreSheet` over the current tab instead. This route is
- * kept mounted so the tab still appears in the bar, and so the previous
- * full-screen version stays one line away if we want it back — delete the
- * `listeners` on the `more` screen in the tab layout to revert.
+ * More is an action, never a destination. The tab press is intercepted by the
+ * layout, but deep links and older navigation state can still arrive here.
+ * Resolve those cases to the inbox and open the same compact sheet instead of
+ * ever rendering the retired full-screen More page.
  */
 export default function MoreScreen() {
-  return <LegacyMoreScreen />;
+  useEffect(() => {
+    useMoreSheet.getState().open();
+    router.replace('/(tabs)/messages');
+  }, []);
+
+  return null;
 }

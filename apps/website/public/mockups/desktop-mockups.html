@@ -20,13 +20,20 @@
     <script src="./heroicons.js" defer></script>
     <script src="./desktop-tabs.js" defer></script>
     <script src="./desktop-mockups.js" defer></script>
-      <script src="./mockup-embed.js"></script>
+    <script src="./mockup-embed.js"></script>
   </head>
   <body>
     <header class="desktop-doc-header">
-      <a class="desktop-doc-brand" href="/" target="_top"><img class="desktop-doc-brand-mark" src="/assets/brand/claire-app-icon-lime.svg" alt="" />claire <span>/ desktop app</span></a>
+      <a class="desktop-doc-brand" href="/" target="_top"
+        ><img
+          class="desktop-doc-brand-mark"
+          src="/assets/brand/claire-app-icon-lime.svg"
+          alt=""
+        />claire <span>/ desktop app</span></a
+      >
       <nav class="desktop-doc-links">
-        <a href="/mockups/desktop/components" target="_top">Components</a><a href="/mockups/mobile" target="_top">Mobile</a
+        <a href="/mockups/desktop/components" target="_top">Components</a
+        ><a href="/mockups/mobile" target="_top">Mobile</a
         ><a class="active" href="/mockups/desktop" target="_top">Desktop</a
         ><a href="/mockups/plugins" target="_top">Plugins</a>
       </nav>
@@ -124,6 +131,7 @@
       <nav class="desktop-toolbar" aria-label="Desktop mockup filters">
         <button class="active" data-desktop-filter="all">All mockups</button
         ><button data-desktop-filter="client">Full client</button
+        ><button data-desktop-filter="chat-tools">Chat tools</button
         ><button data-desktop-filter="companion">Companion</button
         ><button data-desktop-filter="setup">Connections & setup</button
         ><button class="active" data-workspace-view="context">Context panel on</button
@@ -315,7 +323,9 @@
             <div class="companion-layout">
               <claire-desktop-tabs active="home"></claire-desktop-tabs>
               <aside class="companion-sidebar">
-                <div class="companion-brand"><img src="/assets/brand/claire-kept-thread-flipped.svg" alt="" />claire</div>
+                <div class="companion-brand">
+                  <img src="/assets/brand/claire-kept-thread-flipped.svg" alt="" />claire
+                </div>
                 <nav class="companion-nav">
                   <button class="active"><i data-heroicon="home"></i>Home</button
                   ><button><i data-heroicon="inbox"></i>Inbox</button
@@ -949,6 +959,223 @@
           <p class="frame-note">
             Compact mode supports “companion” behavior without fragmenting the product into a
             separate app or menu-bar-only utility.
+          </p>
+        </article>
+
+        <article
+          class="frame-case"
+          data-desktop-kind="chat-tools"
+          data-screen="rich-message-actions"
+        >
+          <div class="frame-label">
+            <b>08 / RICH MESSAGE ACTIONS</b><span>HOVER · RIGHT CLICK · KEYBOARD</span>
+          </div>
+          <div class="mac-window">
+            <header class="window-bar">
+              <div class="traffic"><i></i><i></i><i></i></div>
+              <span class="window-title">Claire — Maya Kim</span>
+              <div class="window-tools">
+                <button aria-label="Search"><i data-heroicon="search"></i></button>
+              </div>
+            </header>
+            <div class="workspace rich-workspace">
+              <claire-desktop-tabs variant="workspace" active="inbox"></claire-desktop-tabs>
+              <aside class="desk-list">
+                <div class="desk-list-head">
+                  <h2>Inbox</h2>
+                  <button><i data-heroicon="compose"></i></button>
+                </div>
+                <div class="desk-search">
+                  <i data-heroicon="search"></i><span>Search everything</span><kbd>⌘K</kbd>
+                </div>
+                <div class="desk-chips">
+                  <button class="desk-chip active">All</button
+                  ><button class="desk-chip">Unread 12</button>
+                </div>
+                <div class="desk-section-label"><span>RECENT</span><span>24</span></div>
+                <div class="desk-conversation active">
+                  <div class="desk-avatar">MK<i class="desk-platform platform-wa">W</i></div>
+                  <div>
+                    <b>Maya Kim</b>
+                    <p>Could you send that deck?</p>
+                  </div>
+                  <time>2m</time>
+                </div>
+                <div class="desk-conversation">
+                  <div class="desk-avatar blue">NO<i class="desk-platform platform-tg">T</i></div>
+                  <div>
+                    <b>Noah Oliver</b>
+                    <p>Voice note · 0:18</p>
+                  </div>
+                  <time>18m</time>
+                </div>
+              </aside>
+              <section class="desk-chat rich-desk-chat">
+                <header class="desk-chat-head">
+                  <div class="desk-avatar">MK<i class="desk-platform platform-wa">W</i></div>
+                  <div><b>Maya Kim</b><small>WhatsApp · active now</small></div>
+                  <div class="desk-chat-actions">
+                    <button><i data-heroicon="search"></i></button
+                    ><button><i data-heroicon="more"></i></button>
+                  </div>
+                </header>
+                <div class="desk-messages">
+                  <div class="desk-day">Today</div>
+                  <div class="desk-bubble selected">
+                    Could you send the final deck before the review?<small>9:12</small>
+                    <div class="hover-message-actions">
+                      <button title="Reply"><i data-heroicon="reply"></i></button
+                      ><button title="Copy"><i data-heroicon="copy"></i></button
+                      ><button title="Forward"><i data-heroicon="forward"></i></button>
+                    </div>
+                  </div>
+                  <div class="desk-bubble out">
+                    <div class="desk-quoted">
+                      <b>Maya</b><span>Could you send the final deck before the review?</span>
+                    </div>
+                    Absolutely. I’ll send it before 10.<small>9:14 · ✓✓</small>
+                  </div>
+                  <div class="desk-message-menu">
+                    <div>
+                      <button>👍</button><button>❤️</button><button>😂</button><button>+</button>
+                    </div>
+                    <button><i data-heroicon="reply"></i>Reply <kbd>R</kbd></button
+                    ><button><i data-heroicon="copy"></i>Copy <kbd>⌘C</kbd></button
+                    ><button><i data-heroicon="forward"></i>Forward</button
+                    ><button class="disabled">
+                      <i data-heroicon="pencil"></i>Edit <span>Not supported</span>
+                    </button>
+                  </div>
+                  <div class="desk-reply-composer">
+                    <div>
+                      <i data-heroicon="reply"></i
+                      ><span
+                        ><small>REPLYING TO MAYA</small
+                        ><b>Could you send the final deck before the review?</b></span
+                      ><button>×</button>
+                    </div>
+                    <label
+                      ><i data-heroicon="plus"></i><span>Write a message…</span><kbd>⌘↩</kbd
+                      ><button><i data-heroicon="send"></i></button
+                    ></label>
+                  </div>
+                </div>
+              </section>
+              <aside class="desk-context">
+                <div class="context-person">
+                  <div class="desk-avatar">MK</div>
+                  <h3>Maya Kim</h3>
+                  <p>Business · Product lead</p>
+                  <div class="context-actions">
+                    <button>Profile</button><button>Media</button><button>Mute</button>
+                  </div>
+                </div>
+                <div class="context-block">
+                  <small>SUPPORTED HERE</small>
+                  <div class="capability-list">
+                    <span>● Reply</span><span>● Photo & files</span><span>● Read receipts</span
+                    ><span class="muted">○ Edit messages</span>
+                  </div>
+                </div>
+                <div class="context-block">
+                  <small>KEYBOARD</small>
+                  <h4>R · reply</h4>
+                  <p>⌘↩ send · ⌘F search this chat</p>
+                </div>
+              </aside>
+            </div>
+          </div>
+          <p class="frame-note">
+            Hover makes frequent actions fast; the menu names the action and its keyboard path.
+            Unsupported actions stay visibly unavailable rather than becoming silent no-ops.
+          </p>
+        </article>
+
+        <article class="frame-case" data-desktop-kind="chat-tools" data-screen="rich-media-library">
+          <div class="frame-label">
+            <b>09 / SHARED MEDIA & ATTACHMENTS</b><span>DRAG, REVIEW, SEND, FIND</span>
+          </div>
+          <div class="mac-window">
+            <header class="window-bar">
+              <div class="traffic"><i></i><i></i><i></i></div>
+              <span class="window-title">Claire — Maya Kim · Media</span>
+              <div class="window-tools">
+                <button><i data-heroicon="search"></i></button>
+              </div>
+            </header>
+            <div class="media-library-window">
+              <aside class="media-sidebar">
+                <div class="media-avatar">MK</div>
+                <h2>Maya Kim</h2>
+                <p>WhatsApp · shared items</p>
+                <nav>
+                  <button class="active">Media</button><button>Files</button><button>Links</button
+                  ><button>Voice notes</button>
+                </nav>
+                <div class="media-filter">
+                  <small>FILTER</small><button>Last 30 days</button><button>Photos & videos</button>
+                </div>
+              </aside>
+              <section class="media-library-main">
+                <header>
+                  <div>
+                    <div class="desk-overline">MAYA KIM · WHATSAPP</div>
+                    <h2>Shared media</h2>
+                  </div>
+                  <button class="desktop-add-media">
+                    <i data-heroicon="plus"></i> Add attachment
+                  </button>
+                </header>
+                <div class="desktop-dropzone">
+                  <i data-heroicon="image"></i>
+                  <div>
+                    <b>Drop a photo, video, or file here</b>
+                    <p>Or browse from this Mac. Nothing uploads until you review and send.</p>
+                  </div>
+                  <button>Browse files</button>
+                </div>
+                <div class="media-library-grid">
+                  <article>
+                    <div class="library-poster poster-one">
+                      <button><i data-heroicon="play"></i></button><span>0:24</span>
+                    </div>
+                    <b>Rooftop view</b><small>Today · Video</small>
+                  </article>
+                  <article>
+                    <div class="library-poster poster-two"><i data-heroicon="image"></i></div>
+                    <b>Q3 launch preview</b><small>Yesterday · Image</small>
+                  </article>
+                  <article class="library-file">
+                    <i data-heroicon="document"></i>
+                    <div><b>q3-launch-deck.pdf</b><small>Yesterday · 4.8 MB</small></div>
+                    <button>Open</button>
+                  </article>
+                  <article class="library-audio">
+                    <button><i data-heroicon="play"></i></button>
+                    <div>
+                      <b>Voice note</b>
+                      <div></div>
+                      <small>0:08 / 0:24 · 1×</small>
+                    </div>
+                  </article>
+                </div>
+              </section>
+              <aside class="upload-review">
+                <small>READY TO SEND</small>
+                <div class="review-thumbnail"><i data-heroicon="image"></i></div>
+                <h3>q3-launch-preview.png</h3>
+                <p>2.4 MB · Image</p>
+                <label
+                  >Caption (optional)<span>Here’s the newest preview for tomorrow.</span></label
+                >
+                <div class="review-row"><span>Send as image</span><b>Supported</b></div>
+                <button class="review-send"><i data-heroicon="send"></i> Send to Maya</button>
+              </aside>
+            </div>
+          </div>
+          <p class="frame-note">
+            Desktop turns attachments into a deliberate three-pane flow: browse shared material,
+            drag or pick a new asset, then review before any bytes leave the device.
           </p>
         </article>
       </section>

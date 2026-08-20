@@ -136,7 +136,7 @@ export default function SettingsScreen() {
   return (
     <ScrollView testID="settings-screen" style={{ flex: 1, backgroundColor: colors.cream }} contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ paddingBottom: 64 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: space[4], paddingTop: space[2], paddingBottom: space[3], minHeight: 52 }}>
-        <MobileIconButton label="Back to More" onPress={() => router.replace('/more')}><ChevronLeft size={20} color={colors.ink} /></MobileIconButton>
+        <MobileIconButton label="Back to inbox" onPress={() => router.replace('/(tabs)/messages')}><ChevronLeft size={20} color={colors.ink} /></MobileIconButton>
         <Text style={{ flex: 1, textAlign: 'center', ...mobileType.sectionTitle, color: colors.ink }}>Settings</Text>
         <View style={{ width: 40 }} />
       </View>

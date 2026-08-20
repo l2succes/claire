@@ -14,6 +14,10 @@ export interface ChatMessage {
   media_url?: string;
   media_mime_type?: string;
   platform_message_id?: string;
+  /** The local source row when the quoted message is already synced. */
+  reply_to_message_id?: string | null;
+  /** Source-platform/Matrix event identifier used until the row is resolvable. */
+  reply_to_platform_message_id?: string | null;
 }
 
 /**
