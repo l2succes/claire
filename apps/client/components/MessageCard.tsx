@@ -82,7 +82,6 @@ export function MessageCard({ message, variant = 'default', onPress, onLongPress
       <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}>
           {message.is_pinned && !isPinnedPresentation ? <Pin size={13} color={colors.neutral[600]} fill={colors.neutral[600]} /> : null}
-          {message.is_muted ? <View testID={`message-card-muted-${message.id}`}><BellOff size={14} color={colors.neutral[600]} strokeWidth={1.8} /></View> : null}
           <Text selectable numberOfLines={1} style={{ ...mobileType.body, flex: 1, fontWeight: message.unread_count ? '700' : '600', color: colors.ink }}>{name}</Text>
           <Text selectable testID="message-card-timestamp" style={{ ...mobileType.monoLabel, color: colors.neutral[400] }}>{formatInboxTimestamp(message.timestamp)}</Text>
         </View>
@@ -91,6 +90,7 @@ export function MessageCard({ message, variant = 'default', onPress, onLongPress
           <Text selectable numberOfLines={1} style={{ ...mobileType.bodySmall, flex: 1, color: message.unread_count ? colors.neutral[800] : colors.neutral[600], fontWeight: message.unread_count ? '600' : '400' }}>
             {isCompactPresentation ? '' : message.from_me ? 'You: ' : ''}{message.content || 'Media'}
           </Text>
+          {message.is_muted ? <View testID={`message-card-muted-${message.id}`}><BellOff size={14} color={colors.neutral[600]} strokeWidth={1.8} /></View> : null}
           {message.unread_count ? (
             <View style={{ minWidth: 20, height: 20, paddingHorizontal: 5, borderRadius: 10, backgroundColor: colors.lime, alignItems: 'center', justifyContent: 'center' }}>
               <Text style={{ ...mobileType.label, color: colors.ink, fontVariant: ['tabular-nums'] }}>{message.unread_count}</Text>
