@@ -48,6 +48,7 @@ const createOp = z.object({
   title: z.string().min(1).max(200),
   kind: z.enum(LOOP_KINDS),
   owner: z.enum(['me', 'them', 'shared', 'unknown']),
+  requester: z.enum(['me', 'them', 'shared', 'unknown']),
   // OpenAI's strict JSON Schema requires every declared property. Use explicit
   // nulls for values that are absent instead of optional object keys.
   owner_name: z.string().max(120).nullable(),
@@ -69,6 +70,7 @@ const updateOp = z.object({
   state_summary: z.string().max(500),
   status: z.enum(['open', 'waiting']).nullable(),
   owner: z.enum(['me', 'them', 'shared', 'unknown']).nullable(),
+  requester: z.enum(['me', 'them', 'shared', 'unknown']).nullable(),
   deadline: z.string().nullable(),
   deadline_precision: z.enum(DEADLINE_PRECISIONS).nullable(),
   evidence_refs: z.array(z.string().max(16)).max(20),
@@ -138,9 +140,11 @@ Rules:
    named or @-mentioned, is replied to, is addressed in second person right after
    they spoke, is the named assignee, or committed themselves. When you are not
    sure, set it false and say why in addressing_evidence.
-6. owner is who owes the work: "me" (the user), "them" (a counterparty),
+6. requester is who initiated the request or desired outcome. owner is who owes
+the work: "me" (the user), "them" (a counterparty),
    "shared", or "unknown". When someone else is named as the assignee, set
-   owner_name to their name exactly as it appears.
+   owner_name to their name exactly as it appears. Never infer requester from
+   owner: "I asked Maya to help" means requester=me, owner=them.
 7. confidence is your certainty this is a real, actionable loop. Reported speech
    ("she said she'd send it"), past tense ("I sent it Friday"), hypotheticals,
    and jokes are not loops — either omit them or give them low confidence.

@@ -8,6 +8,11 @@ describe('calculateLoopPriority', () => {
   it('makes an overdue commitment owned by the user act-now priority', () => {
     expect(calculateLoopPriority({ ...base, deadline: '2026-08-20T12:00:00.000Z' }).score).toBeGreaterThanOrEqual(80);
   });
+  it('does not let a week-old deadline outrank an imminent commitment', () => {
+    const recent = calculateLoopPriority({ ...base, deadline: '2026-08-20T12:00:00.000Z' });
+    const stale = calculateLoopPriority({ ...base, deadline: '2026-08-14T12:00:00.000Z' });
+    expect(recent.score).toBeGreaterThan(stale.score);
+  });
   it('excludes snoozed and suppressed loops from attention', () => {
     expect(calculateLoopPriority({ ...base, snoozedUntil: '2026-08-22T12:00:00.000Z' }).eligible).toBe(false);
     expect(calculateLoopPriority({ ...base, visibility: 'suppressed' }).score).toBe(0);

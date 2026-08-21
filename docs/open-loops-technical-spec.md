@@ -30,7 +30,7 @@ backfill for existing live rows.
 
 | Component | Range | Rule |
 | --- | ---: | --- |
-| urgency | 0–35 | overdue 35; today 27; ≤3 days 20; ≤7 days 10 |
+| urgency | 0–35 | overdue ≤2 days 35; overdue 2–7 days 8; today 27; ≤3 days 20; ≤7 days 10 |
 | responsibility | 0–15 | me 15; shared 10; them 7; unknown 0 |
 | commitment | 0–12 | agreed 12; pending confirmation 8; negotiating 3; proposed 0 |
 | relevance | 0–12 | normalized detector relevance |
