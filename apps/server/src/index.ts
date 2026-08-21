@@ -24,7 +24,7 @@ import preferencesRoutes from './routes/preferences';
 import autoReplyRoutes from './routes/auto-reply';
 import { aiRateLimit, authRateLimit } from './middleware/rate-limit';
 import seedRoutes from './routes/seed';
-import promiseRoutes from './routes/promises';
+import loopRoutes from './routes/loops';
 import pushTokenRoutes from './routes/push-tokens';
 import notificationDeviceRoutes from './routes/notification-devices';
 import operationsRoutes from './routes/operations';
@@ -44,8 +44,9 @@ import {
   incomingContactId,
   phoneNumberFromBridgeIdentifiers,
   phoneNumberFromPlatformContactId,
+  resolveMentions,
 } from './services/contact-identity';
-import { promiseDetector } from './services/promise-detector';
+import { scheduleChat } from './services/loops/loop-queue';
 import { operationsMonitor } from './services/operations-monitor';
 import { operationsTelemetry } from './services/operations-telemetry';
 import { autoReplyEngine } from './services/auto-reply-engine';
@@ -131,7 +132,7 @@ app.use('/conversations', conversationRoutes);
 app.use('/preferences', preferencesRoutes);
 // Seed/reset route — only functional when MOCK_BRIDGE=true (guarded inside route)
 app.use('/seed', seedRoutes);
-app.use('/promises', promiseRoutes);
+app.use('/loops', loopRoutes);
 app.use('/push-tokens', pushTokenRoutes);
 app.use('/notification-devices', notificationDeviceRoutes);
 app.use('/operations', operationsRoutes);
@@ -626,6 +627,10 @@ async function initializePlatforms() {
                 phoneNumberFromPlatformContactId(message.platform, senderContactId),
             reply_to_message_id: replyToInternalMessageId,
             reply_to_platform_message_id: message.replyToMessageId || null,
+            thread_root_platform_id: message.threadRootId || null,
+            mentions: resolveMentions(message.mentions),
+            mentions_room: message.mentionsRoom === true,
+            formatted_body: message.formattedBody || null,
             metadata: message.platformMetadata || null,
             media_url: (() => {
               const mediaUrl = message.platformMetadata?.mediaUrl;
@@ -768,11 +773,13 @@ async function initializePlatforms() {
             .catch((err) => logger.debug('Voice profile refresh skipped:', (err as Error).message));
         }
 
-        // Detect and persist promises (fire-and-forget, both inbound and outbound)
-        if (savedMsg?.id && message.content?.trim() && aiProcessingEnabled) {
-          promiseDetector
-            .detectPromises(savedMsg.id, message.content, message.userId, message.isFromMe)
-            .catch((err) => logger.debug('Promise detection skipped:', (err as Error).message));
+        // Detection is debounced per conversation and excludes backfill, so a
+        // burst is reconciled as one thread of intent rather than one row per
+        // message. The loop detector applies its own per-user enablement gate.
+        if (savedMsg?.id && !isBackfill && message.content?.trim() && chat?.id) {
+          void scheduleChat(message.userId, chat.id).catch((err) =>
+            logger.debug('Loop detection skipped:', (err as Error).message)
+          );
         }
 
         // Evaluate auto-reply rules for incoming messages (fire-and-forget)
@@ -857,7 +864,7 @@ const serverReady = Promise.resolve(
       logger.info('Skipping direct session monitor in Matrix/mock bridge mode');
     }
 
-    // Start promise reminder scheduler
+    // Start loop reminder scheduler
     reminderScheduler.start();
 
     // Matrix room registration may backfill a substantial history. The

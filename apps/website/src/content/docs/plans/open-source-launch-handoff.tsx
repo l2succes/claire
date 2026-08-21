@@ -28,7 +28,7 @@ export default function Page() {
       <Section id="source-of-truth" title="Source of truth">
       <P>Read the complete plan at:</P>
       <P><C>docs/plans/open-source-launch/PLAN.md</C></P>
-      <P>The existing <C>landing/</C> directory is the visual source of truth. Reuse its tokens, CSS, assets, logos, Heroicons, platform marks, mockups, and responsive behavior. Do not replace Claire’s visual language with generic Next.js or generic Fumadocs styling.</P>
+      <P>The website is the visual source of truth. Reuse its tokens, CSS, assets, logos, Heroicons, platform marks, mockups, and responsive behavior. Do not replace Claire’s visual language with generic Next.js or generic Fumadocs styling.</P>
       </Section>
       <Section id="required-sequence" title="Required sequence">
       <P>Implement in focused phases:</P>
@@ -38,11 +38,11 @@ export default function Page() {
               <li>Rename <C>client/</C> to <C>mobile/</C> and update all references.</li>
               <li>Establish workspace/package boundaries.</li>
               <li>Reorganize public documentation.</li>
-              <li>Extract the existing landing design system into shared tokens and Tailwind components.</li>
+              <li>Extract the existing Claire design system into shared tokens and Tailwind components.</li>
               <li>Port the website and mockups faithfully.</li>
               <li>Add Fumadocs, Markdown export, <C>llms.txt</C>, and Ask Claire docs search.</li>
               <li>Add plugin SDK examples and contributor setup.</li>
-              <li>Remove <C>landing/</C> only after parity checks.</li>
+              <li>Validate website parity before removing obsolete static references.</li>
             </ol>
       </Section>
       <Section id="final-structure" title="Final structure">
@@ -66,7 +66,7 @@ export default function Page() {
       <Section id="design-system-requirements" title="Design-system requirements">
       <ul>
               <li>Tailwind CSS v4 is the composition layer.</li>
-              <li>Existing <C>landing/tokens.css</C> becomes canonical semantic tokens.</li>
+              <li>The Claire token system becomes canonical semantic tokens.</li>
               <li>Existing landing colors, typography, spacing, shadows, borders, logo vectors, Heroicons, and platform marks must be reused.</li>
               <li>Use scoped CSS for complex phone, desktop, and plugin mockup geometry when appropriate.</li>
               <li>Add Storybook stories for reusable components and important states.</li>

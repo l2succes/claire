@@ -1,3 +1,5 @@
+export * from './blocks';
+
 export type JsonSchema = Record<string, unknown>;
 
 export type PluginVerification = 'claire' | 'verified' | 'community' | 'private';
@@ -9,9 +11,23 @@ export type PluginApproval = 'never' | 'configurable' | 'always';
 export type PluginTriggerEvent =
   | 'message.received'
   | 'message.sent'
+  | 'loop.detected'
+  | 'loop.updated'
+  | 'loop.resolved'
+  /** @deprecated Use 'loop.detected'. Normalized at manifest load so existing plugins keep working. */
   | 'promise.detected'
   | 'schedule.detected'
   | 'manual';
+
+/**
+ * Resolve a manifest trigger to its current name.
+ *
+ * The rename must not break an installed plugin, so the old event is accepted
+ * on input and normalized once, rather than being handled at every fan-out site.
+ */
+export function normalizeTriggerEvent(event: PluginTriggerEvent): PluginTriggerEvent {
+  return event === 'promise.detected' ? 'loop.detected' : event;
+}
 
 export type ClairePluginManifest = {
   schemaVersion: '1';

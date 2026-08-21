@@ -11,7 +11,7 @@ import { APP_NAME, IS_DEV } from './channel';
 const NAVIGATION: Array<{ label: string; accelerator: string; route: string }> = [
   { label: 'Home', accelerator: 'CmdOrCtrl+1', route: '/dashboard' },
   { label: 'Inbox', accelerator: 'CmdOrCtrl+2', route: '/messages' },
-  { label: 'Promises', accelerator: 'CmdOrCtrl+3', route: '/promises' },
+  { label: 'Loops', accelerator: 'CmdOrCtrl+3', route: '/loops' },
   { label: 'People', accelerator: 'CmdOrCtrl+4', route: '/contacts' },
   { label: 'Ask Claire', accelerator: '', route: '/ask-claire' },
   { label: 'Settings', accelerator: 'CmdOrCtrl+,', route: '/settings' },

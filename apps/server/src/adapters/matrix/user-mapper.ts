@@ -52,6 +52,7 @@ export class MatrixUserMapper {
       [Platform.TELEGRAM]: 'telegrambot',
       [Platform.INSTAGRAM]: 'metabot',
       [Platform.IMESSAGE]: 'imessagebot',
+      [Platform.SLACK]: 'slackbot',
     };
     return `@${botNames[platform]}:${this.serverName}`;
   }

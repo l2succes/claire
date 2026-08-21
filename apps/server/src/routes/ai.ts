@@ -522,7 +522,7 @@ router.get('/morning-brief',
       const since = new Date(Date.now() - 7 * 24 * 3600_000).toISOString(); // last 7 days
       const { data: rows, error } = await supabase
         .from('messages')
-        .select(`id, chat_id, content, timestamp, from_me, is_group, contact_name, chat_name, platform,
+        .select(`id, chat_id, content, timestamp, from_me, is_group, contact_name, platform,
                  chats!messages_chat_id_fkey(name, platform_chat_id)`)
         .eq('user_id', userId)
         .eq('from_me', false)
@@ -555,7 +555,7 @@ router.get('/morning-brief',
           id: row.id,
           chat_id: chatId,
           contact_name: row.contact_name ?? undefined,
-          chat_name: (row.chats as any)?.name || row.chat_name || undefined,
+          chat_name: (row.chats as any)?.name || undefined,
           content: row.content,
           timestamp: row.timestamp,
           from_me: row.from_me,

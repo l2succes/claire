@@ -5,7 +5,7 @@ import { NativeTabs } from 'expo-router/unstable-native-tabs';
  * Switch to it from `app/(tabs)/_layout.tsx` by setting TAB_BAR_STYLE to
  * 'liquid-glass'. The custom floating Claire bar cannot use this material.
  */
-export function LiquidGlassTabs({ promiseCount }: { promiseCount?: number }) {
+export function LiquidGlassTabs({ loopCount }: { loopCount?: number }) {
   return (
     <NativeTabs tintColor="#10120F" minimizeBehavior="onScrollDown">
       <NativeTabs.Trigger name="dashboard" disableTransparentOnScrollEdge>
@@ -20,11 +20,11 @@ export function LiquidGlassTabs({ promiseCount }: { promiseCount?: number }) {
         <NativeTabs.Trigger.Icon sf={{ default: 'sparkles', selected: 'sparkles' }} md="auto_awesome" />
         <NativeTabs.Trigger.Label hidden>Ask Claire</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="promises" disableTransparentOnScrollEdge>
+      <NativeTabs.Trigger name="loops" disableTransparentOnScrollEdge>
         <NativeTabs.Trigger.Icon sf={{ default: 'checkmark.seal', selected: 'checkmark.seal.fill' }} md="verified" />
         <NativeTabs.Trigger.Label hidden>Loops</NativeTabs.Trigger.Label>
-        {promiseCount && promiseCount > 0 ? (
-          <NativeTabs.Trigger.Badge>{promiseCount > 99 ? '99+' : String(promiseCount)}</NativeTabs.Trigger.Badge>
+        {loopCount && loopCount > 0 ? (
+          <NativeTabs.Trigger.Badge>{loopCount > 99 ? '99+' : String(loopCount)}</NativeTabs.Trigger.Badge>
         ) : null}
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="more" role="more" disableTransparentOnScrollEdge>

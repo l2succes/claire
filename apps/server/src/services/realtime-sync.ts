@@ -178,7 +178,7 @@ export class RealtimeSyncService extends EventEmitter {
    */
   private async sendInitialSync(userId: string) {
     try {
-      const [{ data: messages }, { data: promises }, { data: contacts }] = await Promise.all([
+      const [{ data: messages }, { data: loops }, { data: contacts }] = await Promise.all([
         supabase
           .from('messages')
           .select('*')
@@ -186,7 +186,7 @@ export class RealtimeSyncService extends EventEmitter {
           .order('created_at', { ascending: false })
           .limit(50),
         supabase
-          .from('promises')
+          .from('loops')
           .select('*')
           .eq('user_id', userId)
           .in('status', ['pending', 'in_progress'])
@@ -201,7 +201,7 @@ export class RealtimeSyncService extends EventEmitter {
       // Send initial data
       this.broadcastToUser(userId, 'sync:initial', {
         messages: (messages ?? []).slice().reverse(),
-        promises: promises ?? [],
+        loops: loops ?? [],
         contacts: contacts ?? [],
         timestamp: new Date(),
       });

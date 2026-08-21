@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { TextInput } from 'react-native';
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react-native';
 import { View } from '@tamagui/core';
 import { useMedia } from '@tamagui/core';
@@ -7,8 +6,6 @@ import {
   ClaireIconButton,
   ClaireText,
   colors,
-  fonts,
-  space,
 } from '@claire/design-system';
 import { host } from '@claire/host';
 import { DragRegion } from './DragRegion';
@@ -45,15 +42,11 @@ export function DesktopShell({
   destinations,
   activeRoute,
   onNavigate,
-  onSearch,
-  onOpenConnections,
 }: {
   children: ReactNode;
   destinations: DesktopDestination[];
   activeRoute: string;
   onNavigate: (route: string) => void;
-  onSearch: (query: string) => void;
-  onOpenConnections: () => void;
 }) {
   // Start in the compact, mockup-style rail. A user can expand it on a wide
   // window when labels are more useful than content width.
@@ -92,7 +85,6 @@ export function DesktopShell({
         collapsed={visiblyCollapsed}
         railWidth={railWidth}
         onToggleNavigation={toggleCollapsed}
-        onSearch={onSearch}
       />
       <View flex={1} flexDirection="row" minHeight={0}>
         <DesktopNavigationRail
@@ -114,14 +106,11 @@ function DesktopTitleBar({
   collapsed,
   railWidth,
   onToggleNavigation,
-  onSearch,
 }: {
   collapsed: boolean;
   railWidth: number;
   onToggleNavigation: () => void;
-  onSearch: (query: string) => void;
 }) {
-  const [query, setQuery] = useState('');
   const leadingClearance = Math.max(railWidth + 16, TRAFFIC_LIGHT_CLEARANCE);
 
   return (
@@ -153,14 +142,9 @@ function DesktopTitleBar({
           </View>
         </DragRegion>
 
-        <DragRegion draggable={false} flex={1}>
-          <View flex={1} alignItems="center" justifyContent="center" paddingHorizontal="$3">
-            <View width="56%" minWidth={240} maxWidth={560} height={32} paddingLeft="$2" paddingRight={3} borderWidth={1} borderColor="$neutral200" borderRadius={10} backgroundColor="$neutral50" flexDirection="row" alignItems="center" columnGap="$1">
-              <TextInput accessibilityLabel="Search everything" value={query} onFocus={() => onSearch(query)} onChangeText={setQuery} onSubmitEditing={() => onSearch(query)} placeholder="Search everything" placeholderTextColor={colors.neutral[400]} returnKeyType="search" testID="desktop-search-input" style={{ flex: 1, minWidth: 0, height: 30, color: colors.ink, fontFamily: fonts.sans, fontSize: 13, lineHeight: 18, paddingTop: 6, paddingBottom: 6, paddingHorizontal: space[1] }} />
-              <View minWidth={28} height={24} paddingHorizontal={5} alignItems="center" justifyContent="center" borderRadius={7} backgroundColor="$paper" borderWidth={1} borderColor="$neutral200"><ClaireText variant="monoLabel" color="$neutral600" fontSize={10}>⌘K</ClaireText></View>
-            </View>
-          </View>
-        </DragRegion>
+        {/* Flexible spacer. Search is on ⌘K and connections live in Settings,
+            so neither needs permanent chrome here. */}
+        <DragRegion draggable={false} flex={1} />
 
         {collapsed ? null : (
           <View

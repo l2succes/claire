@@ -11,7 +11,7 @@ See LICENSE and LICENSES/ for the full texts.
 
 Third-party notices
 -------------------
-- Heroicons: MIT License. See landing/HEROICONS-LICENSE.txt and website attributions.
+- Heroicons: MIT License. See apps/website/THIRD_PARTY_NOTICES.md.
 - mautrix documentation (optional submodule under vendor/mautrix-docs): copyright the mautrix authors.
 - Platform marks (WhatsApp, Telegram, Instagram, and others) are trademarks of their respective owners and are used only for identification.
 

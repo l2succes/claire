@@ -34,7 +34,7 @@ export default function Page() {
         <Table
           head={['Label group', 'Values']}
           rows={[
-            [<C key="a">area/*</C>, 'server, client, ai, promises, notifications, platforms, testing, infra, auth, db'],
+            [<C key="a">area/*</C>, 'server, client, ai, loops, notifications, platforms, testing, infra, auth, db'],
             [<C key="b">p0–p3</C>, 'Priority; p0 is critical'],
             [<C key="c">type/*</C>, 'feature, bug, chore, test, docs'],
             [<C key="d">risk/*</C>, 'auto-merge — the loop may merge on green CI; human-gate — review required'],
@@ -163,7 +163,7 @@ export default function Page() {
           </li>
           <li>
             <b>Core-loop end-to-end</b> is the definition of done: sign in → inbox shows seeded messages →
-            open chat → AI suggestion appears and is accepted → send → Promises lists the detected promise
+            open chat → AI suggestion appears and is accepted → send → Loops lists the detected loop
             → mark complete → reminder scheduled.
           </li>
         </ul>

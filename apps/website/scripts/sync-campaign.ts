@@ -1,16 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 /*
- * The Close your loops creative is authored as a dependency-free static page
- * in `landing/`. Mirror its small asset bundle into `public/campaigns/` so the
- * Next website can serve the exact same experience at `/campaigns/close-the-loop`.
+ * The Close your loops creative is website-owned. Keep the files in
+ * `public/campaigns/` together so the Next route can serve the exact static
+ * experience without a dependency on the retired landing directory.
  */
-import { copyFile, mkdir } from 'node:fs/promises';
+import { access } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const websiteRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
-const landingRoot = join(websiteRoot, '..', '..', 'landing');
-const destination = join(websiteRoot, 'public', 'campaigns');
+const campaignRoot = join(websiteRoot, 'public', 'campaigns');
 const files = [
   'close-the-loop.html',
   'close-the-loop.css',
@@ -19,7 +18,6 @@ const files = [
   'tokens.css',
 ];
 
-await mkdir(destination, { recursive: true });
-await Promise.all(files.map((file) => copyFile(join(landingRoot, file), join(destination, file))));
+await Promise.all(files.map((file) => access(join(campaignRoot, file))));
 
-console.log(`Synced ${files.length} campaign files into public/campaigns.`);
+console.log(`Verified ${files.length} website-owned campaign files.`);

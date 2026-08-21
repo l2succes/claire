@@ -42,7 +42,7 @@ bunx expo run:ios`}</Terminal>
           The mockup gallery is the reference for layout and hierarchy; the built app should match it, and
           divergence is usually a bug in one of the two.
         </P>
-        <Mockup surface="mobile" screen="promises" caption="Promises — commitments extracted from conversations" />
+        <Mockup surface="mobile" screen="loops" caption="Loops — commitments tracked from conversations" />
       </Section>
 
       <Section id="secrets" title="What not to commit">

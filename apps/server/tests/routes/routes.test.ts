@@ -211,37 +211,37 @@ describe('/platforms', () => {
 });
 
 // ---------------------------------------------------------------------------
-// /promises
+// /loops
 // ---------------------------------------------------------------------------
-describe('/promises', () => {
+describe('/loops', () => {
   it('GET / — 401 without token', async () => {
-    const res = await request.get('/promises');
+    const res = await request.get('/loops');
     expect(res.status).toBe(401);
     expect(res.body).toHaveProperty('error');
   });
 
   it('GET / — 200 with valid token, returns array', async () => {
     const res = await request
-      .get('/promises')
+      .get('/loops')
       .set('Authorization', 'Bearer valid-token');
     expect(res.status).toBe(200);
-    expect(Array.isArray(res.body.promises)).toBe(true);
+    expect(Array.isArray(res.body.loops)).toBe(true);
     expect(typeof res.body.total).toBe('number');
   });
 
-  it('GET /:id — 200 for existing promise', async () => {
+  it('GET /:id — 200 for existing loop', async () => {
     const res = await request
-      .get('/promises/promise-1')
+      .get('/loops/loop-1')
       .set('Authorization', 'Bearer valid-token');
     expect(res.status).toBe(200);
-    expect(res.body.promise).toHaveProperty('id', 'promise-1');
-    expect(res.body.promise).toHaveProperty('status');
-    expect(res.body.promise).toHaveProperty('content');
+    expect(res.body.loop).toHaveProperty('id', 'loop-1');
+    expect(res.body.loop).toHaveProperty('status');
+    expect(res.body.loop).toHaveProperty('content');
   });
 
-  it('GET /:id — 404 for unknown promise', async () => {
+  it('GET /:id — 404 for unknown loop', async () => {
     const res = await request
-      .get('/promises/no-such-promise')
+      .get('/loops/no-such-loop')
       .set('Authorization', 'Bearer valid-token');
     expect(res.status).toBe(404);
     expect(res.body).toHaveProperty('error');
@@ -249,38 +249,38 @@ describe('/promises', () => {
 
   it('PATCH /:id — 401 without token', async () => {
     const res = await request
-      .patch('/promises/promise-1')
+      .patch('/loops/loop-1')
       .send({ status: 'completed' });
     expect(res.status).toBe(401);
   });
 
-  it('PATCH /:id — 200 marks promise completed', async () => {
+  it('PATCH /:id — 200 marks loop completed', async () => {
     const res = await request
-      .patch('/promises/promise-1')
+      .patch('/loops/loop-1')
       .set('Authorization', 'Bearer valid-token')
       .send({ status: 'completed' });
     expect(res.status).toBe(200);
-    expect(res.body.promise).toHaveProperty('status', 'completed');
+    expect(res.body.loop).toHaveProperty('status', 'completed');
   });
 
   it('POST /:id/snooze — 200 returns updated deadline', async () => {
     const until = new Date(Date.now() + 2 * 86_400_000).toISOString();
     const res = await request
-      .post('/promises/promise-1/snooze')
+      .post('/loops/loop-1/snooze')
       .set('Authorization', 'Bearer valid-token')
       .send({ until });
     expect(res.status).toBe(200);
-    expect(res.body.promise).toHaveProperty('deadline', until);
+    expect(res.body.loop).toHaveProperty('deadline', until);
   });
 
   it('DELETE /:id — 401 without token', async () => {
-    const res = await request.delete('/promises/promise-1');
+    const res = await request.delete('/loops/loop-1');
     expect(res.status).toBe(401);
   });
 
   it('DELETE /:id — 200 with valid token', async () => {
     const res = await request
-      .delete('/promises/promise-1')
+      .delete('/loops/loop-1')
       .set('Authorization', 'Bearer valid-token');
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
@@ -307,7 +307,7 @@ describe('/preferences', () => {
     expect(typeof res.body.data.preferences.quiet_hours_enabled).toBe('boolean');
     expect(typeof res.body.data.preferences.quiet_hours_start).toBe('string');
     expect(typeof res.body.data.preferences.notify_messages).toBe('boolean');
-    expect(typeof res.body.data.preferences.notify_promises).toBe('boolean');
+    expect(typeof res.body.data.preferences.notify_loops).toBe('boolean');
     expect(typeof res.body.data.preferences.notify_ai_suggestions).toBe('boolean');
   });
 
@@ -338,7 +338,7 @@ describe('/preferences', () => {
           quiet_hours_start: '23:00',
           quiet_hours_end: '07:00',
           notify_messages: false,
-          notify_promises: true,
+          notify_loops: true,
           notify_ai_suggestions: false,
         },
       });

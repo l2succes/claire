@@ -24,7 +24,6 @@ Copyright (c) 2025-2026 Claire contributors
    - packages/
    - examples/
    - docs/ (public documentation)
-   - landing/ (until removed after website parity)
 
 If a file includes an SPDX-License-Identifier header, that header controls
 for that file. If you are unsure which license applies, treat server-side

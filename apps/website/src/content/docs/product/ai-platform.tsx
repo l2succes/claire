@@ -20,7 +20,7 @@ export const meta: DocMeta = {
 export default function Page() {
   return (
     <Doc>
-      <P lede><b>Status:</b> Proposed <b>Audience:</b> Product, design, backend, desktop, infrastructure, security, and billing <b>Scope:</b> Product packaging and the provider-neutral AI platform that powers reply assistance, Ask Claire, conversation memory, promise detection, summaries, and semantic search.</P>
+      <P lede><b>Status:</b> Proposed <b>Audience:</b> Product, design, backend, desktop, infrastructure, security, and billing <b>Scope:</b> Product packaging and the provider-neutral AI platform that powers reply assistance, Ask Claire, conversation memory, loop detection, summaries, and semantic search.</P>
       <Section id="executive-decision" title="Executive decision">
       <P>Claire should ship as one product with two operating editions and three AI execution modes:</P>
       <ol>
@@ -158,7 +158,7 @@ export default function Page() {
                 [<><C>reply</C></>, <>Suggested replies and rewrites</>, <>Structured output</>],
                 [<><C>assistant</C></>, <>Ask Claire answers</>, <>Structured output, long context, streaming preferred</>],
                 [<><C>analysis</C></>, <>Explanations, summaries, memory extraction</>, <>Structured output</>],
-                [<><C>classification</C></>, <>Promise and intent detection</>, <>Low latency, structured output</>],
+                [<><C>classification</C></>, <>Loop and intent detection</>, <>Low latency, structured output</>],
                 [<><C>embedding</C></>, <>Cross-chat semantic search</>, <>Embedding model with fixed dimensions</>],
               ]}
             />
@@ -209,7 +209,7 @@ export default function Page() {
       <Section id="provider-architecture" title="Provider architecture">
       <Section id="boundary" title="Boundary" level={3}>
       <P>Only files under <C>server/src/services/ai/</C> may import Vercel AI SDK or provider packages. Product services depend on a Claire-owned interface so a future SDK change does not touch every feature.</P>
-      <Code lang="text">{"Reply / Ask Claire / Voice profile / Memory / Promise detector\n                              │\n                       ClaireAIService\n                              │\n             ┌────────────────┼────────────────┐\n             │                │                │\n       Task router      Policy middleware   Usage meter\n             │                │                │\n             └──────── Provider registry ─────┘\n                              │\n     OpenAI | Anthropic | Bedrock | Google | OpenAI-compatible | Local"}</Code>
+      <Code lang="text">{"Reply / Ask Claire / Voice profile / Memory / Loop detector\n                              │\n                       ClaireAIService\n                              │\n             ┌────────────────┼────────────────┐\n             │                │                │\n       Task router      Policy middleware   Usage meter\n             │                │                │\n             └──────── Provider registry ─────┘\n                              │\n     OpenAI | Anthropic | Bedrock | Google | OpenAI-compatible | Local"}</Code>
       <P>Proposed interface:</P>
       <Code lang="ts">{"type AITaskRole = 'reply' | 'assistant' | 'analysis' | 'classification' | 'embedding';\n\ninterface AIExecutionContext {\n  userId: string;\n  task: AITaskRole;\n  hostingMode: 'claire_cloud' | 'self_hosted' | 'desktop_local';\n  providerConnectionId?: string;\n  modelProfileId: string;\n  requestId: string;\n  abortSignal?: AbortSignal;\n}\n\ninterface ClaireAIService {\n  generateObject<T>(context: AIExecutionContext, input: StructuredAIInput<T>): Promise<AIResult<T>>;\n  streamText(context: AIExecutionContext, input: TextAIInput): Promise<AITextStream>;\n  embedMany(context: AIExecutionContext, values: string[]): Promise<AIEmbeddingResult>;\n}"}</Code>
       <P>Every result normalizes:</P>

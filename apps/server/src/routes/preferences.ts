@@ -29,7 +29,7 @@ const updatePreferencesSchema = z.object({
         quiet_hours_start: z.string().regex(/^\d{2}:\d{2}$/).optional(),
         quiet_hours_end: z.string().regex(/^\d{2}:\d{2}$/).optional(),
         notify_messages: z.boolean().optional(),
-        notify_promises: z.boolean().optional(),
+        notify_loops: z.boolean().optional(),
         notify_ai_suggestions: z.boolean().optional(),
         ai_enabled: z.boolean().optional(),
         desktop_appearance: z.object({

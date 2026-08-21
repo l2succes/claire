@@ -1,12 +1,10 @@
 import React, { useCallback, type ReactNode } from 'react';
 import { router, usePathname } from 'expo-router';
 import {
-  ChatBubbleLeftRightIcon,
   CheckBadgeIcon,
   Cog6ToothIcon,
   HomeIcon,
   InboxIcon,
-  MagnifyingGlassIcon,
   SparklesIcon,
   UserGroupIcon,
 } from 'react-native-heroicons/outline';
@@ -46,10 +44,6 @@ export function DesktopChrome({ children }: { children: ReactNode }) {
       destinations={DESTINATIONS}
       activeRoute={pathname}
       onNavigate={navigate}
-      onSearch={(query) =>
-        router.push({ pathname: '/search', params: query ? { q: query } : {} } as never)
-      }
-      onOpenConnections={() => router.push('/connections' as never)}
     >
       {children}
     </DesktopShell>
@@ -69,13 +63,8 @@ const DESTINATIONS: DesktopDestination[] = [
     icon: (props) => <InboxIcon {...props} />,
   },
   {
-    route: '/search',
-    label: 'Search',
-    icon: (props) => <MagnifyingGlassIcon {...props} />,
-  },
-  {
-    route: '/promises',
-    label: 'Promises',
+    route: '/loops',
+    label: 'Loops',
     icon: (props) => <CheckBadgeIcon {...props} />,
   },
   {
@@ -87,11 +76,6 @@ const DESTINATIONS: DesktopDestination[] = [
     route: '/contacts',
     label: 'People',
     icon: (props) => <UserGroupIcon {...props} />,
-  },
-  {
-    route: '/connections',
-    label: 'Connections',
-    icon: (props) => <ChatBubbleLeftRightIcon {...props} />,
   },
   {
     route: '/settings',

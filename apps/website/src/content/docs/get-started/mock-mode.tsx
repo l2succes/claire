@@ -36,7 +36,7 @@ export default function Page() {
             { label: 'Platforms', value: '3 — WhatsApp, Telegram, Instagram' },
             { label: 'Chats', value: '4 — three individual, one WhatsApp group' },
             { label: 'Messages', value: '10' },
-            { label: 'Promise-bearing', value: '1' },
+            { label: 'Loop-bearing', value: '1' },
           ]}
         />
 
@@ -51,11 +51,11 @@ export default function Page() {
         />
       </Section>
 
-      <Section id="promise" title="The promise message">
+      <Section id="loop" title="The loop message">
         <Code lang="text" title="Fixture" copy={false}>{`I'll send you the report by Friday`}</Code>
         <P>
-          Sent by the user (<C>isFromMe=true</C>) in the WhatsApp/Alice chat. The promise detector should
-          flag it as a <C>commitment</C> with the deadline <C>Friday</C>. It exists so promise detection
+          Sent by the user (<C>isFromMe=true</C>) in the WhatsApp/Alice chat. The loop detector should
+          flag it as a <C>commitment</C> with the deadline <C>Friday</C>. It exists so loop detection
           has a stable target to assert against.
         </P>
       </Section>

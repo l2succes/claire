@@ -46,9 +46,9 @@ describe('platform catalog', () => {
     expect(googleMessages?.deviceDependency).toBe('android_phone_online');
   });
 
-  it('matches the generated landing-page snapshot', async () => {
+  it('matches the generated website snapshot', async () => {
     const generatedSource = await Bun.file(
-      new URL('../../../landing/platform-catalog.js', import.meta.url)
+      new URL('../../website/public/scripts/platform-catalog.js', import.meta.url)
     ).text();
     const json = generatedSource
       .replace(/^.*window\.CLAIRE_PLATFORM_CATALOG = /s, '')

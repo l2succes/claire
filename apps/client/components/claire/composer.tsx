@@ -46,7 +46,7 @@ export const ASK_TOOLS = [
     id: 'open-loops',
     label: 'Find open loops',
     description: 'Open loops and questions.',
-    prompt: 'What promises, questions, or plans are still unresolved?',
+    prompt: 'What commitments, questions, or plans are still unresolved?',
   },
   {
     id: 'tone',

@@ -73,7 +73,8 @@
     "desktop:prod": "cd apps/desktop && bun run prod",
     "desktop:prod:fresh": "cd apps/desktop && bun run prod:fresh",
     "desktop:package": "cd apps/desktop && bun run package",
-    "desktop:package:dev": "cd apps/desktop && bun run package:dev"
+    "desktop:package:dev": "cd apps/desktop && bun run package:dev",
+    "eval:loops": "cd apps/server && bun run eval:loops"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",

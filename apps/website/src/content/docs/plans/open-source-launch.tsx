@@ -18,7 +18,7 @@ export default function Page() {
       <P>Prepare Claire for an open-source launch through focused, reviewable migrations rather than one oversized change.</P>
       <P>Final top-level product structure:</P>
       <Code lang="text">{"claire/\n├── mobile/                  # Expo iOS, Android, and mobile web client\n├── desktop/                 # Desktop applications and native companion code\n│   └── macos/\n├── website/                 # Next.js marketing site, docs, mockups, Storybook\n├── server/                  # Bun API and messaging services\n├── packages/\n│   ├── design-system/       # Shared tokens, contracts, and platform-neutral assets\n│   ├── platform-catalog/    # Canonical connector metadata\n│   ├── plugin-sdk/          # Plugin types, runtime helpers, and test utilities\n│   └── shared-types/        # Shared API and domain contracts\n├── examples/\n│   └── plugins/             # Working example plugins\n├── docker/                  # Local infrastructure\n├── supabase/                # Database config and migrations\n├── docs/                    # Canonical Markdown/MDX documentation\n├── scripts/                 # Repository-wide development and release tooling\n└── vendor/\n    └── mautrix-docs/        # Optional upstream documentation submodule"}</Code>
-      <P><C>client/</C> becomes <C>mobile/</C>. The supported desktop application lives in <C>apps/desktop/</C>. <C>landing/</C> is removed only after every useful design, mockup, asset, and interaction has been ported into <C>website/</C>.</P>
+      <P><C>client/</C> becomes <C>mobile/</C>. The supported desktop application lives in <C>apps/desktop/</C>. Every useful design, mockup, asset, and interaction now lives in <C>apps/website/</C>.</P>
       </Section>
       <Section id="secure-and-license-the-repository" title="Secure and license the repository">
       <Section id="immediate-containment" title="Immediate containment" level={3}>
@@ -66,12 +66,12 @@ export default function Page() {
       <P>Move connector definitions into <C>packages/platform-catalog</C>, consumed by server, website, mobile, and desktop. Add <C>packages/shared-types</C> only for genuine cross-runtime contracts.</P>
       </Section>
       <Section id="preserve-and-port-the-existing-claire-design" title="Preserve and port the existing Claire design">
-      <P>The existing <C>landing/</C> implementation is the visual source of truth. Reuse its tokens, typography, CSS, logos, Heroicons, vendor marks, homepage, business page, security page, mobile/desktop/plugin mockups, and responsive behavior.</P>
+      <P>The existing <C>apps/website/</C> implementation is the visual source of truth. Reuse its tokens, typography, CSS, logos, Heroicons, vendor marks, homepage, business page, security page, mobile/desktop/plugin mockups, and responsive behavior.</P>
       <P>Do not replace it with a generic Next.js visual language.</P>
       <Section id="tailwind-and-component-kit" title="Tailwind and component kit" level={3}>
       <ul>
               <li>Add Tailwind CSS v4 to <C>website/</C>.</li>
-              <li>Convert <C>landing/tokens.css</C> into canonical semantic variables in <C>packages/design-system</C>.</li>
+              <li>Maintain canonical semantic variables in <C>packages/design-system</C>.</li>
               <li>Expose those values through Tailwind <C>@theme</C>.</li>
               <li>Use <C>class-variance-authority</C>, <C>clsx</C>, and <C>tailwind-merge</C> for variants.</li>
               <li>Keep scoped CSS for intricate mockup geometry where utility-only markup is less maintainable.</li>
@@ -98,7 +98,7 @@ export default function Page() {
               <li>Claire SVG logo assets remain editable source files.</li>
               <li>Storybook documents every reusable component and meaningful state.</li>
             </ul>
-      <P>Maintain a parity matrix mapping every static page to its Next.js route. Delete <C>landing/</C> only after content, responsive behavior, interactions, accessibility states, and assets are verified in <C>website/</C>.</P>
+      <P>Maintain a parity matrix mapping every reference to its Next.js route. Content, responsive behavior, interactions, accessibility states, and assets are verified in <C>apps/website/</C>.</P>
       </Section>
       </Section>
       <Section id="clean-and-reorganize-documentation" title="Clean and reorganize documentation">
@@ -180,10 +180,10 @@ export default function Page() {
               <li><C>client/</C> to <C>mobile/</C> mechanical rename.</li>
               <li>Workspace scripts and shared-package boundaries.</li>
               <li>Documentation cleanup and contributor quickstart.</li>
-              <li>Design-token and component extraction from <C>landing/</C>.</li>
+              <li>Design-token and component extraction from the Claire visual system.</li>
               <li>Website page migration.</li>
               <li>Fumadocs and AI search.</li>
-              <li>Mockup migration and <C>landing/</C> removal.</li>
+              <li>Mockup migration and obsolete static-reference removal.</li>
               <li>README, screenshots, GitHub configuration, and alpha release.</li>
             </ol>
       <P>Acceptance criteria:</P>
@@ -198,7 +198,7 @@ export default function Page() {
               <li>Published docs are searchable and copyable as Markdown.</li>
               <li>Storybook, website, server, mobile, and desktop checks pass.</li>
               <li>CI validates paths, docs links, licenses, secrets, types, and fresh-clone setup.</li>
-              <li><C>landing/</C> is deleted only after parity verification.</li>
+              <li>Website parity is verified before obsolete static references are deleted.</li>
               <li>GitHub community profile reaches 100%.</li>
               <li>Publish <C>v0.1.0-alpha.1</C> after a clean-clone rehearsal.</li>
             </ul>
@@ -207,7 +207,7 @@ export default function Page() {
       <ul>
               <li>Top-level names are <C>mobile</C>, <C>desktop</C>, <C>website</C>, and <C>server</C>; no <C>apps/</C> wrapper is introduced.</li>
               <li>The desktop application is <C>apps/desktop/</C>.</li>
-              <li><C>landing/</C> is authoritative until fully ported.</li>
+              <li><C>apps/website/</C> is authoritative for marketing and Lab references.</li>
               <li>Root <C>docs/</C> is the canonical Markdown source consumed by Fumadocs.</li>
               <li>Old plans are consolidated or deleted after their durable decisions are preserved.</li>
               <li>Migration work happens in an isolated worktree and does not disturb the current shared dirty worktree.</li>

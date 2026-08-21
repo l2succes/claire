@@ -3,13 +3,12 @@ import { redisConfig } from '../config';
 import { logger } from '../utils/logger';
 import { IncomingMessage } from './message-ingestion';
 import { aiProcessor } from './ai-processor';
-import { promiseDetector } from './promise-detector';
 import { contactInference } from './contact-inference';
 import { decrypt, encrypt } from '../utils/crypto';
 import { isAiProcessingEnabled } from './ai-policy';
 
 interface MessageJob {
-  type: 'process_message' | 'generate_response' | 'detect_promise' | 'infer_contact';
+  type: 'process_message' | 'generate_response' | 'infer_contact';
   data: any;
   sessionId: string;
   userId: string;
@@ -47,9 +46,6 @@ class MessageQueueService {
     
     // AI response generation queue
     this.createQueue('ai-responses', this.processAIResponseJob.bind(this));
-    
-    // Promise detection queue
-    this.createQueue('promise-detection', this.processPromiseDetectionJob.bind(this));
     
     // Contact inference queue
     this.createQueue('contact-inference', this.processContactInferenceJob.bind(this));
@@ -161,20 +157,8 @@ class MessageQueueService {
         );
       }
 
-      // 2. Detect promises/commitments
-      if (aiEnabled) {
-        promises.push(
-          this.addPromiseDetectionJob({
-            messageId: data.messageId,
-            content: data.content,
-            sessionId,
-            userId,
-            fromMe: data.fromMe,
-          })
-        );
-      }
-
-      // 3. Infer contact identity
+      // 2. Infer contact identity. Loop detection is scheduled directly by
+      // message ingestion, where it has the chat UUID needed for debouncing.
       if (data.contactId && !data.fromMe && aiEnabled) {
         promises.push(
           this.addContactInferenceJob({
@@ -236,45 +220,6 @@ class MessageQueueService {
       return response;
     } catch (error) {
       logger.error(`Error generating AI response:`, error);
-      throw error;
-    }
-  }
-
-  /**
-   * Add promise detection job
-   */
-  private async addPromiseDetectionJob(data: any) {
-    const queue = this.queues.get('promise-detection');
-    if (!queue) throw new Error('Promise detection queue not initialized');
-
-    return await queue.add(this.seal({
-      type: 'detect_promise',
-      data,
-      sessionId: data.sessionId,
-      userId: data.userId,
-    }));
-  }
-
-  /**
-   * Process promise detection job
-   */
-  private async processPromiseDetectionJob(job: Job<EncryptedMessageJob | MessageJob>) {
-    const { data } = this.unseal(job);
-    
-    try {
-      logger.info('Detecting promises queue job');
-      
-      // This will be implemented in promise-detector.ts
-      const promises = await promiseDetector.detectPromises(
-        data.messageId,
-        data.content,
-        data.userId,
-        data.fromMe
-      );
-      
-      return { detected: promises.length, promises };
-    } catch (error) {
-      logger.error(`Error detecting promises:`, error);
       throw error;
     }
   }

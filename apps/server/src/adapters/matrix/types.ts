@@ -60,6 +60,7 @@ export const BRIDGE_BOT_LOCALPARTS: Record<Platform, string> = {
   [Platform.TELEGRAM]: 'telegrambot',
   [Platform.INSTAGRAM]: 'metabot',
   [Platform.IMESSAGE]: 'imessagebot',
+  [Platform.SLACK]: 'slackbot',
 };
 
 /**
@@ -70,6 +71,7 @@ export const GHOST_USER_PREFIXES: Record<Platform, string> = {
   [Platform.TELEGRAM]: '_telegram_',
   [Platform.INSTAGRAM]: 'meta_',
   [Platform.IMESSAGE]: '_imessage_',
+  [Platform.SLACK]: 'slack_',
 };
 
 /**
@@ -80,6 +82,7 @@ export const BRIDGE_COMMAND_PREFIXES: Record<Platform, string> = {
   [Platform.TELEGRAM]: '!tg',
   [Platform.INSTAGRAM]: '!ig',
   [Platform.IMESSAGE]: '!im',
+  [Platform.SLACK]: '!slack',
 };
 
 /**
@@ -122,8 +125,17 @@ export interface MatrixMessageContent {
     'm.in_reply_to'?: {
       event_id: string;
     };
+    // 'm.thread' on platforms with native threading (Slack, Discord). `event_id`
+    // is then the thread root rather than a reply target.
     rel_type?: string;
     event_id?: string;
+  };
+  // Structured mentions. Bridges render the display form into `body` differently
+  // per platform (WhatsApp writes the phone number, Telegram the handle), so this
+  // is the only mention representation that generalizes.
+  'm.mentions'?: {
+    user_ids?: string[];
+    room?: boolean;
   };
 }
 
@@ -173,6 +185,12 @@ export const BRIDGE_LOGIN_COMMANDS: Record<Platform, BridgeLoginCommand> = {
     platform: Platform.IMESSAGE,
     command: '', // iMessage doesn't use command-based login
     requiresAdditionalInput: false,
+  },
+  [Platform.SLACK]: {
+    platform: Platform.SLACK,
+    command: 'login-token',
+    requiresAdditionalInput: true,
+    inputPrompt: 'Paste your Slack xoxc- and xoxd- tokens, separated by a space',
   },
 };
 

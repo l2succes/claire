@@ -25,14 +25,14 @@ export default function Page() {
       <P>Claire Desktop is a complete messaging client. “Companion” is a capability inside that client, not a separate reduced product.</P>
       <P>The app supports two simultaneous modes:</P>
       <ul>
-              <li><b>Standalone:</b> sign in, connect supported networks, read and send messages, search, manage promises and relationships, and configure Claire without a mobile device.</li>
+              <li><b>Standalone:</b> sign in, connect supported networks, read and send messages, search, manage loops and relationships, and configure Claire without a mobile device.</li>
               <li><b>Companion:</b> continue drafts and searches from mobile, host Mac-only/on-device bridges, surface bridge health, and hand work between devices.</li>
             </ul>
       <P>The visual reference is the <a href="/mockups/desktop">public desktop mockups</a>.</P>
       <P>Claire Desktop ships as one product on two native hosts:</P>
       <ul>
               <li><b>React Native macOS</b> for macOS, including Mac-only companion features such as iMessage.</li>
-              <li><b>React Native Windows</b> for Windows, with the same full messaging, AI, search, promise, relationship, and connection-management experience.</li>
+              <li><b>React Native Windows</b> for Windows, with the same full messaging, AI, search, loop, relationship, and connection-management experience.</li>
             </ul>
       <P>The product must not present Windows as a reduced companion. Only individual network capabilities vary by host.</P>
       </Section>
@@ -51,7 +51,7 @@ export default function Page() {
             </ul>
       </Section>
       <Section id="proposed-repository-topology" title="Proposed repository topology">
-      <Code lang="text">{"claire/\n├── mobile/                         # existing Expo iOS/Android/web application\n├── desktop/\n│   ├── macos/                      # RN macOS host: Xcode, Swift/AppKit modules\n│   ├── windows/                    # RN Windows host: Visual Studio, C++/WinRT modules\n│   ├── shared/                     # desktop-only navigation and pane composition\n│   ├── bridge-host/                # typed companion-agent protocol and health UI\n│   ├── package.json                # workspace manifest, no host-version assumptions\n│   └── README.md\n├── packages/\n│   ├── design-system/              # semantic tokens and native primitives\n│   ├── domain/                     # messages, chats, contacts, promises, search types\n│   ├── platform-sdk/               # server API, Supabase, Matrix identifiers\n│   └── state/                      # framework-neutral stores and query keys\n├── server/\n└── docker/"}</Code>
+      <Code lang="text">{"claire/\n├── apps/client/                         # existing Expo iOS/Android/web application\n├── desktop/\n│   ├── macos/                      # RN macOS host: Xcode, Swift/AppKit modules\n│   ├── windows/                    # RN Windows host: Visual Studio, C++/WinRT modules\n│   ├── shared/                     # desktop-only navigation and pane composition\n│   ├── bridge-host/                # typed companion-agent protocol and health UI\n│   ├── package.json                # workspace manifest, no host-version assumptions\n│   └── README.md\n├── packages/\n│   ├── design-system/              # semantic tokens and native primitives\n│   ├── domain/                     # messages, chats, contacts, loops, search types\n│   ├── platform-sdk/               # server API, Supabase, Matrix identifiers\n│   └── state/                      # framework-neutral stores and query keys\n├── server/\n└── docker/"}</Code>
       <P>The first implementation PR should introduce the two host shells plus packages that can be extracted without changing mobile behavior. Move existing mobile code into shared packages incrementally, not as a prerequisite for the desktop shell. Shared components must have no native-host imports; use <C>.macos.tsx</C> and <C>.windows.tsx</C> variants only at the composition/native boundary.</P>
       </Section>
       <Section id="desktop-information-architecture" title="Desktop information architecture">
@@ -61,7 +61,7 @@ export default function Page() {
               rows={[
                 [<>Home</>, <>Daily brief, handoff, bridge health</>, <><C>⌘1</C></>, <><C>Ctrl+1</C></>],
                 [<>Inbox</>, <>Unified conversations and filters</>, <><C>⌘2</C></>, <><C>Ctrl+2</C></>],
-                [<>Promises</>, <>Open, waiting, overdue, completed</>, <><C>⌘3</C></>, <><C>Ctrl+3</C></>],
+                [<>Loops</>, <>Open, waiting, snoozed, done</>, <><C>⌘3</C></>, <><C>Ctrl+3</C></>],
                 [<>People</>, <>Contacts and relationship memory</>, <><C>⌘4</C></>, <><C>Ctrl+4</C></>],
                 [<>Search</>, <>Global semantic search</>, <><C>⌘K</C></>, <><C>Ctrl+K</C></>],
                 [<>Connections</>, <>Network accounts and bridge health</>, <><C>⌘,</C></>, <><C>Ctrl+,</C></>],
@@ -85,10 +85,10 @@ export default function Page() {
               <li>Account sign-in and device verification.</li>
               <li>Desktop home / daily brief / handoff.</li>
               <li>Unified inbox.</li>
-              <li>Chat with inline AI context and promise detection.</li>
+              <li>Chat with inline AI context and loop detection.</li>
               <li>AI copilot sheet/popover.</li>
               <li>Global command search and cited results.</li>
-              <li>Promise tracker.</li>
+              <li>Loop tracker.</li>
               <li>People list and relationship memory editor.</li>
               <li>Connections overview.</li>
               <li>Per-network setup flows.</li>
@@ -104,7 +104,7 @@ export default function Page() {
       <Diagram>{"flowchart LR\n    MacUI[\"React Native macOS UI\"] --> SDK[\"Shared Claire platform SDK\"]\n    WinUI[\"React Native Windows UI\"] --> SDK\n    MacUI --> MacNative[\"Swift / AppKit modules\"]\n    WinUI --> WinNative[\"C++/WinRT modules\"]\n    SDK --> API[\"Bun server API\"]\n    SDK --> RT[\"Supabase Realtime\"]\n    API --> DB[\"Supabase PostgreSQL\"]\n    API --> Matrix[\"Synapse / Matrix\"]\n    MacNative --> Supervisor[\"Local companion-agent supervisor\"]\n    WinNative --> Supervisor\n    Supervisor --> IM[\"mautrix-imessage / platform-imessage\"]\n    Supervisor --> Meta[\"Desktop-auth Meta connector\"]\n    IM --> WS[\"Appservice websocket proxy\"]\n    Meta --> WS\n    WS --> Matrix\n    Matrix --> API"}</Diagram>
       <Section id="ui-and-state-layers" title="UI and state layers" level={3}>
       <ul>
-              <li><b>Server state:</b> TanStack Query for chats, messages, people, promises, connections, and search results.</li>
+              <li><b>Server state:</b> TanStack Query for chats, messages, people, loops, connections, and search results.</li>
               <li><b>Realtime:</b> one authenticated subscription coordinator that invalidates query keys; do not let each screen create independent subscriptions.</li>
               <li><b>Local UI state:</b> Zustand for pane state, filters, draft selection, window state, and command palette.</li>
               <li><b>Durable local state:</b> host preferences for window and appearance settings; Keychain on macOS and Credential Locker/DPAPI on Windows for device tokens and local bridge secrets.</li>
@@ -247,7 +247,7 @@ export default function Page() {
                 [<>Devices</>, <><C>devices</C> table: id, user, host, name, public key, capabilities, last_seen, push token</>],
                 [<>Handoff</>, <><C>drafts</C> and <C>continuation_activity</C> with optimistic version fields</>],
                 [<>Connections</>, <>host device id, connection class, bridge version, health, last sync, auth expiry</>],
-                [<>Search</>, <>unified endpoint returning cited messages, people, files, and promises</>],
+                [<>Search</>, <>unified endpoint returning cited messages, people, files, and loops</>],
                 [<>Presence</>, <>ephemeral device/bridge health through Redis + Realtime</>],
                 [<>Permissions</>, <>no raw TCC data; store only capability status and timestamps</>],
               ]}
@@ -261,7 +261,7 @@ export default function Page() {
               <li>Full keyboard traversal with a visible <C>#3C68FF</C> focus ring.</li>
               <li>macOS: <C>⌘K</C> search, <C>⌘N</C> compose, <C>⌘,</C> settings, <C>⌘1–4</C> destinations, and <C>⌘⇧M</C> compact mode.</li>
               <li>Windows: <C>Ctrl+K</C> search, <C>Ctrl+N</C> compose, <C>Ctrl+,</C> settings, <C>Ctrl+1–4</C> destinations, and <C>Ctrl+Shift+M</C> compact mode.</li>
-              <li>Context menus for conversations, messages, files, and promises.</li>
+              <li>Context menus for conversations, messages, files, and loops.</li>
               <li>Multi-select and bulk actions in inbox/search where platform capabilities allow them.</li>
               <li>Minimum pointer target: 28 points; preferred primary control: 32–36 points.</li>
               <li>Support system text scaling without truncating message content.</li>
@@ -302,7 +302,7 @@ export default function Page() {
       <Section id="phase-2-full-client-loop-2-3-weeks" title="Phase 2 — Full client loop (2–3 weeks)" level={3}>
       <ul>
               <li>Compose/send, attachments, reactions according to platform capability.</li>
-              <li>Global search, promises, people, relationship memory.</li>
+              <li>Global search, loops, people, relationship memory.</li>
               <li>Desktop notifications, drafts, keyboard shortcuts.</li>
             </ul>
       </Section>
