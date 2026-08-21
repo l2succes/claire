@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Modal, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
-import { PenSquare, Pin, Search, Sparkles, X } from 'lucide-react-native';
+import { BellOff, PenSquare, Pin, Search, Sparkles, X } from 'lucide-react-native';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
@@ -91,7 +91,7 @@ export function InboxConversationRow({
     <Pressable
       testID={`message-card-${message.id}`}
       accessibilityRole="button"
-      accessibilityLabel={`${name}${message.unread_count ? `, ${message.unread_count} unread` : ''}`}
+      accessibilityLabel={`${name}${message.is_muted ? ', notifications muted' : ''}${message.unread_count ? `, ${message.unread_count} unread` : ''}`}
       onPress={onPress}
       onLongPress={onLongPress}
       style={{
@@ -119,8 +119,10 @@ export function InboxConversationRow({
       </View>
 
       <View style={{ position: 'absolute', top: pinned ? 20 : desktop ? 13 : 14, left: inset + avatarSize + (desktop ? 9 : 14), right: inset, gap: desktop ? 1 : 3 }}>
-        <Text maxFontSizeMultiplier={1} selectable numberOfLines={1} style={{ paddingRight: 54, fontFamily: mobileType.body.fontFamily, fontSize: desktop ? 14 : 17, lineHeight: desktop ? 17 : 21, fontWeight: message.unread_count ? '700' : '600', color: colors.ink }}>{name}</Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingRight: message.unread_count ? 36 : 0 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingRight: 54 }}>
+          <Text maxFontSizeMultiplier={1} selectable numberOfLines={1} style={{ flexShrink: 1, fontFamily: mobileType.body.fontFamily, fontSize: desktop ? 14 : 17, lineHeight: desktop ? 17 : 21, fontWeight: message.unread_count ? '700' : '600', color: colors.ink }}>{name}</Text>
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingRight: (message.unread_count ? 36 : 0) + (message.is_muted ? 22 : 0) }}>
           {preview.thumbnailUri && !thumbFailed ? (
             <Image
               source={{ uri: preview.thumbnailUri }}
@@ -135,7 +137,10 @@ export function InboxConversationRow({
         </View>
       </View>
       <Text maxFontSizeMultiplier={1} selectable style={{ position: 'absolute', right: inset, top: pinned ? 21 : desktop ? 13 : 16, fontFamily: mobileType.monoLabel.fontFamily, fontSize: desktop ? 9 : 11, lineHeight: desktop ? 12 : 14, letterSpacing: 0.4, color: colors.neutral[400] }}>{formatInboxTimestamp(message.timestamp)}</Text>
-      {message.unread_count ? <View style={{ position: 'absolute', right: inset, bottom: pinned ? 16 : desktop ? 10 : 14, minWidth: desktop ? 18 : 22, height: desktop ? 18 : 22, paddingHorizontal: 4, borderRadius: 11, backgroundColor: colors.lime, alignItems: 'center', justifyContent: 'center' }}><Text maxFontSizeMultiplier={1} style={{ ...mobileType.label, fontSize: desktop ? 9 : undefined, color: colors.ink, fontVariant: ['tabular-nums'] }}>{message.unread_count}</Text></View> : null}
+      <View style={{ position: 'absolute', right: inset, bottom: pinned ? 16 : desktop ? 10 : 14, height: desktop ? 18 : 22, flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+        {message.is_muted ? <View testID={`inbox-muted-${message.chat_id}`}><BellOff size={desktop ? 13 : 15} color={colors.neutral[600]} strokeWidth={1.8} /></View> : null}
+        {message.unread_count ? <View style={{ minWidth: desktop ? 18 : 22, height: desktop ? 18 : 22, paddingHorizontal: 4, borderRadius: 11, backgroundColor: colors.lime, alignItems: 'center', justifyContent: 'center' }}><Text maxFontSizeMultiplier={1} style={{ ...mobileType.label, fontSize: desktop ? 9 : undefined, color: colors.ink, fontVariant: ['tabular-nums'] }}>{message.unread_count}</Text></View> : null}
+      </View>
     </Pressable>
   );
 }
