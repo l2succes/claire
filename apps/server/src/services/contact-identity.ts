@@ -17,8 +17,21 @@ export function isOpaqueWhatsAppLid(value: string | null | undefined): boolean {
  * name nor a phone number Claire can display or search as an identity.
  */
 export function isRedactedPhoneFallback(value: string | null | undefined): boolean {
-  const source = value?.trim() || '';
-  return Boolean(source) && /^[+0-9\s().•*-]+$/.test(source) && /[•*]/.test(source);
+  // Provider masks must never become a persisted display name. The bridge may
+  // append arbitrary suffixes, so the mask glyph itself is the reliable signal.
+  // mautrix currently uses U+2219 (bullet operator); other providers use
+  // U+2022 (bullet) or an asterisk. All are privacy masks.
+  return /[•∙*]/.test(value?.trim() || '');
+}
+
+/**
+ * A bridge can occasionally report punctuation (for example `.`) as a
+ * WhatsApp push name. It is not a useful identity and should be treated the
+ * same way as an absent profile name. Emoji-only names remain valid: many
+ * people intentionally use one as their WhatsApp profile name.
+ */
+export function isMeaningfulContactName(value: string | null | undefined): boolean {
+  return /[\p{L}\p{N}\p{Extended_Pictographic}]/u.test(value?.trim() || '');
 }
 
 /** Return a real phone-shaped platform identifier, never a WhatsApp LID. */
@@ -43,9 +56,13 @@ export function phoneNumberFromBridgeIdentifiers(
 ): string | null {
   for (const identifier of identifiers) {
     if (!identifier) continue;
-    const source = identifier.trim().replace(/^tel:/i, '').split('@')[0];
+    const source = identifier
+      .trim()
+      .replace(/^tel:/i, '')
+      .replace(/\s*\(WA\)\s*$/i, '')
+      .split('@')[0];
     if (isOpaqueWhatsAppLid(source)) continue;
-    const digits = source.replace(/^\+/, '');
+    const digits = source.replace(/^\+/, '').replace(/[().\s-]/g, '');
     if (/^\d{7,15}$/.test(digits)) return `+${digits}`;
   }
   return null;
@@ -61,9 +78,10 @@ export function displayNameFromBridge(
   platform: Platform,
   platformContactId: string | null | undefined
 ): string | null {
-  const name = candidate?.trim() || '';
+  const name = candidate?.trim().replace(/\s*\(WA\)\s*$/i, '') || '';
   if (
     !name ||
+    !isMeaningfulContactName(name) ||
     (platform === Platform.WHATSAPP &&
       (isOpaqueWhatsAppLid(name) || isRedactedPhoneFallback(name)))
   ) {

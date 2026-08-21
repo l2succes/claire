@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Modal, Pressable, ScrollView, Text, View } from 'react-native';
-import { Check, ChevronLeft, ListFilter, Search, Sparkles } from 'lucide-react-native';
+import { Check, ListFilter, Search } from 'lucide-react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { colors, mobileType, radius, space, useIsDesktopLayout } from '@claire/design-system';
@@ -38,6 +38,7 @@ export default function ContactsScreen() {
   const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
   const [showPlatformFilter, setShowPlatformFilter] = useState(false);
   const user = useAuthStore(state => state.user);
+  const requestedIdentitySyncFor = useRef<string | null>(null);
   const debouncedSearchQuery = useDebouncedValue(searchQuery);
 
   useEffect(() => {
@@ -55,11 +56,37 @@ export default function ContactsScreen() {
       filter,
     }),
     getNextPageParam: (page) => page.nextOffset,
+    // Contacts are enriched asynchronously by the connected bridges. A
+    // foreground return should always pick up newly learned names/numbers.
+    // Keep polling briefly while the bounded server-side identity sync runs.
+    refetchOnMount: 'always',
+    refetchInterval: 15_000,
   });
+
+  useEffect(() => {
+    if (!user?.id || requestedIdentitySyncFor.current === user.id) return;
+    requestedIdentitySyncFor.current = user.id;
+    // This only starts a per-user, metadata-only bridge sync. It is safe to
+    // ignore a missing/disconnected WhatsApp account; People still renders
+    // the identities already stored for other platforms.
+    void contactsApi.startIdentitySync()
+      .then(() => peopleQuery.refetch())
+      .catch(() => undefined);
+  }, [user?.id, peopleQuery.refetch]);
   const contacts = useMemo(
-    () => peopleQuery.data?.pages.flatMap((page) => page.contacts) || [],
+    () => (peopleQuery.data?.pages.flatMap((page) => page.contacts) || [])
+      .slice()
+      .sort((left, right) => {
+        const leftName = personName(left);
+        const rightName = personName(right);
+        const leftUnknown = leftName === 'WhatsApp contact' || leftName === 'Unknown person';
+        const rightUnknown = rightName === 'WhatsApp contact' || rightName === 'Unknown person';
+        if (leftUnknown !== rightUnknown) return leftUnknown ? 1 : -1;
+        return leftName.localeCompare(rightName, undefined, { sensitivity: 'base' });
+      }),
     [peopleQuery.data],
   );
+
   // Keep every supported platform visible. A zero-result Instagram filter is
   // useful feedback that the account has no synced Instagram conversations;
   // hiding it made that distinction impossible to see.
@@ -103,7 +130,6 @@ export default function ContactsScreen() {
         title="People"
         subtitle="The people behind your conversations"
         safeArea
-        leading={isDesktop ? undefined : <MobileIconButton label="Back" onPress={() => router.back()}><ChevronLeft size={20} color={colors.ink} /></MobileIconButton>}
         actions={!isDesktop ? (
           <MobileIconButton
             label="Filter by platform"
@@ -145,7 +171,7 @@ export default function ContactsScreen() {
           renderItem={({ item }) => {
             const name = personName(item);
             const identityDetail = personDetails(item);
-            const needsContext = !item.inferred_relationship && !item.is_group;
+            const secondaryDetail = identityDetail || item.inferred_relationship || (item.is_group ? 'Group conversation' : null);
             return (
               <Pressable
                 accessibilityRole="button"
@@ -160,14 +186,9 @@ export default function ContactsScreen() {
                   <MobileAvatar name={name} uri={item.avatar_url} size={48} isGroup={item.is_group} />
                   <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
                     <Text numberOfLines={1} style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>{name}</Text>
-                    <Text numberOfLines={1} style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{identityDetail || item.inferred_relationship || (item.is_group ? 'Group conversation' : 'Add context for better replies')}</Text>
+                    {secondaryDetail ? <Text numberOfLines={1} style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{secondaryDetail}</Text> : null}
                     <PlatformName platform={contactPlatform(item)} size={12} />
                   </View>
-                  {needsContext ? (
-                    <View style={{ width: 34, height: 34, flexShrink: 0, borderRadius: 12, backgroundColor: colors.lavender, alignItems: 'center', justifyContent: 'center' }}>
-                      <Sparkles size={16} color={colors.ink} />
-                    </View>
-                  ) : null}
                 </View>
               </Pressable>
             );

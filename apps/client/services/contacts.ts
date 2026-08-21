@@ -28,9 +28,10 @@ interface PeoplePage {
   nextOffset: number | null;
 }
 
-async function request<T>(path: string): Promise<T> {
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const { data: { session } } = await supabase.auth.getSession();
   const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...init,
     headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
   });
   const body = await response.json().catch(() => ({})) as { data?: T; error?: string };
@@ -54,5 +55,8 @@ export const contactsApi = {
     });
     if (query.trim()) params.set('q', query.trim());
     return request<PeoplePage>(`/contacts?${params.toString()}`);
+  },
+  startIdentitySync() {
+    return request<{ status: 'started' }>('/contacts/identity-backfill', { method: 'POST' });
   },
 };

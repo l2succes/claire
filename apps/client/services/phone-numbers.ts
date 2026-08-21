@@ -31,8 +31,12 @@ export function isOpaqueWhatsAppLid(value: string | null | undefined): boolean {
 
 /** WhatsApp's bridge fallback is a privacy mask, not a usable phone number. */
 export function isRedactedPhoneFallback(value: string | null | undefined): boolean {
-  const source = sourcePhone(value || '');
-  return Boolean(source) && /^[+0-9\s().•*-]+$/.test(source) && /[•*]/.test(source);
+  // A bridge privacy mask is never a profile name. Treat any mask glyph as
+  // redacted even when a provider adds an unknown suffix or invisible
+  // formatting character; otherwise it can leak back into a visible row.
+  // mautrix currently uses U+2219 (bullet operator); other providers use
+  // U+2022 (bullet) or an asterisk. All are privacy masks.
+  return /[•∙*]/.test(sourcePhone(value || ''));
 }
 
 /** A bridge display-name fallback containing only a phone number (optionally suffixed with `(WA)`). */

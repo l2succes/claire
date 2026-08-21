@@ -85,3 +85,38 @@ describe('BridgeHttpClient identifier resolution', () => {
     }
   });
 });
+
+describe('BridgeHttpClient contacts', () => {
+  it('reads contacts through the exact linked account', async () => {
+    const originalFetch = globalThis.fetch;
+    let request: Request | undefined;
+
+    globalThis.fetch = async (input, init) => {
+      request = new Request(input, init);
+      return new Response(JSON.stringify({
+        contacts: [{
+          id: 'lid-192204836479059',
+          name: 'A profile name',
+          identifiers: ['@whatsapp_lid-192204836479059:claire.local'],
+        }],
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    };
+
+    try {
+      const client = new BridgeHttpClient(
+        'https://bridge.example',
+        'shared-secret',
+        '@claire:claire.local'
+      );
+      const contacts = await client.getContacts('linked-whatsapp-account');
+
+      expect(contacts).toHaveLength(1);
+      expect(contacts[0]?.name).toBe('A profile name');
+      expect(new URL(request!.url).pathname).toBe('/_matrix/provision/v3/contacts');
+      expect(new URL(request!.url).searchParams.get('login_id')).toBe('linked-whatsapp-account');
+      expect(new URL(request!.url).searchParams.get('user_id')).toBe('@claire:claire.local');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
