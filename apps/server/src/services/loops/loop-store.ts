@@ -135,6 +135,7 @@ export interface UpdateLoopInput {
   threadState?: string | null;
   status?: string | null;
   owner?: string | null;
+  requester?: string | null;
   deadline?: string | null;
   deadlinePrecision?: string | null;
   latestMessageId?: string | null;
@@ -173,6 +174,7 @@ export async function updateLoop(input: UpdateLoopInput): Promise<boolean> {
   // A human correction outranks the detector on the fields a human can set.
   if (!current.user_edited) {
     if (input.owner) patch.owner = input.owner;
+    if (input.requester) patch.requester = input.requester;
     if (input.deadline !== undefined) patch.deadline = input.deadline;
     if (input.deadlinePrecision) patch.deadline_precision = input.deadlinePrecision;
   }

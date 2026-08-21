@@ -28,7 +28,11 @@ export function calculateLoopPriority(input: PriorityInput): PriorityResult {
   if (quiet) return { score: 0, eligible: false, breakdown: { eligible: false } };
   const due = input.deadline ? new Date(input.deadline) : null;
   const days = due ? (due.getTime() - now.getTime()) / 86_400_000 : Infinity;
-  const urgency = days < 0 ? 35 : days < 1 ? 27 : days <= 3 ? 20 : days <= 7 ? 10 : 0;
+  // A stale, long-overdue loop should not crowd out a genuinely imminent one.
+  // We still surface it, but reserve the top urgency band for the last 48h.
+  const urgency = days < 0
+    ? days >= -2 ? 35 : days >= -7 ? 8 : 0
+    : days < 1 ? 27 : days <= 3 ? 20 : days <= 7 ? 10 : 0;
   const responsibility = input.owner === 'me' ? 15 : input.owner === 'shared' ? 10 : input.owner === 'them' ? 7 : 0;
   const commitment = input.state === 'agreed' ? 12 : input.state === 'pending_confirmation' ? 8 : input.state === 'negotiating' ? 3 : 0;
   const relevance = Math.round(Math.max(0, Math.min(1, input.relevance)) * 12);

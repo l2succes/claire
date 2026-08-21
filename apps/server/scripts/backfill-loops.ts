@@ -8,6 +8,10 @@
  * Example:
  * LOOP_BACKFILL_USER_ID=<uuid> LOOP_BACKFILL_CONFIRM=<uuid> \
  *   LOOP_BACKFILL_DAYS=30 LOOP_DETECTION_MODE=inline bun run scripts/backfill-loops.ts
+ *
+ * Add LOOP_BACKFILL_FORCE=1 only for an intentional re-evaluation of chats
+ * that already completed a historical scan (for example, after a detector
+ * contract change). It does not bypass the date or message safety caps.
  */
 
 import { detectLoopsForChat } from '../src/services/loops/loop-detector';
@@ -17,6 +21,7 @@ import { supabase } from '../src/services/supabase';
 const userId = process.env.LOOP_BACKFILL_USER_ID;
 const confirmation = process.env.LOOP_BACKFILL_CONFIRM;
 const days = Number.parseInt(process.env.LOOP_BACKFILL_DAYS ?? '30', 10);
+const force = process.env.LOOP_BACKFILL_FORCE === '1';
 const BATCH_SIZE = 40;
 const MAX_MESSAGES = 10_000;
 const CONCURRENCY = 3;
@@ -73,6 +78,7 @@ async function processChat(chatId: string, chatMessages: HistoricalMessage[]): P
   // A rerun after an interruption resumes at chat boundaries. A completed chat
   // has already advanced its cursor past the snapshot that this run selected.
   if (
+    !force &&
     cursor?.last_gate_result === 'history_backfill' &&
     cursor.last_message_timestamp &&
     cursor.last_message_timestamp >= newest.timestamp
@@ -113,4 +119,4 @@ await Promise.all(Array.from({ length: Math.min(CONCURRENCY, jobs.length) }, asy
   }
 }));
 
-console.log(JSON.stringify({ ok: true, days, messages: messages.length, ...totals }));
+console.log(JSON.stringify({ ok: true, days, force, messages: messages.length, ...totals }));
