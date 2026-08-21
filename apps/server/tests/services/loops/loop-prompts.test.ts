@@ -22,17 +22,20 @@ const VALID_CREATE = {
   title: 'Send Maya the Q3 deck',
   kind: 'commitment',
   owner: 'me',
+  owner_name: null,
   state: 'agreed',
   state_summary: 'Due Friday',
   deadline: '2026-08-21T00:00:00Z',
   deadline_precision: 'day',
   addressed_to_user: true,
+  addressing_evidence: [],
+  participants: [],
   evidence_refs: ['m2'],
   confidence: 0.93,
 };
 
 describe('op schema', () => {
-  it('accepts a well-formed create and fills list defaults', () => {
+  it('accepts a well-formed create with explicit empty and nullable values', () => {
     const parsed = loopOpSchema.safeParse(VALID_CREATE);
     expect(parsed.success).toBe(true);
     if (!parsed.success || parsed.data.op !== 'create') return;

@@ -147,14 +147,16 @@ export interface StructuredListResult<T> extends Omit<StructuredResult<T[]>, 'ob
 /**
  * Call a model for a list of items, validating each independently.
  *
- * The wrapper schema is deliberately permissive (`unknown[]`) so one malformed
- * op cannot discard the whole response — a strict array schema would make the
- * entire detection pass fail on a single bad entry.
+ * The provider-facing wrapper must use the item schema. OpenAI structured
+ * output rejects `items: {}` (the JSON Schema emitted by `z.unknown()`), and
+ * a strict item schema gives the model a useful contract instead of accepting
+ * arbitrary JSON. We still validate each entry below as a defensive boundary
+ * for providers that return a compatible but imperfect payload.
  */
 export async function callStructuredList<T>(
   request: Omit<StructuredRequest, 'schema'> & { itemSchema: z.ZodTypeAny; listKey: string },
 ): Promise<StructuredListResult<T>> {
-  const wrapper = z.object({ [request.listKey]: z.array(z.unknown()) });
+  const wrapper = z.object({ [request.listKey]: z.array(request.itemSchema) });
 
   const result = await callStructured<Record<string, unknown[]>>({
     role: request.role,
