@@ -56,6 +56,10 @@ export function LoopsScreen() {
   const [filter, setFilter] = useState<LoopFilter>('open');
   const [showCreate, setShowCreate] = useState(false);
   const [newLoop, setNewLoop] = useState('');
+  // Pressable's ({ pressed }) => style callback is dropped by NativeWind's
+  // react-native-css-interop wrapper, so the button renders with no style at
+  // all. Track pressed state manually instead. See CLAUDE.md "Mobile gotchas".
+  const [addLoopPressed, setAddLoopPressed] = useState(false);
   const query = useQuery({ queryKey: ['mobile-loops', user?.id], enabled: !!user?.id, queryFn: () => request<LoopItem[]>('/loops?limit=200'), staleTime: 60_000 });
   const patch = useMutation({
     mutationFn: ({ id, status }: { id: string; status: LoopItem['status'] }) => request<LoopItem>(`/loops/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) }),
@@ -137,7 +141,22 @@ export function LoopsScreen() {
             <View style={{ flexDirection: 'row', alignItems: 'center' }}><Text style={{ ...mobileType.sectionTitle, flex: 1, color: colors.ink }}>Add a loop</Text><MobileIconButton label="Close" onPress={() => setShowCreate(false)}><X size={19} color={colors.ink} /></MobileIconButton></View>
             <TextInput autoFocus multiline value={newLoop} onChangeText={setNewLoop} placeholder="What do you want to remember?" placeholderTextColor={colors.neutral[400]} style={{ minHeight: 110, textAlignVertical: 'top', padding: space[4], borderRadius: radius.card, borderWidth: 1, borderColor: colors.neutral[200], backgroundColor: colors.cream, ...mobileType.body, color: colors.ink }} />
             {create.error ? <Text selectable style={{ ...mobileType.bodySmall, color: colors.danger }}>{create.error.message}</Text> : null}
-            <Pressable disabled={!newLoop.trim() || create.isPending} onPress={() => create.mutate(newLoop.trim())} style={({ pressed }) => ({ minHeight: 50, borderRadius: radius.control, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center', opacity: !newLoop.trim() || create.isPending ? 0.42 : pressed ? 0.78 : 1 })}><Text style={{ ...mobileType.body, fontWeight: '700', color: colors.paper }}>{create.isPending ? 'Adding…' : 'Add loop'}</Text></Pressable>
+            <Pressable
+              disabled={!newLoop.trim() || create.isPending}
+              onPress={() => create.mutate(newLoop.trim())}
+              onPressIn={() => setAddLoopPressed(true)}
+              onPressOut={() => setAddLoopPressed(false)}
+              style={{
+                minHeight: 50,
+                borderRadius: radius.control,
+                backgroundColor: colors.ink,
+                alignItems: 'center',
+                justifyContent: 'center',
+                opacity: !newLoop.trim() || create.isPending ? 0.42 : addLoopPressed ? 0.78 : 1,
+              }}
+            >
+              <Text style={{ ...mobileType.body, fontWeight: '700', color: colors.paper }}>{create.isPending ? 'Adding…' : 'Add loop'}</Text>
+            </Pressable>
           </View>
         </View>
       </Modal>
