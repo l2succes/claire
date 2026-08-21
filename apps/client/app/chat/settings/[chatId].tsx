@@ -152,21 +152,20 @@ export default function ConversationSettingsScreen() {
       </View>
       {isLoading && !chatSettings ? <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator size="large" color={colors.ink} /></View> : (
         <ScrollView contentContainerStyle={{ padding: space[4], paddingBottom: 132 + insets.bottom, gap: space[5] }} keyboardShouldPersistTaps="handled">
-          <View style={{ gap: space[2] }}>
-            <SectionLabel title="Chat settings" />
-            <View testID="conversation-notification-settings" style={{ minHeight: 76, flexDirection: 'row', alignItems: 'center', gap: space[3], paddingHorizontal: space[3], borderRadius: radius.card, backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.neutral[200] }}>
-              <View style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: radius.control, backgroundColor: isMuted ? colors.neutral[100] : colors.sky }}><BellOff size={19} color={colors.ink} /></View>
-              <View style={{ flex: 1, gap: 2 }}><Text style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>Mute notifications</Text><Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{isMuted ? 'Notifications are muted for this chat.' : `Receive alerts for this ${is_group === '1' ? 'group' : 'conversation'}.`}</Text></View>
-              <Switch testID="conversation-mute-notifications" accessibilityLabel={`Mute notifications for ${displayName}`} value={isMuted} disabled={isSavingMute || !accessToken} onValueChange={(value) => void updateMute(value)} trackColor={{ false: colors.neutral[200], true: colors.ink }} thumbColor={isMuted ? colors.lime : colors.paper} />
-            </View>
-          </View>
-
           <View style={{ alignItems: 'center', gap: space[2], paddingVertical: space[2] }}>
             <MobileAvatar name={displayName} size={72} isGroup={is_group === '1'} />
             <Text maxFontSizeMultiplier={1} style={{ ...mobileType.sectionTitle, color: colors.ink }}>{displayName}</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               {platform ? <PlatformBadge platform={platform as Platform} size={14} /> : null}
               <Text maxFontSizeMultiplier={1} numberOfLines={1} style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{subtitle}</Text>
+            </View>
+          </View>
+
+          <View testID="conversation-notification-settings" style={{ minHeight: 76, flexDirection: 'row', alignItems: 'center', gap: space[3], paddingHorizontal: space[3], paddingVertical: space[3], borderRadius: radius.card, backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.neutral[200] }}>
+            <View style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: radius.control, backgroundColor: isMuted ? colors.neutral[100] : colors.sky }}><BellOff size={19} color={colors.ink} /></View>
+            <View style={{ flex: 1, gap: 2 }}><Text style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>Mute notifications</Text><Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{isMuted ? 'Notifications are muted for this chat.' : `Receive alerts for this ${is_group === '1' ? 'group' : 'conversation'}.`}</Text></View>
+            <View style={{ alignSelf: 'stretch', justifyContent: 'center', alignItems: 'center' }}>
+              <Switch testID="conversation-mute-notifications" accessibilityLabel={`Mute notifications for ${displayName}`} value={isMuted} disabled={isSavingMute || !accessToken} onValueChange={(value) => void updateMute(value)} trackColor={{ false: colors.neutral[200], true: colors.ink }} thumbColor={isMuted ? colors.lime : colors.paper} />
             </View>
           </View>
 
