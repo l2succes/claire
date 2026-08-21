@@ -119,24 +119,30 @@ export function InboxConversationRow({
       </View>
 
       <View style={{ position: 'absolute', top: pinned ? 20 : desktop ? 13 : 14, left: inset + avatarSize + (desktop ? 9 : 14), right: inset, gap: desktop ? 1 : 3 }}>
-        <Text maxFontSizeMultiplier={1} selectable numberOfLines={1} style={{ paddingRight: 54, fontFamily: mobileType.body.fontFamily, fontSize: desktop ? 14 : 17, lineHeight: desktop ? 17 : 21, fontWeight: message.unread_count ? '700' : '600', color: colors.ink }}>{name}</Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingRight: message.unread_count ? 36 : 0 }}>
-          {preview.thumbnailUri && !thumbFailed ? (
-            <Image
-              source={{ uri: preview.thumbnailUri }}
-              style={{ width: 26, height: 26, borderRadius: 5, backgroundColor: colors.neutral[100] }}
-              contentFit="cover"
-              transition={120}
-              onError={() => setThumbFailed(true)}
-              testID={`inbox-preview-thumb-${message.chat_id}`}
-            />
-          ) : null}
-          <Text maxFontSizeMultiplier={1} selectable numberOfLines={1} style={{ flex: 1, fontFamily: mobileType.body.fontFamily, fontSize: desktop ? 12 : 14, lineHeight: desktop ? 15 : 19, color: colors.neutral[600], fontWeight: message.unread_count ? '500' : '400' }}>{preview.label}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Text maxFontSizeMultiplier={1} selectable numberOfLines={1} style={{ flex: 1, fontFamily: mobileType.body.fontFamily, fontSize: desktop ? 14 : 17, lineHeight: desktop ? 17 : 21, fontWeight: message.unread_count ? '700' : '600', color: colors.ink }}>{name}</Text>
+          <Text maxFontSizeMultiplier={1} selectable style={{ fontFamily: mobileType.monoLabel.fontFamily, fontSize: desktop ? 9 : 11, lineHeight: desktop ? 12 : 14, letterSpacing: 0.4, color: colors.neutral[400] }}>{formatInboxTimestamp(message.timestamp)}</Text>
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            {preview.thumbnailUri && !thumbFailed ? (
+              <Image
+                source={{ uri: preview.thumbnailUri }}
+                style={{ width: 26, height: 26, borderRadius: 5, backgroundColor: colors.neutral[100] }}
+                contentFit="cover"
+                transition={120}
+                onError={() => setThumbFailed(true)}
+                testID={`inbox-preview-thumb-${message.chat_id}`}
+              />
+            ) : null}
+            <Text maxFontSizeMultiplier={1} selectable numberOfLines={1} style={{ flex: 1, fontFamily: mobileType.body.fontFamily, fontSize: desktop ? 12 : 14, lineHeight: desktop ? 15 : 19, color: colors.neutral[600], fontWeight: message.unread_count ? '500' : '400' }}>{preview.label}</Text>
+          </View>
+          {(message.has_open_loop || message.unread_count) ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            {message.has_open_loop ? <View accessibilityLabel="Open loop in this conversation" style={{ width: desktop ? 18 : 22, height: desktop ? 18 : 22, borderRadius: 11, backgroundColor: colors.blush, alignItems: 'center', justifyContent: 'center' }}><CheckCircle2 size={desktop ? 12 : 15} color={colors.ink} strokeWidth={2.2} /></View> : null}
+            {message.unread_count ? <View style={{ minWidth: desktop ? 18 : 22, height: desktop ? 18 : 22, paddingHorizontal: 4, borderRadius: 11, backgroundColor: colors.lime, alignItems: 'center', justifyContent: 'center' }}><Text maxFontSizeMultiplier={1} style={{ ...mobileType.label, fontSize: desktop ? 9 : undefined, color: colors.ink, fontVariant: ['tabular-nums'] }}>{message.unread_count}</Text></View> : null}
+          </View> : null}
         </View>
       </View>
-      <Text maxFontSizeMultiplier={1} selectable style={{ position: 'absolute', right: inset, top: pinned ? 21 : desktop ? 13 : 16, fontFamily: mobileType.monoLabel.fontFamily, fontSize: desktop ? 9 : 11, lineHeight: desktop ? 12 : 14, letterSpacing: 0.4, color: colors.neutral[400] }}>{formatInboxTimestamp(message.timestamp)}</Text>
-      {message.has_open_loop ? <View accessibilityLabel="Open loop in this conversation" style={{ position: 'absolute', right: inset, bottom: message.unread_count ? (desktop ? 34 : 42) : (desktop ? 10 : 14), width: desktop ? 18 : 22, height: desktop ? 18 : 22, borderRadius: 11, backgroundColor: colors.blush, alignItems: 'center', justifyContent: 'center' }}><CheckCircle2 size={desktop ? 12 : 15} color={colors.ink} strokeWidth={2.2} /></View> : null}
-      {message.unread_count ? <View style={{ position: 'absolute', right: inset, bottom: pinned ? 16 : desktop ? 10 : 14, minWidth: desktop ? 18 : 22, height: desktop ? 18 : 22, paddingHorizontal: 4, borderRadius: 11, backgroundColor: colors.lime, alignItems: 'center', justifyContent: 'center' }}><Text maxFontSizeMultiplier={1} style={{ ...mobileType.label, fontSize: desktop ? 9 : undefined, color: colors.ink, fontVariant: ['tabular-nums'] }}>{message.unread_count}</Text></View> : null}
     </Pressable>
   );
 }

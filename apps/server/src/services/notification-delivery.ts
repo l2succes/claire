@@ -22,6 +22,8 @@ export interface IncomingNotificationEvent {
   chatId: string;
   platform: string;
   senderName?: string;
+  chatName?: string;
+  isGroup?: boolean;
   content: string;
   messageId: string;
 }
@@ -141,6 +143,11 @@ export class NotificationDeliveryService {
           messageId: event.messageId,
           chatId: event.chatId,
           platform: event.platform,
+          ...(event.chatName ? { chatName: event.chatName } : {}),
+          ...(!event.isGroup && (event.chatName || event.senderName)
+            ? { contactName: event.chatName || event.senderName! }
+            : {}),
+          isGroup: event.isGroup === true,
           url: `claire://chat/${event.chatId}?messageId=${event.messageId}`,
         },
       };
