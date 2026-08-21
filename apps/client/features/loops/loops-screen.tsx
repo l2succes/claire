@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { FlatList, Modal, Pressable, RefreshControl, Text, TextInput, View } from 'react-native';
-import { Image } from 'expo-image';
-import { AlertCircle, Check, Clock3, MessageCircle, Plus, UserRound, UsersRound, X } from 'lucide-react-native';
+import { Plus, X } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { colors, mobileType, radius, space } from '@claire/design-system';
@@ -10,6 +9,7 @@ import type { LoopItem } from '../../services/loop-types';
 import { useAuthStore } from '../../stores/authStore';
 import { supabase } from '../../services/supabase';
 import { LoopsSkeleton } from '../../components/claire/skeleton';
+import { LoopRow } from './loop-row';
 
 type LoopFilter = 'for_you' | 'done' | 'waiting' | 'all';
 
@@ -39,24 +39,6 @@ const LIVE_STATUSES: LoopItem['status'][] = ['open', 'waiting', 'snoozed'];
 // Overdue is derived, never stored: a loop is overdue when the date it next
 // needs attention has passed. Snoozing moves that date without touching the
 // deadline the user actually committed to.
-function isOverdue(item: LoopItem) {
-  const due = item.snoozed_until || item.deadline;
-  return !!due && new Date(due) < new Date() && LIVE_STATUSES.includes(item.status);
-}
-
-function conversationName(item: LoopItem) {
-  return item.chat?.name || item.contact?.name || item.contact?.inferred_name || item.chat?.contact?.name || item.chat?.contact?.inferred_name || item.contact_name || 'Personal reminder';
-}
-
-function loopTitle(item: LoopItem) {
-  return item.title?.trim() || item.content.trim() || 'Untitled loop';
-}
-
-function loopDetail(item: LoopItem, title: string) {
-  const detail = item.state_summary?.trim();
-  return detail && detail !== title ? detail : null;
-}
-
 export function LoopsScreen() {
   const user = useAuthStore(state => state.user);
   const queryClient = useQueryClient();
@@ -110,49 +92,6 @@ export function LoopsScreen() {
   const visible = filter === 'done' ? completed : filter === 'waiting' ? waiting : filter === 'for_you' ? forYou : open;
   const needsAttention = open.filter(item => (item.priority_score ?? 0) >= 80).length;
 
-  const renderItem = ({ item }: { item: LoopItem }) => {
-    const name = conversationName(item);
-    const title = loopTitle(item);
-    const detail = loopDetail(item, title);
-    const avatar = item.contact?.avatar_url || item.chat?.contact?.avatar_url;
-    const group = !!item.chat?.is_group;
-    const overdue = isOverdue(item);
-    return (
-      <Pressable
-        testID={`loop-item-${item.id}`}
-        // Opens the loop, not the chat. Jumping straight into the conversation
-        // meant snooze, notes, history, and delete had nowhere to live.
-        // "Open conversation" is now a secondary action inside the detail page.
-        onPress={() => router.push({ pathname: '/loops/[id]', params: { id: item.id } })}
-        accessibilityRole="button"
-        style={({ pressed }) => ({ flexDirection: 'row', gap: space[3], paddingVertical: space[3], borderBottomWidth: 1, borderBottomColor: colors.neutral[200], opacity: pressed ? 0.65 : 1 })}
-      >
-        <Pressable
-          testID={`loop-toggle-${item.id}`}
-          accessibilityRole="checkbox"
-          accessibilityState={{ checked: item.status === 'done' }}
-          accessibilityLabel={`${item.status === 'done' ? 'Reopen' : 'Complete'} ${item.content}`}
-          onPress={() => patch.mutate({ id: item.id, status: item.status === 'done' ? 'open' : 'done' })}
-          style={{ width: 34, height: 34, borderRadius: 17, borderWidth: 1, borderColor: overdue ? colors.danger : colors.ink, backgroundColor: item.status === 'done' ? colors.lime : overdue ? colors.blush : colors.paper, alignItems: 'center', justifyContent: 'center' }}
-        >{item.status === 'done' ? <Check size={18} color={colors.ink} /> : overdue ? <AlertCircle size={17} color={colors.danger} /> : null}</Pressable>
-        <View style={{ flex: 1, minWidth: 0, gap: 5 }}>
-          <Text selectable numberOfLines={2} style={{ ...mobileType.body, fontWeight: '700', color: colors.ink, textDecorationLine: item.status === 'done' ? 'line-through' : 'none' }}>{title}</Text>
-          {detail ? <Text selectable numberOfLines={1} style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{detail}</Text> : null}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}>
-            <View testID={`loop-contact-avatar-${item.id}`} style={{ width: 25, height: 25, borderRadius: 13, backgroundColor: group ? colors.sky : colors.blush, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }}>{avatar ? <Image source={{ uri: avatar }} style={{ width: 25, height: 25 }} /> : group ? <UsersRound size={13} color={colors.neutral[600]} /> : <UserRound size={13} color={colors.neutral[600]} />}</View>
-            <Text testID={`loop-contact-name-${item.id}`} selectable numberOfLines={1} style={{ ...mobileType.bodySmall, flex: 1, color: colors.neutral[600] }}>{name}</Text>
-            <Text style={{ ...mobileType.monoLabel, color: item.owner === 'me' ? colors.ink : colors.neutral[600] }}>{item.owner === 'me' ? 'YOU OWE THIS' : item.owner === 'them' ? 'WAITING ON THEM' : item.thread_state === 'pending_confirmation' ? 'PENDING' : ''}</Text>
-            {item.chat_id ? <MessageCircle size={14} color={colors.neutral[400]} /> : null}
-          </View>
-        </View>
-        <View style={{ alignItems: 'flex-end', gap: 4 }}>
-          {(item.priority_score ?? 0) >= 80 ? <Text style={{ ...mobileType.monoLabel, color: colors.danger }}>ACT NOW</Text> : null}
-          {item.deadline ? <><Clock3 size={14} color={overdue ? colors.danger : colors.neutral[400]} /><Text style={{ ...mobileType.monoLabel, color: overdue ? colors.danger : colors.neutral[600] }}>{new Date(item.deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</Text></> : null}
-        </View>
-      </Pressable>
-    );
-  };
-
   return (
     <View testID="loops-screen" style={{ flex: 1, backgroundColor: colors.cream }}>
       <MobileHeader title="Loops" subtitle="Follow through without losing the conversation." safeArea actions={<MobileIconButton label="Add a loop" testID="loops-add" onPress={() => setShowCreate(true)}><Plus size={21} color={colors.ink} /></MobileIconButton>} />
@@ -169,7 +108,7 @@ export function LoopsScreen() {
         </View>
       </View>
       {query.isLoading ? <LoopsSkeleton /> : (
-        <FlatList testID="loops-list" data={visible} renderItem={renderItem} keyExtractor={item => item.id} contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ paddingHorizontal: space[4], paddingBottom: 112 }} refreshControl={<RefreshControl refreshing={query.isRefetching} onRefresh={() => void query.refetch()} tintColor={colors.ink} />} ListEmptyComponent={<MobileState title={filter === 'done' ? 'Nothing completed yet' : filter === 'waiting' ? "You're not waiting on anyone" : 'No open loops'} message="Claire will surface commitments from your conversations here." />} />
+        <FlatList testID="loops-list" data={visible} renderItem={({ item }) => <LoopRow item={item} onOpen={() => router.push({ pathname: '/loops/[id]', params: { id: item.id } })} onToggle={() => patch.mutate({ id: item.id, status: item.status === 'done' ? 'open' : 'done' })} />} keyExtractor={item => item.id} contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ paddingHorizontal: space[4], paddingBottom: 112 }} refreshControl={<RefreshControl refreshing={query.isRefetching} onRefresh={() => void query.refetch()} tintColor={colors.ink} />} ListEmptyComponent={<MobileState title={filter === 'done' ? 'Nothing completed yet' : filter === 'waiting' ? "You're not waiting on anyone" : 'No open loops'} message="Claire will surface commitments from your conversations here." />} />
       )}
 
       <Modal visible={showCreate} transparent animationType="slide" onRequestClose={() => setShowCreate(false)}>
