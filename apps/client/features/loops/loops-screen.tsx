@@ -8,13 +8,14 @@ import { colors, mobileType, radius, space } from '@claire/design-system';
 import { MobileChip, MobileHeader, MobileIconButton, MobileState } from '../../components/mobile/claire-mobile';
 import { useAuthStore } from '../../stores/authStore';
 import { supabase } from '../../services/supabase';
-import { API_BASE_URL } from '../../services/platforms';
 import { LoopsSkeleton } from '../../components/claire/skeleton';
 
 type LoopFilter = 'open' | 'done' | 'waiting';
 interface LoopItem {
   id: string;
   content: string;
+  title?: string | null;
+  state_summary?: string | null;
   deadline?: string | null;
   priority: 'low' | 'medium' | 'high';
   status: 'open' | 'waiting' | 'snoozed' | 'done' | 'dropped' | 'superseded';
@@ -28,12 +29,24 @@ interface LoopItem {
   contact?: { name?: string | null; inferred_name?: string | null; avatar_url?: string | null } | null;
 }
 
-async function request<T>(path: string, init: RequestInit = {}) {
-  const { data: { session } } = await supabase.auth.getSession();
-  const response = await fetch(`${API_BASE_URL}${path}`, { ...init, headers: { 'Content-Type': 'application/json', ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}), ...init.headers } });
-  const body = await response.json().catch(() => ({})) as { data?: T; error?: string };
-  if (!response.ok) throw new Error(body.error || `Request failed (${response.status})`);
-  return body.data as T;
+const LOOP_SELECT = `
+  *,
+  contact:contacts!loops_contact_id_fkey(name, inferred_name, avatar_url),
+  chat:chats!loops_chat_id_fkey(
+    name, is_group, platform,
+    contact:contacts!chats_contact_id_fkey(name, inferred_name, avatar_url)
+  )
+`;
+
+async function fetchLoops(userId: string): Promise<LoopItem[]> {
+  const { data, error } = await supabase
+    .from('loops')
+    .select(LOOP_SELECT)
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(200);
+  if (error) throw error;
+  return (data ?? []) as LoopItem[];
 }
 
 const LIVE_STATUSES: LoopItem['status'][] = ['open', 'waiting', 'snoozed'];
@@ -50,19 +63,54 @@ function conversationName(item: LoopItem) {
   return item.chat?.name || item.contact?.name || item.contact?.inferred_name || item.chat?.contact?.name || item.chat?.contact?.inferred_name || item.contact_name || 'Personal reminder';
 }
 
+function loopTitle(item: LoopItem) {
+  return item.title?.trim() || item.content.trim() || 'Untitled loop';
+}
+
+function loopDetail(item: LoopItem, title: string) {
+  const detail = item.state_summary?.trim();
+  return detail && detail !== title ? detail : null;
+}
+
 export function LoopsScreen() {
   const user = useAuthStore(state => state.user);
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<LoopFilter>('open');
   const [showCreate, setShowCreate] = useState(false);
   const [newLoop, setNewLoop] = useState('');
-  const query = useQuery({ queryKey: ['mobile-loops', user?.id], enabled: !!user?.id, queryFn: () => request<LoopItem[]>('/loops?limit=200'), staleTime: 60_000 });
+  const query = useQuery({ queryKey: ['mobile-loops', user?.id], enabled: !!user?.id, queryFn: () => fetchLoops(user!.id), staleTime: 60_000 });
   const patch = useMutation({
-    mutationFn: ({ id, status }: { id: string; status: LoopItem['status'] }) => request<LoopItem>(`/loops/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+    mutationFn: async ({ id, status }: { id: string; status: LoopItem['status'] }) => {
+      const { data, error } = await supabase
+        .from('loops')
+        .update({ status })
+        .eq('id', id)
+        .eq('user_id', user!.id)
+        .select(LOOP_SELECT)
+        .single();
+      if (error) throw error;
+      return data as LoopItem;
+    },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['mobile-loops', user?.id] }),
   });
   const create = useMutation({
-    mutationFn: (content: string) => request<LoopItem>('/loops', { method: 'POST', body: JSON.stringify({ content, priority: 'medium' }) }),
+    mutationFn: async (content: string) => {
+      const { data, error } = await supabase
+        .from('loops')
+        .insert({
+          user_id: user!.id,
+          content,
+          priority: 'medium',
+          type: 'task',
+          from_me: true,
+          status: 'open',
+          confidence: 1,
+        })
+        .select(LOOP_SELECT)
+        .single();
+      if (error) throw error;
+      return data as LoopItem;
+    },
     onSuccess: () => { setNewLoop(''); setShowCreate(false); queryClient.invalidateQueries({ queryKey: ['mobile-loops', user?.id] }); },
   });
 
@@ -77,6 +125,8 @@ export function LoopsScreen() {
 
   const renderItem = ({ item }: { item: LoopItem }) => {
     const name = conversationName(item);
+    const title = loopTitle(item);
+    const detail = loopDetail(item, title);
     const avatar = item.contact?.avatar_url || item.chat?.contact?.avatar_url;
     const group = !!item.chat?.is_group;
     const overdue = isOverdue(item);
@@ -99,7 +149,8 @@ export function LoopsScreen() {
           style={{ width: 34, height: 34, borderRadius: 17, borderWidth: 1, borderColor: overdue ? colors.danger : colors.ink, backgroundColor: item.status === 'done' ? colors.lime : overdue ? colors.blush : colors.paper, alignItems: 'center', justifyContent: 'center' }}
         >{item.status === 'done' ? <Check size={18} color={colors.ink} /> : overdue ? <AlertCircle size={17} color={colors.danger} /> : null}</Pressable>
         <View style={{ flex: 1, minWidth: 0, gap: 5 }}>
-          <Text selectable style={{ ...mobileType.body, fontWeight: '700', color: colors.ink, textDecorationLine: item.status === 'done' ? 'line-through' : 'none' }}>{item.content}</Text>
+          <Text selectable numberOfLines={2} style={{ ...mobileType.body, fontWeight: '700', color: colors.ink, textDecorationLine: item.status === 'done' ? 'line-through' : 'none' }}>{title}</Text>
+          {detail ? <Text selectable numberOfLines={1} style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{detail}</Text> : null}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}>
             <View testID={`loop-contact-avatar-${item.id}`} style={{ width: 25, height: 25, borderRadius: 13, backgroundColor: group ? colors.sky : colors.blush, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }}>{avatar ? <Image source={{ uri: avatar }} style={{ width: 25, height: 25 }} /> : group ? <UsersRound size={13} color={colors.neutral[600]} /> : <UserRound size={13} color={colors.neutral[600]} />}</View>
             <Text testID={`loop-contact-name-${item.id}`} selectable numberOfLines={1} style={{ ...mobileType.bodySmall, flex: 1, color: colors.neutral[600] }}>{name}</Text>

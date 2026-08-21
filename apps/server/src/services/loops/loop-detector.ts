@@ -61,6 +61,13 @@ export interface DetectionResult {
   provider: string | null;
 }
 
+export interface DetectionRunOptions {
+  /** A bounded historical slice selected by a backfill runner. */
+  messageIds?: string[];
+  /** Historical slices must not move the live cursor until the scan finishes. */
+  advanceCursor?: boolean;
+}
+
 const EMPTY_RESULT: DetectionResult = {
   ran: false,
   skipReason: null,
@@ -82,14 +89,21 @@ const EMPTY_RESULT: DetectionResult = {
  * cursor is only advanced on a pass that actually completed, so a transient
  * model outage means the window is retried rather than skipped.
  */
-export async function detectLoopsForChat(userId: string, chatId: string): Promise<DetectionResult> {
+export async function detectLoopsForChat(
+  userId: string,
+  chatId: string,
+  options: DetectionRunOptions = {},
+): Promise<DetectionResult> {
   if (detectionMode() === 'off') {
     return { ...EMPTY_RESULT, skipReason: 'detection_mode_off' };
   }
 
   let context: LoopContext | null;
   try {
-    context = await buildLoopContext(userId, chatId);
+    context = await buildLoopContext(userId, chatId, {
+      messageIds: options.messageIds,
+      treatWindowAsDelta: !!options.messageIds,
+    });
   } catch (error) {
     logger.warn('[loops] context build failed', {
       chatId,
@@ -113,7 +127,9 @@ export async function detectLoopsForChat(userId: string, chatId: string): Promis
   if (!gate.run) {
     // Still advance the cursor: these messages have been considered and must not
     // be re-read forever. `producedOps: false` feeds the backoff.
-    await advanceCursor(userId, chatId, context.cursorTimestamp, context.cursorMessageId, false, gate.skipReason ?? 'skip');
+    if (options.advanceCursor !== false) {
+      await advanceCursor(userId, chatId, context.cursorTimestamp, context.cursorMessageId, false, gate.skipReason ?? 'skip');
+    }
     return { ...EMPTY_RESULT, gate, skipReason: gate.skipReason };
   }
 
@@ -350,7 +366,9 @@ export async function detectLoopsForChat(userId: string, chatId: string): Promis
   }
 
   const producedOps = result.created + result.updated + result.closed + result.suppressed > 0;
-  await advanceCursor(userId, chatId, context.cursorTimestamp, context.cursorMessageId, producedOps, 'ran');
+  if (options.advanceCursor !== false) {
+    await advanceCursor(userId, chatId, context.cursorTimestamp, context.cursorMessageId, producedOps, 'ran');
+  }
 
   logger.info('[loops] detection pass', {
     chatId,

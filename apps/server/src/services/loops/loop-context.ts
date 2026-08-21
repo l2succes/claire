@@ -62,6 +62,16 @@ export interface LoopContext {
   cursorMessageId: string | null;
 }
 
+export interface BuildLoopContextOptions {
+  /**
+   * An exact, bounded historical slice. Supplying ids avoids using the live
+   * cursor as a pagination mechanism and keeps a backfill chronological.
+   */
+  messageIds?: string[];
+  /** Treat a supplied historical slice as new work regardless of live cursor. */
+  treatWindowAsDelta?: boolean;
+}
+
 interface RosterRow {
   identity_key: string;
   display_name: string;
@@ -113,7 +123,11 @@ function defaultSensitivity(platform: string, isGroup: boolean, userDefault: Loo
  * Returns null when the chat cannot be read at all — the caller treats that as
  * "skip", never as "no loops here".
  */
-export async function buildLoopContext(userId: string, chatId: string): Promise<LoopContext | null> {
+export async function buildLoopContext(
+  userId: string,
+  chatId: string,
+  options: BuildLoopContextOptions = {},
+): Promise<LoopContext | null> {
   const { data: chat, error: chatError } = await supabase
     .from('chats')
     .select('id, name, platform, is_group, member_count, platform_chat_id')
@@ -158,7 +172,7 @@ export async function buildLoopContext(userId: string, chatId: string): Promise<
     watchTerms: settingsResult.data?.watch_terms ?? [],
   };
 
-  const rows = await fetchWindowRows(userId, chatId, cursorTimestamp);
+  const rows = await fetchWindowRows(userId, chatId, cursorTimestamp, options.messageIds);
   if (!rows.length) {
     logger.debug('[loops] empty window', { chatId });
   }
@@ -168,7 +182,9 @@ export async function buildLoopContext(userId: string, chatId: string): Promise<
 
   // The delta is what the gate scores: everything strictly newer than the
   // cursor. The overlap tail is context for the model, not new information.
-  const delta = cursorTimestamp
+  const delta = options.treatWindowAsDelta
+    ? window
+    : cursorTimestamp
     ? window.filter((m) => m.at > cursorTimestamp)
     : window;
 
@@ -208,6 +224,7 @@ async function fetchWindowRows(
   userId: string,
   chatId: string,
   cursorTimestamp: string | null,
+  messageIds?: string[],
 ): Promise<MessageRow[]> {
   const select =
     'id, content, timestamp, from_me, contact_name, contact_id, mentions, mentions_room, reply_to_message_id, thread_root_platform_id';
@@ -218,11 +235,16 @@ async function fetchWindowRows(
     .eq('user_id', userId)
     .eq('chat_id', chatId)
     .eq('is_deleted', false)
-    .order('timestamp', { ascending: false })
-    .limit(WINDOW_MAX_MESSAGES + WINDOW_OVERLAP);
+    .order('timestamp', { ascending: messageIds ? true : false });
+
+  if (messageIds?.length) {
+    query = query.in('id', messageIds);
+  } else {
+    query = query.limit(WINDOW_MAX_MESSAGES + WINDOW_OVERLAP);
+  }
 
   // Read a little before the cursor so a loop spanning the boundary stays whole.
-  if (cursorTimestamp) {
+  if (cursorTimestamp && !messageIds?.length) {
     const overlapStart = new Date(new Date(cursorTimestamp).getTime() - 1000 * 60 * 60 * 6).toISOString();
     query = query.gte('timestamp', overlapStart);
   }
@@ -234,8 +256,8 @@ async function fetchWindowRows(
   }
 
   // Restore chronological order and drop anything with no text to reason about.
-  const rows = ((data ?? []) as MessageRow[])
-    .reverse()
+  const orderedRows = (data ?? []) as MessageRow[];
+  const rows = (messageIds?.length ? orderedRows : orderedRows.reverse())
     .filter((row) => (row.content ?? '').trim().length > 0);
 
   let budget = WINDOW_MAX_CHARS;
