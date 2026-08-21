@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
-import { Check, ChevronLeft, Mail, MapPin, Phone, RefreshCw, Sparkles } from 'lucide-react-native';
+import { BellOff, Check, ChevronLeft, Mail, MapPin, Phone, RefreshCw, Sparkles } from 'lucide-react-native';
 import { colors, mobileType, radius, space } from '@claire/design-system';
 import { useAuthStore } from '../../../stores/authStore';
 import { useConversationSettingsStore } from '../../../stores/conversationSettingsStore';
@@ -14,6 +14,7 @@ import { Platform } from '../../../types/platform';
 import type { ChatCategory } from '../../../types/conversationSettings';
 import { formatPhoneNumber, formatPhoneNumberInput, normalizePhoneNumber } from '../../../services/phone-numbers';
 import { displayContactName } from '../../../services/contact-display';
+import { API_BASE_URL } from '../../../services/platforms';
 
 const TONES = [
   { key: 'warm', title: 'Warm + direct', description: 'Clear, human, confident' },
@@ -43,6 +44,7 @@ function Field({ icon, label, value, onChangeText, placeholder, keyboardType = '
 export default function ConversationSettingsScreen() {
   const { chatId, platform, contact_name, chat_name, is_group } = useLocalSearchParams<{ chatId: string; platform?: string; contact_name?: string; chat_name?: string; is_group?: string }>();
   const user = useAuthStore((state) => state.user);
+  const accessToken = useAuthStore((state) => state.token);
   const insets = useSafeAreaInsets();
   const { settings, fetchSettings, setCategory, updateProfile, refreshInsights } = useConversationSettingsStore();
   const chatSettings = settings[chatId];
@@ -53,6 +55,8 @@ export default function ConversationSettingsScreen() {
   const [instruction, setInstruction] = useState('');
   const [tone, setTone] = useState<ToneKey | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [isSavingMute, setIsSavingMute] = useState(false);
   const displayName =
     is_group === '1'
       ? chat_name || contact_name || 'Group'
@@ -67,7 +71,8 @@ export default function ConversationSettingsScreen() {
       // Contacts own the canonical phone number. A Matrix sender identifier can
       // instead be a WhatsApp LID, so only fall back to message metadata when
       // the contact record has not been populated yet.
-      const { data: chat } = await supabase.from('chats').select('contact_id').eq('id', chatId).maybeSingle();
+      const { data: chat } = await supabase.from('chats').select('contact_id,is_muted').eq('id', chatId).maybeSingle();
+      if (active) setIsMuted(chat?.is_muted === true);
       let phone = '';
       if (chat?.contact_id) {
         const { data: contact } = await supabase.from('contacts').select('phone_number').eq('id', chat.contact_id).maybeSingle();
@@ -96,6 +101,25 @@ export default function ConversationSettingsScreen() {
   }, [details.email, details.phone, platform, sourcePhone]);
 
   const handleCategorySelect = (category: ChatCategory) => { if (user?.id) void setCategory(chatId, user.id, category); };
+  const updateMute = async (muted: boolean) => {
+    if (!accessToken || isSavingMute) return;
+    const previous = isMuted;
+    setIsMuted(muted);
+    setIsSavingMute(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/messages/chats/${encodeURIComponent(chatId)}/mute`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ muted }),
+      });
+      if (!response.ok) throw new Error(`Mute update failed (${response.status})`);
+    } catch {
+      setIsMuted(previous);
+      Alert.alert('Could not update notifications', 'Please check your connection and try again.');
+    } finally {
+      setIsSavingMute(false);
+    }
+  };
   const selectTone = (nextTone: ToneKey) => {
     setTone(nextTone);
     if (!instruction.trim()) {
@@ -124,11 +148,19 @@ export default function ConversationSettingsScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.cream }} edges={['top']}>
       <View style={{ minHeight: 64, paddingHorizontal: space[4], flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: colors.neutral[200] }}>
         <MobileIconButton label="Back to chat" onPress={() => router.back()}><ChevronLeft size={21} color={colors.ink} /></MobileIconButton>
-        <Text maxFontSizeMultiplier={1} style={{ ...mobileType.sectionTitle, flex: 1, paddingHorizontal: space[3], color: colors.ink }}>Relationship memory</Text>
-        <View style={{ width: 40 }} />
+        <View style={{ flex: 1 }} />
       </View>
       {isLoading && !chatSettings ? <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator size="large" color={colors.ink} /></View> : (
         <ScrollView contentContainerStyle={{ padding: space[4], paddingBottom: 132 + insets.bottom, gap: space[5] }} keyboardShouldPersistTaps="handled">
+          <View style={{ gap: space[2] }}>
+            <SectionLabel title="Chat settings" />
+            <View testID="conversation-notification-settings" style={{ minHeight: 76, flexDirection: 'row', alignItems: 'center', gap: space[3], paddingHorizontal: space[3], borderRadius: radius.card, backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.neutral[200] }}>
+              <View style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: radius.control, backgroundColor: isMuted ? colors.neutral[100] : colors.sky }}><BellOff size={19} color={colors.ink} /></View>
+              <View style={{ flex: 1, gap: 2 }}><Text style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>Mute notifications</Text><Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{isMuted ? 'Notifications are muted for this chat.' : `Receive alerts for this ${is_group === '1' ? 'group' : 'conversation'}.`}</Text></View>
+              <Switch testID="conversation-mute-notifications" accessibilityLabel={`Mute notifications for ${displayName}`} value={isMuted} disabled={isSavingMute || !accessToken} onValueChange={(value) => void updateMute(value)} trackColor={{ false: colors.neutral[200], true: colors.ink }} thumbColor={isMuted ? colors.lime : colors.paper} />
+            </View>
+          </View>
+
           <View style={{ alignItems: 'center', gap: space[2], paddingVertical: space[2] }}>
             <MobileAvatar name={displayName} size={72} isGroup={is_group === '1'} />
             <Text maxFontSizeMultiplier={1} style={{ ...mobileType.sectionTitle, color: colors.ink }}>{displayName}</Text>
