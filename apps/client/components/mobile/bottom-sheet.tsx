@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import GorhomBottomSheet, {
   BottomSheetBackdrop,
+  BottomSheetScrollView,
   BottomSheetView,
   type BottomSheetBackdropProps,
 } from '@gorhom/bottom-sheet';
@@ -36,12 +37,16 @@ export function BottomSheet({
   onClose,
   children,
   testID,
+  snapPoints = SNAP_POINTS,
+  scrollable = false,
 }: {
   visible: boolean;
   title: string;
   onClose: () => void;
   children: ReactNode;
   testID?: string;
+  snapPoints?: string[];
+  scrollable?: boolean;
 }) {
   const insets = useSafeAreaInsets();
   const sheetRef = useRef<GorhomBottomSheet>(null);
@@ -70,7 +75,7 @@ export function BottomSheet({
     <GorhomBottomSheet
       ref={sheetRef}
       index={-1}
-      snapPoints={SNAP_POINTS}
+      snapPoints={snapPoints}
       enablePanDownToClose
       onClose={onClose}
       backdropComponent={renderBackdrop}
@@ -84,7 +89,7 @@ export function BottomSheet({
         borderTopRightRadius: 28,
       }}
     >
-      <BottomSheetView style={{ paddingBottom: bottomSheetInset(insets.bottom) }}>
+      <BottomSheetView>
         <View
           testID={testID}
           style={{
@@ -105,8 +110,16 @@ export function BottomSheet({
             <X size={19} color={colors.ink} />
           </MobileIconButton>
         </View>
-        {children}
       </BottomSheetView>
+      {scrollable ? (
+        <BottomSheetScrollView contentContainerStyle={{ paddingBottom: bottomSheetInset(insets.bottom) }}>
+          {children}
+        </BottomSheetScrollView>
+      ) : (
+        <BottomSheetView style={{ paddingBottom: bottomSheetInset(insets.bottom) }}>
+          {children}
+        </BottomSheetView>
+      )}
     </GorhomBottomSheet>
   );
 }

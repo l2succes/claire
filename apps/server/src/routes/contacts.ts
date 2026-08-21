@@ -31,6 +31,9 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
         .order('id', { ascending: true });
 
       if (platform !== 'all') query = query.eq('platform', platform);
+      // "Contacted" is maintained by a database trigger, rather than passing
+      // a potentially huge message-derived ID list through a URL query.
+      if (filter === 'contacted') query = query.eq('is_group', false).gt('outbound_message_count', 0);
       if (filter === 'needs_context') query = query.eq('is_group', false).is('inferred_relationship', null);
       if (filter === 'groups') query = query.eq('is_group', true);
       if (search) {

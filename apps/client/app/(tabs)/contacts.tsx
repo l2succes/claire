@@ -17,6 +17,22 @@ import { isPhoneNumberFallback } from '../../services/phone-numbers';
 
 type PlatformFilter = 'all' | Platform;
 
+const CURRENT_FILTERS: Array<{ value: PeopleFilter; label: string; detail: string }> = [
+  { value: 'all', label: 'All people', detail: 'Everyone Claire has synced' },
+  { value: 'contacted', label: 'Contacted', detail: 'People you have messaged' },
+  { value: 'needs_context', label: 'Needs context', detail: 'People without relationship context' },
+  { value: 'groups', label: 'Groups', detail: 'Group conversations' },
+];
+
+const COMING_SOON_FILTERS = [
+  ['Open loops', 'Unresolved promises, questions, and plans'],
+  ['Needs reply', 'Conversations waiting on you'],
+  ['Follow-ups due', 'Commitments and reminders with a next step'],
+  ['Reconnecting', 'People you have not talked to recently'],
+  ['Context gaps', 'Important people Claire knows little about'],
+  ['Important moments', 'Relevant dates and shared context'],
+] as const;
+
 const PLATFORM_ORDER: Platform[] = [Platform.WHATSAPP, Platform.INSTAGRAM, Platform.IMESSAGE, Platform.TELEGRAM];
 
 function contactPlatform(contact: PersonContact) {
@@ -154,7 +170,13 @@ export default function ContactsScreen() {
     setShowPlatformFilter(false);
   };
 
-  const emptyTitle = searchQuery ? 'No people found' : platform !== 'all' ? `No people on ${platformLabel(platform)}` : 'No people yet';
+  const emptyTitle = searchQuery
+    ? 'No people found'
+    : filter === 'contacted'
+      ? 'No people contacted yet'
+      : platform !== 'all'
+        ? `No people on ${platformLabel(platform)}`
+        : 'No people yet';
   const emptyMessage = searchQuery
     ? 'Try another name or number.'
     : platform !== 'all'
@@ -197,6 +219,7 @@ export default function ContactsScreen() {
         <MobileSearchField icon={<Search size={18} color={colors.neutral[600]} />} placeholder="Search people" value={searchQuery} onChangeText={setSearchQuery} testID="contacts-search-input" />
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space[2] }}>
           <MobileChip label="All" active={filter === 'all'} onPress={() => setFilter('all')} />
+          <MobileChip label="Contacted" active={filter === 'contacted'} onPress={() => setFilter('contacted')} />
           <MobileChip label="Needs context" active={filter === 'needs_context'} onPress={() => setFilter('needs_context')} />
           <MobileChip label="Groups" active={filter === 'groups'} onPress={() => setFilter('groups')} />
           <MobileChip
@@ -268,9 +291,25 @@ export default function ContactsScreen() {
         </View>
       )}
 
-      <BottomSheet visible={showPlatformFilter} title="Filter people" onClose={() => setShowPlatformFilter(false)} testID="people-platform-sheet">
+      <BottomSheet visible={showPlatformFilter} title="Filter people" onClose={() => setShowPlatformFilter(false)} testID="people-platform-sheet" snapPoints={['88%']} scrollable>
         <View style={{ paddingHorizontal: space[4], paddingBottom: space[2] }}>
-            <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600], marginBottom: space[3] }}>Choose the networks you want to see.</Text>
+            <Text style={{ ...mobileType.monoLabel, color: colors.neutral[600], marginBottom: space[2] }}>SHOW</Text>
+            {CURRENT_FILTERS.map((option, index) => (
+              <View key={option.value}>
+                {index ? <View style={{ height: 1, backgroundColor: colors.neutral[200] }} /> : null}
+                <Pressable accessibilityRole="button" accessibilityState={{ selected: filter === option.value }} onPress={() => { setFilter(option.value); setShowPlatformFilter(false); }} testID={`people-filter-${option.value}`}>
+                  <View style={{ minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: space[3], paddingVertical: space[2] }}>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>{option.label}</Text>
+                      <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{option.detail}</Text>
+                    </View>
+                    {filter === option.value ? <Check size={18} color={colors.ink} /> : null}
+                  </View>
+                </Pressable>
+              </View>
+            ))}
+            <View style={{ height: 1, backgroundColor: colors.neutral[200], marginVertical: space[2] }} />
+            <Text style={{ ...mobileType.monoLabel, color: colors.neutral[600], marginBottom: space[2] }}>PLATFORM</Text>
             <Pressable accessibilityRole="button" accessibilityState={{ selected: platform === 'all' }} onPress={() => selectPlatform('all')} testID="people-platform-all">
               <View style={{ minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: space[3], paddingVertical: space[2] }}>
                 <View style={{ flex: 1, minWidth: 0 }}>
@@ -297,6 +336,21 @@ export default function ContactsScreen() {
                     {platform === value ? <Check size={18} color={colors.ink} /> : null}
                   </View>
                 </Pressable>
+              </View>
+            ))}
+            <View style={{ height: 1, backgroundColor: colors.neutral[200], marginVertical: space[2] }} />
+            <Text style={{ ...mobileType.monoLabel, color: colors.neutral[600], marginBottom: space[1] }}>CLAIRE INTELLIGENCE</Text>
+            <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600], marginBottom: space[2] }}>Coming soon — these require reliable, explainable signals.</Text>
+            {COMING_SOON_FILTERS.map(([label, detail], index) => (
+              <View key={label}>
+                {index ? <View style={{ height: 1, backgroundColor: colors.neutral[200] }} /> : null}
+                <View accessibilityRole="text" style={{ minHeight: 58, flexDirection: 'row', alignItems: 'center', gap: space[3], paddingVertical: space[2], opacity: 0.58 }}>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={{ ...mobileType.bodySmall, fontWeight: '700', color: colors.ink }}>{label}</Text>
+                    <Text style={{ ...mobileType.label, color: colors.neutral[600] }}>{detail}</Text>
+                  </View>
+                  <Text style={{ ...mobileType.monoLabel, color: colors.neutral[600] }}>SOON</Text>
+                </View>
               </View>
             ))}
         </View>

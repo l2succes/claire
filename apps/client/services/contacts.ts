@@ -2,7 +2,7 @@ import { supabase } from './supabase';
 import { API_BASE_URL } from './platforms';
 import type { Platform } from '../types/platform';
 
-export type PeopleFilter = 'all' | 'needs_context' | 'groups';
+export type PeopleFilter = 'all' | 'contacted' | 'needs_context' | 'groups';
 
 export interface PersonContact {
   id: string;
