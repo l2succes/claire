@@ -180,7 +180,18 @@ router.get(
 
       const { status, platform, contact_id, limit, offset } = req.query as any;
 
-      let query = supabase
+      // Count and data are fetched as two separate requests, not combined via
+      // { count: 'exact' } on the embedded select below. Combining them on this
+      // query (large multi-table embed + count + range) was observed in
+      // production to return the correct count but an empty data array, with
+      // no error surfaced — reproducible only on the long-running server
+      // process, never on a fresh one-shot request. Splitting sidesteps it.
+      let countQuery = supabase
+        .from('loops')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId);
+
+      let dataQuery = supabase
         .from('loops')
         .select(`
           *,
@@ -189,18 +200,21 @@ router.get(
             name, is_group, platform,
             contact:contacts!chats_contact_id_fkey(name, inferred_name, avatar_url)
           )
-        `, { count: 'exact' })
+        `)
         .eq('user_id', userId)
         .order('created_at', { ascending: false });
 
-      if (status) query = query.eq('status', status);
-      if (platform) query = query.eq('platform', platform);
-      if (contact_id) query = query.eq('contact_id', contact_id);
+      if (status) { countQuery = countQuery.eq('status', status); dataQuery = dataQuery.eq('status', status); }
+      if (platform) { countQuery = countQuery.eq('platform', platform); dataQuery = dataQuery.eq('platform', platform); }
+      if (contact_id) { countQuery = countQuery.eq('contact_id', contact_id); dataQuery = dataQuery.eq('contact_id', contact_id); }
 
-      const { data, error, count } = await query.range(offset, offset + limit - 1);
+      const [{ count, error: countError }, { data, error }] = await Promise.all([
+        countQuery,
+        dataQuery.range(offset, offset + limit - 1),
+      ]);
 
-      if (error) {
-        logger.error('Error listing loops:', error);
+      if (error || countError) {
+        logger.error('Error listing loops:', error || countError);
         return res.status(500).json({ success: false, error: 'Failed to fetch loops' });
       }
 

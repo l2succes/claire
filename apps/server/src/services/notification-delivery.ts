@@ -51,6 +51,10 @@ interface NotificationOptions {
   quiet_hours_end?: string;
 }
 
+export function shouldNotifyConversation(notificationEnabled: boolean | null | undefined, options: NotificationOptions, isMuted: boolean | null | undefined): boolean {
+  return notificationEnabled !== false && options.notify_messages !== false && isMuted !== true;
+}
+
 function minutesAtTimezone(date: Date, timezone: string): number {
   try {
     const parts = new Intl.DateTimeFormat('en-GB', { timeZone: timezone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(date);
@@ -95,14 +99,16 @@ export class NotificationDeliveryService {
 
   async enqueueIncomingMessage(event: IncomingNotificationEvent): Promise<number> {
     this.start();
-    const [{ data: preferences, error: preferenceError }, { data: devices, error: deviceError }] = await Promise.all([
+    const [{ data: preferences, error: preferenceError }, { data: devices, error: deviceError }, { data: chat, error: chatError }] = await Promise.all([
       supabase.from('user_preferences').select('notification_enabled,preferences').eq('user_id', event.userId).maybeSingle(),
       supabase.from('notification_devices').select('id,user_id,device_id,platform,provider,token,enabled,timezone').eq('user_id', event.userId).eq('enabled', true),
+      supabase.from('chats').select('is_muted').eq('id', event.chatId).eq('user_id', event.userId).maybeSingle(),
     ]);
     if (preferenceError) throw preferenceError;
     if (deviceError) throw deviceError;
+    if (chatError) throw chatError;
     const options = (preferences?.preferences || {}) as NotificationOptions;
-    if (preferences?.notification_enabled === false || options.notify_messages === false) return 0;
+    if (!shouldNotifyConversation(preferences?.notification_enabled, options, chat?.is_muted)) return 0;
 
     const { data: chats } = await supabase.from('chats').select('unread_count').eq('user_id', event.userId);
     const badge = (chats || []).reduce((sum: number, chat: { unread_count?: number }) => sum + Math.max(0, chat.unread_count || 0), 0);
