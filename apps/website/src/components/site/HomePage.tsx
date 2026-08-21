@@ -657,23 +657,18 @@ export function HomePage() {
               <div className="phone-tabs">
                 <span>
                   <HeroIcon name="home" />
-                  <small>Home</small>
                 </span>
                 <span>
                   <HeroIcon name="inbox" />
-                  <small>Inbox</small>
                 </span>
                 <span className="phone-tab-ask">
                   <HeroIcon name="sparkles" />
-                  <small>Ask</small>
                 </span>
                 <span>
                   <HeroIcon name="promises" />
-                  <small>Promises</small>
                 </span>
                 <span>
                   <HeroIcon name="search" />
-                  <small>Search</small>
                 </span>
               </div>
             </div>

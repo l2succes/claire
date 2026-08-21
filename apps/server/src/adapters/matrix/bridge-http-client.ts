@@ -38,6 +38,20 @@ export interface ResolvedBridgeIdentifier {
   mxid?: string;
 }
 
+/**
+ * A contact profile returned by mautrix's authenticated provisioning API.
+ * These values are scoped to a single linked bridge login; they must never be
+ * copied into a shared Matrix ghost profile.
+ */
+export interface BridgeContact {
+  id: string;
+  name?: string;
+  avatar_url?: string;
+  identifiers?: string[];
+  dm_room_mxid?: string;
+  mxid?: string;
+}
+
 export class BridgeHttpClient {
   private readonly provisioningBase: string;
   private static readonly REQUEST_TIMEOUT_MS = 12_000;
@@ -117,6 +131,22 @@ export class BridgeHttpClient {
       undefined,
       { login_id: loginId }
     );
+  }
+
+  /**
+   * Read the authenticated account's own contact directory. mautrix v3
+   * exposes this separately from Matrix room-member profiles, which lets
+   * Claire enrich its per-user contacts table without turning another
+   * person's local address-book label into global bridge metadata.
+   */
+  async getContacts(loginId: string): Promise<BridgeContact[]> {
+    const response = await this.request<{ contacts?: BridgeContact[] }>(
+      'GET',
+      '/v3/contacts',
+      undefined,
+      { login_id: loginId }
+    );
+    return Array.isArray(response.contacts) ? response.contacts : [];
   }
 
   async startLogin(flowId: string): Promise<LoginStepResponse> {

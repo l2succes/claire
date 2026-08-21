@@ -20,6 +20,7 @@ import { loginWithCredentials, submitTwoFactorCode } from '../services/instagram
 import { platformCatalog, platformCatalogVersion } from '../platform-catalog';
 import { supabase, type DbRow } from '../services/supabase';
 import { operationsTelemetry } from '../services/operations-telemetry';
+import { queueWhatsAppContactIdentitySync } from '../services/whatsapp-contact-backfill';
 
 // Railway services cannot reach each other through localhost. Railway does not
 // inject NODE_ENV by default, so its public-domain marker is also used to
@@ -634,6 +635,16 @@ router.post('/:platform/connect', async (req: Request, res: Response) => {
                 session.id,
                 result.complete?.user_login_id
               );
+              void queueWhatsAppContactIdentitySync(session.userId)
+                .then((sync) => logger.info('WhatsApp contact identity sync completed after login', {
+                  scanned: sync.scanned,
+                  matched: sync.matched,
+                  updated: sync.updated,
+                  unresolved: sync.unresolved,
+                }))
+                .catch((error) => logger.warn('WhatsApp contact identity sync failed after login', {
+                  error: error instanceof Error ? error.message : 'Unknown error',
+                }));
               logger.info(`WhatsApp login complete for session ${session.id}`);
               return;
             }

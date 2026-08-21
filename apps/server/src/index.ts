@@ -372,7 +372,7 @@ async function initializePlatforms() {
           const resolved = await bridge.resolveIdentifier(platformUserId, platformUserId);
           return resolved.mxid ? [resolved.mxid] : [];
         },
-        resolveContactIdentity: async (platform, platformContactId, platformUserId) => {
+        resolveContactIdentity: async (platform, platformContactId) => {
           if (platform !== Platform.WHATSAPP || !process.env.WHATSAPP_BRIDGE_SECRET) {
             return null;
           }
@@ -381,10 +381,15 @@ async function initializePlatforms() {
             process.env.WHATSAPP_BRIDGE_SECRET,
             process.env.WHATSAPP_BRIDGE_USER_ID || '@claire_bot:claire.local'
           );
-          const resolved = await bridge.resolveIdentifier(platformContactId, platformUserId);
+          // mautrix resolves an already-known contact profile through the
+          // authenticated bridge user. `platformUserId` is a WhatsApp phone
+          // or LID, not a provisioning login ID, so passing it here prevents
+          // profile enrichment on some bridge versions.
+          const resolved = await bridge.resolveIdentifier(platformContactId);
           return {
             displayName: resolved.name,
             phoneNumber: phoneNumberFromBridgeIdentifiers([
+              resolved.name,
               ...(resolved.identifiers || []),
               resolved.id,
             ]) || undefined,
