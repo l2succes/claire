@@ -51,10 +51,11 @@ export function displayContactName(
 }
 
 /**
- * Full contact identity used by People. A real formatted phone number is the
- * most reliable way to identify a WhatsApp-only contact, followed by the
- * provider profile name and then a public username. This keeps bridge routing
- * IDs and privacy masks out of the product while still making every row useful.
+ * Primary People label. When the platform gives us both a profile name and a
+ * phone number, people scan much more naturally as "Name" then "Number" than
+ * as a phone directory. A phone remains the primary label only when it is the
+ * only safe identity we have. This keeps bridge routing IDs and privacy masks
+ * out of the product while still making every row useful.
  */
 export function displayPersonName(
   contact: {
@@ -75,13 +76,13 @@ export function displayPersonName(
       ? name
       : '';
   const phone = formatPhoneNumber(contact.phone_number);
-  return phone || visibleName || (username ? `@${username}` : '') ||
+  return visibleName || (username ? `@${username}` : '') || phone ||
     (isWhatsApp
       ? 'WhatsApp contact'
       : fallback);
 }
 
-/** Secondary identity detail for a People row, without duplicating its title. */
+/** Secondary People identity detail, without duplicating its primary label. */
 export function displayPersonDetails(contact: {
   name?: string | null;
   inferred_name?: string | null;
@@ -93,9 +94,9 @@ export function displayPersonDetails(contact: {
   const username = contact.username?.trim().replace(/^@+/, '') || '';
   const phone = formatPhoneNumber(contact.phone_number);
   const visibleName = name && (!isWhatsAppPlatform(contact.platform) || isUsableWhatsAppName(name)) ? name : '';
-  // The title already uses phone first. Show the useful provider identity
-  // beneath it instead of a generic "add context" prompt.
-  if (phone) return visibleName || (username ? `@${username}` : null);
+  // A full name belongs on the first line. Put its formatted phone beneath it;
+  // otherwise use a public username as the supporting identity.
+  if ((visibleName || username) && phone) return phone;
   if (visibleName && username) return `@${username}`;
   if (visibleName) return null;
   return username ? `@${username}` : null;

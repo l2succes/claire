@@ -2,7 +2,7 @@ import { supabase } from './supabase';
 import { API_BASE_URL } from './platforms';
 import type { Platform } from '../types/platform';
 
-export type PeopleFilter = 'all' | 'needs_context' | 'groups';
+export type PeopleFilter = 'all' | 'contacted' | 'needs_context' | 'groups';
 
 export interface PersonContact {
   id: string;
@@ -41,15 +41,16 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const contactsApi = {
-  list({ offset = 0, query, platform, filter }: {
+  list({ offset = 0, limit = 80, query, platform, filter }: {
     offset?: number;
+    limit?: number;
     query: string;
     platform: 'all' | Platform;
     filter: PeopleFilter;
   }) {
     const params = new URLSearchParams({
       offset: String(offset),
-      limit: '80',
+      limit: String(limit),
       platform,
       filter,
     });

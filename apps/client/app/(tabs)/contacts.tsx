@@ -1,19 +1,37 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { FlatList, Modal, Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, SectionList, Text, View } from 'react-native';
 import { Check, ListFilter, Search } from 'lucide-react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useInfiniteQuery } from '@tanstack/react-query';
-import { colors, mobileType, radius, space, useIsDesktopLayout } from '@claire/design-system';
+import { useQuery } from '@tanstack/react-query';
+import { colors, mobileType, space, useIsDesktopLayout } from '@claire/design-system';
 import { useAuthStore } from '../../stores/authStore';
 import { MobileAvatar, MobileChip, MobileHeader, MobileIconButton, MobileSearchField, MobileState } from '../../components/mobile/claire-mobile';
+import { BottomSheet } from '../../components/mobile/bottom-sheet';
 import { PlatformIcon, PlatformName } from '../../components/PlatformIcon';
 import { Platform, platformLabel } from '../../types/platform';
 import { PeopleSkeleton } from '../../components/claire/skeleton';
 import { contactsApi, type PeopleFilter, type PersonContact } from '../../services/contacts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { displayPersonDetails, displayPersonName } from '../../services/contact-display';
+import { isPhoneNumberFallback } from '../../services/phone-numbers';
 
 type PlatformFilter = 'all' | Platform;
+
+const CURRENT_FILTERS: Array<{ value: PeopleFilter; label: string; detail: string }> = [
+  { value: 'all', label: 'All people', detail: 'Everyone Claire has synced' },
+  { value: 'contacted', label: 'Contacted', detail: 'People you have messaged' },
+  { value: 'needs_context', label: 'Needs context', detail: 'People without relationship context' },
+  { value: 'groups', label: 'Groups', detail: 'Group conversations' },
+];
+
+const COMING_SOON_FILTERS = [
+  ['Open loops', 'Unresolved promises, questions, and plans'],
+  ['Needs reply', 'Conversations waiting on you'],
+  ['Follow-ups due', 'Commitments and reminders with a next step'],
+  ['Reconnecting', 'People you have not talked to recently'],
+  ['Context gaps', 'Important people Claire knows little about'],
+  ['Important moments', 'Relevant dates and shared context'],
+] as const;
 
 const PLATFORM_ORDER: Platform[] = [Platform.WHATSAPP, Platform.INSTAGRAM, Platform.IMESSAGE, Platform.TELEGRAM];
 
@@ -21,12 +39,57 @@ function contactPlatform(contact: PersonContact) {
   return contact.chat?.platform || contact.platform || null;
 }
 
+/**
+ * A contact is the durable platform profile; a chat is the latest
+ * conversation envelope. Older WhatsApp imports occasionally have identity
+ * metadata only on that envelope, so use it as a display-only fallback. This
+ * keeps a person identifiable without ever surfacing the bridge LID.
+ */
+function displayIdentity(contact: PersonContact) {
+  const chatName = contact.chat?.name?.trim() || null;
+  return {
+    ...contact,
+    platform: contactPlatform(contact),
+    name: contact.name || contact.inferred_name || chatName,
+    phone_number: contact.phone_number || (chatName && isPhoneNumberFallback(chatName) ? chatName : null),
+  };
+}
+
 function personName(contact: PersonContact): string {
-  return displayPersonName({ ...contact, platform: contactPlatform(contact) }, 'Unknown person');
+  return displayPersonName(displayIdentity(contact), 'Unknown person');
 }
 
 function personDetails(contact: PersonContact): string | null {
-  return displayPersonDetails(contact);
+  return displayPersonDetails(displayIdentity(contact));
+}
+
+type PeopleSection = { title: string; data: PersonContact[] };
+
+function alphabetLetter(contact: PersonContact): string {
+  const initial = personName(contact)
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .charAt(0)
+    .toUpperCase();
+  return /^[A-Z]$/.test(initial) ? initial : '#';
+}
+
+function alphabetizedSections(contacts: PersonContact[]): PeopleSection[] {
+  const grouped = new Map<string, PersonContact[]>();
+  for (const contact of contacts) {
+    const letter = alphabetLetter(contact);
+    const section = grouped.get(letter) || [];
+    section.push(contact);
+    grouped.set(letter, section);
+  }
+  return [...grouped.entries()]
+    .sort(([left], [right]) => {
+      if (left === '#') return 1;
+      if (right === '#') return -1;
+      return left.localeCompare(right);
+    })
+    .map(([title, data]) => ({ title, data }));
 }
 
 export default function ContactsScreen() {
@@ -39,28 +102,27 @@ export default function ContactsScreen() {
   const [showPlatformFilter, setShowPlatformFilter] = useState(false);
   const user = useAuthStore(state => state.user);
   const requestedIdentitySyncFor = useRef<string | null>(null);
+  const peopleListRef = useRef<SectionList<PersonContact>>(null);
   const debouncedSearchQuery = useDebouncedValue(searchQuery);
 
   useEffect(() => {
     setSearchQuery(params.q || params.query || '');
   }, [params.q, params.query]);
 
-  const peopleQuery = useInfiniteQuery({
+  const peopleQuery = useQuery({
     queryKey: ['people', user?.id, debouncedSearchQuery, platform, filter],
     enabled: !!user?.id,
-    initialPageParam: 0,
-    queryFn: ({ pageParam }) => contactsApi.list({
-      offset: pageParam,
+    // The API and bridge sync share a 10k maximum. Loading that user-scoped
+    // directory as one virtualized list is what makes an A–Z index truthful:
+    // tapping J never jumps only within whichever page happened to be loaded.
+    queryFn: () => contactsApi.list({
+      limit: 10_000,
       query: debouncedSearchQuery,
       platform,
       filter,
     }),
-    getNextPageParam: (page) => page.nextOffset,
-    // Contacts are enriched asynchronously by the connected bridges. A
-    // foreground return should always pick up newly learned names/numbers.
-    // Keep polling briefly while the bounded server-side identity sync runs.
+    // A foreground return should always pick up newly learned names/numbers.
     refetchOnMount: 'always',
-    refetchInterval: 15_000,
   });
 
   useEffect(() => {
@@ -69,12 +131,17 @@ export default function ContactsScreen() {
     // This only starts a per-user, metadata-only bridge sync. It is safe to
     // ignore a missing/disconnected WhatsApp account; People still renders
     // the identities already stored for other platforms.
-    void contactsApi.startIdentitySync()
-      .then(() => peopleQuery.refetch())
-      .catch(() => undefined);
+    // The task is asynchronous. Refresh a few times while a linked account's
+    // bounded directory import runs, instead of repeatedly downloading a
+    // possible 10k-person directory for the entire life of the screen.
+    const refreshTimers = [3_000, 15_000, 45_000].map((delay) => setTimeout(() => {
+      void peopleQuery.refetch();
+    }, delay));
+    void contactsApi.startIdentitySync().catch(() => undefined);
+    return () => refreshTimers.forEach(clearTimeout);
   }, [user?.id, peopleQuery.refetch]);
   const contacts = useMemo(
-    () => (peopleQuery.data?.pages.flatMap((page) => page.contacts) || [])
+    () => (peopleQuery.data?.contacts || [])
       .slice()
       .sort((left, right) => {
         const leftName = personName(left);
@@ -86,6 +153,7 @@ export default function ContactsScreen() {
       }),
     [peopleQuery.data],
   );
+  const sections = useMemo(() => alphabetizedSections(contacts), [contacts]);
 
   // Keep every supported platform visible. A zero-result Instagram filter is
   // useful feedback that the account has no synced Instagram conversations;
@@ -102,12 +170,18 @@ export default function ContactsScreen() {
     setShowPlatformFilter(false);
   };
 
-  const emptyTitle = searchQuery ? 'No people found' : platform !== 'all' ? `No people on ${platformLabel(platform)}` : 'No people yet';
+  const emptyTitle = searchQuery
+    ? 'No people found'
+    : filter === 'contacted'
+      ? 'No people contacted yet'
+      : platform !== 'all'
+        ? `No people on ${platformLabel(platform)}`
+        : 'No people yet';
   const emptyMessage = searchQuery
     ? 'Try another name or number.'
     : platform !== 'all'
-      ? 'Contacts from this account appear here as conversations sync.'
-      : 'Contacts appear here as conversations sync.';
+      ? 'Contacts from this connected account appear here after it syncs.'
+      : 'Contacts from your connected accounts appear here after they sync.';
 
   if (isDesktop) {
     const selected = contacts.find((contact) => contact.id === selectedContactId) || contacts[0];
@@ -145,6 +219,7 @@ export default function ContactsScreen() {
         <MobileSearchField icon={<Search size={18} color={colors.neutral[600]} />} placeholder="Search people" value={searchQuery} onChangeText={setSearchQuery} testID="contacts-search-input" />
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space[2] }}>
           <MobileChip label="All" active={filter === 'all'} onPress={() => setFilter('all')} />
+          <MobileChip label="Contacted" active={filter === 'contacted'} onPress={() => setFilter('contacted')} />
           <MobileChip label="Needs context" active={filter === 'needs_context'} onPress={() => setFilter('needs_context')} />
           <MobileChip label="Groups" active={filter === 'groups'} onPress={() => setFilter('groups')} />
           <MobileChip
@@ -157,17 +232,21 @@ export default function ContactsScreen() {
         </ScrollView>
       </View>
         {peopleQuery.isLoading ? <View style={{ paddingHorizontal: space[4] }}><PeopleSkeleton /></View> : (
-        <FlatList
-          data={contacts}
+        <View style={{ flex: 1, minHeight: 0 }}>
+        <SectionList
+          ref={peopleListRef}
+          sections={sections}
           keyExtractor={item => item.id}
           testID="contacts-list"
           style={{ backgroundColor: colors.paper }}
-          contentContainerStyle={{ paddingHorizontal: space[4], paddingBottom: 104 }}
-          onEndReached={() => {
-            if (peopleQuery.hasNextPage && !peopleQuery.isFetchingNextPage) void peopleQuery.fetchNextPage();
-          }}
-          onEndReachedThreshold={0.6}
+          contentContainerStyle={{ paddingLeft: space[4], paddingRight: 30, paddingBottom: 104 }}
+          stickySectionHeadersEnabled={false}
           ItemSeparatorComponent={() => <View style={{ height: 1, backgroundColor: colors.neutral[200] }} />}
+          renderSectionHeader={({ section }) => (
+            <View style={{ paddingTop: space[3], paddingBottom: space[1] }}>
+              <Text style={{ ...mobileType.monoLabel, color: colors.neutral[600] }}>{section.title}</Text>
+            </View>
+          )}
           renderItem={({ item }) => {
             const name = personName(item);
             const identityDetail = personDetails(item);
@@ -194,19 +273,45 @@ export default function ContactsScreen() {
             );
           }}
           ListEmptyComponent={<MobileState error={!!peopleQuery.error} title={peopleQuery.error ? 'People are unavailable' : emptyTitle} message={peopleQuery.error ? 'Try again in a moment.' : emptyMessage} />}
-          ListFooterComponent={peopleQuery.isFetchingNextPage ? <View style={{ paddingVertical: space[4] }}><PeopleSkeleton /></View> : null}
         />
+        {sections.length ? <View pointerEvents="box-none" style={{ position: 'absolute', right: 2, top: space[2], bottom: 96, justifyContent: 'center' }} testID="people-alphabet-index">
+          {sections.map((section, sectionIndex) => (
+            <Pressable
+              key={section.title}
+              accessibilityRole="button"
+              accessibilityLabel={`Jump to ${section.title}`}
+              hitSlop={4}
+              onPress={() => peopleListRef.current?.scrollToLocation({ sectionIndex, itemIndex: 0, animated: true, viewOffset: 8 })}
+              style={{ minHeight: 15, minWidth: 20, alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Text style={{ fontSize: 10, lineHeight: 12, fontWeight: '800', color: colors.neutral[600] }}>{section.title}</Text>
+            </Pressable>
+          ))}
+        </View> : null}
+        </View>
       )}
 
-      <Modal visible={showPlatformFilter} transparent animationType="slide" onRequestClose={() => setShowPlatformFilter(false)}>
-        <View style={{ flex: 1, backgroundColor: 'rgba(16,18,15,0.35)', justifyContent: 'flex-end' }}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Close platform filter" style={{ flex: 1 }} onPress={() => setShowPlatformFilter(false)} />
-          <View style={{ backgroundColor: colors.paper, borderTopLeftRadius: radius.panel, borderTopRightRadius: radius.panel, paddingHorizontal: space[5], paddingTop: space[4], paddingBottom: 36 }}>
-            <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: colors.neutral[300], alignSelf: 'center', marginBottom: space[4] }} />
-            <Text style={{ ...mobileType.sectionTitle, color: colors.ink }}>Filter by platform</Text>
-            <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600], marginTop: 4, marginBottom: space[3] }}>People includes everyone Claire has synced, including Instagram.</Text>
+      <BottomSheet visible={showPlatformFilter} title="Filter people" onClose={() => setShowPlatformFilter(false)} testID="people-platform-sheet" snapPoints={['88%']} scrollable>
+        <View style={{ paddingHorizontal: space[4], paddingBottom: space[2] }}>
+            <Text style={{ ...mobileType.monoLabel, color: colors.neutral[600], marginBottom: space[2] }}>SHOW</Text>
+            {CURRENT_FILTERS.map((option, index) => (
+              <View key={option.value}>
+                {index ? <View style={{ height: 1, backgroundColor: colors.neutral[200] }} /> : null}
+                <Pressable accessibilityRole="button" accessibilityState={{ selected: filter === option.value }} onPress={() => { setFilter(option.value); setShowPlatformFilter(false); }} testID={`people-filter-${option.value}`}>
+                  <View style={{ minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: space[3], paddingVertical: space[2] }}>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>{option.label}</Text>
+                      <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{option.detail}</Text>
+                    </View>
+                    {filter === option.value ? <Check size={18} color={colors.ink} /> : null}
+                  </View>
+                </Pressable>
+              </View>
+            ))}
+            <View style={{ height: 1, backgroundColor: colors.neutral[200], marginVertical: space[2] }} />
+            <Text style={{ ...mobileType.monoLabel, color: colors.neutral[600], marginBottom: space[2] }}>PLATFORM</Text>
             <Pressable accessibilityRole="button" accessibilityState={{ selected: platform === 'all' }} onPress={() => selectPlatform('all')} testID="people-platform-all">
-              <View style={{ minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: space[3] }}>
+              <View style={{ minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: space[3], paddingVertical: space[2] }}>
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>All platforms</Text>
                   <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>Every synced person</Text>
@@ -223,7 +328,7 @@ export default function ContactsScreen() {
                   onPress={() => selectPlatform(value)}
                   testID={`people-platform-${value}`}
                 >
-                  <View style={{ minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: space[3] }}>
+                  <View style={{ minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: space[3], paddingVertical: space[2] }}>
                     <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
                       <PlatformName platform={value} size={14} />
                       <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>Show {platformLabel(value)} people</Text>
@@ -233,9 +338,23 @@ export default function ContactsScreen() {
                 </Pressable>
               </View>
             ))}
-          </View>
+            <View style={{ height: 1, backgroundColor: colors.neutral[200], marginVertical: space[2] }} />
+            <Text style={{ ...mobileType.monoLabel, color: colors.neutral[600], marginBottom: space[1] }}>CLAIRE INTELLIGENCE</Text>
+            <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600], marginBottom: space[2] }}>Coming soon — these require reliable, explainable signals.</Text>
+            {COMING_SOON_FILTERS.map(([label, detail], index) => (
+              <View key={label}>
+                {index ? <View style={{ height: 1, backgroundColor: colors.neutral[200] }} /> : null}
+                <View accessibilityRole="text" style={{ minHeight: 58, flexDirection: 'row', alignItems: 'center', gap: space[3], paddingVertical: space[2], opacity: 0.58 }}>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={{ ...mobileType.bodySmall, fontWeight: '700', color: colors.ink }}>{label}</Text>
+                    <Text style={{ ...mobileType.label, color: colors.neutral[600] }}>{detail}</Text>
+                  </View>
+                  <Text style={{ ...mobileType.monoLabel, color: colors.neutral[600] }}>SOON</Text>
+                </View>
+              </View>
+            ))}
         </View>
-      </Modal>
+      </BottomSheet>
     </View>
   );
 }

@@ -14,17 +14,28 @@ describe('contact display', () => {
     expect(displayContactName('Lucas', Platform.WHATSAPP, '192204836479059')).toBe('Lucas');
   });
 
-  it('uses a formatted phone number before the profile name or username in People', () => {
+  it('puts a profile name first and a formatted phone below it in People', () => {
+    expect(
+      displayPersonName({
+        platform: Platform.INSTAGRAM,
+        name: 'Lucas',
+        username: 'lucas',
+        phone_number: '+14155552671',
+      })
+    ).toBe('Lucas');
+    expect(
+      displayPersonDetails({ platform: Platform.INSTAGRAM, name: 'Lucas', username: 'lucas', phone_number: '+14155552671' })
+    ).toBe('+1 415 555 2671');
     expect(
       displayPersonName({
         platform: Platform.INSTAGRAM,
         username: 'lucas',
         phone_number: '+14155552671',
       })
-    ).toBe('+1 415 555 2671');
+    ).toBe('@lucas');
     expect(
-      displayPersonDetails({ platform: Platform.INSTAGRAM, name: 'Lucas', username: 'lucas', phone_number: '+14155552671' })
-    ).toBe('Lucas');
+      displayPersonDetails({ platform: Platform.INSTAGRAM, username: 'lucas', phone_number: '+14155552671' })
+    ).toBe('+1 415 555 2671');
   });
 
   it('does not expose an opaque WhatsApp LID in People', () => {
