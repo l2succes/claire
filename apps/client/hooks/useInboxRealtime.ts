@@ -78,7 +78,7 @@ export function useInboxRealtime(userId?: string) {
       patchInboxRealtimeMessage(queryClient, userId, row as InboxRealtimeRow);
     });
     channel.on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'chats', filter: `user_id=eq.${userId}` }, ({ new: row }) => {
-      const chat = row as { id: string; platform?: Platform; unread_count?: number; is_pinned?: boolean };
+      const chat = row as { id: string; platform?: Platform; unread_count?: number; is_pinned?: boolean; is_muted?: boolean };
       patchInboxChat(queryClient, userId, chat);
     });
     channel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ai_suggestions', filter: `user_id=eq.${userId}` }, ({ new: row }) => {

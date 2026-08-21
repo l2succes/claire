@@ -1,6 +1,6 @@
 import { Pressable, Text, View } from 'react-native';
 import { Image } from 'expo-image';
-import { Check, CheckCheck, Clock, Pin, Sparkles, UserRound, UsersRound } from 'lucide-react-native';
+import { BellOff, Check, CheckCheck, Clock, Pin, Sparkles, UserRound, UsersRound } from 'lucide-react-native';
 import { colors, mobileType, space } from '@claire/design-system';
 import { useState } from 'react';
 import { PlatformBadge } from './PlatformIcon';
@@ -23,6 +23,7 @@ interface MessageCardProps {
     has_open_loop?: boolean;
     platform?: Platform;
     is_pinned?: boolean;
+    is_muted?: boolean;
   };
   variant?: 'default' | 'pinned' | 'recent';
   onPress: () => void;
@@ -49,7 +50,7 @@ export function MessageCard({ message, variant = 'default', onPress, onLongPress
       onPress={onPress}
       onLongPress={onLongPress}
       accessibilityRole="button"
-      accessibilityLabel={`${name}${message.unread_count ? `, ${message.unread_count} unread` : ''}`}
+      accessibilityLabel={`${name}${message.is_muted ? ', notifications muted' : ''}${message.unread_count ? `, ${message.unread_count} unread` : ''}`}
       testID={`message-card-${message.id}`}
       style={({ pressed }) => ({
         minHeight: isPinnedPresentation ? 82 : 70,
@@ -81,6 +82,7 @@ export function MessageCard({ message, variant = 'default', onPress, onLongPress
       <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}>
           {message.is_pinned && !isPinnedPresentation ? <Pin size={13} color={colors.neutral[600]} fill={colors.neutral[600]} /> : null}
+          {message.is_muted ? <View testID={`message-card-muted-${message.id}`}><BellOff size={14} color={colors.neutral[600]} strokeWidth={1.8} /></View> : null}
           <Text selectable numberOfLines={1} style={{ ...mobileType.body, flex: 1, fontWeight: message.unread_count ? '700' : '600', color: colors.ink }}>{name}</Text>
           <Text selectable testID="message-card-timestamp" style={{ ...mobileType.monoLabel, color: colors.neutral[400] }}>{formatInboxTimestamp(message.timestamp)}</Text>
         </View>

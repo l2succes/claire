@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Modal, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
-import { PenSquare, Pin, Search, Sparkles, X } from 'lucide-react-native';
+import { BellOff, PenSquare, Pin, Search, Sparkles, X } from 'lucide-react-native';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
@@ -91,7 +91,7 @@ export function InboxConversationRow({
     <Pressable
       testID={`message-card-${message.id}`}
       accessibilityRole="button"
-      accessibilityLabel={`${name}${message.unread_count ? `, ${message.unread_count} unread` : ''}`}
+      accessibilityLabel={`${name}${message.is_muted ? ', notifications muted' : ''}${message.unread_count ? `, ${message.unread_count} unread` : ''}`}
       onPress={onPress}
       onLongPress={onLongPress}
       style={{
@@ -119,7 +119,10 @@ export function InboxConversationRow({
       </View>
 
       <View style={{ position: 'absolute', top: pinned ? 20 : desktop ? 13 : 14, left: inset + avatarSize + (desktop ? 9 : 14), right: inset, gap: desktop ? 1 : 3 }}>
-        <Text maxFontSizeMultiplier={1} selectable numberOfLines={1} style={{ paddingRight: 54, fontFamily: mobileType.body.fontFamily, fontSize: desktop ? 14 : 17, lineHeight: desktop ? 17 : 21, fontWeight: message.unread_count ? '700' : '600', color: colors.ink }}>{name}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingRight: 54 }}>
+          <Text maxFontSizeMultiplier={1} selectable numberOfLines={1} style={{ flexShrink: 1, fontFamily: mobileType.body.fontFamily, fontSize: desktop ? 14 : 17, lineHeight: desktop ? 17 : 21, fontWeight: message.unread_count ? '700' : '600', color: colors.ink }}>{name}</Text>
+          {message.is_muted ? <View testID={`inbox-muted-${message.chat_id}`}><BellOff size={desktop ? 13 : 15} color={colors.neutral[600]} strokeWidth={1.8} /></View> : null}
+        </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingRight: message.unread_count ? 36 : 0 }}>
           {preview.thumbnailUri && !thumbFailed ? (
             <Image

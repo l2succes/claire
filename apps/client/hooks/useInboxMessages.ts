@@ -24,6 +24,7 @@ export interface InboxMessage {
   platform?: Platform;
   snoozed_until?: string | null;
   is_pinned?: boolean;
+  is_muted?: boolean;
   content_type?: string;
   media_url?: string;
   sender_name?: string;
@@ -52,7 +53,7 @@ interface RawMessage {
   contact_phone?: string;
   contact_name?: string;
   snoozed_until?: string | null;
-  chats?: { name?: string; platform_chat_id?: string; unread_count?: number; is_pinned?: boolean } | null;
+  chats?: { name?: string; platform_chat_id?: string; unread_count?: number; is_pinned?: boolean; is_muted?: boolean } | null;
   contacts?: { avatar_url?: string | null } | null;
   ai_suggestions?: Array<{ id: string; confidence?: number }>;
 }
@@ -145,6 +146,7 @@ function conversationRowToInboxMessage(row: DbRow): InboxMessage {
     has_ai_response: row.last_message_has_ai_response === true,
     snoozed_until: (row.last_message_snoozed_until as string) ?? null,
     is_pinned: row.is_pinned === true,
+    is_muted: row.is_muted === true,
     content_type: (row.last_message_content_type as string) || 'text',
     media_url: (row.last_message_media_url as string) || undefined,
     sender_name: (row.last_message_sender_name as string) || undefined,
@@ -156,7 +158,8 @@ function sameMessage(a: InboxMessage, b: InboxMessage) {
     a.from_me === b.from_me && a.status === b.status && a.contact_name === b.contact_name &&
     a.contact_avatar === b.contact_avatar && a.chat_name === b.chat_name &&
     a.contact_phone === b.contact_phone && a.has_ai_response === b.has_ai_response &&
-    a.snoozed_until === b.snoozed_until && a.unread_count === b.unread_count && a.is_pinned === b.is_pinned;
+    a.snoozed_until === b.snoozed_until && a.unread_count === b.unread_count &&
+    a.is_pinned === b.is_pinned && a.is_muted === b.is_muted;
 }
 
 function sortMessages(messages: InboxMessage[]) {
@@ -244,6 +247,7 @@ export function patchInboxRealtimeMessage(
       has_ai_response: false,
       snoozed_until: row.snoozed_until ?? null,
       is_pinned: false,
+      is_muted: false,
     };
     const first = old.pages[0];
     if (!first) return { ...old, pages: [{ messages: [newMessage], hasMore: false, nextCursor: null }] };
@@ -254,7 +258,7 @@ export function patchInboxRealtimeMessage(
 export function patchInboxChat(
   queryClient: QueryClient,
   userId: string | undefined,
-  chat: { id: string; platform?: Platform; unread_count?: number; is_pinned?: boolean },
+  chat: { id: string; platform?: Platform; unread_count?: number; is_pinned?: boolean; is_muted?: boolean },
 ) {
   const key = conversationKey(chat.id, chat.platform || Platform.WHATSAPP);
   updateInboxQueries(queryClient, userId, (old) => {
@@ -263,9 +267,9 @@ export function patchInboxChat(
     const pages = old.pages.map((page) => ({
       ...page,
       messages: page.messages.map((message) => {
-        if (message.conversation_key !== key || (message.unread_count === chat.unread_count && message.is_pinned === chat.is_pinned)) return message;
+        if (message.conversation_key !== key || (message.unread_count === chat.unread_count && message.is_pinned === chat.is_pinned && message.is_muted === chat.is_muted)) return message;
         changed = true;
-        return { ...message, unread_count: chat.unread_count ?? message.unread_count ?? 0, is_pinned: chat.is_pinned ?? message.is_pinned };
+        return { ...message, unread_count: chat.unread_count ?? message.unread_count ?? 0, is_pinned: chat.is_pinned ?? message.is_pinned, is_muted: chat.is_muted ?? message.is_muted };
       }),
     }));
     return changed ? { ...old, pages } : old;
@@ -313,6 +317,7 @@ function cachedInboxMessages(chats: CachedChat[]): InboxMessage[] {
       has_ai_response: false,
       snoozed_until: null,
       is_pinned: chat.is_pinned === true,
+      is_muted: chat.is_muted === true,
     }];
   }));
 }
