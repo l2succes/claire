@@ -3,6 +3,7 @@ import { useInfiniteQuery, useQueryClient, type InfiniteData, type QueryClient }
 import { supabase, type DbRow } from '../services/supabase';
 import { Platform } from '../types/platform';
 import { cacheTimeline, hydrateMobileCache, usesNativeMobileCache, type CachedChat } from '../services/mobile-cache';
+import { displayContactName } from '../services/contact-display';
 
 export interface InboxMessage {
   id: string;
@@ -116,10 +117,14 @@ function conversationRowToInboxMessage(row: DbRow): InboxMessage {
   const chatId = String(row.chat_id);
   const platform = (row.platform as Platform) || Platform.WHATSAPP;
   const isGroup = row.is_group === true;
-  const displayName = (row.chat_name as string)
+  const persistedName = (row.chat_name as string)
     || (row.contact_name as string)
     || (row.contact_inferred_name as string)
     || undefined;
+  const contactPhone = (row.contact_phone as string) || undefined;
+  const displayName = isGroup
+    ? persistedName
+    : displayContactName(persistedName, platform, contactPhone);
   return {
     id: (row.last_message_id as string) || chatId,
     conversation_key: conversationKey(chatId, platform),
@@ -134,7 +139,7 @@ function conversationRowToInboxMessage(row: DbRow): InboxMessage {
     is_group: isGroup,
     status: row.last_message_status as InboxMessage['status'],
     chat_id: chatId,
-    contact_phone: (row.contact_phone as string) || undefined,
+    contact_phone: contactPhone,
     platform,
     unread_count: typeof row.unread_count === 'number' ? row.unread_count : 0,
     has_ai_response: row.last_message_has_ai_response === true,
@@ -190,6 +195,7 @@ export function patchInboxRealtimeMessage(
   if (!row.chat_id && !row.id) return;
   const platform = row.platform || Platform.WHATSAPP;
   const key = conversationKey(row.chat_id || row.id, platform);
+  const incomingName = displayContactName(row.contact_name, platform, row.contact_phone);
   if (usesNativeMobileCache() && userId && row.chat_id && row.timestamp) {
     void cacheTimeline(userId, row.chat_id, [row as RawMessage & { id: string; chat_id: string; timestamp: string }]).catch(() => undefined);
   }
@@ -207,7 +213,7 @@ export function patchInboxRealtimeMessage(
           from_me: row.from_me ?? message.from_me,
           is_group: row.is_group ?? message.is_group,
           status: row.status ?? message.status,
-          contact_name: row.contact_name || message.contact_name,
+          contact_name: row.contact_name ? incomingName : message.contact_name,
           contact_phone: row.contact_phone || message.contact_phone,
           unread_count: row.from_me === false
             ? (message.unread_count || 0) + 1
@@ -224,8 +230,8 @@ export function patchInboxRealtimeMessage(
     const newMessage: InboxMessage = {
       id: row.id,
       conversation_key: key,
-      contact_name: row.contact_name,
-      chat_name: row.contact_name,
+      contact_name: incomingName,
+      chat_name: incomingName,
       content: row.content ?? '',
       timestamp: row.timestamp ?? new Date().toISOString(),
       from_me: row.from_me ?? false,
@@ -287,7 +293,10 @@ function cachedInboxMessages(chats: CachedChat[]): InboxMessage[] {
     const latest = chat.latest_message as Record<string, unknown> | null | undefined;
     if (!latest || typeof latest.id !== 'string') return [];
     const contact = chat.contact as Record<string, unknown> | null | undefined;
-    const name = typeof chat.name === 'string' ? chat.name : typeof contact?.name === 'string' ? contact.name : undefined;
+    const persistedName = typeof chat.name === 'string' ? chat.name : typeof contact?.name === 'string' ? contact.name : undefined;
+    const name = chat.is_group === true
+      ? persistedName
+      : displayContactName(persistedName, chat.platform as Platform | undefined);
     return [{
       id: latest.id,
       conversation_key: conversationKey(chat.id, chat.platform as Platform | undefined),

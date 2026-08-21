@@ -74,6 +74,10 @@ export default function TabLayout() {
       <Tabs.Screen name="dashboard" options={{ title: 'Home' }} />
       <Tabs.Screen name="messages" options={{ title: 'Inbox', sceneStyle: { backgroundColor: colors.paper } }} />
       <Tabs.Screen name="contacts" options={{ href: null }} />
+      {/* More-sheet destinations remain tab children so the floating bar stays
+          mounted rather than stranding people on a full-screen route. */}
+      <Tabs.Screen name="connections" options={{ href: null }} />
+      <Tabs.Screen name="settings" options={{ href: null }} />
       <Tabs.Screen name="ask-claire" options={{ title: 'Ask Claire' }} />
       <Tabs.Screen
         name="loops"

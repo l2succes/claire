@@ -16,9 +16,11 @@ import {
   Preset,
   MsgType,
   EventType,
+  RelationType,
 } from 'matrix-js-sdk';
 import { BasePlatformAdapter } from '../base-adapter';
 import { supabase, type DbRow } from '../../services/supabase';
+import { operationsTelemetry } from '../../services/operations-telemetry';
 import {
   Platform,
   AuthMethod,
@@ -41,6 +43,34 @@ import {
   PersistedMatrixSessionRow,
   toPersistedMatrixSession,
 } from './session-persistence';
+import { logger } from '../../utils/logger';
+import {
+  displayNameFromBridge,
+  incomingContactId,
+  isOpaqueWhatsAppLid,
+  phoneNumberFromBridgeIdentifiers,
+  phoneNumberFromPlatformContactId,
+} from '../../services/contact-identity';
+
+interface MatrixSdkLogger {
+  trace(...args: unknown[]): void;
+  debug(...args: unknown[]): void;
+  info(...args: unknown[]): void;
+  warn(...args: unknown[]): void;
+  error(...args: unknown[]): void;
+  getChild(namespace: string): MatrixSdkLogger;
+}
+
+// matrix-js-sdk's default logger includes request URLs and Matrix identifiers.
+// Keep diagnostic signal without handing that metadata to infrastructure logs.
+const matrixSdkLogger: MatrixSdkLogger = {
+  trace: () => undefined,
+  debug: () => undefined,
+  info: () => undefined,
+  warn: () => logger.warn('Matrix SDK warning'),
+  error: () => logger.error('Matrix SDK error'),
+  getChild: () => matrixSdkLogger,
+};
 
 export interface MatrixSessionConfig {
   platform: Platform;
@@ -73,6 +103,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
       MessageContentType.IMAGE,
       MessageContentType.VIDEO,
       MessageContentType.AUDIO,
+      MessageContentType.VOICE,
       MessageContentType.DOCUMENT,
     ],
   };
@@ -95,6 +126,13 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
   private readonly doublePuppetEnabled: boolean = process.env.ENABLE_DOUBLE_PUPPETING === 'true';
   // Event IDs that this server sent (to avoid double-counting bot's own sends as incoming)
   private localSentEventIds: Set<string> = new Set();
+  // Contact identity lookups are bridge-local, but can occur for every Matrix
+  // event in a busy room. Coalesce identical requests so a single LID never
+  // turns into a burst of provisioning calls.
+  private readonly contactIdentityLookups = new Map<
+    string,
+    Promise<import('./types').ResolvedBridgeContactIdentity | null>
+  >();
   private durableSessionStorageAvailable = true;
 
   /**
@@ -121,7 +159,11 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     }
   }
 
-  private getSelfGhostIds(sessionId: string, session: PlatformSession, platform: Platform): string[] {
+  private getSelfGhostIds(
+    sessionId: string,
+    session: PlatformSession,
+    platform: Platform
+  ): string[] {
     const known = this.sessionSelfGhostIds.get(sessionId);
     const platformUserId = session.platformUserId || session.phoneNumber;
     const derived = this.userMapper.selfGhostUserIds(platform, platformUserId);
@@ -134,12 +176,14 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
       session.selfGhostId = derived[0];
     }
     const configuredAliases = this.config.configuredSelfGhostIds?.[platform] || [];
-    return [...new Set([
-      ...derived,
-      ...(known ? [known] : []),
-      ...(session.selfGhostIds || []),
-      ...configuredAliases,
-    ])].filter((id) => this.userMapper.ghostUserToPlatformContact(id)?.platform === platform);
+    return [
+      ...new Set([
+        ...derived,
+        ...(known ? [known] : []),
+        ...(session.selfGhostIds || []),
+        ...configuredAliases,
+      ]),
+    ].filter((id) => this.userMapper.ghostUserToPlatformContact(id)?.platform === platform);
   }
 
   /** Local Matrix user for this session — the bot account when double-puppeting is off. */
@@ -187,7 +231,10 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
       session.selfGhostIds = all;
       await this.saveSessionToRedis(session);
       if (exactAliases.length > 0) {
-        this.log('info', `Resolved self ghost aliases for ${sessionId}: ${exactAliases.join(', ')}`);
+        this.log(
+          'info',
+          `Resolved self ghost aliases for ${sessionId}: ${exactAliases.join(', ')}`
+        );
       }
       return all;
     } catch (error) {
@@ -196,22 +243,86 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     }
   }
 
+  /** Resolve provider metadata without ever treating a routing identifier as display data. */
+  private async resolveRemoteContactIdentity(
+    platform: Platform,
+    platformContactId: string,
+    session: PlatformSession
+  ): Promise<import('./types').ResolvedBridgeContactIdentity | null> {
+    const platformUserId = session.platformUserId || session.phoneNumber;
+    if (!this.config.resolveContactIdentity || !platformUserId) return null;
+    // WhatsApp phone ghosts already contain the canonical phone number. LIDs
+    // are the only current provider identifier that requires a remote lookup.
+    if (platform !== Platform.WHATSAPP || !isOpaqueWhatsAppLid(platformContactId)) return null;
+
+    const key = `${platform}:${platformUserId}:${platformContactId}`;
+    const existing = this.contactIdentityLookups.get(key);
+    if (existing) return existing;
+
+    const lookup = this.config
+      .resolveContactIdentity(platform, platformContactId, platformUserId)
+      .catch(() => {
+        // Identity enrichment is best effort. Message delivery must retain its
+        // normal path if a bridge is temporarily unavailable.
+        this.contactIdentityLookups.delete(key);
+        return null;
+      });
+    this.contactIdentityLookups.set(key, lookup);
+    return lookup;
+  }
+
+  private async enrichRemoteMessageContact(
+    message: UnifiedMessage,
+    session: PlatformSession
+  ): Promise<void> {
+    if (message.isFromMe) return;
+    const platformContactId = incomingContactId(message);
+    if (!platformContactId) return;
+
+    const identity = await this.resolveRemoteContactIdentity(
+      message.platform,
+      platformContactId,
+      session
+    );
+    if (!identity) return;
+
+    const displayName = displayNameFromBridge(
+      identity.displayName,
+      message.platform,
+      platformContactId
+    );
+    if (displayName) message.senderName = displayName;
+
+    const phoneNumber = phoneNumberFromBridgeIdentifiers([identity.phoneNumber]);
+    if (phoneNumber) {
+      message.platformMetadata = {
+        ...message.platformMetadata,
+        contactPhone: phoneNumber,
+      };
+    }
+  }
+
   private mediaProxyPath(mediaUrl: unknown): string | null {
     if (typeof mediaUrl !== 'string' || !mediaUrl) return null;
     if (mediaUrl.startsWith('/media/')) return mediaUrl;
-    const match = mediaUrl.match(/^mxc:\/\/([^/]+)\/(.+)$/)
-      || mediaUrl.match(/\/_matrix\/(?:client\/v1\/media|media\/v3)\/(?:thumbnail|download)\/([^/]+)\/([^?]+)/);
-    return match ? `/media/${encodeURIComponent(match[1])}/${encodeURIComponent(match[2])}` : mediaUrl;
+    const match =
+      mediaUrl.match(/^mxc:\/\/([^/]+)\/(.+)$/) ||
+      mediaUrl.match(
+        /\/_matrix\/(?:client\/v1\/media|media\/v3)\/(?:thumbnail|download)\/([^/]+)\/([^?]+)/
+      );
+    return match
+      ? `/media/${encodeURIComponent(match[1])}/${encodeURIComponent(match[2])}`
+      : mediaUrl;
   }
 
   /** Do not replace a known name with the bridge's phone-number fallback. */
-  private contactNameForStorage(displayName: string | undefined, platformContactId: string): string | null {
+  private contactNameForStorage(
+    displayName: string | undefined,
+    platformContactId: string,
+    platform: Platform
+  ): string | null {
     const name = displayName ? this.userMapper.cleanDisplayName(displayName) : '';
-    if (!name) return null;
-    const normalizedId = platformContactId.replace(/[^a-z0-9]/gi, '').toLowerCase();
-    const normalizedName = name.replace(/[^a-z0-9]/gi, '').toLowerCase();
-    if (normalizedName === normalizedId || /^[+\d().\s-]+$/.test(name)) return null;
-    return name;
+    return displayNameFromBridge(name, platform, platformContactId);
   }
 
   /** Correct rows already written by an older sender/media conversion path. */
@@ -225,11 +336,32 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     if (lookupError || !existing) return;
 
     const metadata = {
-      ...((existing.metadata && typeof existing.metadata === 'object') ? existing.metadata : {}),
+      ...(existing.metadata && typeof existing.metadata === 'object' ? existing.metadata : {}),
       ...(message.platformMetadata || {}),
     };
     const mediaInfo = message.platformMetadata?.mediaInfo as { mimetype?: string } | undefined;
+    let replyToInternalMessageId: string | null = null;
+    if (message.replyToMessageId) {
+      const { data: replyTarget } = await supabase
+        .from('messages')
+        .select('id')
+        .eq('user_id', message.userId)
+        .eq('chat_id', existing.chat_id)
+        .eq('platform_message_id', message.replyToMessageId)
+        .maybeSingle();
+      replyToInternalMessageId = replyTarget?.id || null;
+    }
     const contact = this.userMapper.ghostUserToPlatformContact(message.senderId);
+    const contactName = contact
+      ? displayNameFromBridge(message.senderName, message.platform, contact.platformContactId)
+      : null;
+    const contactPhone = contact
+      ? phoneNumberFromBridgeIdentifiers([
+          typeof message.platformMetadata?.contactPhone === 'string'
+            ? message.platformMetadata.contactPhone
+            : undefined,
+        ]) || phoneNumberFromPlatformContactId(message.platform, contact.platformContactId)
+      : null;
     let contactId: string | null = null;
     if (!message.isFromMe && contact) {
       const { data: contactRow } = await supabase
@@ -245,27 +377,37 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
       .from('messages')
       .update({
         from_me: message.isFromMe,
-        contact_name: message.isFromMe ? null : (message.senderName || null),
-        contact_phone: message.isFromMe ? null : (contact?.platformContactId || null),
+        contact_name: message.isFromMe ? null : contactName,
+        contact_phone: message.isFromMe ? null : contactPhone,
         contact_id: contactId,
         is_group: message.chatType === 'group',
         type: message.contentType,
         content_type: message.contentType,
         metadata,
+        reply_to_message_id: replyToInternalMessageId,
+        reply_to_platform_message_id: message.replyToMessageId || null,
         media_url: this.mediaProxyPath(message.platformMetadata?.mediaUrl),
         media_mime_type: mediaInfo?.mimetype || null,
       })
       .eq('id', existing.id);
-    if (error) this.log('warn', `Failed to repair Matrix message ${message.platformMessageId}`, { error });
+    if (error)
+      this.log('warn', `Failed to repair Matrix message ${message.platformMessageId}`, { error });
     else {
+      const repairedChatName =
+        message.chatType === 'group'
+          ? message.chatName || message.chatId
+          : displayNameFromBridge(message.chatName, message.platform, message.chatId) || contactName;
       const { error: chatError } = await supabase
         .from('chats')
         .update({
           is_group: message.chatType === 'group',
-          name: message.chatName || message.chatId,
+          ...(repairedChatName ? { name: repairedChatName } : {}),
         })
         .eq('id', existing.chat_id);
-      if (chatError) this.log('warn', `Failed to repair Matrix chat for ${message.platformMessageId}`, { error: chatError });
+      if (chatError)
+        this.log('warn', `Failed to repair Matrix chat for ${message.platformMessageId}`, {
+          error: chatError,
+        });
     }
   }
 
@@ -288,6 +430,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
       baseUrl: this.config.homeserverUrl,
       accessToken: this.config.adminAccessToken,
       userId: this.config.botUserId || `@claire_bot:${this.config.serverName}`,
+      logger: matrixSdkLogger,
     });
 
     // Setup event handlers BEFORE starting client so we capture initial sync events
@@ -390,10 +533,15 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     this.matrixClient.on(RoomEvent.Timeline, async (event, room, toStartOfTimeline) => {
       if (!room) return;
       if (toStartOfTimeline) return; // Ignore historical messages
+      if (event.getType() === EventType.Reaction) {
+        await this.handleReactionEvent(event, room);
+        return;
+      }
       if (event.getType() !== 'm.room.message') return;
 
       const sender = event.getSender();
       const eventId = event.getId();
+      const observedAt = Date.now();
 
       // Skip the local timeline echo of SDK sends (persist happens in sendMessage).
       // When double-puppeting is disabled, every bot-sender event is an SDK send.
@@ -440,6 +588,30 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
         selfGhostIds,
         matrixUserId
       );
+      await this.enrichRemoteMessageContact(unifiedMessage, session);
+
+      // Matrix receives bridged provider events after mautrix has translated
+      // them. These events prove arrival at both observable boundaries; the
+      // values persisted below are HMAC references only, never Matrix IDs.
+      const direction = unifiedMessage.isFromMe ? ('outbound' as const) : ('inbound' as const);
+      void operationsTelemetry.record({
+        traceSource: unifiedMessage.platformMessageId,
+        userId: session.userId,
+        platform: chatInfo.platform,
+        direction,
+        stage: 'bridge',
+        outcome: 'accepted',
+        durationMs: Date.now() - observedAt,
+      });
+      void operationsTelemetry.record({
+        traceSource: unifiedMessage.platformMessageId,
+        userId: session.userId,
+        platform: chatInfo.platform,
+        direction,
+        stage: 'matrix',
+        outcome: 'accepted',
+        durationMs: Date.now() - observedAt,
+      });
 
       this.emitPlatformEvent('message', chatInfo.sessionId, unifiedMessage);
     });
@@ -463,6 +635,79 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
    */
   private isControlRoomMessage(room: Room, sender: string): boolean {
     return this.userMapper.isBridgeBot(sender) && this.roomMapper.isControlRoom(room);
+  }
+
+  /**
+   * Store Matrix annotations as metadata-only reaction rows. The event is
+   * deliberately handled outside the message converter: a reaction has no
+   * message body to persist, and never belongs in operational log payloads.
+   */
+  private async handleReactionEvent(event: MatrixEvent, room: Room): Promise<void> {
+    const eventId = event.getId();
+    const sender = event.getSender() || '';
+    if (!eventId || !sender) return;
+
+    // The API route already writes our local reaction. Ignore its timeline echo
+    // so a quick tap cannot create a second reaction row.
+    if (this.localSentEventIds.has(eventId)) return;
+
+    let chatInfo = this.roomMapper.getRoomChatInfo(room.roomId);
+    if (!chatInfo) {
+      await this.tryRegisterRoom(room);
+      chatInfo = this.roomMapper.getRoomChatInfo(room.roomId);
+      if (!chatInfo) return;
+    }
+
+    const session = this.sessions.get(chatInfo.sessionId);
+    if (!session) return;
+
+    const relation = (event.getContent() as {
+      'm.relates_to'?: { rel_type?: string; event_id?: string; key?: string };
+    })['m.relates_to'];
+    if (
+      relation?.rel_type !== 'm.annotation' ||
+      typeof relation.event_id !== 'string' ||
+      typeof relation.key !== 'string' ||
+      !relation.key
+    ) {
+      return;
+    }
+
+    const { data: target, error: targetError } = await supabase
+      .from('messages')
+      .select('id')
+      .eq('user_id', session.userId)
+      .eq('platform_message_id', relation.event_id)
+      .maybeSingle();
+    if (targetError) {
+      this.log('warn', 'Could not resolve reaction target', { error: targetError.message });
+      return;
+    }
+    if (!target) return;
+
+    const selfGhostIds = this.getSelfGhostIds(chatInfo.sessionId, session, chatInfo.platform);
+    const matrixUserId = this.localMatrixUserId(chatInfo.sessionId);
+    const fromMe =
+      selfGhostIds.includes(sender) || this.userMapper.isDoublePuppetUser(sender, matrixUserId);
+    const member = room.getMember(sender);
+    const reactorName = !fromMe && member?.name ? this.userMapper.cleanDisplayName(member.name) : null;
+
+    const { error } = await supabase.from('message_reactions').upsert(
+      {
+        user_id: session.userId,
+        message_id: target.id,
+        platform_event_id: eventId,
+        emoji: relation.key.normalize('NFC'),
+        from_me: fromMe,
+        reactor_id: fromMe ? 'self' : sender,
+        reactor_name: reactorName,
+        reacted_at: (event.getDate() || new Date()).toISOString(),
+      },
+      { onConflict: 'platform_event_id' }
+    );
+    if (error) {
+      this.log('warn', 'Could not persist message reaction', { error: error.message });
+    }
   }
 
   /**
@@ -598,19 +843,25 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     // Exclude the self ghost user (present in groups but not DMs) to avoid false positives.
     // Strategy: prefer phone-based contacts for counting (ignore LID duplicates of the same person).
     // If ALL contacts are LID-based (mautrix v2 all-LID group), fall back to counting LID contacts.
-    const allGhostContacts = room.getJoinedMembers()
-      .filter(m => !this.userMapper.isBridgeBot(m.userId) && !selfGhostIds.includes(m.userId))
-      .map(m => this.userMapper.ghostUserToPlatformContact(m.userId))
+    const allGhostContacts = room
+      .getJoinedMembers()
+      .filter((m) => !this.userMapper.isBridgeBot(m.userId) && !selfGhostIds.includes(m.userId))
+      .map((m) => this.userMapper.ghostUserToPlatformContact(m.userId))
       .filter((c): c is NonNullable<typeof c> => c !== null && c.platform === platform);
 
-    const phoneContacts = allGhostContacts.filter(c => !c.platformContactId.startsWith('lid-'));
+    const phoneContacts = allGhostContacts.filter((c) => !c.platformContactId.startsWith('lid-'));
     const contactsForCounting = phoneContacts.length > 0 ? phoneContacts : allGhostContacts;
     const isGroup = contactsForCounting.length > 1;
-    const chatId = isGroup ? room.roomId : this.roomMapper.getPrimaryChatParticipant(room, selfGhostIds);
+    const chatId = isGroup
+      ? room.roomId
+      : this.roomMapper.getPrimaryChatParticipant(room, selfGhostIds);
     if (!chatId) return;
 
     this.roomMapper.registerRoom(room.roomId, platform, chatId, matchingSessionId);
-    this.log('info', `Registered room ${room.roomId} for ${platform} chat ${chatId} (${isGroup ? 'group' : 'dm'})`);
+    this.log(
+      'info',
+      `Registered room ${room.roomId} for ${platform} chat ${chatId} (${isGroup ? 'group' : 'dm'})`
+    );
   }
 
   /**
@@ -643,8 +894,12 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     // Merge explicit bridgeConfig with any top-level fields (e.g. phoneNumber from connect body)
     const bridgeConfig = {
       ...config?.bridgeConfig,
-      ...(( config as unknown as Record<string, unknown> )?.phoneNumber ? { phoneNumber: ( config as unknown as Record<string, unknown> ).phoneNumber as string } : {}),
-      ...(( config as unknown as Record<string, unknown> )?.skipBridgeAuth ? { skipBridgeAuth: true } : {}),
+      ...((config as unknown as Record<string, unknown>)?.phoneNumber
+        ? { phoneNumber: (config as unknown as Record<string, unknown>).phoneNumber as string }
+        : {}),
+      ...((config as unknown as Record<string, unknown>)?.skipBridgeAuth
+        ? { skipBridgeAuth: true }
+        : {}),
     };
 
     // Initiate auth flow
@@ -679,9 +934,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
   /**
    * Find or create a DM room with a bridge bot
    */
-  private async findOrCreateControlRoom(
-    bridgeBotUserId: string
-  ): Promise<{ roomId: string }> {
+  private async findOrCreateControlRoom(bridgeBotUserId: string): Promise<{ roomId: string }> {
     if (!this.matrixClient) {
       throw new Error('Matrix client not initialized');
     }
@@ -690,10 +943,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     const rooms = this.matrixClient.getRooms();
     for (const room of rooms) {
       const members = room.getJoinedMembers();
-      if (
-        members.length === 2 &&
-        members.some((m) => m.userId === bridgeBotUserId)
-      ) {
+      if (members.length === 2 && members.some((m) => m.userId === bridgeBotUserId)) {
         return { roomId: room.roomId };
       }
     }
@@ -764,21 +1014,28 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     // Old versions persisted a session before confirming Instagram
     // provisioning was reachable. Retire those stale attempts as well as
     // abandoned current attempts; a new connection can always start fresh.
-    await Promise.all(userSessions.map(async (session) => {
-      const platform = (session as PlatformSession & { platform?: Platform }).platform;
-      const isPending = session.status === PlatformStatus.INITIALIZING
-        || session.status === PlatformStatus.AWAITING_AUTH
-        || session.status === PlatformStatus.AUTHENTICATING
-        || session.status === PlatformStatus.RECONNECTING;
-      const ageMs = Date.now() - new Date(session.createdAt).getTime();
+    await Promise.all(
+      userSessions.map(async (session) => {
+        const platform = (session as PlatformSession & { platform?: Platform }).platform;
+        const isPending =
+          session.status === PlatformStatus.INITIALIZING ||
+          session.status === PlatformStatus.AWAITING_AUTH ||
+          session.status === PlatformStatus.AUTHENTICATING ||
+          session.status === PlatformStatus.RECONNECTING;
+        const ageMs = Date.now() - new Date(session.createdAt).getTime();
 
-      if (platform === Platform.INSTAGRAM && isPending && ageMs > MatrixBridgeAdapter.INSTAGRAM_AUTH_EXPIRY_MS) {
-        await this.markSessionFailed(
-          session.id,
-          'Instagram sign-in expired. Start a new connection to try again.'
-        );
-      }
-    }));
+        if (
+          platform === Platform.INSTAGRAM &&
+          isPending &&
+          ageMs > MatrixBridgeAdapter.INSTAGRAM_AUTH_EXPIRY_MS
+        ) {
+          await this.markSessionFailed(
+            session.id,
+            'Instagram sign-in expired. Start a new connection to try again.'
+          );
+        }
+      })
+    );
 
     return userSessions;
   }
@@ -791,7 +1048,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
    * Replicates the logic in handleControlRoomMessage for the login-success case.
    */
   async markSessionConnected(sessionId: string, platformUserId?: string): Promise<void> {
-    const session = this.sessions.get(sessionId) || await this.loadSessionFromRedis(sessionId);
+    const session = this.sessions.get(sessionId) || (await this.loadSessionFromRedis(sessionId));
     if (!session) return;
 
     session.status = PlatformStatus.CONNECTED;
@@ -837,7 +1094,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
   }
 
   async markSessionFailed(sessionId: string, error: string): Promise<void> {
-    const session = this.sessions.get(sessionId) || await this.loadSessionFromRedis(sessionId);
+    const session = this.sessions.get(sessionId) || (await this.loadSessionFromRedis(sessionId));
     if (!session) return;
 
     session.status = PlatformStatus.FAILED;
@@ -899,7 +1156,10 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
   }
 
   /** Restore the control-room mapping for a session loaded from Redis. */
-  private async getOrRestoreControlRoom(sessionId: string, platform: Platform): Promise<string | undefined> {
+  private async getOrRestoreControlRoom(
+    sessionId: string,
+    platform: Platform
+  ): Promise<string | undefined> {
     const existing = this.sessionControlRooms.get(sessionId);
     if (existing) return existing;
     if (!this.matrixClient) return undefined;
@@ -997,8 +1257,15 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
       roomId = foundRoomId;
     }
 
+    // Preserve Matrix's native reply relation. mautrix bridges can translate
+    // this into the source platform's quoted-message behavior where supported.
+    const relation = message.replyToMessageId
+      ? { 'm.relates_to': { 'm.in_reply_to': { event_id: message.replyToMessageId } } }
+      : {};
+
     // Send the message
     let eventId: string;
+    let outboundMediaMetadata: Record<string, unknown> | undefined;
 
     if (message.media && message.media.length > 0) {
       // Upload and send media
@@ -1007,10 +1274,13 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
       // it on `ArrayBufferLike`, which no longer satisfies the DOM
       // `BufferSource` the SDK asks for. Re-wrap the bytes as a plain
       // `Uint8Array` backed by its own `ArrayBuffer`.
-      const uploaded = await this.matrixClient.uploadContent(
-        new Uint8Array(media.data as Buffer),
-        { type: media.mimeType },
-      );
+      const uploaded = await this.matrixClient.uploadContent(new Uint8Array(media.data as Buffer), {
+        type: media.mimeType,
+      });
+      outboundMediaMetadata = {
+        mediaUrl: uploaded.content_uri,
+        mediaInfo: { mimetype: media.mimeType },
+      };
 
       const msgtype = this.contentTypeToMatrixMsgtype(media.type);
       // Send media message using sendEvent for better type compatibility
@@ -1019,6 +1289,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
         msgtype: msgtype as any,
         body: message.content || media.fileName || 'media',
         url: uploaded.content_uri,
+        ...relation,
       });
       eventId = response.event_id;
     } else {
@@ -1026,6 +1297,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
       const response = await this.matrixClient.sendEvent(roomId, EventType.RoomMessage, {
         msgtype: MsgType.Text,
         body: message.content,
+        ...relation,
       });
       eventId = response.event_id;
     }
@@ -1049,11 +1321,55 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
       timestamp: new Date(),
       isFromMe: true,
       isRead: true,
+      replyToMessageId: message.replyToMessageId,
       hasMedia: !!message.media?.length,
+      platformMetadata: outboundMediaMetadata,
     };
+
+    void operationsTelemetry.record({
+      traceSource: eventId,
+      userId: session.userId,
+      platform,
+      direction: 'outbound',
+      stage: 'matrix',
+      outcome: 'accepted',
+    });
 
     this.emitPlatformEvent('message', sessionId, unifiedMessage);
     return unifiedMessage;
+  }
+
+  /**
+   * Matrix annotations are the common reaction format that mautrix bridges
+   * translate into each provider's native reaction event when it is supported.
+   */
+  async sendReaction(
+    sessionId: string,
+    chatId: string,
+    messageId: string,
+    emoji: string
+  ): Promise<{ platformEventId: string }> {
+    if (!this.matrixClient) throw new Error('Matrix client not initialized');
+    if (!this.sessions.has(sessionId)) throw new Error('Session not found');
+
+    const platform = this.sessionPlatforms.get(sessionId);
+    if (!platform) throw new Error('Session platform not found');
+
+    const roomId =
+      chatId.startsWith('!') && chatId.includes(':')
+        ? chatId
+        : await this.roomMapper.findRoomForChat(this.matrixClient, platform, chatId);
+    if (!roomId) throw new Error(`No Matrix room found for platform ${platform} chat ${chatId}`);
+
+    const response = await this.matrixClient.sendEvent(roomId, EventType.Reaction, {
+      'm.relates_to': {
+        rel_type: RelationType.Annotation,
+        event_id: messageId,
+        key: emoji,
+      },
+    });
+    this.rememberSentEvent(response.event_id);
+    return { platformEventId: response.event_id };
   }
 
   private contentTypeToMatrixMsgtype(contentType: MessageContentType): MsgType {
@@ -1075,26 +1391,16 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
   /**
    * Mark a message as read
    */
-  async markAsRead(
-    sessionId: string,
-    chatId: string,
-    messageId: string
-  ): Promise<void> {
+  async markAsRead(sessionId: string, chatId: string, messageId: string): Promise<void> {
     if (!this.matrixClient) return;
 
     const platform = this.sessionPlatforms.get(sessionId);
     if (!platform) return;
 
-    const roomId = await this.roomMapper.findRoomForChat(
-      this.matrixClient,
-      platform,
-      chatId
-    );
+    const roomId = await this.roomMapper.findRoomForChat(this.matrixClient, platform, chatId);
 
     if (roomId) {
-      await this.matrixClient.sendReadReceipt(
-        { getId: () => messageId } as MatrixEvent
-      );
+      await this.matrixClient.sendReadReceipt({ getId: () => messageId } as MatrixEvent);
     }
   }
 
@@ -1123,7 +1429,9 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
         if (selfGhostIds.includes(member.userId)) continue;
 
         let displayName = member.name;
-        let avatarUrl = member.getAvatarUrl(this.config.homeserverUrl, 256, 256, 'crop', false, false) || undefined;
+        let avatarUrl =
+          member.getAvatarUrl(this.config.homeserverUrl, 256, 256, 'crop', false, false) ||
+          undefined;
 
         // Room state is not always populated for bridged ghost users. Fetch
         // the canonical Matrix profile as a fallback so contact names and
@@ -1132,9 +1440,10 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
           const profile = await this.matrixClient.getProfileInfo(member.userId);
           displayName = profile.displayname || displayName;
           if (profile.avatar_url) {
-            avatarUrl = this.matrixMediaProxyUrl(profile.avatar_url)
-              || this.matrixClient.mxcUrlToHttp(profile.avatar_url)
-              || avatarUrl;
+            avatarUrl =
+              this.matrixMediaProxyUrl(profile.avatar_url) ||
+              this.matrixClient.mxcUrlToHttp(profile.avatar_url) ||
+              avatarUrl;
           }
         } catch {
           // A profile lookup can fail for a stale/remote ghost; room metadata
@@ -1149,6 +1458,26 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
           avatarUrl,
           session.userId
         );
+
+        if (contact) {
+          const identity = await this.resolveRemoteContactIdentity(
+            contact.platform,
+            contact.platformContactId,
+            session
+          );
+          if (identity) {
+            const resolvedName = displayNameFromBridge(
+              identity.displayName,
+              contact.platform,
+              contact.platformContactId
+            );
+            if (resolvedName) contact.displayName = resolvedName;
+            const resolvedPhone = phoneNumberFromBridgeIdentifiers([identity.phoneNumber]);
+            if (resolvedPhone) contact.phoneNumber = resolvedPhone;
+            if (identity.username) contact.username = identity.username;
+            if (identity.avatarUrl) contact.avatarUrl = identity.avatarUrl;
+          }
+        }
 
         if (contact && !contacts.some((c) => c.platformContactId === contact.platformContactId)) {
           contacts.push(contact);
@@ -1165,12 +1494,18 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
    * the Matrix token or relying on an unauthenticated Synapse media endpoint.
    */
   private matrixMediaProxyUrl(mxcUrl: string): string | undefined {
-    const match = mxcUrl.match(/^mxc:\/\/([^/]+)\/(.+)$/)
-      || mxcUrl.match(/\/_matrix\/(?:client\/v1\/media|media\/v3)\/(?:thumbnail|download)\/([^/]+)\/([^?]+)/);
+    const match =
+      mxcUrl.match(/^mxc:\/\/([^/]+)\/(.+)$/) ||
+      mxcUrl.match(
+        /\/_matrix\/(?:client\/v1\/media|media\/v3)\/(?:thumbnail|download)\/([^/]+)\/([^?]+)/
+      );
     if (!match) return undefined;
 
-    const apiBase = process.env.PUBLIC_API_URL
-      || (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : `http://localhost:${process.env.PORT || '3001'}`);
+    const apiBase =
+      process.env.PUBLIC_API_URL ||
+      (process.env.RAILWAY_PUBLIC_DOMAIN
+        ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
+        : `http://localhost:${process.env.PORT || '3001'}`);
     return `${apiBase}/media/${encodeURIComponent(match[1])}/${encodeURIComponent(match[2])}`;
   }
 
@@ -1233,11 +1568,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     const platform = this.sessionPlatforms.get(sessionId);
     if (!platform) return [];
 
-    const roomId = await this.roomMapper.findRoomForChat(
-      this.matrixClient,
-      platform,
-      chatId
-    );
+    const roomId = await this.roomMapper.findRoomForChat(this.matrixClient, platform, chatId);
 
     if (!roomId) return [];
 
@@ -1279,7 +1610,8 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
       for (const key of keys) {
         const sessionId = key.replace(this.sessionPrefix, '');
         const session = await this.loadSessionFromRedis(sessionId);
-        if (session?.status === PlatformStatus.CONNECTED) await this.restoreConnectedSession(session);
+        if (session?.status === PlatformStatus.CONNECTED)
+          await this.restoreConnectedSession(session);
       }
 
       // Connected sessions must outlive Redis' TTL. Redis remains the source
@@ -1288,7 +1620,9 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
       if (this.durableSessionStorageAvailable) {
         const { data, error } = await supabase
           .from('platform_sessions')
-          .select('session_id,user_id,platform,status,platform_user_id,platform_username,phone_number,session_data,created_at,last_connected_at')
+          .select(
+            'session_id,user_id,platform,status,platform_user_id,platform_username,phone_number,session_data,created_at,last_connected_at'
+          )
           .eq('status', PlatformStatus.CONNECTED);
         if (error) {
           this.durableSessionStorageAvailable = false;
@@ -1328,14 +1662,17 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
         this.log('info', `Restored matrixUserId for session ${sessionId}: ${matrixUserId}`);
       }
     }
-    this.log('info', `Restored Matrix session: ${sessionId} (selfGhost: ${selfGhostId || 'unknown'})`);
+    this.log(
+      'info',
+      `Restored Matrix session: ${sessionId} (selfGhost: ${selfGhostId || 'unknown'})`
+    );
   }
 
   private async repairOrphanedSessions(): Promise<void> {
     if (process.env.REPAIR_ORPHANED_MATRIX_SESSIONS !== 'true') return;
 
     const connectedSessions = [...this.sessions.values()].filter(
-      (session) => session.status === PlatformStatus.CONNECTED,
+      (session) => session.status === PlatformStatus.CONNECTED
     );
     if (connectedSessions.length === 0) return;
 
@@ -1347,7 +1684,10 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
 
     const userIds = new Set<string>((users || []).map((user: DbRow) => user.id as string));
     if (userIds.size !== 1) {
-      this.log('warn', `Skipping orphaned Matrix session repair: expected one user, found ${userIds.size}`);
+      this.log(
+        'warn',
+        `Skipping orphaned Matrix session repair: expected one user, found ${userIds.size}`
+      );
       return;
     }
 
@@ -1358,7 +1698,10 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     for (const session of orphaned) {
       session.userId = targetUserId;
       await this.saveSessionToRedis(session);
-      this.log('warn', `Reassigned orphaned Matrix session ${session.id} to the sole application profile`);
+      this.log(
+        'warn',
+        `Reassigned orphaned Matrix session ${session.id} to the sole application profile`
+      );
     }
   }
 
@@ -1393,16 +1736,30 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
 
       for (const contact of contacts) {
         // Skip the user's own ghost contact
-        if (selfGhostIds.some((id) => this.userMapper.ghostUserToPlatformContact(id)?.platformContactId === contact.platformContactId)) continue;
+        if (
+          selfGhostIds.some(
+            (id) =>
+              this.userMapper.ghostUserToPlatformContact(id)?.platformContactId ===
+              contact.platformContactId
+          )
+        )
+          continue;
 
-        const name = this.contactNameForStorage(contact.displayName, contact.platformContactId);
+        const name = this.contactNameForStorage(
+          contact.displayName,
+          contact.platformContactId,
+          contact.platform
+        );
+        const phoneNumber =
+          contact.phoneNumber ||
+          phoneNumberFromPlatformContactId(contact.platform, contact.platformContactId);
         const payload: DbRow = {
           user_id: session.userId,
           platform: contact.platform,
           platform_contact_id: contact.platformContactId,
           whatsapp_id: contact.platformContactId,
           avatar_url: contact.avatarUrl || null,
-          phone_number: contact.phoneNumber || (/^\d+$/.test(contact.platformContactId) ? contact.platformContactId : null),
+          ...(phoneNumber ? { phone_number: phoneNumber } : {}),
           ...(contact.username ? { username: contact.username } : {}),
           // Omitting an unknown name is intentional: on conflict Supabase then
           // preserves a real name that was learned from an earlier sync.
@@ -1412,7 +1769,25 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
           .from('contacts')
           .upsert(payload, { onConflict: 'user_id,platform,platform_contact_id' });
 
-        if (!error) synced++;
+        if (!error) {
+          synced++;
+          // A contact profile can arrive after room history. Propagate its
+          // verified bridge display name to an existing direct chat so an old
+          // LID/anonymous fallback is repaired without waiting for a new
+          // message event.
+          if (name) {
+            const { error: chatNameError } = await supabase
+              .from('chats')
+              .update({ name })
+              .eq('user_id', session.userId)
+              .eq('platform', contact.platform)
+              .eq('platform_chat_id', contact.platformContactId)
+              .eq('is_group', false);
+            if (chatNameError) {
+              this.log('warn', `Failed to sync contact name to chat`, { chatNameError });
+            }
+          }
+        }
       }
 
       this.log('info', `Synced ${synced} contacts for session ${sessionId}`);

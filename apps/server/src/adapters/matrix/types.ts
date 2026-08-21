@@ -21,6 +21,23 @@ export interface MatrixConfig {
     platform: Platform,
     platformUserId: string
   ) => Promise<string[]>;
+  /**
+   * Resolve a remote bridge identity through the user's authenticated bridge
+   * login. This is used for provider-owned identifiers (notably WhatsApp
+   * LIDs) that are stable routing keys but are not suitable for display.
+   */
+  resolveContactIdentity?: (
+    platform: Platform,
+    platformContactId: string,
+    platformUserId: string
+  ) => Promise<ResolvedBridgeContactIdentity | null>;
+}
+
+export interface ResolvedBridgeContactIdentity {
+  displayName?: string;
+  phoneNumber?: string;
+  username?: string;
+  avatarUrl?: string;
 }
 
 /**

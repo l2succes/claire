@@ -49,6 +49,16 @@ variable. The field labels must exactly match the Railway variable names, such
 as `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `JWT_SECRET`,
 `ENCRYPTION_KEY`, `HEALTHCHECK_TOKEN`, `REDIS_URL`, and `CORS_ORIGINS`.
 
+### Encryption-key rotation
+
+Use a one-key overlap: set the replacement as `ENCRYPTION_KEY` and keep the
+retired value in concealed `ENCRYPTION_KEY_PREVIOUS`. New session, queue, and
+AI-cache writes use the replacement while reads can safely decrypt active
+values written with the retired key. After the longest active encrypted TTL
+has expired and a deployment has been verified, remove `ENCRYPTION_KEY_PREVIOUS`
+from 1Password and Railway. Never place either value in a command argument or
+commit it to an environment file.
+
 For the complete live-service inventory, the repository uses one item per
 Railway service to preserve identical variable names across services. This
 command reads each configured non-`RAILWAY_*` variable, writes it as a

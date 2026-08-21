@@ -5,7 +5,7 @@
  * which are persisted server-side and injected into AI prompt context.
  */
 
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, TextInput, Pressable } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, TextInput, Pressable, Switch } from 'react-native';
 import { useState, useEffect } from 'react';
 import { router } from 'expo-router';
 import { ChevronLeft, Check } from 'lucide-react-native';
@@ -35,7 +35,10 @@ interface Preferences {
   tone: Tone;
   response_style: Style;
   language: string;
+  preferences?: { ai_enabled?: boolean };
 }
+
+interface PrivacyDisclosure { enabled: boolean; provider: string; message: string; operationsTelemetry: string; }
 
 interface VoiceProfile {
   language: string;
@@ -73,6 +76,8 @@ export default function AISettingsScreen() {
   const [saving, setSaving] = useState(false);
   const [tone, setTone] = useState<Tone>('friendly');
   const [style, setStyle] = useState<Style>('concise');
+  const [aiEnabled, setAiEnabled] = useState(true);
+  const [privacyDisclosure, setPrivacyDisclosure] = useState<PrivacyDisclosure | null>(null);
   const [voiceProfiles, setVoiceProfiles] = useState<VoiceProfile[]>([]);
   const [rebuildingVoice, setRebuildingVoice] = useState(false);
 
@@ -82,13 +87,16 @@ export default function AISettingsScreen() {
         const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token;
         if (!token) return;
-        const [prefs, voiceResponse] = await Promise.all([
+        const [prefs, voiceResponse, privacyResponse] = await Promise.all([
           fetchPreferences(token),
           fetch(`${API_BASE_URL}/preferences/voice-profiles`, { headers: { Authorization: `Bearer ${token}` } }),
+          fetch(`${API_BASE_URL}/preferences/privacy`, { headers: { Authorization: `Bearer ${token}` } }),
         ]);
         setTone(prefs.tone as Tone);
         setStyle(prefs.response_style as Style);
+        setAiEnabled(prefs.preferences?.ai_enabled !== false);
         if (voiceResponse.ok) setVoiceProfiles((await voiceResponse.json()).data || []);
+        if (privacyResponse.ok) setPrivacyDisclosure((await privacyResponse.json()).data);
       } catch {
         // silently use defaults
       } finally {
@@ -103,7 +111,7 @@ export default function AISettingsScreen() {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
       if (!token) throw new Error('Not authenticated');
-      await savePreferences(token, { tone, response_style: style });
+      await savePreferences(token, { tone, response_style: style, preferences: { ai_enabled: aiEnabled } });
       router.back();
     } catch {
       Alert.alert('Error', 'Failed to save settings. Please try again.');
@@ -172,6 +180,11 @@ export default function AISettingsScreen() {
         }
       />
       <View className="p-4">
+        <View className="mb-6 rounded-lg border border-gray-200 bg-white px-4 py-4 dark:border-gray-700 dark:bg-gray-800">
+          <View className="flex-row items-center gap-3"><View className="flex-1"><Text className="text-lg font-semibold text-gray-900 dark:text-white">Use Claire AI</Text><Text className="mt-1 text-sm text-gray-500 dark:text-gray-400">Turn off suggestions, summaries, Ask Claire, voice learning, and AI promise detection. Messaging continues normally.</Text></View><Switch testID="ai-processing-toggle" value={aiEnabled} onValueChange={setAiEnabled} trackColor={{ true: colors.lime }} /></View>
+          <Text className="mt-3 text-xs text-gray-500 dark:text-gray-400">{privacyDisclosure?.message || 'When enabled, selected conversation context may be sent to Claire’s configured AI provider.'}</Text>
+          <Text className="mt-2 text-xs text-gray-500 dark:text-gray-400">{privacyDisclosure?.operationsTelemetry || 'Operations telemetry never includes message content.'}</Text>
+        </View>
 
         {/* Tone Section */}
         <Text className="text-lg font-semibold text-gray-900 dark:text-white mb-3">

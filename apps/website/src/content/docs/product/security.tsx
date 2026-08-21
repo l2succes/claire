@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-import { Callout, Doc, P, Section, Steps, Step } from '@/components/docs/blocks';
+import { Callout, Doc, DocLink, P, Section, Steps, Step } from '@/components/docs/blocks';
 import type { DocMeta } from '@/lib/docs-types';
 
 export const meta: DocMeta = {
@@ -13,7 +13,7 @@ export const meta: DocMeta = {
     status: 'research',
     summary: 'Validate stronger encryption, local-only, and credential-protection claims with evidence.',
   },
-  related: ['/docs/product/connectors', '/docs/deploy-operate/self-hosting'],
+  related: ['/docs/product/connectors', '/docs/deploy-operate/self-hosting', '/docs/product/end-to-end-encryption'],
 };
 
 export default function Page() {
@@ -72,6 +72,10 @@ export default function Page() {
       </Section>
 
       <Section id="e2ee-gate" title="Gate: end-to-end encryption">
+        <P>
+          The full research boundary, including the hosted-bridge limitation and future local
+          connector requirements, lives in the <DocLink to="/docs/product/end-to-end-encryption">end-to-end encryption research document</DocLink>.
+        </P>
         <Steps>
           <Step title="Enable and enforce bridge encryption in production" />
           <Step title="Test the full matrix of behaviour">

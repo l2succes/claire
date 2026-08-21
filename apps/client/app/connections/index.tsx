@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { Image } from 'expo-image';
-import { Check, ChevronLeft, ChevronRight, Laptop, Plus, RefreshCw, Smartphone } from 'lucide-react-native';
+import { Check, ChevronRight, Laptop, Plus, RefreshCw, Smartphone } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { colors, mobileType, radius, space, useIsDesktopLayout } from '@claire/design-system';
 import { host } from '@claire/host';
@@ -147,7 +147,6 @@ export default function ConnectionsScreen() {
         <MobileHeader
           title="Connections"
           subtitle="Bring your conversations into Claire."
-          leading={<MobileIconButton label="Back" onPress={() => router.back()}><ChevronLeft size={20} color={colors.ink} /></MobileIconButton>}
           actions={<MobileIconButton label="Refresh connections" onPress={() => void load()}><RefreshCw size={18} color={colors.ink} /></MobileIconButton>}
         />
         {loading ? (

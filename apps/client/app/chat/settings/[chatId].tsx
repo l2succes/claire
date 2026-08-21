@@ -12,6 +12,8 @@ import { MobileAvatar, MobileIconButton, SectionLabel } from '../../../component
 import { PlatformBadge } from '../../../components/PlatformIcon';
 import { Platform } from '../../../types/platform';
 import type { ChatCategory } from '../../../types/conversationSettings';
+import { formatPhoneNumber, formatPhoneNumberInput, normalizePhoneNumber } from '../../../services/phone-numbers';
+import { displayContactName } from '../../../services/contact-display';
 
 const TONES = [
   { key: 'warm', title: 'Warm + direct', description: 'Clear, human, confident' },
@@ -21,13 +23,6 @@ const TONES = [
 ] as const;
 
 type ToneKey = (typeof TONES)[number]['key'];
-
-function formatPhone(value: string | null | undefined) {
-  if (!value) return '';
-  const raw = value.split('@')[0] || value;
-  const digits = raw.replace(/\D/g, '');
-  return digits.length >= 7 ? `+${digits}` : value;
-}
 
 function toneFromInstruction(instruction: string | null | undefined): ToneKey | null {
   const match = instruction?.match(/Default tone:\s*(warm \+ direct|professional|casual|playful)/i)?.[1]?.toLowerCase();
@@ -52,13 +47,16 @@ export default function ConversationSettingsScreen() {
   const { settings, fetchSettings, setCategory, updateProfile, refreshInsights } = useConversationSettingsStore();
   const chatSettings = settings[chatId];
   const isLoading = chatSettings?.isLoading ?? true;
-  const displayName = is_group === '1' ? (chat_name || contact_name || 'Group') : (contact_name || chat_name || 'Unknown');
   const [sourcePhone, setSourcePhone] = useState('');
   const [details, setDetails] = useState({ phone: '', email: '', location: '' });
   const [memory, setMemory] = useState('');
   const [instruction, setInstruction] = useState('');
   const [tone, setTone] = useState<ToneKey | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const displayName =
+    is_group === '1'
+      ? chat_name || contact_name || 'Group'
+      : displayContactName(contact_name || chat_name, platform, sourcePhone, 'Contact');
 
   useEffect(() => { if (chatId) void fetchSettings(chatId); }, [chatId, fetchSettings]);
 
@@ -79,7 +77,7 @@ export default function ConversationSettingsScreen() {
         const { data: latestMessage } = await supabase.from('messages').select('contact_phone').eq('chat_id', chatId).not('contact_phone', 'is', null).order('timestamp', { ascending: false }).limit(1).maybeSingle();
         phone = latestMessage?.contact_phone || '';
       }
-      if (active) setSourcePhone(formatPhone(phone));
+      if (active) setSourcePhone(formatPhoneNumber(phone));
     })();
     return () => { active = false; };
   }, [chatId]);
@@ -110,7 +108,10 @@ export default function ConversationSettingsScreen() {
     setIsSaving(true);
     await updateProfile(chatId, user.id, {
       display_name: displayName,
-      phone_number: details.phone.trim() || null,
+      // Store valid entries canonically so the same contact is recognized
+      // across WhatsApp, Telegram, and Instagram. Preserve malformed legacy
+      // data rather than discarding it while someone saves another field.
+      phone_number: normalizePhoneNumber(details.phone) ?? (details.phone.trim() || null),
       email: details.email.trim() || null,
       location: details.location.trim() || null,
       relationship_context: memory.trim() || null,
@@ -162,7 +163,7 @@ export default function ConversationSettingsScreen() {
           <View style={{ gap: space[1] }}>
             <SectionLabel title="Contact details" />
             <View style={{ paddingHorizontal: space[3], borderRadius: radius.card, backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.neutral[200] }}>
-              <Field icon={<Phone size={17} color={colors.neutral[600]} />} label="Phone" value={details.phone} onChangeText={(phone) => setDetails((current) => ({ ...current, phone }))} placeholder="Add phone number" keyboardType="phone-pad" />
+              <Field icon={<Phone size={17} color={colors.neutral[600]} />} label="Phone" value={details.phone} onChangeText={(phone) => setDetails((current) => ({ ...current, phone: formatPhoneNumberInput(phone, current.phone) }))} placeholder="+52 931 193 7748" keyboardType="phone-pad" />
               <Field icon={<Mail size={17} color={colors.neutral[600]} />} label="Email" value={details.email} onChangeText={(email) => setDetails((current) => ({ ...current, email }))} placeholder="Add email" keyboardType="email-address" />
               <Field icon={<MapPin size={17} color={colors.neutral[600]} />} label="Location" value={details.location} onChangeText={(location) => setDetails((current) => ({ ...current, location }))} placeholder="Add location" />
             </View>

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-import { C, Callout, Doc, P, Platforms, Section, Table } from '@/components/docs/blocks';
+import { C, Callout, Doc, DocLink, P, Platforms, Section, Table } from '@/components/docs/blocks';
 import type { DocMeta } from '@/lib/docs-types';
 
 export const meta: DocMeta = {
@@ -14,7 +14,7 @@ export const meta: DocMeta = {
     status: 'planned',
     summary: 'Expand the supported connector catalog after each network passes production certification.',
   },
-  related: ['/docs/product/roadmap', '/docs/get-started/companion-app', '/docs/product/security'],
+  related: ['/docs/product/roadmap', '/docs/get-started/companion-app', '/docs/product/security', '/docs/product/end-to-end-encryption'],
 };
 
 export default function Page() {
@@ -136,6 +136,9 @@ export default function Page() {
           message content, media, indexes, embeddings, logs, notification bodies, and credentials do not
           reach Claire services.
         </Callout>
+        <P>
+          A hosted connector is a trusted processing boundary. The separate <DocLink to="/docs/product/end-to-end-encryption">end-to-end encryption research document</DocLink> explains why a local connector is required before Claire can make a zero-knowledge claim.
+        </P>
       </Section>
 
       <Section id="verification" title="Verification matrix">

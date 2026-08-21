@@ -27,6 +27,8 @@ import seedRoutes from './routes/seed';
 import loopRoutes from './routes/loops';
 import pushTokenRoutes from './routes/push-tokens';
 import notificationDeviceRoutes from './routes/notification-devices';
+import operationsRoutes from './routes/operations';
+import telemetryRoutes from './routes/telemetry';
 import contactRoutes from './routes/contacts';
 import deviceRoutes from './routes/devices';
 import searchRoutes from './routes/search';
@@ -37,10 +39,19 @@ import { platformManager } from './adapters';
 import { aiProcessor } from './services/ai-processor';
 import { conversationAssistant } from './services/conversation-assistant';
 import { voiceProfileService } from './services/voice-profile-service';
-import { incomingContactId, resolveMentions } from './services/contact-identity';
+import {
+  displayNameFromBridge,
+  incomingContactId,
+  phoneNumberFromBridgeIdentifiers,
+  phoneNumberFromPlatformContactId,
+  resolveMentions,
+} from './services/contact-identity';
 import { scheduleChat } from './services/loops/loop-queue';
+import { operationsMonitor } from './services/operations-monitor';
+import { operationsTelemetry } from './services/operations-telemetry';
 import { autoReplyEngine } from './services/auto-reply-engine';
 import { notificationDeliveryService } from './services/notification-delivery';
+import { isAiProcessingEnabled } from './services/ai-policy';
 import { Platform, PlatformStatus } from './adapters/types';
 import { whatsappAdapter } from './adapters/whatsapp';
 import { telegramAdapter } from './adapters/telegram';
@@ -96,7 +107,21 @@ app.use(
 );
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-app.use(morgan('combined', { stream }));
+// Keep HTTP diagnostics useful without recording search terms, OAuth values,
+// or other query parameters that can contain private data.
+app.use(
+  morgan(
+    (tokens, req, res) =>
+      [
+        tokens.method(req, res),
+        req.path,
+        tokens.status(req, res),
+        tokens.res(req, res, 'content-length') || '-',
+        `${tokens['response-time'](req, res)} ms`,
+      ].join(' '),
+    { stream }
+  )
+);
 
 // Routes
 app.use('/auth', authRateLimit, authRoutes);
@@ -110,6 +135,8 @@ app.use('/seed', seedRoutes);
 app.use('/loops', loopRoutes);
 app.use('/push-tokens', pushTokenRoutes);
 app.use('/notification-devices', notificationDeviceRoutes);
+app.use('/operations', operationsRoutes);
+app.use('/telemetry', telemetryRoutes);
 app.use('/contacts', contactRoutes);
 app.use('/devices', deviceRoutes);
 app.use('/search', searchRoutes);
@@ -346,6 +373,30 @@ async function initializePlatforms() {
           const resolved = await bridge.resolveIdentifier(platformUserId, platformUserId);
           return resolved.mxid ? [resolved.mxid] : [];
         },
+        resolveContactIdentity: async (platform, platformContactId) => {
+          if (platform !== Platform.WHATSAPP || !process.env.WHATSAPP_BRIDGE_SECRET) {
+            return null;
+          }
+          const bridge = new BridgeHttpClient(
+            process.env.WHATSAPP_BRIDGE_URL || 'http://mautrixwhatsapp.railway.internal:29318',
+            process.env.WHATSAPP_BRIDGE_SECRET,
+            process.env.WHATSAPP_BRIDGE_USER_ID || '@claire_bot:claire.local'
+          );
+          // mautrix resolves an already-known contact profile through the
+          // authenticated bridge user. `platformUserId` is a WhatsApp phone
+          // or LID, not a provisioning login ID, so passing it here prevents
+          // profile enrichment on some bridge versions.
+          const resolved = await bridge.resolveIdentifier(platformContactId);
+          return {
+            displayName: resolved.name,
+            phoneNumber: phoneNumberFromBridgeIdentifiers([
+              resolved.name,
+              ...(resolved.identifiers || []),
+              resolved.id,
+            ]) || undefined,
+            avatarUrl: resolved.avatar_url,
+          };
+        },
       });
 
       platformManager.setMatrixMode(matrixAdapter);
@@ -370,12 +421,23 @@ async function initializePlatforms() {
 
   // Setup unified message handler BEFORE initialize so backfill is captured
   platformManager.onMessage(async (message) => {
-    logger.debug(`Message received from ${message.platform}: ${message.id}`);
+    logger.debug('Platform message received', { platform: message.platform });
 
     // Skip WhatsApp status broadcasts
     if (message.chatId === 'status@broadcast' || message.platformMetadata?.isStatus) {
       return;
     }
+
+    const receivedAt = Date.now();
+    const direction = message.isFromMe ? ('outbound' as const) : ('inbound' as const);
+    void operationsTelemetry.record({
+      traceSource: message.platformMessageId,
+      userId: message.userId,
+      platform: message.platform,
+      direction,
+      stage: 'api',
+      outcome: 'accepted',
+    });
 
     try {
       // Fast-path: skip duplicate messages (backfill replay) without touching the DB further
@@ -400,7 +462,24 @@ async function initializePlatforms() {
         return; // already processed — skip chat/AI/contact upserts
       }
 
-      logger.info(`New message from ${message.platform}: ${message.platformMessageId}`);
+      logger.info('New platform message accepted', { platform: message.platform });
+      const aiProcessingEnabled = await isAiProcessingEnabled(message.userId);
+
+      // A WhatsApp LID is an opaque bridge identifier, not a contact name or
+      // number. Prefer the real bridge profile name and omit the field when
+      // the bridge has not supplied one; omitting it preserves a previously
+      // learned name on conflict instead of overwriting it with a LID.
+      const senderContactId = incomingContactId(message);
+      const resolvedContactPhone = phoneNumberFromBridgeIdentifiers([
+        typeof message.platformMetadata?.contactPhone === 'string'
+          ? message.platformMetadata.contactPhone
+          : undefined,
+      ]);
+      const chatDisplayName =
+        message.chatType === 'group'
+          ? message.chatName || message.chatId
+          : displayNameFromBridge(message.chatName, message.platform, message.chatId) ||
+            displayNameFromBridge(message.senderName, message.platform, senderContactId);
 
       // 1. Upsert chat record to get its UUID
       const { data: chat, error: chatError } = await supabase
@@ -411,12 +490,9 @@ async function initializePlatforms() {
             whatsapp_chat_id: message.chatId,
             platform_chat_id: message.chatId,
             platform: message.platform,
-            name: message.chatName || message.chatId,
+            ...(chatDisplayName ? { name: chatDisplayName } : {}),
             is_group: message.chatType === 'group',
             last_message_at: message.timestamp,
-            ...(typeof message.memberCount === 'number'
-              ? { member_count: message.memberCount }
-              : {}),
           },
           { onConflict: 'user_id,platform,platform_chat_id' }
         )
@@ -437,9 +513,17 @@ async function initializePlatforms() {
       // inbox a stable avatar/name relationship instead of trying to infer it
       // from the latest message row on every render.
       let contactId: string | null = null;
-      const senderContactId = incomingContactId(message);
+      let storedContactName: string | null = null;
       if (senderContactId) {
         const platformContactId = senderContactId;
+        const contactName = displayNameFromBridge(
+          message.senderName,
+          message.platform,
+          platformContactId
+        );
+        const contactPhone =
+          resolvedContactPhone ||
+          phoneNumberFromPlatformContactId(message.platform, platformContactId);
         {
           const { data: contact, error: contactError } = await supabase
             .from('contacts')
@@ -449,22 +533,72 @@ async function initializePlatforms() {
                 platform: message.platform,
                 platform_contact_id: platformContactId,
                 whatsapp_id: platformContactId,
-                name: message.senderName || platformContactId,
-                phone_number: /^\d+$/.test(platformContactId) ? platformContactId : null,
+                ...(contactName ? { name: contactName } : {}),
+                ...(contactPhone ? { phone_number: contactPhone } : {}),
               },
               { onConflict: 'user_id,platform,platform_contact_id' }
             )
-            .select('id')
+            .select('id, name')
             .single();
           if (contactError) {
             logger.debug('Failed to upsert contact:', contactError);
           } else {
             contactId = contact?.id || null;
+            storedContactName = displayNameFromBridge(
+              contact?.name,
+              message.platform,
+              platformContactId
+            );
           }
         }
       }
       if (contactId && message.chatType === 'individual') {
         await supabase.from('chats').update({ contact_id: contactId }).eq('id', chat.id);
+      }
+      if (message.chatType === 'individual' && !chatDisplayName) {
+        // Outgoing messages do not have a remote sender to upsert above, and
+        // some bridges only learn the profile name during contact sync. Reuse
+        // that canonical record to repair a previously anonymous chat.
+        let resolvedName = storedContactName;
+        if (!resolvedName) {
+          const { data: knownContact } = await supabase
+            .from('contacts')
+            .select('name')
+            .eq('user_id', message.userId)
+            .eq('platform', message.platform)
+            .eq('platform_contact_id', message.chatId)
+            .maybeSingle();
+          resolvedName = displayNameFromBridge(
+            knownContact?.name,
+            message.platform,
+            message.chatId
+          );
+        }
+        if (resolvedName) {
+          await supabase.from('chats').update({ name: resolvedName }).eq('id', chat.id);
+        }
+      }
+
+      // A bridge may deliver a reply before its referenced message (especially
+      // during history backfill). Preserve the platform identifier either way,
+      // and link the local UUID as soon as it is available for fast quote
+      // rendering in the clients.
+      let replyToInternalMessageId: string | null = null;
+      if (message.replyToMessageId) {
+        const { data: replyTarget, error: replyTargetError } = await supabase
+          .from('messages')
+          .select('id')
+          .eq('user_id', message.userId)
+          .eq('chat_id', chat.id)
+          .eq('platform_message_id', message.replyToMessageId)
+          .maybeSingle();
+        if (replyTargetError) {
+          logger.debug('Could not resolve reply target during message ingest', {
+            platform: message.platform,
+          });
+        } else {
+          replyToInternalMessageId = replyTarget?.id || null;
+        }
       }
 
       // 2. Insert message record (ignoreDuplicates as a safety net)
@@ -484,8 +618,14 @@ async function initializePlatforms() {
             timestamp: message.timestamp,
             is_group: message.chatType === 'group',
             contact_id: contactId,
-            contact_name: message.isFromMe ? null : message.senderName || null,
-            contact_phone: message.isFromMe ? null : senderContactId,
+            contact_name: message.isFromMe
+              ? null
+              : displayNameFromBridge(message.senderName, message.platform, senderContactId),
+            contact_phone: message.isFromMe
+              ? null
+              : resolvedContactPhone ||
+                phoneNumberFromPlatformContactId(message.platform, senderContactId),
+            reply_to_message_id: replyToInternalMessageId,
             reply_to_platform_message_id: message.replyToMessageId || null,
             thread_root_platform_id: message.threadRootId || null,
             mentions: resolveMentions(message.mentions),
@@ -516,8 +656,46 @@ async function initializePlatforms() {
 
       if (msgError) {
         logger.error('Failed to upsert message:', msgError);
+        void operationsTelemetry.record({
+          traceSource: message.platformMessageId,
+          userId: message.userId,
+          platform: message.platform,
+          direction,
+          stage: 'database',
+          outcome: 'failed',
+          durationMs: Date.now() - receivedAt,
+          errorClass: 'dependency',
+        });
       } else {
-        logger.debug(`Message saved: ${message.platformMessageId}`);
+        logger.debug('Platform message persisted', { platform: message.platform });
+
+        // Resolve replies which arrived before this source message. The update
+        // is intentionally scoped by account and chat so a platform identifier
+        // can never cross a conversation boundary.
+        if (savedMsg?.id) {
+          const { error: replyResolutionError } = await supabase
+            .from('messages')
+            .update({ reply_to_message_id: savedMsg.id })
+            .eq('user_id', message.userId)
+            .eq('chat_id', chat.id)
+            .eq('reply_to_platform_message_id', message.platformMessageId)
+            .is('reply_to_message_id', null);
+          if (replyResolutionError) {
+            logger.debug('Could not reconcile deferred reply references', {
+              platform: message.platform,
+            });
+          }
+        }
+
+        void operationsTelemetry.record({
+          traceSource: message.platformMessageId,
+          userId: message.userId,
+          platform: message.platform,
+          direction,
+          stage: 'database',
+          outcome: 'persisted',
+          durationMs: Date.now() - receivedAt,
+        });
 
         if (!message.isFromMe && !isBackfill && savedMsg?.id) {
           const { error: unreadError } = await supabase.rpc('increment_chat_unread', {
@@ -547,6 +725,7 @@ async function initializePlatforms() {
           !message.isFromMe &&
           savedMsg?.id &&
           message.content?.trim() &&
+          aiProcessingEnabled &&
           aiProcessor.isConfigured
         ) {
           const chatType = message.chatType === 'group' ? 'group' : 'individual';
@@ -556,7 +735,12 @@ async function initializePlatforms() {
         }
 
         // Keep the global Ask Claire index current for new text/caption rows.
-        if (savedMsg?.id && message.content?.trim() && conversationAssistant.isConfigured) {
+        if (
+          savedMsg?.id &&
+          message.content?.trim() &&
+          aiProcessingEnabled &&
+          conversationAssistant.isConfigured
+        ) {
           void conversationAssistant
             .indexMessage({
               id: savedMsg.id,
@@ -581,6 +765,7 @@ async function initializePlatforms() {
           savedMsg?.id &&
           message.isFromMe &&
           message.content?.trim() &&
+          aiProcessingEnabled &&
           voiceProfileService.isConfigured
         ) {
           void voiceProfileService
@@ -588,16 +773,9 @@ async function initializePlatforms() {
             .catch((err) => logger.debug('Voice profile refresh skipped:', (err as Error).message));
         }
 
-        // Schedule loop detection for this chat (fire-and-forget).
-        //
-        // Scheduling is per-CHAT and debounced, not per-message: a burst of
-        // twenty messages costs one detection pass over the whole exchange
-        // rather than twenty passes over twenty fragments. That is what lets one
-        // plan stay one loop as it evolves.
-        //
-        // Backfill is excluded: replaying history would re-run detection over
-        // every archived message, which is expensive and produces stale loops.
-        // `chat.id` is the database UUID; message.chatId is the platform's id.
+        // Detection is debounced per conversation and excludes backfill, so a
+        // burst is reconciled as one thread of intent rather than one row per
+        // message. The loop detector applies its own per-user enablement gate.
         if (savedMsg?.id && !isBackfill && message.content?.trim() && chat?.id) {
           void scheduleChat(message.userId, chat.id).catch((err) =>
             logger.debug('Loop detection skipped:', (err as Error).message)
@@ -617,9 +795,9 @@ async function initializePlatforms() {
             })
             .then(async (result) => {
               if (result.fired && result.reply) {
-                logger.info(
-                  `Auto-reply rule "${result.ruleName}" fired — reply queued for chat ${message.chatId}`
-                );
+                logger.info('Auto-reply rule fired and reply queued', {
+                  platform: message.platform,
+                });
                 try {
                   const sessions = await platformManager.getUserSessions(message.userId);
                   const session = sessions.find(
@@ -635,9 +813,9 @@ async function initializePlatforms() {
                       { content: result.reply }
                     );
                   } else {
-                    logger.warn(
-                      `Auto-reply: no active session for user ${message.userId} on ${message.platform}`
-                    );
+                    logger.warn('Auto-reply skipped because no active session exists', {
+                      platform: message.platform,
+                    });
                   }
                 } catch (err) {
                   logger.warn('Auto-reply send failed:', (err as Error).message);
@@ -649,6 +827,16 @@ async function initializePlatforms() {
       }
     } catch (err) {
       logger.error('Error saving message to DB:', err);
+      void operationsTelemetry.record({
+        traceSource: message.platformMessageId,
+        userId: message.userId,
+        platform: message.platform,
+        direction,
+        stage: 'api',
+        outcome: 'failed',
+        durationMs: Date.now() - receivedAt,
+        errorClass: 'dependency',
+      });
     }
   });
 
@@ -666,11 +854,23 @@ const serverReady = Promise.resolve(
   app.listen(PORT, async () => {
     logger.info(`Server running on port ${PORT} in ${config.NODE_ENV} mode`);
 
-    // Start session monitor
-    sessionMonitor.start();
+    // The legacy session monitor probes direct WhatsApp-web.js clients. In
+    // Matrix mode those clients intentionally do not exist; running it would
+    // misclassify healthy mautrix sessions as disconnected and overwrite the
+    // durable bridge-session mapping needed after a restart.
+    if (!matrixConfig.enabled && !mockBridgeConfig.enabled) {
+      sessionMonitor.start();
+    } else {
+      logger.info('Skipping direct session monitor in Matrix/mock bridge mode');
+    }
 
     // Start loop reminder scheduler
     reminderScheduler.start();
+
+    // Matrix room registration may backfill a substantial history. The
+    // watchdog must not wait for that optional work, or a slow bridge startup
+    // would leave production unmonitored exactly when it needs observation.
+    setTimeout(() => operationsMonitor.start(), 10_000);
 
     // Initialize platforms
     await initializePlatforms();

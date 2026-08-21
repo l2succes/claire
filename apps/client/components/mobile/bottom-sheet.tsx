@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import GorhomBottomSheet, {
   BottomSheetBackdrop,
+  BottomSheetScrollView,
   BottomSheetView,
   type BottomSheetBackdropProps,
 } from '@gorhom/bottom-sheet';
@@ -36,12 +37,16 @@ export function BottomSheet({
   onClose,
   children,
   testID,
+  snapPoints = SNAP_POINTS,
+  scrollable = false,
 }: {
   visible: boolean;
   title: string;
   onClose: () => void;
   children: ReactNode;
   testID?: string;
+  snapPoints?: string[];
+  scrollable?: boolean;
 }) {
   const insets = useSafeAreaInsets();
   const sheetRef = useRef<GorhomBottomSheet>(null);
@@ -70,7 +75,7 @@ export function BottomSheet({
     <GorhomBottomSheet
       ref={sheetRef}
       index={-1}
-      snapPoints={SNAP_POINTS}
+      snapPoints={snapPoints}
       enablePanDownToClose
       onClose={onClose}
       backdropComponent={renderBackdrop}
@@ -84,6 +89,31 @@ export function BottomSheet({
         borderTopRightRadius: 28,
       }}
     >
+      {scrollable ? (
+        <BottomSheetScrollView contentContainerStyle={{ paddingBottom: bottomSheetInset(insets.bottom) }}>
+          <View
+            testID={testID}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: space[2],
+              paddingHorizontal: space[4],
+              paddingTop: space[3],
+              paddingBottom: space[2],
+            }}
+          >
+            <Text style={{ ...mobileType.sectionTitle, flex: 1, color: colors.ink }}>{title}</Text>
+            <MobileIconButton
+              label="Close"
+              testID={testID ? `${testID}-close` : undefined}
+              onPress={onClose}
+            >
+              <X size={19} color={colors.ink} />
+            </MobileIconButton>
+          </View>
+          {children}
+        </BottomSheetScrollView>
+      ) : (
       <BottomSheetView style={{ paddingBottom: bottomSheetInset(insets.bottom) }}>
         <View
           testID={testID}
@@ -107,6 +137,7 @@ export function BottomSheet({
         </View>
         {children}
       </BottomSheetView>
+      )}
     </GorhomBottomSheet>
   );
 }

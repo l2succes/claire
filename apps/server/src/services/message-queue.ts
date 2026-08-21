@@ -4,6 +4,8 @@ import { logger } from '../utils/logger';
 import { IncomingMessage } from './message-ingestion';
 import { aiProcessor } from './ai-processor';
 import { contactInference } from './contact-inference';
+import { decrypt, encrypt } from '../utils/crypto';
+import { isAiProcessingEnabled } from './ai-policy';
 
 interface MessageJob {
   type: 'process_message' | 'generate_response' | 'infer_contact';
@@ -12,8 +14,24 @@ interface MessageJob {
   userId: string;
 }
 
+interface EncryptedMessageJob {
+  encrypted: string;
+}
+
 class MessageQueueService {
   private queues: Map<string, Queue> = new Map();
+
+  private seal(job: MessageJob): EncryptedMessageJob {
+    return { encrypted: encrypt(JSON.stringify(job)) };
+  }
+
+  private unseal(job: Job<EncryptedMessageJob | MessageJob>): MessageJob {
+    const raw = job.data as EncryptedMessageJob | MessageJob;
+    // Temporary migration support: jobs created before this release are
+    // processed once and then removed; all new message-bearing jobs are sealed.
+    if ('encrypted' in raw) return JSON.parse(decrypt(raw.encrypted)) as MessageJob;
+    return raw;
+  }
   
   constructor() {
     this.initializeQueues();
@@ -84,7 +102,7 @@ class MessageQueueService {
     const queue = this.queues.get('messages');
     if (!queue) throw new Error('Messages queue not initialized');
 
-    const job = await queue.add({
+    const job = await queue.add(this.seal({
       type: 'process_message',
       data: {
         messageId: message.message.id._serialized,
@@ -98,34 +116,36 @@ class MessageQueueService {
       },
       sessionId: message.sessionId,
       userId: message.userId,
-    } as MessageJob, {
+    }), {
       priority: message.message.fromMe ? 2 : 1, // Lower priority for sent messages
     });
 
-    logger.info(`Message ${message.message.id._serialized} added to queue`);
+    logger.info('Message added to processing queue');
     return job;
   }
 
   /**
    * Process message job
    */
-  private async processMessageJob(job: Job<MessageJob>) {
-    const { data, sessionId, userId } = job.data;
+  private async processMessageJob(job: Job<EncryptedMessageJob | MessageJob>) {
+    const { data, sessionId, userId } = this.unseal(job);
     
     try {
-      logger.info(`Processing message ${data.messageId}`);
+      logger.info('Processing message queue job');
       
       // Don't process messages from self
       if (data.fromMe) {
-        logger.debug(`Skipping self message ${data.messageId}`);
+        logger.debug('Skipping self-authored message queue job');
         return { processed: false, reason: 'self_message' };
       }
 
       // Create sub-jobs for different processing tasks
       const promises = [];
 
+      const aiEnabled = await isAiProcessingEnabled(userId);
+
       // 1. Generate AI response suggestion
-      if (!data.fromMe) {
+      if (!data.fromMe && aiEnabled) {
         promises.push(
           this.addAIResponseJob({
             messageId: data.messageId,
@@ -137,8 +157,9 @@ class MessageQueueService {
         );
       }
 
-      // 2. Infer contact identity
-      if (data.contactId && !data.fromMe) {
+      // 2. Infer contact identity. Loop detection is scheduled directly by
+      // message ingestion, where it has the chat UUID needed for debouncing.
+      if (data.contactId && !data.fromMe && aiEnabled) {
         promises.push(
           this.addContactInferenceJob({
             contactId: data.contactId,
@@ -157,7 +178,7 @@ class MessageQueueService {
         subJobs: promises.length,
       };
     } catch (error) {
-      logger.error(`Error processing message ${data.messageId}:`, error);
+      logger.error('Error processing message queue job', error);
       throw error;
     }
   }
@@ -169,12 +190,12 @@ class MessageQueueService {
     const queue = this.queues.get('ai-responses');
     if (!queue) throw new Error('AI responses queue not initialized');
 
-    return await queue.add({
+    return await queue.add(this.seal({
       type: 'generate_response',
       data,
       sessionId: data.sessionId,
       userId: data.userId,
-    } as MessageJob, {
+    }), {
       delay: 1000, // Delay 1 second to allow for more context
     });
   }
@@ -182,11 +203,11 @@ class MessageQueueService {
   /**
    * Process AI response job
    */
-  private async processAIResponseJob(job: Job<MessageJob>) {
-    const { data } = job.data;
+  private async processAIResponseJob(job: Job<EncryptedMessageJob | MessageJob>) {
+    const { data } = this.unseal(job);
     
     try {
-      logger.info(`Generating AI response for message ${data.messageId}`);
+      logger.info('Generating AI response queue job');
       
       // This will be implemented in ai-processor.ts
       const response = await aiProcessor.generateResponse(
@@ -210,12 +231,12 @@ class MessageQueueService {
     const queue = this.queues.get('contact-inference');
     if (!queue) throw new Error('Contact inference queue not initialized');
 
-    return await queue.add({
+    return await queue.add(this.seal({
       type: 'infer_contact',
       data,
       sessionId: data.sessionId,
       userId: data.userId,
-    } as MessageJob, {
+    }), {
       delay: 5000, // Delay to batch multiple messages
     });
   }
@@ -223,11 +244,11 @@ class MessageQueueService {
   /**
    * Process contact inference job
    */
-  private async processContactInferenceJob(job: Job<MessageJob>) {
-    const { data } = job.data;
+  private async processContactInferenceJob(job: Job<EncryptedMessageJob | MessageJob>) {
+    const { data } = this.unseal(job);
     
     try {
-      logger.info(`Inferring contact identity for ${data.contactId}`);
+      logger.info('Inferring contact identity queue job');
       
       // This will be implemented in contact-inference.ts
       const inference = await contactInference.inferIdentity(

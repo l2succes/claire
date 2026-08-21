@@ -53,6 +53,9 @@ jest.mock('@supabase/supabase-js', () => ({
       signInWithPassword: jest.fn(),
       signOut: jest.fn(),
       getSession: jest.fn(),
+      refreshSession: jest.fn(),
+      startAutoRefresh: jest.fn(),
+      stopAutoRefresh: jest.fn(),
       onAuthStateChange: jest.fn(),
     },
     from: jest.fn(() => ({

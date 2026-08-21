@@ -1,6 +1,8 @@
 import { redis } from './redis';
 import { logger } from '../utils/logger';
-import crypto from 'crypto';
+import { createHmac } from 'crypto';
+import { config } from '../config';
+import { decrypt, encrypt } from '../utils/crypto';
 
 interface CachedResponse {
   suggestions: string[];
@@ -19,13 +21,12 @@ class ResponseCache {
    * Generate cache key from message content and user context
    */
   private generateCacheKey(content: string, userId: string): string {
-    const hash = crypto
-      .createHash('sha256')
+    const userRef = createHmac('sha256', config.ENCRYPTION_KEY).update(userId).digest('hex').substring(0, 16);
+    const hash = createHmac('sha256', config.ENCRYPTION_KEY)
       .update(`${content}:${userId}`)
       .digest('hex')
       .substring(0, 16);
-    
-    return `${this.keyPrefix}${hash}`;
+    return `${this.keyPrefix}${userRef}:${hash}`;
   }
 
   /**
@@ -38,7 +39,15 @@ class ResponseCache {
       
       if (!cached) return null;
       
-      const response: CachedResponse = JSON.parse(cached);
+      let response: CachedResponse;
+      try {
+        response = JSON.parse(decrypt(cached));
+      } catch {
+        // Pre-hardening entries are deliberately not read. They expire through
+        // normal Redis cleanup and are replaced only with encrypted values.
+        await redis.del(key);
+        return null;
+      }
       
       // Check if cache is still valid
       const now = Date.now();
@@ -77,7 +86,7 @@ class ResponseCache {
         ttl: ttl || this.defaultTTL,
       };
       
-      await redis.setex(key, cacheData.ttl, JSON.stringify(cacheData));
+      await redis.setex(key, cacheData.ttl, encrypt(JSON.stringify(cacheData)));
       logger.debug(`Cached response for key: ${key}`);
     } catch (error) {
       logger.error('Error caching response:', error);
@@ -102,7 +111,8 @@ class ResponseCache {
    */
   async clearUserCache(userId: string): Promise<void> {
     try {
-      const pattern = `${this.keyPrefix}*${userId}*`;
+      const userRef = createHmac('sha256', config.ENCRYPTION_KEY).update(userId).digest('hex').substring(0, 16);
+      const pattern = `${this.keyPrefix}${userRef}:*`;
       const keys = await redis.keys(pattern);
       
       if (keys.length > 0) {
@@ -176,7 +186,7 @@ class ResponseCache {
         const cached = await redis.get(key);
         if (cached) {
           try {
-            const response: CachedResponse = JSON.parse(cached);
+            const response: CachedResponse = JSON.parse(decrypt(cached));
             const now = Date.now();
             
             if (now - response.timestamp > response.ttl * 1000) {

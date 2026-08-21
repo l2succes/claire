@@ -67,4 +67,22 @@ describe('encrypt / decrypt', () => {
     const ciphertext = encrypt('test', hexKey);
     expect(decrypt(ciphertext, hexKey)).toBe('test');
   });
+
+  it('can read a value during a one-key rotation overlap', () => {
+    const current = process.env.ENCRYPTION_KEY;
+    const previous = process.env.ENCRYPTION_KEY_PREVIOUS;
+    const oldKey = '12345678901234567890123456789012';
+    const newKey = 'abcdefghijklmnopqrstuvwxyz123456';
+    const ciphertext = encrypt('rotating secret', oldKey);
+    process.env.ENCRYPTION_KEY = newKey;
+    process.env.ENCRYPTION_KEY_PREVIOUS = oldKey;
+    try {
+      expect(decrypt(ciphertext)).toBe('rotating secret');
+    } finally {
+      if (current === undefined) delete process.env.ENCRYPTION_KEY;
+      else process.env.ENCRYPTION_KEY = current;
+      if (previous === undefined) delete process.env.ENCRYPTION_KEY_PREVIOUS;
+      else process.env.ENCRYPTION_KEY_PREVIOUS = previous;
+    }
+  });
 });

@@ -1,9 +1,9 @@
 import { useEffect, type ComponentType, type ReactNode } from 'react';
 import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
-import { Bell, Bot, Check, ChevronLeft, ChevronRight, DatabaseZap, KeyRound, Link2, LogOut, MessageCircle, Smile, Sparkles } from 'lucide-react-native';
+import { Bell, Bot, Check, ChevronRight, DatabaseZap, KeyRound, Link2, LogOut, MessageCircle, Smile, Sparkles } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { colors, mobileType, radius, space, useIsDesktopLayout } from '@claire/design-system';
-import { MobileAvatar, MobileIconButton, SectionLabel } from '../../components/mobile/claire-mobile';
+import { MobileAvatar, MobileHeader, SectionLabel } from '../../components/mobile/claire-mobile';
 import { useAuthStore } from '../../stores/authStore';
 import { useChatPreferencesStore } from '../../stores/chatPreferencesStore';
 import { usePlatformStore } from '../../stores/platformStore';
@@ -76,7 +76,7 @@ export default function SettingsScreen() {
 
   const claireRows: SettingsRow[] = [
     { title: 'AI behavior', detail: 'Suggestions, summaries, and memory', icon: Sparkles, href: '/settings/ai', testID: 'settings-ai-settings', iconBackground: colors.lavender },
-    { title: 'Relationships', detail: 'People, categories, and prompts', icon: Smile, href: '/people', testID: 'settings-relationships', iconBackground: colors.blush },
+    { title: 'Relationships', detail: 'People, categories, and prompts', icon: Smile, href: '/(tabs)/contacts', testID: 'settings-relationships', iconBackground: colors.blush },
     {
       title: 'Loop detection',
       detail: 'Automatically suggest tracking',
@@ -112,7 +112,7 @@ export default function SettingsScreen() {
   ];
 
   const appRows: SettingsRow[] = [
-    { title: 'Connected accounts', detail: `${connected} platform${connected === 1 ? '' : 's'} active`, icon: Link2, href: '/connections', testID: 'settings-connections', iconBackground: colors.lavender },
+    { title: 'Connected accounts', detail: `${connected} platform${connected === 1 ? '' : 's'} active`, icon: Link2, href: '/(tabs)/connections', testID: 'settings-connections', iconBackground: colors.lavender },
     { title: 'Notifications', detail: 'Priority people and quiet hours', icon: Bell, href: '/settings/notifications', testID: 'settings-notifications', iconBackground: colors.sky },
     { title: 'Chat', detail: 'Plus button and reply options', icon: MessageCircle, href: '/settings/chat', testID: 'settings-chat', iconBackground: colors.neutral[100] },
     { title: 'Privacy & data', detail: 'Export, retention, and delete', icon: DatabaseZap, href: '/settings/privacy', testID: 'settings-privacy-data', iconBackground: colors.neutral[100] },
@@ -135,11 +135,7 @@ export default function SettingsScreen() {
 
   return (
     <ScrollView testID="settings-screen" style={{ flex: 1, backgroundColor: colors.cream }} contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ paddingBottom: 64 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: space[4], paddingTop: space[2], paddingBottom: space[3], minHeight: 52 }}>
-        <MobileIconButton label="Back to More" onPress={() => router.replace('/more')}><ChevronLeft size={20} color={colors.ink} /></MobileIconButton>
-        <Text style={{ flex: 1, textAlign: 'center', ...mobileType.sectionTitle, color: colors.ink }}>Settings</Text>
-        <View style={{ width: 40 }} />
-      </View>
+      <MobileHeader title="Settings" subtitle="Preferences, privacy, and account controls." />
 
       <View style={{ paddingHorizontal: space[4], gap: space[5] }}>
         <Pressable

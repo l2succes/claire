@@ -93,6 +93,9 @@ jobs:
   e2e:
     name: Mock end-to-end tests
     runs-on: ubuntu-latest
+    # Keep the advisory suite from occupying a runner for GitHub's six-hour
+    # default when Expo or Playwright becomes stuck during startup.
+    timeout-minutes: 15
     # The suite boots the app and signs in, but 41 of 59 tests still assert
     # against selectors the redesigned inbox no longer renders. Non-blocking
     # until those are rewritten: https://github.com/l2succes/claire/issues/145

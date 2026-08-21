@@ -57,6 +57,8 @@ describe('BridgeHttpClient identifier resolution', () => {
       request = new Request(input, init);
       return new Response(JSON.stringify({
         id: '15166100494',
+        name: 'Bridge profile name',
+        identifiers: ['15166100494@s.whatsapp.net'],
         mxid: '@whatsapp_15166100494:claire.local',
       }), { status: 200, headers: { 'content-type': 'application/json' } });
     };
@@ -71,11 +73,48 @@ describe('BridgeHttpClient identifier resolution', () => {
       const result = await client.resolveIdentifier('+15166100494', '15166100494');
 
       expect(result.mxid).toBe('@whatsapp_15166100494:claire.local');
+      expect(result.name).toBe('Bridge profile name');
+      expect(result.identifiers).toEqual(['15166100494@s.whatsapp.net']);
       expect(request?.method).toBe('GET');
       expect(new URL(request!.url).pathname).toBe(
         '/_matrix/provision/v3/resolve_identifier/%2B15166100494'
       );
       expect(new URL(request!.url).searchParams.get('login_id')).toBe('15166100494');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
+describe('BridgeHttpClient contacts', () => {
+  it('reads contacts through the exact linked account', async () => {
+    const originalFetch = globalThis.fetch;
+    let request: Request | undefined;
+
+    globalThis.fetch = async (input, init) => {
+      request = new Request(input, init);
+      return new Response(JSON.stringify({
+        contacts: [{
+          id: 'lid-192204836479059',
+          name: 'A profile name',
+          identifiers: ['@whatsapp_lid-192204836479059:claire.local'],
+        }],
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    };
+
+    try {
+      const client = new BridgeHttpClient(
+        'https://bridge.example',
+        'shared-secret',
+        '@claire:claire.local'
+      );
+      const contacts = await client.getContacts('linked-whatsapp-account');
+
+      expect(contacts).toHaveLength(1);
+      expect(contacts[0]?.name).toBe('A profile name');
+      expect(new URL(request!.url).pathname).toBe('/_matrix/provision/v3/contacts');
+      expect(new URL(request!.url).searchParams.get('login_id')).toBe('linked-whatsapp-account');
+      expect(new URL(request!.url).searchParams.get('user_id')).toBe('@claire:claire.local');
     } finally {
       globalThis.fetch = originalFetch;
     }
