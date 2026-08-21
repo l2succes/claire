@@ -267,7 +267,7 @@ export async function detectLoopsForChat(
       await upsertLoopParticipants(
         stored.id,
         userId,
-        buildParticipants(op.participants, context, op.owner_name ?? null),
+        buildParticipants(op.participants, context, op.owner, op.owner_name ?? null),
       );
     } else {
       // Lost a race, or the same intent restated: fold it into the live loop.
@@ -405,21 +405,28 @@ function normalizeDeadline(value: string | null | undefined): string | null {
 }
 
 /** Roster entries for the people a loop actually involves. */
-function buildParticipants(
+export function buildParticipants(
   names: string[],
   context: LoopContext,
+  owner: 'me' | 'them' | 'shared' | 'unknown',
   ownerName: string | null,
 ): Array<{ displayName: string; identityKey: string; contactId?: string | null; isSelf?: boolean; role?: 'owner' | 'counterparty' | 'mentioned' | 'observer' }> {
   const byName = new Map(context.roster.map((p) => [p.displayName.toLowerCase(), p]));
 
   return names.slice(0, 25).map((name) => {
     const match = byName.get(name.toLowerCase());
-    const isOwner = !!ownerName && name.toLowerCase() === ownerName.toLowerCase();
+    const isSelf = match?.isSelf ?? false;
+    // The model's optional name must never override the structured owner
+    // direction. In particular, a user cannot be labelled the owner of a loop
+    // whose `owner` is `them` merely because their name appeared in the prompt.
+    const isOwner = owner === 'me'
+      ? isSelf
+      : owner === 'them' && !isSelf && !!ownerName && name.toLowerCase() === ownerName.toLowerCase();
     return {
       displayName: name,
       identityKey: match?.identityKey ?? name.toLowerCase(),
       contactId: match?.contactId ?? null,
-      isSelf: match?.isSelf ?? false,
+      isSelf,
       role: isOwner ? ('owner' as const) : ('counterparty' as const),
     };
   });
