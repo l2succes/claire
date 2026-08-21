@@ -13,71 +13,73 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
   if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });
 
   try {
-    const limit = Math.min(Math.max(Number.parseInt(String(req.query.limit ?? ''), 10) || 80, 1), 100);
+    // People is an address book as well as a conversation workspace. The
+    // mobile client asks for the bounded full directory so its A–Z index can
+    // jump reliably; keep the server-side cap aligned with the bridge sync.
+    const limit = Math.min(Math.max(Number.parseInt(String(req.query.limit ?? ''), 10) || 80, 1), 10_000);
     const offset = Math.max(Number.parseInt(String(req.query.offset ?? ''), 10) || 0, 0);
     const search = typeof req.query.q === 'string' ? req.query.q.trim() : '';
     const platform = typeof req.query.platform === 'string' ? req.query.platform : 'all';
     const filter = typeof req.query.filter === 'string' ? req.query.filter : 'all';
 
-    // People is a conversation workspace, not a raw bridge directory. Older
-    // mautrix syncs could leave thousands of historical/LID-only directory
-    // records behind with no Claire chat. Showing those records made the list
-    // both slow and impossible to identify. Start from actual conversations,
-    // then load only their linked contacts.
-    let chatQuery = supabase
-      .from('chats')
-      .select('id, contact_id, name, platform, is_group, last_message_at')
-      .eq('user_id', userId)
-      .not('contact_id', 'is', null)
-      .order('last_message_at', { ascending: false, nullsFirst: false });
-    if (platform !== 'all') chatQuery = chatQuery.eq('platform', platform);
-    const { data: linkedChats, error: linkedChatsError } = await chatQuery;
-    if (linkedChatsError) throw linkedChatsError;
+    const contactsQuery = () => {
+      let query = supabase
+        .from('contacts')
+        .select('id, name, phone_number, platform_contact_id, avatar_url, inferred_name, inferred_relationship, is_group, platform, username')
+        .eq('user_id', userId)
+        .order('name', { ascending: true, nullsFirst: false })
+        .order('id', { ascending: true });
 
+      if (platform !== 'all') query = query.eq('platform', platform);
+      if (filter === 'needs_context') query = query.eq('is_group', false).is('inferred_relationship', null);
+      if (filter === 'groups') query = query.eq('is_group', true);
+      if (search) {
+        // PostgREST's OR grammar treats commas and parentheses as syntax. They
+        // aren't useful for People search, so make them literal-free first.
+        const pattern = `%${search.replace(/[%,()]/g, ' ')}%`;
+        query = query.or(
+          `name.ilike.${pattern},` +
+          `inferred_name.ilike.${pattern},` +
+          `phone_number.ilike.${pattern},` +
+          `username.ilike.${pattern}`,
+        );
+      }
+      return query;
+    };
+
+    // Supabase deployments often cap one PostgREST response at 1,000 rows.
+    // Fetch in internal chunks so a 10k directory still reaches the mobile
+    // A–Z list as one complete, correctly sorted data set.
+    const rows: DbRow[] = [];
+    const desiredRows = limit + 1;
+    for (let pageOffset = offset; rows.length < desiredRows; ) {
+      const chunkSize = Math.min(1_000, desiredRows - rows.length);
+      const { data, error } = await contactsQuery().range(pageOffset, pageOffset + chunkSize - 1);
+      if (error) throw error;
+      const chunk = (data || []) as DbRow[];
+      rows.push(...chunk);
+      if (chunk.length < chunkSize) break;
+      pageOffset += chunk.length;
+    }
+    const page = rows.slice(0, limit);
+    const contactIds = page.map((contact: DbRow) => contact.id as string);
     const chatsByContact = new Map<string, DbRow>();
-    for (const chat of linkedChats || []) {
-      if (chat.contact_id && !chatsByContact.has(chat.contact_id)) {
-        chatsByContact.set(chat.contact_id, chat);
+    if (contactIds.length) {
+      let chatQuery = supabase
+        .from('chats')
+        .select('id, contact_id, name, platform, is_group, last_message_at')
+        .eq('user_id', userId)
+        .in('contact_id', contactIds)
+        .order('last_message_at', { ascending: false, nullsFirst: false });
+      if (platform !== 'all') chatQuery = chatQuery.eq('platform', platform);
+      const { data: linkedChats, error: linkedChatsError } = await chatQuery;
+      if (linkedChatsError) throw linkedChatsError;
+      for (const chat of linkedChats || []) {
+        if (chat.contact_id && !chatsByContact.has(chat.contact_id)) {
+          chatsByContact.set(chat.contact_id, chat);
+        }
       }
     }
-    const linkedContactIds = [...chatsByContact.keys()];
-    if (!linkedContactIds.length) {
-      return res.json({ success: true, data: { contacts: [], nextOffset: null } });
-    }
-
-    let query = supabase
-      .from('contacts')
-      .select('id, name, phone_number, platform_contact_id, avatar_url, inferred_name, inferred_relationship, is_group, platform, username')
-      .eq('user_id', userId)
-      .in('id', linkedContactIds)
-      .order('name', { ascending: true, nullsFirst: false })
-      .order('id', { ascending: true })
-      .range(offset, offset + limit);
-
-    if (platform !== 'all') query = query.eq('platform', platform);
-    if (filter === 'needs_context') query = query.eq('is_group', false).is('inferred_relationship', null);
-    if (filter === 'groups') query = query.eq('is_group', true);
-    if (search) {
-      // PostgREST's OR grammar treats commas and parentheses as syntax. They
-      // aren't useful for People search, so make them literal-free first.
-      const pattern = `%${search.replace(/[%,()]/g, ' ')}%`;
-      query = query.or(
-        `name.ilike.${pattern},` +
-        `inferred_name.ilike.${pattern},` +
-        `phone_number.ilike.${pattern},` +
-        `username.ilike.${pattern}`,
-      );
-    }
-
-    // Fetch one extra row rather than an exact count. Exact counts become an
-    // unnecessary full-table scan when a user has a large imported address
-    // book, and the UI only needs to know whether another page exists.
-    const { data, error } = await query;
-
-    if (error) throw error;
-
-    const rows = data || [];
-    const page = rows.slice(0, limit);
     return res.json({
       success: true,
       data: {
@@ -101,8 +103,9 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
 /**
  * Start a user-scoped WhatsApp contact identity sync. This is asynchronous on
  * purpose: a large address book must never keep a mobile request open. The
- * People query polls while the deduplicated server task enriches existing
- * contacts, and the task reads no message bodies.
+ * People query polls while the deduplicated server task enriches and imports
+ * the linked account's contact directory, and the task reads no message
+ * bodies.
  */
 router.post('/identity-backfill', requireAuth, async (req: Request, res: Response) => {
   const userId = req.user?.id;
@@ -113,6 +116,7 @@ router.post('/identity-backfill', requireAuth, async (req: Request, res: Respons
       .then((result) => logger.info('WhatsApp contact identity sync completed', {
         scanned: result.scanned,
         matched: result.matched,
+        created: result.created,
         updated: result.updated,
         unresolved: result.unresolved,
         hasMore: result.hasMore,

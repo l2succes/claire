@@ -9,7 +9,7 @@ import {
   phoneNumberFromBridgeIdentifiers,
   phoneNumberFromPlatformContactId,
 } from './contact-identity';
-import { whatsappContactKeys } from './whatsapp-contact-backfill';
+import { directoryInsertPayload, whatsappContactKeys } from './whatsapp-contact-backfill';
 
 describe('incoming contact identity', () => {
   test('keeps a direct Mac iMessage phone handle', () => {
@@ -79,5 +79,26 @@ describe('WhatsApp directory identity matching', () => {
     ]));
     expect(whatsappContactKeys('lid-192204836479059')).not.toContain('+192204836479059');
     expect(whatsappContactKeys('192204836479059')).toContain('lid-192204836479059');
+  });
+
+  test('creates a user-scoped directory person from a named LID profile', () => {
+    const payload = directoryInsertPayload('user-1', {
+      id: 'lid-192204836479059',
+      name: 'Ezra',
+      identifiers: ['12409945910@s.whatsapp.net'],
+    });
+    expect(payload).toMatchObject({
+      user_id: 'user-1',
+      platform: Platform.WHATSAPP,
+      platform_contact_id: 'lid-192204836479059',
+      whatsapp_id: 'lid-192204836479059',
+      name: 'Ezra',
+      phone_number: '+12409945910',
+      is_group: false,
+    });
+  });
+
+  test('does not persist a directory entry that has only an opaque LID', () => {
+    expect(directoryInsertPayload('user-1', { id: 'lid-192204836479059' })).toBeNull();
   });
 });

@@ -15,6 +15,7 @@ export interface ContactIdentityBackfillResult {
   scanned: number;
   matched: number;
   updated: number;
+  created: number;
   unresolved: number;
   skipped: number;
   hasMore: boolean;
@@ -134,6 +135,34 @@ function bridgeContactForStoredContact(
   return null;
 }
 
+function storedContactIndex(contacts: DbRow[]): Map<string, DbRow> {
+  const index = new Map<string, DbRow>();
+  for (const contact of contacts) {
+    for (const identity of [
+      contact.platform_contact_id as string | null | undefined,
+      contact.whatsapp_id as string | null | undefined,
+    ]) {
+      for (const key of whatsappContactKeys(identity)) {
+        if (!index.has(key)) index.set(key, contact);
+      }
+    }
+  }
+  return index;
+}
+
+function storedContactForBridgeContact(
+  bridgeContact: BridgeContact,
+  contacts: Map<string, DbRow>
+): DbRow | null {
+  for (const identity of [bridgeContact.id, ...(bridgeContact.identifiers || []), bridgeContact.mxid]) {
+    for (const key of whatsappContactKeys(identity)) {
+      const matched = contacts.get(key);
+      if (matched) return matched;
+    }
+  }
+  return null;
+}
+
 function updatePayload(contact: DbRow, bridgeContact: BridgeContact): DbRow | null {
   const platformContactId = String(contact.platform_contact_id || contact.whatsapp_id || '');
   const name = displayNameFromBridge(bridgeContact.name, Platform.WHATSAPP, platformContactId);
@@ -172,14 +201,47 @@ function updatePayload(contact: DbRow, bridgeContact: BridgeContact): DbRow | nu
 }
 
 /**
- * Copy an authenticated WhatsApp account's contact identities into Claire's
- * existing, user-scoped contact records. The bridge request is explicitly
- * scoped by login_id; never use the bridge bot's whole contact directory as a
- * fallback, because that could mix identities between Claire users.
+ * A bridge-directory entry is safe to persist only if it carries a usable
+ * provider name or a direct phone identifier. A raw WhatsApp LID alone is a
+ * routing handle, not an identity people should see in Claire.
+ */
+export function directoryInsertPayload(userId: string, bridgeContact: BridgeContact): DbRow | null {
+  const platformContactId = String(bridgeContact.id || bridgeContact.identifiers?.[0] || '').trim();
+  if (!platformContactId) return null;
+
+  const name = displayNameFromBridge(bridgeContact.name, Platform.WHATSAPP, platformContactId);
+  const phoneNumber = phoneNumberFromBridgeIdentifiers([
+    bridgeContact.id,
+    ...(bridgeContact.identifiers || []),
+  ]);
+  if (!name && !phoneNumber) return null;
+
+  return {
+    user_id: userId,
+    platform: Platform.WHATSAPP,
+    platform_contact_id: platformContactId,
+    // The legacy field is still NOT NULL. Keeping the same authenticated
+    // bridge-owned identifier in both fields preserves its database contract.
+    whatsapp_id: platformContactId,
+    name,
+    phone_number: phoneNumber,
+    avatar_url: typeof bridgeContact.avatar_url === 'string' && bridgeContact.avatar_url.trim()
+      ? bridgeContact.avatar_url
+      : null,
+    is_group: false,
+  };
+}
+
+/**
+ * Copy an authenticated WhatsApp account's contact directory into Claire's
+ * user-scoped contact records. Existing contacts are enriched in place and
+ * contacts that have not yet messaged the user are added as standalone People
+ * entries. The bridge request is explicitly scoped by login_id; never use the
+ * bridge bot's whole contact directory as a fallback, because that could mix
+ * identities between Claire users.
  *
- * A single run is capped at 10k existing contacts and uses paged reads plus
- * batch upserts so it can repair a large People list without touching message
- * content or operational telemetry.
+ * A single run is capped at 10k bridge-directory entries and uses paged reads
+ * plus batch upserts. It touches no message bodies or operational telemetry.
  */
 export async function backfillWhatsAppContactIdentities(
   userId: string,
@@ -196,25 +258,45 @@ export async function backfillWhatsAppContactIdentities(
     loadExistingWhatsAppContacts(userId, limit + 1),
     bridge.getContacts(loginId),
   ]);
-  const targets = rows.slice(0, limit);
-  const bridgeContacts = buildBridgeContactIndex(bridgeDirectory);
-  const updates: DbRow[] = [];
+  const directory = bridgeDirectory.slice(0, limit);
+  const bridgeContacts = buildBridgeContactIndex(directory);
+  const contactsByIdentity = storedContactIndex(rows.slice(0, limit));
+  const upserts: DbRow[] = [];
   let matched = 0;
+  let created = 0;
   let unresolved = 0;
+  const matchedStoredContactIds = new Set<string>();
+  const insertedDirectoryIds = new Set<string>();
 
-  for (const contact of targets) {
+  // First preserve the existing reconciliation behavior for contacts created
+  // from conversations, including old aliases the bridge may no longer emit.
+  for (const contact of rows.slice(0, limit)) {
     const bridgeContact = bridgeContactForStoredContact(contact, bridgeContacts);
-    if (!bridgeContact) {
+    if (!bridgeContact || matchedStoredContactIds.has(String(contact.id))) continue;
+    matchedStoredContactIds.add(String(contact.id));
+    matched++;
+    const payload = updatePayload(contact, bridgeContact);
+    if (payload) upserts.push(payload);
+  }
+
+  // Then add the rest of the authenticated WhatsApp directory. This is what
+  // lets People include someone the user has saved but never messaged.
+  for (const bridgeContact of directory) {
+    if (storedContactForBridgeContact(bridgeContact, contactsByIdentity)) continue;
+    const payload = directoryInsertPayload(userId, bridgeContact);
+    if (!payload) {
       unresolved++;
       continue;
     }
-    matched++;
-    const payload = updatePayload(contact, bridgeContact);
-    if (payload) updates.push(payload);
+    const contactId = String(payload.platform_contact_id);
+    if (insertedDirectoryIds.has(contactId)) continue;
+    insertedDirectoryIds.add(contactId);
+    upserts.push(payload);
+    created++;
   }
 
-  for (let index = 0; index < updates.length; index += WRITE_BATCH_SIZE) {
-    const batch = updates.slice(index, index + WRITE_BATCH_SIZE);
+  for (let index = 0; index < upserts.length; index += WRITE_BATCH_SIZE) {
+    const batch = upserts.slice(index, index + WRITE_BATCH_SIZE);
     const { error } = await supabase
       .from('contacts')
       .upsert(batch, { onConflict: 'user_id,platform,platform_contact_id' });
@@ -222,12 +304,13 @@ export async function backfillWhatsAppContactIdentities(
   }
 
   return {
-    scanned: targets.length,
+    scanned: directory.length,
     matched,
-    updated: updates.length,
+    updated: upserts.length - created,
+    created,
     unresolved,
-    skipped: matched - updates.length,
-    hasMore: rows.length > limit,
+    skipped: matched - (upserts.length - created),
+    hasMore: bridgeDirectory.length > limit,
   };
 }
 
