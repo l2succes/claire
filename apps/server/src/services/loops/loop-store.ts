@@ -35,6 +35,9 @@ export interface LoopWriteFields {
   suppressedReason: string | null;
   dedupeKey: string | null;
   confidence: number;
+  requester?: string;
+  priorityScore?: number;
+  priorityBreakdown?: unknown;
 }
 
 export interface CreateLoopInput extends LoopWriteFields {
@@ -71,6 +74,7 @@ export async function createLoop(input: CreateLoopInput): Promise<StoredLoop | n
     kind: input.kind,
     type: input.kind,
     owner: input.owner,
+    requester: input.requester ?? 'unknown',
     from_me: input.fromMe,
     thread_state: input.threadState,
     state_summary: input.stateSummary,
@@ -86,6 +90,9 @@ export async function createLoop(input: CreateLoopInput): Promise<StoredLoop | n
     suppressed_reason: input.suppressedReason,
     dedupe_key: input.dedupeKey,
     confidence: input.confidence,
+    priority_score: input.priorityScore ?? 0,
+    priority_breakdown: input.priorityBreakdown ?? {},
+    priority_updated_at: new Date().toISOString(),
     source: 'detector',
     detector_version: DETECTOR_VERSION,
     last_detected_at: new Date().toISOString(),

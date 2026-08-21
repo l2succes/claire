@@ -41,6 +41,10 @@ export interface LoopItem {
   priority: 'low' | 'medium' | 'high';
   status: LoopStatus;
   owner?: LoopOwner;
+  requester?: LoopOwner;
+  priority_score?: number | null;
+  priority_breakdown?: Record<string, number | boolean> | null;
+  priority_override?: number | null;
   snoozed_until?: string | null;
   from_me: boolean;
   chat_id?: string | null;
