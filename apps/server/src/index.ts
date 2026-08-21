@@ -76,6 +76,8 @@ async function notifyIncomingMessage(message: {
   chatId: string;
   platform: string;
   senderName?: string;
+  chatName?: string;
+  isGroup?: boolean;
   content: string;
   messageId: string;
 }): Promise<void> {
@@ -496,7 +498,7 @@ async function initializePlatforms() {
           },
           { onConflict: 'user_id,platform,platform_chat_id' }
         )
-        .select('id')
+        .select('id, name, is_group')
         .single();
 
       if (chatError || !chat) {
@@ -713,6 +715,8 @@ async function initializePlatforms() {
             chatId: chat.id,
             platform: message.platform,
             senderName: message.senderName,
+            chatName: chat.name || chatDisplayName,
+            isGroup: chat.is_group,
             content: message.content,
             messageId: savedMsg.id,
           }).catch((error) =>

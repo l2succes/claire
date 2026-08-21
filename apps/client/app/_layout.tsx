@@ -155,11 +155,22 @@ export default function RootLayout() {
   useEffect(() => {
     if (Platform.OS === 'web') return;
     const openNotification = (notification: Notifications.Notification) => {
-      const data = notification.request.content.data as { chatId?: unknown; messageId?: unknown };
+      const data = notification.request.content.data as {
+        chatId?: unknown;
+        messageId?: unknown;
+        contactName?: unknown;
+        chatName?: unknown;
+        platform?: unknown;
+        isGroup?: unknown;
+      };
       if (typeof data.chatId !== 'string') return;
       router.push({ pathname: '/chat/[chatId]', params: {
         chatId: data.chatId,
         ...(typeof data.messageId === 'string' ? { highlightMessageId: data.messageId } : {}),
+        ...(typeof data.contactName === 'string' ? { contact_name: data.contactName } : {}),
+        ...(typeof data.chatName === 'string' ? { chat_name: data.chatName } : {}),
+        ...(typeof data.platform === 'string' ? { platform: data.platform } : {}),
+        ...(typeof data.isGroup === 'boolean' ? { is_group: data.isGroup ? '1' : '0' } : {}),
       } });
     };
     const last = Notifications.getLastNotificationResponse();
