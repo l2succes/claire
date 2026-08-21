@@ -38,6 +38,7 @@ import {
   upsertLoopParticipants,
 } from './loop-store';
 import { resolveSelfIdentity, isWeakIdentity } from './identity';
+import { calculateLoopPriority } from './loop-priority';
 
 export type DetectionMode = 'queue' | 'inline' | 'off';
 
@@ -215,6 +216,16 @@ export async function detectLoopsForChat(
 
     const evidence = resolveEvidence(op.evidence_refs, context.window);
     const newest = evidence[evidence.length - 1];
+    const priority = calculateLoopPriority({
+      status: outcome.status,
+      visibility: outcome.visibility,
+      owner: op.owner,
+      state: op.state,
+      deadline: normalizeDeadline(op.deadline),
+      confidence: op.confidence,
+      relevance: outcome.relevance.score,
+      lastEvidenceAt: newest?.at ?? null,
+    });
 
     const stored = await createLoop({
       userId,
@@ -245,6 +256,9 @@ export async function detectLoopsForChat(
       suppressedReason: outcome.relevance.suppressedReason,
       dedupeKey: outcome.dedupeKey,
       confidence: op.confidence,
+      requester: 'unknown',
+      priorityScore: priority.score,
+      priorityBreakdown: priority.breakdown,
     });
 
     if (!stored) continue;

@@ -6,28 +6,12 @@ import { router } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { colors, mobileType, radius, space } from '@claire/design-system';
 import { MobileChip, MobileHeader, MobileIconButton, MobileState } from '../../components/mobile/claire-mobile';
+import type { LoopItem } from '../../services/loop-types';
 import { useAuthStore } from '../../stores/authStore';
 import { supabase } from '../../services/supabase';
 import { LoopsSkeleton } from '../../components/claire/skeleton';
 
-type LoopFilter = 'open' | 'done' | 'waiting';
-interface LoopItem {
-  id: string;
-  content: string;
-  title?: string | null;
-  state_summary?: string | null;
-  deadline?: string | null;
-  priority: 'low' | 'medium' | 'high';
-  status: 'open' | 'waiting' | 'snoozed' | 'done' | 'dropped' | 'superseded';
-  owner?: 'me' | 'them' | 'shared' | 'unknown';
-  snoozed_until?: string | null;
-  from_me: boolean;
-  chat_id?: string | null;
-  platform?: string | null;
-  contact_name?: string | null;
-  chat?: { name?: string | null; is_group?: boolean | null; platform?: string | null; contact?: { name?: string | null; inferred_name?: string | null; avatar_url?: string | null } | null } | null;
-  contact?: { name?: string | null; inferred_name?: string | null; avatar_url?: string | null } | null;
-}
+type LoopFilter = 'for_you' | 'done' | 'waiting' | 'all';
 
 const LOOP_SELECT = `
   *,
@@ -43,7 +27,8 @@ async function fetchLoops(userId: string): Promise<LoopItem[]> {
     .from('loops')
     .select(LOOP_SELECT)
     .eq('user_id', userId)
-    .order('created_at', { ascending: false })
+    .order('priority_score', { ascending: false, nullsFirst: false })
+    .order('last_evidence_at', { ascending: false, nullsFirst: false })
     .limit(200);
   if (error) throw error;
   return (data ?? []) as LoopItem[];
@@ -75,7 +60,7 @@ function loopDetail(item: LoopItem, title: string) {
 export function LoopsScreen() {
   const user = useAuthStore(state => state.user);
   const queryClient = useQueryClient();
-  const [filter, setFilter] = useState<LoopFilter>('open');
+  const [filter, setFilter] = useState<LoopFilter>('for_you');
   const [showCreate, setShowCreate] = useState(false);
   const [newLoop, setNewLoop] = useState('');
   const query = useQuery({ queryKey: ['mobile-loops', user?.id], enabled: !!user?.id, queryFn: () => fetchLoops(user!.id), staleTime: 60_000 });
@@ -121,7 +106,9 @@ export function LoopsScreen() {
   // loop was detected from an inbound message.
   const waiting = open.filter(item => (item.owner ? item.owner === 'them' : !item.from_me));
   const today = open.filter(item => item.deadline && new Date(item.deadline).toDateString() === new Date().toDateString()).length;
-  const visible = filter === 'done' ? completed : filter === 'waiting' ? waiting : open;
+  const forYou = open.filter(item => item.owner === 'me' || (!item.owner && item.from_me));
+  const visible = filter === 'done' ? completed : filter === 'waiting' ? waiting : filter === 'for_you' ? forYou : open;
+  const needsAttention = open.filter(item => (item.priority_score ?? 0) >= 80).length;
 
   const renderItem = ({ item }: { item: LoopItem }) => {
     const name = conversationName(item);
@@ -154,10 +141,12 @@ export function LoopsScreen() {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}>
             <View testID={`loop-contact-avatar-${item.id}`} style={{ width: 25, height: 25, borderRadius: 13, backgroundColor: group ? colors.sky : colors.blush, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }}>{avatar ? <Image source={{ uri: avatar }} style={{ width: 25, height: 25 }} /> : group ? <UsersRound size={13} color={colors.neutral[600]} /> : <UserRound size={13} color={colors.neutral[600]} />}</View>
             <Text testID={`loop-contact-name-${item.id}`} selectable numberOfLines={1} style={{ ...mobileType.bodySmall, flex: 1, color: colors.neutral[600] }}>{name}</Text>
+            <Text style={{ ...mobileType.monoLabel, color: item.owner === 'me' ? colors.ink : colors.neutral[600] }}>{item.owner === 'me' ? 'YOU OWE THIS' : item.owner === 'them' ? 'WAITING ON THEM' : item.thread_state === 'pending_confirmation' ? 'PENDING' : ''}</Text>
             {item.chat_id ? <MessageCircle size={14} color={colors.neutral[400]} /> : null}
           </View>
         </View>
         <View style={{ alignItems: 'flex-end', gap: 4 }}>
+          {(item.priority_score ?? 0) >= 80 ? <Text style={{ ...mobileType.monoLabel, color: colors.danger }}>ACT NOW</Text> : null}
           {item.deadline ? <><Clock3 size={14} color={overdue ? colors.danger : colors.neutral[400]} /><Text style={{ ...mobileType.monoLabel, color: overdue ? colors.danger : colors.neutral[600] }}>{new Date(item.deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</Text></> : null}
         </View>
       </Pressable>
@@ -168,14 +157,15 @@ export function LoopsScreen() {
     <View testID="loops-screen" style={{ flex: 1, backgroundColor: colors.cream }}>
       <MobileHeader title="Loops" subtitle="Follow through without losing the conversation." safeArea actions={<MobileIconButton label="Add a loop" testID="loops-add" onPress={() => setShowCreate(true)}><Plus size={21} color={colors.ink} /></MobileIconButton>} />
       <View style={{ paddingHorizontal: space[4], gap: space[3], paddingBottom: space[3] }}>
-        <View style={{ flexDirection: 'row', gap: space[2] }}>
-          <View style={{ flex: 1, padding: space[4], borderRadius: radius.card, backgroundColor: colors.lime }}><Text style={{ ...mobileType.screenTitle, color: colors.ink, fontVariant: ['tabular-nums'] }}>{open.length}</Text><Text style={{ ...mobileType.monoLabel, color: colors.ink }}>OPEN LOOPS</Text></View>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space[2] }}>
+          <View style={{ flex: 1, padding: space[4], borderRadius: radius.card, backgroundColor: colors.lime }}><Text style={{ ...mobileType.screenTitle, color: colors.ink, fontVariant: ['tabular-nums'] }}>{needsAttention}</Text><Text style={{ ...mobileType.monoLabel, color: colors.ink }}>NEED ATTENTION</Text></View>
           <View style={{ flex: 1, padding: space[4], borderRadius: radius.card, backgroundColor: colors.sky }}><Text style={{ ...mobileType.screenTitle, color: colors.ink, fontVariant: ['tabular-nums'] }}>{today}</Text><Text style={{ ...mobileType.monoLabel, color: colors.ink }}>DUE TODAY</Text></View>
         </View>
         <View style={{ flexDirection: 'row', gap: space[2] }}>
-          <MobileChip label="Open" active={filter === 'open'} count={open.length} onPress={() => setFilter('open')} testID="loops-tab-open" />
+          <MobileChip label="For you" active={filter === 'for_you'} count={forYou.length} onPress={() => setFilter('for_you')} testID="loops-tab-open" />
           <MobileChip label="Completed" active={filter === 'done'} onPress={() => setFilter('done')} testID="loops-tab-done" />
           <MobileChip label="I'm waiting" active={filter === 'waiting'} count={waiting.length} onPress={() => setFilter('waiting')} testID="loops-tab-waiting" />
+          <MobileChip label="All" active={filter === 'all'} count={open.length} onPress={() => setFilter('all')} testID="loops-tab-all" />
         </View>
       </View>
       {query.isLoading ? <LoopsSkeleton /> : (
