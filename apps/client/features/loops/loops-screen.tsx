@@ -14,6 +14,8 @@ type LoopFilter = 'open' | 'done' | 'waiting';
 interface LoopItem {
   id: string;
   content: string;
+  title?: string | null;
+  state_summary?: string | null;
   deadline?: string | null;
   priority: 'low' | 'medium' | 'high';
   status: 'open' | 'waiting' | 'snoozed' | 'done' | 'dropped' | 'superseded';
@@ -59,6 +61,15 @@ function isOverdue(item: LoopItem) {
 
 function conversationName(item: LoopItem) {
   return item.chat?.name || item.contact?.name || item.contact?.inferred_name || item.chat?.contact?.name || item.chat?.contact?.inferred_name || item.contact_name || 'Personal reminder';
+}
+
+function loopTitle(item: LoopItem) {
+  return item.title?.trim() || item.content.trim() || 'Untitled loop';
+}
+
+function loopDetail(item: LoopItem, title: string) {
+  const detail = item.state_summary?.trim();
+  return detail && detail !== title ? detail : null;
 }
 
 export function LoopsScreen() {
@@ -114,6 +125,8 @@ export function LoopsScreen() {
 
   const renderItem = ({ item }: { item: LoopItem }) => {
     const name = conversationName(item);
+    const title = loopTitle(item);
+    const detail = loopDetail(item, title);
     const avatar = item.contact?.avatar_url || item.chat?.contact?.avatar_url;
     const group = !!item.chat?.is_group;
     const overdue = isOverdue(item);
@@ -136,7 +149,8 @@ export function LoopsScreen() {
           style={{ width: 34, height: 34, borderRadius: 17, borderWidth: 1, borderColor: overdue ? colors.danger : colors.ink, backgroundColor: item.status === 'done' ? colors.lime : overdue ? colors.blush : colors.paper, alignItems: 'center', justifyContent: 'center' }}
         >{item.status === 'done' ? <Check size={18} color={colors.ink} /> : overdue ? <AlertCircle size={17} color={colors.danger} /> : null}</Pressable>
         <View style={{ flex: 1, minWidth: 0, gap: 5 }}>
-          <Text selectable style={{ ...mobileType.body, fontWeight: '700', color: colors.ink, textDecorationLine: item.status === 'done' ? 'line-through' : 'none' }}>{item.content}</Text>
+          <Text selectable numberOfLines={2} style={{ ...mobileType.body, fontWeight: '700', color: colors.ink, textDecorationLine: item.status === 'done' ? 'line-through' : 'none' }}>{title}</Text>
+          {detail ? <Text selectable numberOfLines={1} style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{detail}</Text> : null}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}>
             <View testID={`loop-contact-avatar-${item.id}`} style={{ width: 25, height: 25, borderRadius: 13, backgroundColor: group ? colors.sky : colors.blush, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }}>{avatar ? <Image source={{ uri: avatar }} style={{ width: 25, height: 25 }} /> : group ? <UsersRound size={13} color={colors.neutral[600]} /> : <UserRound size={13} color={colors.neutral[600]} />}</View>
             <Text testID={`loop-contact-name-${item.id}`} selectable numberOfLines={1} style={{ ...mobileType.bodySmall, flex: 1, color: colors.neutral[600] }}>{name}</Text>
