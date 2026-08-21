@@ -89,7 +89,32 @@ export function BottomSheet({
         borderTopRightRadius: 28,
       }}
     >
-      <BottomSheetView>
+      {scrollable ? (
+        <BottomSheetScrollView contentContainerStyle={{ paddingBottom: bottomSheetInset(insets.bottom) }}>
+          <View
+            testID={testID}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: space[2],
+              paddingHorizontal: space[4],
+              paddingTop: space[3],
+              paddingBottom: space[2],
+            }}
+          >
+            <Text style={{ ...mobileType.sectionTitle, flex: 1, color: colors.ink }}>{title}</Text>
+            <MobileIconButton
+              label="Close"
+              testID={testID ? `${testID}-close` : undefined}
+              onPress={onClose}
+            >
+              <X size={19} color={colors.ink} />
+            </MobileIconButton>
+          </View>
+          {children}
+        </BottomSheetScrollView>
+      ) : (
+      <BottomSheetView style={{ paddingBottom: bottomSheetInset(insets.bottom) }}>
         <View
           testID={testID}
           style={{
@@ -110,15 +135,8 @@ export function BottomSheet({
             <X size={19} color={colors.ink} />
           </MobileIconButton>
         </View>
+        {children}
       </BottomSheetView>
-      {scrollable ? (
-        <BottomSheetScrollView contentContainerStyle={{ paddingBottom: bottomSheetInset(insets.bottom) }}>
-          {children}
-        </BottomSheetScrollView>
-      ) : (
-        <BottomSheetView style={{ paddingBottom: bottomSheetInset(insets.bottom) }}>
-          {children}
-        </BottomSheetView>
       )}
     </GorhomBottomSheet>
   );
