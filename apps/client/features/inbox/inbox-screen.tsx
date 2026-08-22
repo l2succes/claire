@@ -309,10 +309,10 @@ export function InboxScreen() {
       <MobileHeader
         title="Inbox"
         safeArea
-        actions={<View style={{ flexDirection: 'row', gap: space[2] }}>
-          <MobileIconButton label="Search everything" testID="inbox-open-search" onPress={() => router.push('/(tabs)/search' as never)}><Search size={20} color={colors.ink} /></MobileIconButton>
-          <MobileIconButton label="New message" testID="inbox-compose" onPress={() => router.push('/compose' as never)}><PenSquare size={20} color={colors.ink} /></MobileIconButton>
-        </View>}
+        // The header carried a second magnifying glass beside the search field
+        // directly below it — two controls, one obvious meaning, different
+        // destinations.
+        actions={<MobileIconButton label="New message" testID="inbox-compose" onPress={() => router.push('/compose' as never)}><PenSquare size={20} color={colors.ink} /></MobileIconButton>}
       />
       <View style={{ paddingHorizontal: space[4], gap: space[3], paddingBottom: space[3], borderBottomWidth: 1, borderBottomColor: colors.neutral[200] }}>
         <MobileSearchField style={{ minHeight: 46, borderRadius: 13, paddingHorizontal: space[4], backgroundColor: colors.neutral[100] }} inputStyle={{ fontSize: 15, lineHeight: 20 }} icon={<Search size={24} strokeWidth={1.7} color={colors.neutral[600]} />} value={query} onChangeText={setQuery} placeholder="Search conversations" returnKeyType="search" testID="messages-search-input" />
