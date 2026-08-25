@@ -468,9 +468,6 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
   const smartCards = convSettings[chatId!]?.smartCards ?? [];
   const contactProfile = convSettings[chatId!]?.profile ?? null;
   const fetchConnectedSessions = usePlatformStore((state) => state.fetchConnectedSessions);
-  const platformCapabilities = availablePlatforms.find(
-    (candidate) => candidate.platform === (platform as Platform)
-  )?.capabilities;
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [reactionsByMessage, setReactionsByMessage] = useState<ReactionsByMessage>({});
@@ -483,6 +480,11 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
   const [suggestionRefreshKey, setSuggestionRefreshKey] = useState(0);
   const [showReplyOptions, setShowReplyOptions] = useState(false);
   const [connectionRefreshing, setConnectionRefreshing] = useState(false);
+  const [chatMetadata, setChatMetadata] = useState<{
+    name: string | null;
+    platform: Platform | null;
+    isGroup: boolean;
+  } | null>(null);
   const platformChatIdRef = useRef<string | null>(null);
   const listRef = useRef<FlatList>(null);
   const composerRef = useRef<import('react-native').TextInput>(null);
@@ -496,12 +498,17 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
     if (draft) setInputText(draft);
   }, [draft]);
 
-  const displayName =
-    is_group === '1'
-      ? chat_name || contact_name || 'Group'
-      : displayContactName(contact_name || chat_name, platform, undefined, 'Contact');
+  const resolvedPlatform = platform || chatMetadata?.platform || undefined;
+  const isGroup = is_group === '1' || (!is_group && chatMetadata?.isGroup === true);
+  const resolvedName = chat_name || contact_name || chatMetadata?.name || undefined;
+  const platformCapabilities = availablePlatforms.find(
+    (candidate) => candidate.platform === (resolvedPlatform as Platform)
+  )?.capabilities;
+  const displayName = isGroup
+    ? resolvedName || 'Group'
+    : displayContactName(resolvedName, resolvedPlatform, undefined, 'Contact');
   const activeSession = connectedSessions.find(
-    (session) => session.platform === (platform as Platform) && session.status === 'connected'
+    (session) => session.platform === (resolvedPlatform as Platform) && session.status === 'connected'
   );
   const isConnected = !!activeSession;
   const contextCard = smartCards[0];
@@ -511,7 +518,7 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
     contactProfile?.ai_instruction ||
     contactProfile?.relationship_context ||
     null;
-  const needsRelationshipContext = is_group !== '1' && !contactProfile?.relationship_context;
+  const needsRelationshipContext = !isGroup && !contactProfile?.relationship_context;
   const showQuickContext = Boolean(quickContext || needsRelationshipContext) && !showReplyOptions;
 
   const fetchMessages = useCallback(async () => {
@@ -596,7 +603,7 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
     if (!chatId) return false;
     const { data, error } = await supabase
       .from('chats')
-      .select('platform_chat_id')
+      .select('platform_chat_id, name, platform, is_group')
       .eq('id', chatId)
       .single();
     if (error) {
@@ -605,6 +612,11 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
     }
     if (data?.platform_chat_id) {
       platformChatIdRef.current = data.platform_chat_id;
+      setChatMetadata({
+        name: typeof data.name === 'string' && data.name.trim() ? data.name : null,
+        platform: typeof data.platform === 'string' ? data.platform as Platform : null,
+        isGroup: data.is_group === true,
+      });
       return true;
     }
     return false;
@@ -624,7 +636,7 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
     if (!chatId) return;
     const session = connectedSessions.find(
       (candidate) =>
-        candidate.platform === (platform as Platform) && candidate.status === 'connected'
+        candidate.platform === (resolvedPlatform as Platform) && candidate.status === 'connected'
     );
     try {
       await platformsApi.markChatRead(chatId, session?.id);
@@ -634,7 +646,7 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
       // so neither the row nor the app badge retains a stale count.
       patchInboxChat(queryClient, user?.id, {
         id: chatId,
-        platform: platform as Platform,
+        platform: resolvedPlatform as Platform,
         unread_count: 0,
       });
       void queryClient.invalidateQueries({ queryKey: inboxQueryPrefix(user?.id) });
@@ -642,7 +654,7 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
     } catch (error) {
       console.warn('Failed to mark conversation read:', error);
     }
-  }, [chatId, platform, connectedSessions, queryClient, user?.id]);
+  }, [chatId, resolvedPlatform, connectedSessions, queryClient, user?.id]);
 
   useEffect(() => {
     if (!chatId) return;
@@ -808,7 +820,7 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
     if (textSendInFlightRef.current) return;
     textSendInFlightRef.current = true;
     const text = inputText.trim();
-    if (!text || !platform) {
+    if (!text || !resolvedPlatform) {
       setSendError('Unable to determine platform');
       textSendInFlightRef.current = false;
       return;
@@ -833,11 +845,11 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
     }
 
     const session = connectedSessions.find(
-      (s) => s.platform === (platform as Platform) && s.status === 'connected'
+      (s) => s.platform === (resolvedPlatform as Platform) && s.status === 'connected'
     );
-    const localIMessage = platform === Platform.IMESSAGE && host.name === 'electron';
+    const localIMessage = resolvedPlatform === Platform.IMESSAGE && host.name === 'electron';
     if (!session && !localIMessage) {
-      setSendError(`Not connected to ${platform}. Reconnect it from Connections.`);
+      setSendError(`Not connected to ${resolvedPlatform}. Reconnect it from Connections.`);
       textSendInFlightRef.current = false;
       return;
     }
@@ -883,7 +895,7 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
       const sent = localIMessage
         ? null
         : await platformsApi.sendMessage(
-            platform as Platform,
+            resolvedPlatform as Platform,
             session!.id,
             platformChatId,
             text,
@@ -918,10 +930,10 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
       setSending(false);
       textSendInFlightRef.current = false;
     }
-  }, [chatId, connectedSessions, fetchChatInfo, inputText, platform, replyTarget, user?.id]);
+  }, [chatId, connectedSessions, fetchChatInfo, inputText, resolvedPlatform, replyTarget, user?.id]);
 
   const handleSendVoice = useCallback(async (draft: VoiceNoteDraft) => {
-    if (!platform) {
+    if (!resolvedPlatform) {
       setSendError('Unable to determine platform');
       throw new Error('Unable to determine platform');
     }
@@ -933,10 +945,10 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
       throw error;
     }
     const session = connectedSessions.find(
-      (candidate) => candidate.platform === (platform as Platform) && candidate.status === 'connected'
+      (candidate) => candidate.platform === (resolvedPlatform as Platform) && candidate.status === 'connected'
     );
     if (!session) {
-      const error = new Error(`Not connected to ${platform}. Reconnect it from Connections.`);
+      const error = new Error(`Not connected to ${resolvedPlatform}. Reconnect it from Connections.`);
       setSendError(error.message);
       throw error;
     }
@@ -968,7 +980,7 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
     setSending(true);
     try {
       const sent = await platformsApi.sendVoiceMessage(
-        platform as Platform,
+        resolvedPlatform as Platform,
         session.id,
         platformChatId,
         draft,
@@ -990,7 +1002,7 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
     } finally {
       setSending(false);
     }
-  }, [chatId, connectedSessions, fetchChatInfo, platform, replyTarget, user?.id]);
+  }, [chatId, connectedSessions, fetchChatInfo, resolvedPlatform, replyTarget, user?.id]);
 
   const handleReact = useCallback(
     async (emoji: string) => {
@@ -998,14 +1010,14 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
       const targetPlatformId = target?.platform_message_id;
       const session = connectedSessions.find(
         (candidate) =>
-          candidate.platform === (platform as Platform) && candidate.status === 'connected'
+          candidate.platform === (resolvedPlatform as Platform) && candidate.status === 'connected'
       );
-      if (!target || !targetPlatformId || !platform || !session) {
+      if (!target || !targetPlatformId || !resolvedPlatform || !session) {
         setSendError('This message is still syncing. Try reacting in a moment.');
         return;
       }
       if (!platformCapabilities?.canSendReactions) {
-        setSendError(`${platform} does not support message reactions.`);
+        setSendError(`${resolvedPlatform} does not support message reactions.`);
         return;
       }
 
@@ -1051,7 +1063,7 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
 
       try {
         const response = await platformsApi.reactToMessage(
-          platform as Platform,
+          resolvedPlatform as Platform,
           session.id,
           platformChatId,
           targetPlatformId,
@@ -1071,7 +1083,7 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
       connectedSessions,
       fetchChatInfo,
       messageActionTarget,
-      platform,
+      resolvedPlatform,
       platformCapabilities?.canSendReactions,
       reactionsByMessage,
     ]
@@ -1399,7 +1411,7 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
             <ChevronLeft size={22} color={colors.ink} />
           </MobileIconButton>
         ) : null}
-        <MobileAvatar name={displayName} size={40} isGroup={is_group === '1'} />
+        <MobileAvatar name={displayName} size={40} isGroup={isGroup} />
         <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
           <Text
             style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}
@@ -1407,14 +1419,14 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
           >
             {displayName}
           </Text>
-          <PlatformName platform={platform} size={13} />
+          <PlatformName platform={resolvedPlatform} size={13} />
         </View>
         <MobileIconButton
           label="Conversation settings"
           onPress={() =>
             router.push({
               pathname: '/chat/settings/[chatId]',
-              params: { chatId: chatId!, platform, contact_name, chat_name, is_group },
+              params: { chatId: chatId!, platform: resolvedPlatform, contact_name: resolvedName, chat_name: resolvedName, is_group: isGroup ? '1' : '0' },
             })
           }
         >
@@ -1479,7 +1491,7 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
               needsRelationshipContext && !quickContext
                 ? router.push({
                     pathname: '/chat/settings/[chatId]',
-                    params: { chatId: chatId!, platform, contact_name, chat_name, is_group },
+                    params: { chatId: chatId!, platform: resolvedPlatform, contact_name: resolvedName, chat_name: resolvedName, is_group: isGroup ? '1' : '0' },
                   })
                 : router.push({
                     pathname: '/chat/assistant/[chatId]',
@@ -1590,7 +1602,7 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
             backgroundColor: colors.cream,
           }}
         >
-          {!isConnected && platform ? (
+          {!isConnected && resolvedPlatform ? (
             <Pressable
               testID="chat-reconnect"
               accessibilityRole="button"
@@ -1613,7 +1625,7 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
                 maxFontSizeMultiplier={1}
                 style={{ ...mobileType.bodySmall, fontWeight: '700', color: colors.warning }}
               >
-                {connectionRefreshing ? 'Checking connection…' : `Reconnect ${platform}`}
+                {connectionRefreshing ? 'Checking connection…' : `Reconnect ${resolvedPlatform}`}
               </Text>
             </Pressable>
           ) : (
