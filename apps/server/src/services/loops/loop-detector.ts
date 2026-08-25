@@ -167,9 +167,19 @@ export async function detectLoopsForChat(
       listKey: 'ops',
       schemaName: 'loop_operations',
       schemaDescription: 'Operations that bring open loops in line with the transcript.',
+      // On reasoning models the cap includes internal work. Leave room for a
+      // complete JSON operation list rather than truncating before emission.
+      maxOutputTokens: 3_500,
     });
 
-    ops = response.items;
+    ops = response.items.filter((op) => {
+      if (op.op !== 'create') return true;
+      const title = normalizeLoopText(op.title);
+      const summary = normalizeLoopText(op.state_summary);
+      const usable = Boolean(title && summary && title !== summary);
+      if (!usable) logger.warn('[loops] discarded create with non-distinct summary', { chatId });
+      return usable;
+    });
     inputTokens = response.inputTokens;
     outputTokens = response.outputTokens;
     provider = response.provider;
@@ -421,6 +431,10 @@ function normalizeDeadline(value: string | null | undefined): string | null {
   if (!value) return null;
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+}
+
+function normalizeLoopText(value: string): string {
+  return value.trim().toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 }
 
 /** Roster entries for the people a loop actually involves. */
