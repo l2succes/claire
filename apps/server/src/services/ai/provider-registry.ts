@@ -64,6 +64,17 @@ const DEFAULT_MODEL_IDS: Record<ProviderId, Record<ModelRole, string>> = {
   },
 };
 
+function fallbackModelIds(provider: ProviderId, role: ModelRole, primary: string): string[] {
+  // Luna is the inexpensive steady-state extractor. Terra is invoked only if
+  // Luna cannot produce a schema-valid object, so a transient provider/model
+  // formatting failure does not make an entire chat unscannable.
+  if (provider === 'openai' && role === 'extraction') {
+    const fallback = process.env.LOOP_MODEL_EXTRACTION_OPENAI_FALLBACK || 'gpt-5.6-terra';
+    return fallback && fallback !== primary ? [primary, fallback] : [primary];
+  }
+  return [primary];
+}
+
 /**
  * Preference order. Azure leads because those credits typically expire; OpenAI
  * is the large durable balance; Kimi and generic OpenAI-compatible hosts are
@@ -158,7 +169,9 @@ export function resolveRole(role: ModelRole): RoleResolution[] {
     const modelId = override || DEFAULT_MODEL_IDS[provider][role];
     if (!modelId) continue;
 
-    resolutions.push({ model: factory(modelId), provider, modelId });
+    for (const candidateModelId of fallbackModelIds(provider, role, modelId)) {
+      resolutions.push({ model: factory(candidateModelId), provider, modelId: candidateModelId });
+    }
   }
 
   return resolutions;
