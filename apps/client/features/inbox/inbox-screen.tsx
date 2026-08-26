@@ -3,10 +3,11 @@ import { FlatList, Modal, Pressable, RefreshControl, ScrollView, Text, View } fr
 import { CheckCircle2, PenSquare, Pin, Search, Sparkles, X } from 'lucide-react-native';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { colors, mobileType, radius, space, useIsDesktopLayout } from '@claire/design-system';
 import { MobileChip, MobileHeader, MobileIconButton, MobileSearchField, MobileState, SectionLabel } from '../../components/mobile/claire-mobile';
 import { useInboxMessages, type InboxMessage } from '../../hooks/useInboxMessages';
+import { chatTimelineOptions, warmChatTimelines } from '../../hooks/useChatTimeline';
 import { useAuthStore } from '../../stores/authStore';
 import { usePlatformStore } from '../../stores/platformStore';
 import { supabase, type DbRow } from '../../services/supabase';
@@ -66,6 +67,7 @@ export function InboxConversationRow({
   active = false,
   layout = 'mobile',
   onPress,
+  onPressIn,
   onLongPress,
 }: {
   message: InboxMessage;
@@ -73,6 +75,8 @@ export function InboxConversationRow({
   active?: boolean;
   layout?: 'mobile' | 'desktop';
   onPress: () => void;
+  /** Fires on touch-down, ahead of navigation — used to warm the transcript. */
+  onPressIn?: () => void;
   onLongPress?: () => void;
 }) {
   const [imageFailed, setImageFailed] = useState(false);
@@ -93,6 +97,7 @@ export function InboxConversationRow({
       accessibilityRole="button"
       accessibilityLabel={`${name}${message.unread_count ? `, ${message.unread_count} unread` : ''}`}
       onPress={onPress}
+      onPressIn={onPressIn}
       onLongPress={onLongPress}
       style={{
         height: rowHeight,
@@ -198,6 +203,7 @@ export function InboxScreen() {
   const [locallySnoozed, setLocallySnoozed] = useState<Set<string>>(new Set());
 
   const inbox = useInboxMessages(user?.id, { search: debouncedQuery, filter, platform });
+  const queryClient = useQueryClient();
 
   // Changing a filter replaces the result set, so bring the viewport with it —
   // otherwise the list stays scrolled where the previous, longer result set
@@ -237,6 +243,22 @@ export function InboxScreen() {
     pathname: '/chat/[chatId]',
     params: { chatId: message.chat_id, contact_name: message.contact_name || '', chat_name: message.chat_name || '', platform: message.platform || '', is_group: message.is_group ? '1' : '0' },
   }), []);
+
+  // Touch-down to navigation commit is a couple of hundred milliseconds of
+  // animation that were previously doing nothing. prefetchQuery honours
+  // staleTime, so a repeat press or an already-warm chat costs nothing.
+  const warmChat = useCallback((message: InboxMessage) => {
+    void queryClient.prefetchQuery(chatTimelineOptions(queryClient, user?.id, message.chat_id));
+  }, [queryClient, user?.id]);
+
+  // Hold the most recent conversations warm so even a first-ever open has
+  // something to paint. Keyed on the first page's identity rather than on every
+  // feed update, so scrolling and realtime patches do not re-trigger it.
+  const firstPageKey = inbox.messages.slice(0, 12).map(message => message.chat_id).join(',');
+  useEffect(() => {
+    if (!user?.id || !firstPageKey) return;
+    void warmChatTimelines(queryClient, user.id, firstPageKey.split(','));
+  }, [queryClient, user?.id, firstPageKey]);
 
   const snooze = async (minutes: number) => {
     const target = snoozeTarget;
@@ -343,7 +365,7 @@ export function InboxScreen() {
         testID="messages-list"
         data={displayedMessages}
         keyExtractor={item => item.conversation_key}
-        renderItem={({ item }) => <InboxConversationRow message={item} onPress={() => openChat(item)} onLongPress={() => setSnoozeTarget(item)} />}
+        renderItem={({ item }) => <InboxConversationRow message={item} onPress={() => openChat(item)} onPressIn={() => warmChat(item)} onLongPress={() => setSnoozeTarget(item)} />}
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{ paddingBottom: 156 }}
         onEndReached={() => {

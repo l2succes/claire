@@ -177,7 +177,12 @@ export async function cacheTimeline<T extends { id: string; chat_id: string; tim
   if (!isNativeMobile) return;
   const db = await database(userId);
   if (!db) return;
-  for (const message of messages) await upsert(db, 'cache_messages', message);
+  // One transaction, not one per row. A chat open caches its whole 100-message
+  // page here while the push animation is still running; unwrapped, that is 100
+  // serialized bridge round trips each committing its own WAL transaction.
+  await db.withTransactionAsync(async () => {
+    for (const message of messages) await upsert(db, 'cache_messages', message);
+  });
   const fullHistory = await meta(db, 'full_history_enabled', 'false');
   if (fullHistory !== 'true') await trimRecentMessages(db, chatId);
 }
