@@ -21,6 +21,7 @@ import { loginWithCredentials, submitTwoFactorCode } from '../services/instagram
 import { platformCatalog, platformCatalogVersion } from '../platform-catalog';
 import { supabase, type DbRow } from '../services/supabase';
 import { operationsTelemetry } from '../services/operations-telemetry';
+import { respondWithError } from '../utils/api-error';
 import { queueWhatsAppContactIdentitySync } from '../services/whatsapp-contact-backfill';
 
 // Railway services cannot reach each other through localhost. Railway does not
@@ -1124,10 +1125,9 @@ router.post(
       });
       return res.json({ success: true, reaction });
     } catch (error) {
-      logger.error('Error sending message reaction:', error);
-      return res.status(500).json({
-        success: false,
-        error: (error as Error).message || 'Failed to send reaction',
+      return respondWithError(res, error, {
+        logMessage: 'Error sending message reaction',
+        fallback: 'Could not add that reaction. Try again.',
       });
     }
   }
@@ -1221,8 +1221,10 @@ router.post(
         throw error;
       }
     } catch (error) {
-      logger.error('Error sending voice note:', error);
-      return res.status(500).json({ success: false, error: 'Failed to send voice note' });
+      return respondWithError(res, error, {
+        logMessage: 'Error sending voice note',
+        fallback: 'Could not send that voice note. Try again.',
+      });
     }
   }
 );
@@ -1354,10 +1356,9 @@ router.post('/:platform/send', async (req: Request, res: Response) => {
       throw error;
     }
   } catch (error) {
-    logger.error('Error sending message:', error);
-    return res.status(500).json({
-      success: false,
-      error: (error as Error).message || 'Failed to send message',
+    return respondWithError(res, error, {
+      logMessage: 'Error sending message',
+      fallback: 'Could not send that message. Try again.',
     });
   }
 });
