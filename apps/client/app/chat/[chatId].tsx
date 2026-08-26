@@ -1325,6 +1325,9 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
           justifyContent: isMe ? 'flex-end' : 'flex-start',
           paddingHorizontal: space[3],
           paddingVertical: 3,
+          // The chip hangs above the bubble, so give it clearance rather than
+          // letting it overlap whatever message precedes this one.
+          paddingTop: reactionChips.length ? 15 : 3,
         }}
         testID={`message-row-${item.id}-${isMe ? 'outgoing' : 'incoming'}`}
       >
@@ -1370,36 +1373,6 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
               <MessageReplyPreview sender={replySender} content={replySource.content} />
             ) : null}
             {renderMessageBody(item)}
-            {reactionChips.length ? (
-              <View
-                accessibilityLabel={reactionChips
-                  .map((reaction) => `${reaction.emoji} ${reaction.count}`)
-                  .join(', ')}
-                style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: space[2] }}
-              >
-                {reactionChips.map((reaction) => (
-                  <View
-                    key={reaction.emoji}
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: 3,
-                      minHeight: 24,
-                      paddingHorizontal: 7,
-                      borderRadius: radius.pill,
-                      borderWidth: 1,
-                      borderColor: reaction.mine ? colors.ink : colors.neutral[200],
-                      backgroundColor: reaction.mine ? colors.paper : colors.neutral[100],
-                    }}
-                  >
-                    <Text style={{ fontSize: 13 }}>{reaction.emoji}</Text>
-                    {reaction.count > 1 ? (
-                      <Text style={{ ...mobileType.label, color: colors.ink }}>{reaction.count}</Text>
-                    ) : null}
-                  </View>
-                ))}
-              </View>
-            ) : null}
             <Text
               style={{
                 ...mobileType.label,
@@ -1415,6 +1388,57 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
               })}
             </Text>
           </InjectedBubble>
+          {reactionChips.length ? (
+            <View
+              pointerEvents="none"
+              accessibilityLabel={reactionChips
+                .map((reaction) => `${reaction.emoji} ${reaction.count}`)
+                .join(', ')}
+              style={{
+                position: 'absolute',
+                // Overlap the bubble's top edge by half a chip so the reaction
+                // reads as pinned to the message, the way iMessage does it,
+                // rather than as one more line of the message's own content.
+                top: -12,
+                ...(isMe ? { right: space[2] } : { left: space[2] }),
+                flexDirection: 'row',
+                flexWrap: 'wrap',
+                justifyContent: isMe ? 'flex-end' : 'flex-start',
+                maxWidth: '100%',
+                gap: 5,
+                zIndex: 1,
+              }}
+            >
+              {reactionChips.map((reaction) => (
+                <View
+                  key={reaction.emoji}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 3,
+                    minHeight: 24,
+                    paddingHorizontal: 7,
+                    borderRadius: radius.pill,
+                    borderWidth: 1,
+                    borderColor: reaction.mine ? colors.ink : colors.neutral[200],
+                    // Opaque, and lifted: it now floats over the transcript and
+                    // the bubble border instead of sitting on the bubble's fill.
+                    backgroundColor: reaction.mine ? colors.paper : colors.neutral[100],
+                    shadowColor: colors.ink,
+                    shadowOpacity: 0.12,
+                    shadowRadius: 3,
+                    shadowOffset: { width: 0, height: 1 },
+                    elevation: 2,
+                  }}
+                >
+                  <Text style={{ fontSize: 13 }}>{reaction.emoji}</Text>
+                  {reaction.count > 1 ? (
+                    <Text style={{ ...mobileType.label, color: colors.ink }}>{reaction.count}</Text>
+                  ) : null}
+                </View>
+              ))}
+            </View>
+          ) : null}
         </Pressable>
       </View>
     );
