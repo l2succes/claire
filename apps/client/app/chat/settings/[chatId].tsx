@@ -146,13 +146,9 @@ export default function ConversationSettingsScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.cream }} edges={['top']}>
-      <View style={{ minHeight: 64, paddingHorizontal: space[4], flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: colors.neutral[200] }}>
-        <MobileIconButton label="Back to chat" onPress={() => router.back()}><ChevronLeft size={21} color={colors.ink} /></MobileIconButton>
-        <View style={{ flex: 1 }} />
-      </View>
       {isLoading && !chatSettings ? <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator size="large" color={colors.ink} /></View> : (
         <ScrollView contentContainerStyle={{ padding: space[4], paddingBottom: 132 + insets.bottom, gap: space[5] }} keyboardShouldPersistTaps="handled">
-          <View style={{ alignItems: 'center', gap: space[2], paddingVertical: space[2] }}>
+          <View style={{ alignItems: 'center', gap: space[2], paddingTop: space[5], paddingBottom: space[2] }}>
             <MobileAvatar name={displayName} size={72} isGroup={is_group === '1'} />
             <Text maxFontSizeMultiplier={1} style={{ ...mobileType.sectionTitle, color: colors.ink }}>{displayName}</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -213,6 +209,13 @@ export default function ConversationSettingsScreen() {
           </View>
         </ScrollView>
       )}
+      {/* The back control lives over the identity header rather than in a bar of
+          its own: a full-width chrome row with a separator existed only to hold
+          this one button. Kept outside the ScrollView so it stays put while the
+          settings scroll, and outside the loading branch so it is always a way out. */}
+      <View style={{ position: 'absolute', top: insets.top + space[2], left: space[4] }}>
+        <MobileIconButton label="Back to chat" onPress={() => router.back()}><ChevronLeft size={21} color={colors.ink} /></MobileIconButton>
+      </View>
       {!isLoading || chatSettings ? <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: space[4], paddingTop: space[3], paddingBottom: Math.max(insets.bottom, space[3]), backgroundColor: colors.cream, borderTopWidth: 1, borderTopColor: colors.neutral[200] }}><Pressable disabled={isSaving} accessibilityRole="button" onPress={() => void save()}><View style={{ minHeight: 50, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space[2], borderRadius: radius.control, backgroundColor: colors.ink, opacity: isSaving ? 0.6 : 1 }}><Check size={18} color={colors.paper} /><Text maxFontSizeMultiplier={1.4} style={{ ...mobileType.body, fontWeight: '700', color: colors.paper }}>{isSaving ? 'Saving…' : 'Save'}</Text></View></Pressable></View> : null}
     </SafeAreaView>
   );
