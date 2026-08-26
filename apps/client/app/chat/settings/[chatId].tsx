@@ -152,15 +152,6 @@ export default function ConversationSettingsScreen() {
       </View>
       {isLoading && !chatSettings ? <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator size="large" color={colors.ink} /></View> : (
         <ScrollView contentContainerStyle={{ padding: space[4], paddingBottom: 132 + insets.bottom, gap: space[5] }} keyboardShouldPersistTaps="handled">
-          <View style={{ gap: space[2] }}>
-            <SectionLabel title="Chat settings" />
-            <View testID="conversation-notification-settings" style={{ minHeight: 76, flexDirection: 'row', alignItems: 'center', gap: space[3], paddingHorizontal: space[3], borderRadius: radius.card, backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.neutral[200] }}>
-              <View style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: radius.control, backgroundColor: isMuted ? colors.neutral[100] : colors.sky }}><BellOff size={19} color={colors.ink} /></View>
-              <View style={{ flex: 1, gap: 2 }}><Text style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>Mute notifications</Text><Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{isMuted ? 'Notifications are muted for this chat.' : `Receive alerts for this ${is_group === '1' ? 'group' : 'conversation'}.`}</Text></View>
-              <Switch testID="conversation-mute-notifications" accessibilityLabel={`Mute notifications for ${displayName}`} value={isMuted} disabled={isSavingMute || !accessToken} onValueChange={(value) => void updateMute(value)} trackColor={{ false: colors.neutral[200], true: colors.ink }} thumbColor={isMuted ? colors.lime : colors.paper} />
-            </View>
-          </View>
-
           <View style={{ alignItems: 'center', gap: space[2], paddingVertical: space[2] }}>
             <MobileAvatar name={displayName} size={72} isGroup={is_group === '1'} />
             <Text maxFontSizeMultiplier={1} style={{ ...mobileType.sectionTitle, color: colors.ink }}>{displayName}</Text>
@@ -171,6 +162,21 @@ export default function ConversationSettingsScreen() {
           </View>
 
           <CategoryPicker selected={chatSettings?.category ?? null} onSelect={handleCategorySelect} />
+
+          <View style={{ gap: space[2] }}>
+            <SectionLabel title="Chat settings" />
+            <View testID="conversation-notification-settings" style={{ minHeight: 76, flexDirection: 'row', alignItems: 'center', gap: space[3], paddingHorizontal: space[3], borderRadius: radius.card, backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.neutral[200] }}>
+              <View style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: radius.control, backgroundColor: isMuted ? colors.neutral[100] : colors.sky }}><BellOff size={19} color={colors.ink} /></View>
+              <View style={{ flex: 1, gap: 2 }}><Text style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>Mute notifications</Text><Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{isMuted ? 'Notifications are muted for this chat.' : `Receive alerts for this ${is_group === '1' ? 'group' : 'conversation'}.`}</Text></View>
+              {/* Switch does not report a usable intrinsic height here, so the row's
+                  alignItems: 'center' had nothing to centre: it laid out as a
+                  full-height box and drew the control at the top, clipping the
+                  card's border. A fixed box it cannot outgrow centres it for real. */}
+              <View style={{ height: 40, justifyContent: 'center' }}>
+                <Switch testID="conversation-mute-notifications" accessibilityLabel={`Mute notifications for ${displayName}`} value={isMuted} disabled={isSavingMute || !accessToken} onValueChange={(value) => void updateMute(value)} trackColor={{ false: colors.neutral[200], true: colors.ink }} thumbColor={isMuted ? colors.lime : colors.paper} />
+              </View>
+            </View>
+          </View>
 
           <View style={{ gap: space[2] }}>
             <SectionLabel title="What should Claire remember?" />
@@ -207,7 +213,7 @@ export default function ConversationSettingsScreen() {
           </View>
         </ScrollView>
       )}
-      {!isLoading || chatSettings ? <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: space[4], paddingTop: space[3], paddingBottom: Math.max(insets.bottom, space[3]), backgroundColor: colors.cream, borderTopWidth: 1, borderTopColor: colors.neutral[200] }}><Pressable disabled={isSaving} accessibilityRole="button" onPress={() => void save()}><View style={{ minHeight: 50, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space[2], borderRadius: radius.control, backgroundColor: colors.ink, opacity: isSaving ? 0.6 : 1 }}><Check size={18} color={colors.paper} /><Text style={{ ...mobileType.label, color: colors.paper }}>{isSaving ? 'Saving…' : 'Save relationship memory'}</Text></View></Pressable></View> : null}
+      {!isLoading || chatSettings ? <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: space[4], paddingTop: space[3], paddingBottom: Math.max(insets.bottom, space[3]), backgroundColor: colors.cream, borderTopWidth: 1, borderTopColor: colors.neutral[200] }}><Pressable disabled={isSaving} accessibilityRole="button" onPress={() => void save()}><View style={{ minHeight: 50, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space[2], borderRadius: radius.control, backgroundColor: colors.ink, opacity: isSaving ? 0.6 : 1 }}><Check size={18} color={colors.paper} /><Text maxFontSizeMultiplier={1.4} style={{ ...mobileType.body, fontWeight: '700', color: colors.paper }}>{isSaving ? 'Saving…' : 'Save'}</Text></View></Pressable></View> : null}
     </SafeAreaView>
   );
 }
