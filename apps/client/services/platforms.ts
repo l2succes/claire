@@ -7,6 +7,7 @@
 
 import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios';
 import { supabase } from './supabase';
+import { clientSafeMessage } from './api-errors';
 import {
   Platform,
   PlatformStatus,
@@ -104,6 +105,7 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
+
 // Handle response errors
 api.interceptors.response.use(
   (response) => response,
@@ -118,12 +120,7 @@ api.interceptors.response.use(
       }
     }
 
-    const message = error.response?.data?.error
-      || error.response?.data?.message
-      || error.message
-      || 'An unexpected error occurred';
-
-    return Promise.reject(new Error(message));
+    return Promise.reject(new Error(clientSafeMessage(error)));
   }
 );
 
