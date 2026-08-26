@@ -540,7 +540,17 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
     contactProfile?.relationship_context ||
     null;
   const needsRelationshipContext = !isGroup && !contactProfile?.relationship_context;
-  const showQuickContext = Boolean(quickContext || needsRelationshipContext) && !showReplyOptions;
+  // The open loop is the more actionable of the two and they compete for the
+  // same strip above the transcript, so it suppresses quick context rather than
+  // stacking with it.
+  // isLoading, not isPending: a disabled query stays pending forever, which
+  // would suppress quick context permanently. Waiting for the loop to resolve
+  // avoids showing this card and then yanking it away a beat later.
+  const showQuickContext =
+    Boolean(quickContext || needsRelationshipContext) &&
+    !showReplyOptions &&
+    !chatLoop.isLoading &&
+    !chatLoop.data;
 
 
   const fetchChatInfo = useCallback(async () => {
@@ -1582,7 +1592,7 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
       >
         {/* Group Summary Banner — only shown for group chats */}
         {is_group === '1' && chatId && <GroupChatSummary chatId={chatId} />}
-        {chatLoop.data ? <Pressable testID="chat-open-loop-card" onPress={() => router.push({ pathname: '/loops/[id]', params: { id: chatLoop.data!.id } })} style={{ marginHorizontal: space[3], marginTop: space[2], padding: space[3], gap: space[2], borderRadius: radius.card, borderWidth: 1, borderColor: colors.neutral[200], backgroundColor: colors.paper, flexDirection: 'row', alignItems: 'center' }}><View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: (chatLoop.data.priority_score ?? 0) >= 80 ? colors.blush : colors.sky, alignItems: 'center', justifyContent: 'center' }}><CheckCircle2 size={17} color={colors.ink} /></View><View style={{ flex: 1, minWidth: 0 }}><Text style={{ ...mobileType.monoLabel, color: colors.neutral[600] }}>{chatLoop.data.owner === 'them' ? 'WAITING ON THEM' : 'OPEN LOOP'}</Text><Text numberOfLines={1} style={{ ...mobileType.bodySmall, fontWeight: '700', color: colors.ink }}>{chatLoop.data.title || chatLoop.data.content}</Text></View><Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>View</Text></Pressable> : null}
+        {chatLoop.data ? <Pressable testID="chat-open-loop-card" onPress={() => router.push({ pathname: '/loops/[id]', params: { id: chatLoop.data!.id } })} style={{ marginHorizontal: space[3], marginTop: space[2], padding: space[3], gap: space[2], borderRadius: radius.control, borderWidth: 1, borderColor: colors.neutral[200], backgroundColor: colors.paper, flexDirection: 'row', alignItems: 'center' }}><View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: (chatLoop.data.priority_score ?? 0) >= 80 ? colors.blush : colors.sky, alignItems: 'center', justifyContent: 'center' }}><CheckCircle2 size={17} color={colors.ink} /></View><View style={{ flex: 1, minWidth: 0 }}><Text style={{ ...mobileType.monoLabel, color: colors.neutral[600] }}>{chatLoop.data.owner === 'them' ? 'WAITING ON THEM' : 'OPEN LOOP'}</Text><Text numberOfLines={1} style={{ ...mobileType.bodySmall, fontWeight: '700', color: colors.ink }}>{chatLoop.data.title || chatLoop.data.content}</Text></View><Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>View</Text></Pressable> : null}
 
         {loading ? (
           <ChatSkeleton testID="chat-loading" />
