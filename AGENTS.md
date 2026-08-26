@@ -6,7 +6,27 @@
 - **Platform mode**: `PLATFORM_MODE=matrix` in `server/.env`
 - **Server**: port 3001, run with `bun run --watch src/index.ts` from project root
 - **Client**: Expo SDK 55, React Native 0.83.4, React 19, new architecture (Bridgeless)
-- **iOS build**: `bunx expo prebuild --clean --platform ios && bunx expo run:ios` from `mobile/`
+- **iOS build**: `bunx expo prebuild --clean --platform ios && bunx expo run:ios` from `apps/client/`
+
+## Testing surfaces
+
+Verify a change on the surface it ships to. The renderer is shared, but the
+host, the caches and the navigation stack are not, so these are not
+interchangeable.
+
+- **Mobile → the iOS Simulator.** Run the real app (`bun run ios` from
+  `apps/client`, or `bun run mobile:ios:staging` from the root), not the web
+  build. Expo web is useful only for confirming a bundle compiles and boots: it
+  exercises no native path, and `usesNativeMobileCache()` is `false` there, so
+  anything touching the encrypted SQLite cache is silently skipped.
+- **Desktop → the Electron app** (`bun run desktop:dev`). Not a browser tab.
+  Electron is the only web-based host where `usesNativeMobileCache()` is true
+  (it gates on `host.name === 'electron' && host.capabilities.encryptedCache`),
+  and it is where the desktop layout — `useIsDesktopLayout`,
+  `DesktopInboxWorkspace` — actually runs.
+
+A plain browser is neither of those. It has no local cache at all, which makes
+it the worst place to judge anything about load or navigation performance.
 
 ## Architecture
 

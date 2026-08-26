@@ -2,16 +2,6 @@
 
 Thanks for helping build Claire. This document is the short contributor contract. The full setup path is [docs/getting-started/repository-setup.md](docs/getting-started/repository-setup.md).
 
-## Developer Certificate of Origin
-
-Every commit must include a DCO sign-off:
-
-```text
-Signed-off-by: Your Name <you@example.com>
-```
-
-Use `git commit -s`. By signing off, you agree to the terms in [DCO](DCO).
-
 ## Quick path
 
 ```bash

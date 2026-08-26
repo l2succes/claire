@@ -9,6 +9,14 @@ export {
 } from './messages';
 export { normalizeMediaUrl, isPlayableAudio, parseMediaCaption, type MediaCaption } from './media';
 export {
+  EMPTY_TIMELINE,
+  TIMELINE_WINDOW,
+  keepPendingReactions,
+  mergeRealtimeMessage,
+  mergeServerTimeline,
+  type ChatTimeline,
+} from './timeline';
+export {
   groupReactions,
   groupReactionsByMessage,
   upsertReactionRow,

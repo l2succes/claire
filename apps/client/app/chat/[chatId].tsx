@@ -3,7 +3,9 @@ import {
   Text,
   ActivityIndicator,
   Pressable,
+  AppState,
   FlatList,
+  InteractionManager,
   KeyboardAvoidingView,
   Platform as RNPlatform,
   Image,
@@ -28,7 +30,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, router } from 'expo-router';
 import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { supabase, type DbRow } from '../../services/supabase';
+import { supabase } from '../../services/supabase';
 import { platformsApi, API_BASE_URL } from '../../services/platforms';
 import { useAuthStore } from '../../stores/authStore';
 import { usePlatformStore } from '../../stores/platformStore';
@@ -55,24 +57,28 @@ import { host } from '@claire/host';
 import { DesktopInboxWorkspace } from '../../features/desktop/desktop-inbox-workspace';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { MobileAvatar, MobileIconButton } from '../../components/mobile/claire-mobile';
-import { cacheTimeline, cachedTimeline, usesNativeMobileCache } from '../../services/mobile-cache';
+import { cacheTimeline } from '../../services/mobile-cache';
 import { inboxQueryPrefix, patchInboxChat } from '../../hooks/useInboxMessages';
 import {
+  chatTimelineKey,
+  updateChatTimeline,
+  useChatTimeline,
+} from '../../hooks/useChatTimeline';
+import {
+  EMPTY_TIMELINE,
   chatMessageFromSend,
   groupReactions,
-  groupReactionsByMessage,
   isBridgeFailure,
   isLocalSend,
   isPlayableAudio,
-  keepPendingSends,
   mergeChatMessage,
   parseMediaCaption,
   normalizeMediaUrl as normalizeMediaUrlWithBase,
   removeReactionRow,
   upsertReactionRow,
   type ChatMessage,
+  type ChatTimeline,
   type ReactionRow,
-  type ReactionsByMessage,
 } from '@claire/chat-core';
 
 function InjectedBubble({
@@ -457,21 +463,36 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
   const accessToken = useAuthStore((state) => state.token);
   const connectedSessions = usePlatformStore((state) => state.connectedSessions);
   const availablePlatforms = usePlatformStore((state) => state.availablePlatforms);
-  const {
-    settings: convSettings,
-    fetchSettings: fetchConvSettings,
-    dismissCard,
-  } = useConversationSettingsStore();
+  // Selectors, not a bare destructure: subscribing to the whole store re-rendered
+  // this screen on every settings mutation for every conversation. Only this
+  // chat's entry can change what renders here.
+  const convChatSettings = useConversationSettingsStore((state) =>
+    chatId ? state.settings[chatId] : undefined
+  );
+  const fetchConvSettings = useConversationSettingsStore((state) => state.fetchSettings);
+  const dismissCard = useConversationSettingsStore((state) => state.dismissCard);
   const plusDefault = useChatPreferencesStore((state) => state.plusDefault);
   const hydrateChatPreferences = useChatPreferencesStore((state) => state.hydrate);
   const insets = useSafeAreaInsets();
-  const smartCards = convSettings[chatId!]?.smartCards ?? [];
-  const contactProfile = convSettings[chatId!]?.profile ?? null;
+  const smartCards = convChatSettings?.smartCards ?? [];
+  const contactProfile = convChatSettings?.profile ?? null;
   const fetchConnectedSessions = usePlatformStore((state) => state.fetchConnectedSessions);
 
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [reactionsByMessage, setReactionsByMessage] = useState<ReactionsByMessage>({});
-  const [loading, setLoading] = useState(true);
+  // The transcript lives in the query cache, not in this component. That is what
+  // lets a second visit paint on the first frame and lets the app-wide realtime
+  // channel keep this conversation current while it is closed.
+  const timeline = useChatTimeline(user?.id, chatId, highlightMessageId);
+  const messages = timeline.data?.messages ?? EMPTY_TIMELINE.messages;
+  const reactionsByMessage = timeline.data?.reactions ?? EMPTY_TIMELINE.reactions;
+  // Not bare isPending: a disabled query stays pending forever, which would turn
+  // "no chatId" into a permanent skeleton instead of the empty state.
+  const loading = !!chatId && !!user?.id && timeline.isPending;
+
+  const patchTimeline = useCallback(
+    (updater: (previous: ChatTimeline) => ChatTimeline, options?: { createIfMissing?: boolean }) =>
+      updateChatTimeline(queryClient, user?.id, chatId, updater, options),
+    [queryClient, user?.id, chatId]
+  );
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [inputText, setInputText] = useState('');
@@ -519,85 +540,18 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
     contactProfile?.relationship_context ||
     null;
   const needsRelationshipContext = !isGroup && !contactProfile?.relationship_context;
-  const showQuickContext = Boolean(quickContext || needsRelationshipContext) && !showReplyOptions;
+  // The open loop is the more actionable of the two and they compete for the
+  // same strip above the transcript, so it suppresses quick context rather than
+  // stacking with it.
+  // isLoading, not isPending: a disabled query stays pending forever, which
+  // would suppress quick context permanently. Waiting for the loop to resolve
+  // avoids showing this card and then yanking it away a beat later.
+  const showQuickContext =
+    Boolean(quickContext || needsRelationshipContext) &&
+    !showReplyOptions &&
+    !chatLoop.isLoading &&
+    !chatLoop.data;
 
-  const fetchMessages = useCallback(async () => {
-    if (!user?.id || !chatId) {
-      setLoading(false);
-      return;
-    }
-    try {
-      if (usesNativeMobileCache()) {
-        const cached = await cachedTimeline(user.id, chatId, 200);
-        if (cached.length) {
-          setMessages((current) => keepPendingSends(cached as unknown as ChatMessage[], current));
-          setLoading(false);
-        }
-      }
-      const { data, error } = await supabase
-        .from('messages')
-        .select(
-          'id, chat_id, content, timestamp, from_me, contact_name, contact_phone, content_type, media_url, media_mime_type, platform_message_id, reply_to_message_id, reply_to_platform_message_id'
-        )
-        .eq('chat_id', chatId)
-        .eq('user_id', user.id)
-        .order('timestamp', { ascending: false })
-        .limit(100);
-      if (error) throw error;
-      let loadedMessages = data || [];
-      // Assistant citations can reference older history than the normal chat
-      // window. Fetch the cited row explicitly so it is always reachable.
-      if (
-        highlightMessageId &&
-        !loadedMessages.some((message: DbRow) => message.id === highlightMessageId)
-      ) {
-        const { data: highlightedMessage, error: highlightError } = await supabase
-          .from('messages')
-          .select(
-            'id, chat_id, content, timestamp, from_me, contact_name, contact_phone, content_type, media_url, media_mime_type, platform_message_id, reply_to_message_id, reply_to_platform_message_id'
-          )
-          .eq('id', highlightMessageId)
-          .eq('chat_id', chatId)
-          .eq('user_id', user.id)
-          .maybeSingle();
-        if (highlightError) throw highlightError;
-        if (highlightedMessage) loadedMessages = [...loadedMessages, highlightedMessage];
-      }
-      const byId = new Map<string, ChatMessage>(
-        loadedMessages.map((message: DbRow) => [message.id as string, message as ChatMessage])
-      );
-      const deduplicated = [...byId.values()].sort(
-        (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-      );
-      setMessages((current) => keepPendingSends(deduplicated, current));
-      const messageIds = deduplicated.map((message) => message.id).filter(Boolean);
-      if (messageIds.length) {
-        const { data: reactionRows, error: reactionsError } = await supabase
-          .from('message_reactions')
-          .select('id, message_id, emoji, from_me, reactor_id, reactor_name, reacted_at')
-          .in('message_id', messageIds);
-        // A client can ship slightly before the database migration. Reactions
-        // should be unavailable in that state, never prevent the chat loading.
-        if (reactionsError) console.warn('Failed to fetch message reactions:', reactionsError);
-        else setReactionsByMessage(groupReactionsByMessage((reactionRows || []) as ReactionRow[]));
-      } else {
-        setReactionsByMessage({});
-      }
-      // The timeline select does not return chat_id, so stamp it on before
-      // caching: cacheTimeline keys rows by conversation and silently caches
-      // orphans without it.
-      if (usesNativeMobileCache())
-        void cacheTimeline(
-          user.id,
-          chatId,
-          deduplicated.map((message) => ({ ...message, chat_id: chatId }))
-        ).catch(() => undefined);
-    } catch (err) {
-      console.error('Failed to fetch messages:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [user?.id, chatId, highlightMessageId]);
 
   const fetchChatInfo = useCallback(async () => {
     if (!chatId) return false;
@@ -642,15 +596,28 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
       await platformsApi.markChatRead(chatId, session?.id);
       // Realtime normally carries this chat-row update back to the inbox, but
       // it can arrive after someone has already navigated back. Patch every
-      // cached inbox view now and refetch filter variants (especially Unread)
-      // so neither the row nor the app badge retains a stale count.
+      // cached inbox view now so neither the row nor the app badge retains a
+      // stale count.
       patchInboxChat(queryClient, user?.id, {
         id: chatId,
         platform: resolvedPlatform as Platform,
         unread_count: 0,
       });
-      void queryClient.invalidateQueries({ queryKey: inboxQueryPrefix(user?.id) });
-      await syncNotificationBadge().catch(() => undefined);
+      // refetchType 'none' is load-bearing, not a micro-optimisation. Nothing
+      // unmounts or freezes the inbox when this screen is pushed on top of it,
+      // so its infinite query stays *active* — and an active infinite query
+      // refetches by replaying every loaded page sequentially, because each
+      // page's keyset cursor depends on the one before it. Scrolled six pages
+      // deep, with the dashboard's feed mounted too, a plain invalidate turned
+      // one chat open into a dozen serial conversation_feed round trips landing
+      // mid-push-animation. patchInboxChat above already corrects the row, so
+      // marking the variants stale gets the Unread filter refreshed the next
+      // time it is mounted or focused without paying for it during navigation.
+      void queryClient.invalidateQueries({
+        queryKey: inboxQueryPrefix(user?.id),
+        refetchType: 'none',
+      });
+      void syncNotificationBadge().catch(() => undefined);
     } catch (error) {
       console.warn('Failed to mark conversation read:', error);
     }
@@ -682,47 +649,36 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
   // that measured 91 joins for three chat opens. Read them through a ref so the
   // handlers always see the latest version without re-running the effect.
   const chatEffectRef = useRef({
-    fetchMessages,
     markConversationRead,
     refreshConnection,
     fetchConvSettings,
   });
   chatEffectRef.current = {
-    fetchMessages,
     markConversationRead,
     refreshConnection,
     fetchConvSettings,
   };
 
   useEffect(() => {
-    chatEffectRef.current.fetchMessages().then(() => chatEffectRef.current.markConversationRead());
-    void chatEffectRef.current.refreshConnection();
-    if (chatId) chatEffectRef.current.fetchConvSettings(chatId);
+    // useChatTimeline owns fetching the transcript. What is left here is side
+    // work that used to run concurrently with the push animation and made
+    // opening a chat feel wedged: a mark-read POST, a four-way
+    // /platforms/:p/status fan-out on a 30s-timeout client, and three
+    // conversation-settings queries. Hold it until the transition has settled.
+    const settleWork = InteractionManager.runAfterInteractions(() => {
+      void chatEffectRef.current.refreshConnection();
+      if (chatId) chatEffectRef.current.fetchConvSettings(chatId);
+    });
 
+    // No `messages` handlers here. The app-wide inbox channel already receives
+    // every row for this user and writes it into the same cache entry, so a
+    // second subscription on the same table would only duplicate the work — and
+    // duplicating it is not free: renderMessage is an inline arrow and
+    // VirtualizedList is a PureComponent, so each redundant write repaints every
+    // visible row, and cacheTimeline would run twice per inbound message.
     const subscription = supabase
       .channel(
         `chat-${chatId}-${user?.id ?? 'anonymous'}-${Math.random().toString(36).slice(2, 10)}`
-      )
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'messages', filter: `chat_id=eq.${chatId}` },
-        (payload) => {
-          const inserted = payload.new as ChatMessage;
-          if (usesNativeMobileCache() && user?.id)
-            void cacheTimeline(user.id, chatId, [{ ...inserted, chat_id: chatId }]).catch(
-              () => undefined
-            );
-          setMessages((prev) => mergeChatMessage(prev, inserted));
-          if (!inserted.from_me) void chatEffectRef.current.markConversationRead();
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'messages', filter: `chat_id=eq.${chatId}` },
-        (payload) => {
-          const updated = payload.new as ChatMessage;
-          setMessages((prev) => mergeChatMessage(prev, updated));
-        }
       )
       .on(
         'postgres_changes',
@@ -733,9 +689,15 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
           filter: user?.id ? `user_id=eq.${user.id}` : undefined,
         },
         (payload) => {
-          setReactionsByMessage((current) =>
-            upsertReactionRow(current, payload.new as ReactionRow)
-          );
+          const row = payload.new as ReactionRow;
+          patchTimeline((previous) => {
+            // The subscription filter is user-scoped, not chat-scoped, so rows
+            // for other conversations arrive here too. In component state those
+            // were harmless orphans; in a cache that outlives the screen they
+            // would be permanent.
+            if (!previous.messages.some((message) => message.id === row.message_id)) return previous;
+            return { ...previous, reactions: upsertReactionRow(previous.reactions, row) };
+          });
         }
       )
       .on(
@@ -747,9 +709,11 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
           filter: user?.id ? `user_id=eq.${user.id}` : undefined,
         },
         (payload) => {
-          setReactionsByMessage((current) =>
-            removeReactionRow(current, payload.old as { id?: string; message_id?: string | null })
-          );
+          const row = payload.old as { id?: string; message_id?: string | null };
+          patchTimeline((previous) => {
+            const reactions = removeReactionRow(previous.reactions, row);
+            return reactions === previous.reactions ? previous : { ...previous, reactions };
+          });
         }
       )
       .on(
@@ -770,9 +734,25 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
       });
 
     return () => {
+      settleWork.cancel();
       supabase.removeChannel(subscription);
     };
   }, [chatId, user?.id]);
+
+  // refetchOnMount covers arriving at a chat, and refetchOnReconnect covers the
+  // network dropping. Neither covers the case in between: a conversation left
+  // open while the phone sleeps, whose realtime socket dies without a reconnect
+  // event. Revalidate this one entry on foreground rather than adding a poller.
+  useEffect(() => {
+    if (!chatId || !user?.id) return;
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') return;
+      void queryClient.invalidateQueries({
+        queryKey: chatTimelineKey(user.id, chatId, highlightMessageId),
+      });
+    });
+    return () => subscription.remove();
+  }, [queryClient, chatId, user?.id, highlightMessageId]);
 
   useEffect(() => {
     void hydrateChatPreferences();
@@ -787,6 +767,33 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
     () => [...messages].reverse().find((message) => !message.from_me),
     [messages]
   );
+
+  // Mark read once per newest inbound message, whatever delivered it: the first
+  // fetch, the app-wide realtime channel, a local-cache seed, or a refetch after
+  // reconnecting. The old trigger fired only from this screen's own INSERT
+  // subscription, so anything already merged into the cache before the screen
+  // mounted left the conversation reading as unread. An empty token covers a
+  // conversation with no inbound messages, which still needs one call on open.
+  const markedInboundRef = useRef<string | null>(null);
+  useEffect(() => {
+    markedInboundRef.current = null;
+  }, [chatId]);
+  useEffect(() => {
+    if (!chatId || timeline.isPending) return;
+    const token = lastInbound?.id ?? '';
+    if (markedInboundRef.current === token) return;
+    let settled = false;
+    // Still deferred: this is a POST plus an inbox cache patch, and neither is
+    // worth contending with the push animation.
+    const handle = InteractionManager.runAfterInteractions(() => {
+      settled = true;
+      markedInboundRef.current = token;
+      void chatEffectRef.current.markConversationRead();
+    });
+    return () => {
+      if (!settled) handle.cancel();
+    };
+  }, [chatId, timeline.isPending, lastInbound?.id]);
   const latestInjectedId = useMemo(
     () =>
       [...messages].reverse().find((message) => message.from_me && isLocalSend(message.id))?.id ??
@@ -874,7 +881,10 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
       reply_to_message_id: replyTargetAtSend?.id ?? null,
       reply_to_platform_message_id: replyToMessageId ?? null,
     };
-    setMessages((prev) => [...prev, optimistic]);
+    patchTimeline(
+      (previous) => ({ ...previous, messages: [...previous.messages, optimistic] }),
+      { createIfMissing: true }
+    );
     if (user?.id && chatId) {
       void cacheTimeline(user.id, chatId, [{ ...optimistic, chat_id: chatId }]).catch(
         () => undefined
@@ -904,7 +914,13 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
       // The local companion scanner will reconcile the optimistic iMessage
       // send with Messages' durable row. Keep it visible immediately.
       const confirmed = sent ? chatMessageFromSend(sent.message, optimistic) : optimistic;
-      setMessages((prev) => mergeChatMessage(prev, confirmed));
+      patchTimeline(
+        (previous) => ({
+          ...previous,
+          messages: mergeChatMessage(previous.messages, confirmed),
+        }),
+        { createIfMissing: true }
+      );
       if (user?.id && chatId) {
         void cacheTimeline(user.id, chatId, [{ ...confirmed, chat_id: chatId }]).catch(
           () => undefined
@@ -923,7 +939,10 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
       setSendError(errorMessage);
 
       // Remove optimistic message and restore input
-      setMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
+      patchTimeline((previous) => ({
+        ...previous,
+        messages: previous.messages.filter((m) => m.id !== optimistic.id),
+      }));
       setInputText(text);
       setReplyTarget(replyTargetAtSend);
     } finally {
@@ -972,7 +991,10 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
       reply_to_message_id: replyTargetAtSend?.id ?? null,
       reply_to_platform_message_id: replyToMessageId ?? null,
     };
-    setMessages((current) => [...current, optimistic]);
+    patchTimeline(
+      (previous) => ({ ...previous, messages: [...previous.messages, optimistic] }),
+      { createIfMissing: true }
+    );
     if (user?.id && chatId) {
       void cacheTimeline(user.id, chatId, [{ ...optimistic, chat_id: chatId }]).catch(() => undefined);
     }
@@ -987,7 +1009,13 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
         replyToMessageId
       );
       const confirmed = chatMessageFromSend(sent.message, optimistic);
-      setMessages((current) => mergeChatMessage(current, confirmed));
+      patchTimeline(
+        (previous) => ({
+          ...previous,
+          messages: mergeChatMessage(previous.messages, confirmed),
+        }),
+        { createIfMissing: true }
+      );
       if (user?.id && chatId) {
         void cacheTimeline(user.id, chatId, [{ ...confirmed, chat_id: chatId }]).catch(() => undefined);
       }
@@ -996,7 +1024,10 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
       console.error('Voice-note send failed:', error);
       const message = error instanceof Error ? error.message : 'Failed to send voice note. Please try again.';
       setSendError(message);
-      setMessages((current) => current.filter((item) => item.id !== optimistic.id));
+      patchTimeline((previous) => ({
+        ...previous,
+        messages: previous.messages.filter((item) => item.id !== optimistic.id),
+      }));
       setReplyTarget(replyTargetAtSend);
       throw error;
     } finally {
@@ -1058,7 +1089,13 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
         reactor_id: 'self',
         reacted_at: new Date().toISOString(),
       };
-      setReactionsByMessage((current) => upsertReactionRow(current, optimistic));
+      patchTimeline(
+        (previous) => ({
+          ...previous,
+          reactions: upsertReactionRow(previous.reactions, optimistic),
+        }),
+        { createIfMissing: true }
+      );
       setMessageActionTarget(null);
 
       try {
@@ -1069,11 +1106,18 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
           targetPlatformId,
           emoji
         );
-        setReactionsByMessage((current) =>
-          upsertReactionRow(current, response.reaction as ReactionRow)
+        patchTimeline(
+          (previous) => ({
+            ...previous,
+            reactions: upsertReactionRow(previous.reactions, response.reaction as ReactionRow),
+          }),
+          { createIfMissing: true }
         );
       } catch (error) {
-        setReactionsByMessage((current) => removeReactionRow(current, { id: optimisticId }));
+        patchTimeline((previous) => ({
+          ...previous,
+          reactions: removeReactionRow(previous.reactions, { id: optimisticId }),
+        }));
         setSendError(error instanceof Error ? error.message : 'Failed to add reaction. Try again.');
       } finally {
         reactionInFlightRef.current.delete(reactionKey);
@@ -1291,6 +1335,9 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
           justifyContent: isMe ? 'flex-end' : 'flex-start',
           paddingHorizontal: space[3],
           paddingVertical: 3,
+          // The chip hangs above the bubble, so give it clearance rather than
+          // letting it overlap whatever message precedes this one.
+          paddingTop: reactionChips.length ? 15 : 3,
         }}
         testID={`message-row-${item.id}-${isMe ? 'outgoing' : 'incoming'}`}
       >
@@ -1336,36 +1383,6 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
               <MessageReplyPreview sender={replySender} content={replySource.content} />
             ) : null}
             {renderMessageBody(item)}
-            {reactionChips.length ? (
-              <View
-                accessibilityLabel={reactionChips
-                  .map((reaction) => `${reaction.emoji} ${reaction.count}`)
-                  .join(', ')}
-                style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: space[2] }}
-              >
-                {reactionChips.map((reaction) => (
-                  <View
-                    key={reaction.emoji}
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: 3,
-                      minHeight: 24,
-                      paddingHorizontal: 7,
-                      borderRadius: radius.pill,
-                      borderWidth: 1,
-                      borderColor: reaction.mine ? colors.ink : colors.neutral[200],
-                      backgroundColor: reaction.mine ? colors.paper : colors.neutral[100],
-                    }}
-                  >
-                    <Text style={{ fontSize: 13 }}>{reaction.emoji}</Text>
-                    {reaction.count > 1 ? (
-                      <Text style={{ ...mobileType.label, color: colors.ink }}>{reaction.count}</Text>
-                    ) : null}
-                  </View>
-                ))}
-              </View>
-            ) : null}
             <Text
               style={{
                 ...mobileType.label,
@@ -1381,6 +1398,57 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
               })}
             </Text>
           </InjectedBubble>
+          {reactionChips.length ? (
+            <View
+              pointerEvents="none"
+              accessibilityLabel={reactionChips
+                .map((reaction) => `${reaction.emoji} ${reaction.count}`)
+                .join(', ')}
+              style={{
+                position: 'absolute',
+                // Overlap the bubble's top edge by half a chip so the reaction
+                // reads as pinned to the message, the way iMessage does it,
+                // rather than as one more line of the message's own content.
+                top: -12,
+                ...(isMe ? { right: space[2] } : { left: space[2] }),
+                flexDirection: 'row',
+                flexWrap: 'wrap',
+                justifyContent: isMe ? 'flex-end' : 'flex-start',
+                maxWidth: '100%',
+                gap: 5,
+                zIndex: 1,
+              }}
+            >
+              {reactionChips.map((reaction) => (
+                <View
+                  key={reaction.emoji}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 3,
+                    minHeight: 24,
+                    paddingHorizontal: 7,
+                    borderRadius: radius.pill,
+                    borderWidth: 1,
+                    borderColor: reaction.mine ? colors.ink : colors.neutral[200],
+                    // Opaque, and lifted: it now floats over the transcript and
+                    // the bubble border instead of sitting on the bubble's fill.
+                    backgroundColor: reaction.mine ? colors.paper : colors.neutral[100],
+                    shadowColor: colors.ink,
+                    shadowOpacity: 0.12,
+                    shadowRadius: 3,
+                    shadowOffset: { width: 0, height: 1 },
+                    elevation: 2,
+                  }}
+                >
+                  <Text style={{ fontSize: 13 }}>{reaction.emoji}</Text>
+                  {reaction.count > 1 ? (
+                    <Text style={{ ...mobileType.label, color: colors.ink }}>{reaction.count}</Text>
+                  ) : null}
+                </View>
+              ))}
+            </View>
+          ) : null}
         </Pressable>
       </View>
     );
@@ -1524,7 +1592,7 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
       >
         {/* Group Summary Banner — only shown for group chats */}
         {is_group === '1' && chatId && <GroupChatSummary chatId={chatId} />}
-        {chatLoop.data ? <Pressable testID="chat-open-loop-card" onPress={() => router.push({ pathname: '/loops/[id]', params: { id: chatLoop.data!.id } })} style={{ marginHorizontal: space[3], marginTop: space[2], padding: space[3], gap: space[2], borderRadius: radius.card, borderWidth: 1, borderColor: colors.neutral[200], backgroundColor: colors.paper, flexDirection: 'row', alignItems: 'center' }}><View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: (chatLoop.data.priority_score ?? 0) >= 80 ? colors.blush : colors.sky, alignItems: 'center', justifyContent: 'center' }}><CheckCircle2 size={17} color={colors.ink} /></View><View style={{ flex: 1, minWidth: 0 }}><Text style={{ ...mobileType.monoLabel, color: colors.neutral[600] }}>{chatLoop.data.owner === 'them' ? 'WAITING ON THEM' : 'OPEN LOOP'}</Text><Text numberOfLines={1} style={{ ...mobileType.bodySmall, fontWeight: '700', color: colors.ink }}>{chatLoop.data.title || chatLoop.data.content}</Text></View><Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>View</Text></Pressable> : null}
+        {chatLoop.data ? <Pressable testID="chat-open-loop-card" onPress={() => router.push({ pathname: '/loops/[id]', params: { id: chatLoop.data!.id } })} style={{ marginHorizontal: space[3], marginTop: space[2], padding: space[3], gap: space[2], borderRadius: radius.control, borderWidth: 1, borderColor: colors.neutral[200], backgroundColor: colors.paper, flexDirection: 'row', alignItems: 'center' }}><View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: (chatLoop.data.priority_score ?? 0) >= 80 ? colors.blush : colors.sky, alignItems: 'center', justifyContent: 'center' }}><CheckCircle2 size={17} color={colors.ink} /></View><View style={{ flex: 1, minWidth: 0 }}><Text style={{ ...mobileType.monoLabel, color: colors.neutral[600] }}>{chatLoop.data.owner === 'them' ? 'WAITING ON THEM' : 'OPEN LOOP'}</Text><Text numberOfLines={1} style={{ ...mobileType.bodySmall, fontWeight: '700', color: colors.ink }}>{chatLoop.data.title || chatLoop.data.content}</Text></View><Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>View</Text></Pressable> : null}
 
         {loading ? (
           <ChatSkeleton testID="chat-loading" />

@@ -180,7 +180,10 @@ export function addPushTokenRotationListener(accessToken: string) {
 
 export async function syncNotificationBadge(): Promise<void> {
   if (!platformCapabilities.supportsNativeNotifications) return;
-  const { data } = await supabase.from('chats').select('unread_count');
+  // Only unread rows can move the badge, and this runs on every chat open, so
+  // filter in the database rather than fetching every conversation to sum a
+  // column that is zero for nearly all of them. Mirrors useUnreadBadge.
+  const { data } = await supabase.from('chats').select('unread_count').gt('unread_count', 0);
   const unread = (data || []).reduce((sum: number, chat: DbRow) => sum + Math.max(0, chat.unread_count || 0), 0);
   await Notifications.setBadgeCountAsync(unread);
 }
