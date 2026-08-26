@@ -10,6 +10,7 @@ import {
   Platform,
   PlatformStatus,
   MessageContentType,
+  type PlatformCapabilities,
 } from '../adapters';
 import { MatrixBridgeAdapter } from '../adapters/matrix';
 import { platformConfig } from '../config';
@@ -198,6 +199,44 @@ router.post('/:platform/interest', async (req: Request, res: Response) => {
  * GET /platforms
  * List all available platforms and their status
  */
+/**
+ * Translate an adapter's capabilities into the shape the clients consume.
+ *
+ * These are two different vocabularies for the same facts, and returning the
+ * adapter object verbatim silently disabled every feature whose name happened
+ * not to match. `canReactToMessages` is `canSendReactions` on the client, so
+ * the reaction picker read `undefined`, treated every platform as incapable,
+ * and never offered a reaction — even though the adapter, the endpoint and the
+ * persistence behind it were all fully implemented. Reply escaped the bug only
+ * because `canReplyToMessages` is spelled the same on both sides.
+ *
+ * Mapping field by field keeps the contract in one place, so the next rename is
+ * a compile error here rather than a feature that quietly stops appearing.
+ */
+export function clientCapabilities(adapter: { capabilities: PlatformCapabilities; sendReaction?: unknown }) {
+  const capabilities = adapter.capabilities;
+  return {
+    canSendText: capabilities.canSendText,
+    canSendMedia: capabilities.canSendMedia,
+    canSendVoice: capabilities.canSendVoice,
+    canSendStickers: capabilities.canSendStickers,
+    // Both halves, because the reaction endpoint gates on both. Three adapters
+    // advertise canReactToMessages without implementing sendReaction; that is
+    // harmless while PLATFORM_MODE=matrix routes them all through the bridge
+    // adapter, but the moment one is served directly the picker would offer a
+    // reaction the endpoint answers with 400. Advertise only what works.
+    canSendReactions: capabilities.canReactToMessages && typeof adapter.sendReaction === 'function',
+    canReplyToMessages: capabilities.canReplyToMessages,
+    canReadReceipts: capabilities.canReadReceipts,
+    canDeleteMessages: capabilities.canDeleteMessages,
+    canEditMessages: capabilities.canEditMessages,
+    // The adapters track whether a group can be *created*, which is the closest
+    // fact available; neither of these is read by a client today.
+    supportsGroups: capabilities.canCreateGroups,
+    supportsBroadcasts: false,
+  };
+}
+
 router.get('/', async (_req: Request, res: Response) => {
   try {
     const platforms = platformManager.getAvailablePlatforms();
@@ -208,7 +247,7 @@ router.get('/', async (_req: Request, res: Response) => {
         platform,
         enabled: platformConfig[platform as keyof typeof platformConfig]?.enabled ?? false,
         authMethod: adapter?.authMethod,
-        capabilities: adapter?.capabilities,
+        capabilities: adapter ? clientCapabilities(adapter) : undefined,
       };
     });
 
@@ -1049,16 +1088,27 @@ router.post(
 
       const startedAt = Date.now();
       const sent = await adapter.sendReaction(sessionId, chatId, messageId, emoji);
+      // Upsert, not insert. The duplicate check above runs before the bridge
+      // call, so the whole provider round trip sits inside the window — and the
+      // bridge echoes the reaction back through the normal ingest path, which
+      // writes this exact row. When the echo wins that race an insert violates
+      // message_reactions_user_id_message_id_reactor_id_emoji_key and the user
+      // sees a raw Postgres constraint error for a reaction that in fact
+      // succeeded. Landing on the row the echo created is the correct outcome,
+      // and it carries our platform_event_id onto it.
       const { data: reaction, error: reactionError } = await supabase
         .from('message_reactions')
-        .insert({
-          user_id: userId,
-          message_id: target.id,
-          platform_event_id: sent.platformEventId,
-          emoji,
-          from_me: true,
-          reactor_id: 'self',
-        })
+        .upsert(
+          {
+            user_id: userId,
+            message_id: target.id,
+            platform_event_id: sent.platformEventId,
+            emoji,
+            from_me: true,
+            reactor_id: 'self',
+          },
+          { onConflict: 'user_id,message_id,reactor_id,emoji' }
+        )
         .select('*')
         .single();
       if (reactionError) throw reactionError;
