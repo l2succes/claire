@@ -58,7 +58,11 @@ import { DesktopInboxWorkspace } from '../../features/desktop/desktop-inbox-work
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { MobileAvatar, MobileIconButton } from '../../components/mobile/claire-mobile';
 import { cacheTimeline } from '../../services/mobile-cache';
-import { inboxQueryPrefix, patchInboxChat } from '../../hooks/useInboxMessages';
+import {
+  inboxQueryPrefix,
+  patchInboxChat,
+  patchInboxRealtimeMessage,
+} from '../../hooks/useInboxMessages';
 import {
   chatTimelineKey,
   updateChatTimeline,
@@ -493,6 +497,7 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
       updateChatTimeline(queryClient, user?.id, chatId, updater, options),
     [queryClient, user?.id, chatId]
   );
+
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [inputText, setInputText] = useState('');
@@ -520,6 +525,31 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
   }, [draft]);
 
   const resolvedPlatform = platform || chatMetadata?.platform || undefined;
+
+  // Sending does not write a messages row: POST /platforms/:platform/send hands
+  // the message to the bridge and returns, and the row only lands when the
+  // platform echoes it back through Matrix. The inbox preview is driven purely
+  // by that row's realtime INSERT, so until the round trip completes the
+  // conversation still lists the previous message. The transcript hides this
+  // behind its optimistic bubble; the inbox had no equivalent, which is why the
+  // subtitle lagged by however long the bridge took. Patch it here too, and let
+  // the realtime row reconcile the ids when it arrives.
+  const syncInboxPreview = useCallback(
+    (message: ChatMessage) => {
+      if (!chatId) return;
+      patchInboxRealtimeMessage(queryClient, user?.id, {
+        id: message.id,
+        chat_id: chatId,
+        content: message.content,
+        timestamp: message.timestamp,
+        from_me: true,
+        is_group: is_group === '1',
+        platform: resolvedPlatform as Platform,
+        contact_name: contact_name || chat_name || undefined,
+      });
+    },
+    [queryClient, user?.id, chatId, is_group, resolvedPlatform, contact_name, chat_name]
+  );
   const isGroup = is_group === '1' || (!is_group && chatMetadata?.isGroup === true);
   const resolvedName = chat_name || contact_name || chatMetadata?.name || undefined;
   const platformCapabilities = availablePlatforms.find(
@@ -885,6 +915,7 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
       (previous) => ({ ...previous, messages: [...previous.messages, optimistic] }),
       { createIfMissing: true }
     );
+    syncInboxPreview(optimistic);
     if (user?.id && chatId) {
       void cacheTimeline(user.id, chatId, [{ ...optimistic, chat_id: chatId }]).catch(
         () => undefined
@@ -921,6 +952,7 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
         }),
         { createIfMissing: true }
       );
+      syncInboxPreview(confirmed);
       if (user?.id && chatId) {
         void cacheTimeline(user.id, chatId, [{ ...confirmed, chat_id: chatId }]).catch(
           () => undefined
@@ -995,6 +1027,7 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
       (previous) => ({ ...previous, messages: [...previous.messages, optimistic] }),
       { createIfMissing: true }
     );
+    syncInboxPreview(optimistic);
     if (user?.id && chatId) {
       void cacheTimeline(user.id, chatId, [{ ...optimistic, chat_id: chatId }]).catch(() => undefined);
     }
@@ -1016,6 +1049,7 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
         }),
         { createIfMissing: true }
       );
+      syncInboxPreview(confirmed);
       if (user?.id && chatId) {
         void cacheTimeline(user.id, chatId, [{ ...confirmed, chat_id: chatId }]).catch(() => undefined);
       }
