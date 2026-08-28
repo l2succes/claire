@@ -223,6 +223,10 @@ export const platformsApi = {
 
   /**
    * Submit verification code (for Telegram phone verification)
+   *
+   * Server follow-up: Matrix mode does not yet expose POST /verify for
+   * Telegram. Keep this client contract unchanged; E2E completion is mocked
+   * explicitly until that bridge route ships.
    */
   async submitVerificationCode(
     platform: Platform,

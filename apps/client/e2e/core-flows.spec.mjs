@@ -923,6 +923,8 @@ const MOCK_IG_SESSION_CONNECTED = {
  * Must be called AFTER mockBackend() since Playwright routes match last-registered first.
  */
 async function mockConnectFlow(page, platformOverrides = {}) {
+  let telegramStarted = false;
+  let telegramVerified = false;
   // Override the generic platforms/** catch-all with a more specific handler
   // that handles connect/verify/status sub-paths correctly.
   await page.route('**/platforms/**', async (route) => {
@@ -931,6 +933,7 @@ async function mockConnectFlow(page, platformOverrides = {}) {
 
     // Telegram connect — returns awaiting_auth + authData to trigger code step
     if (url.includes('/telegram/connect') && method === 'POST') {
+      telegramStarted = true;
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -945,6 +948,9 @@ async function mockConnectFlow(page, platformOverrides = {}) {
 
     // Telegram verify — returns connected session
     if (url.includes('/telegram/verify') && method === 'POST') {
+      // This is intentionally an E2E mock boundary: the production Telegram
+      // POST /verify bridge route is still tracked as a server follow-up.
+      telegramVerified = true;
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -956,12 +962,12 @@ async function mockConnectFlow(page, platformOverrides = {}) {
       return;
     }
 
-    // Telegram status — returns connected after verify
+    // Telegram status — disconnected before start, pending during entry, then connected.
     if (url.includes('/telegram/status')) {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ sessions: [MOCK_TG_SESSION_CONNECTED] }),
+        body: JSON.stringify({ sessions: telegramVerified ? [MOCK_TG_SESSION_CONNECTED] : telegramStarted ? [MOCK_TG_SESSION_CONNECTING] : [] }),
       });
       return;
     }
@@ -1030,9 +1036,47 @@ test.describe('Platform connect flows — mock backend', () => {
     // The default fixture has an already-connected WhatsApp session.
     await page.getByTestId('platform-selector-whatsapp').click();
 
-    await expect(page.getByTestId('platform-connection-status')).toBeVisible({ timeout: 5_000 });
-    await expect(page.getByText('Already connected')).toBeVisible();
-    await expect(page.getByText('Requesting pairing code...')).not.toBeVisible();
+    await expect(page.getByTestId('connection-flow-whatsapp')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId('connection-success')).toBeVisible();
+    await expect(page.getByText('WhatsApp is connected')).toBeVisible();
+    await expect(page.getByText('Getting your link code…')).not.toBeVisible();
+  });
+
+  test('WhatsApp connect flow — validates, copies, and explains phone linking', async ({ page }) => {
+    let started = false;
+    const waitingSession = {
+      id: 'wa-session-2',
+      user_id: MOCK_USER_ID,
+      platform: 'whatsapp',
+      status: 'awaiting_auth',
+      created_at: new Date().toISOString(),
+      authData: { sessionId: 'wa-session-2', pairingCode: 'ABCD-EFGH' },
+    };
+    await page.route('**/platforms/whatsapp/**', async (route) => {
+      const url = route.request().url();
+      if (url.includes('/connect')) {
+        started = true;
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, session: waitingSession, authData: waitingSession.authData }) });
+        return;
+      }
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ sessions: started ? [waitingSession] : [] }) });
+    });
+
+    await page.goto('/login');
+    await page.getByTestId('platform-selector-whatsapp').click();
+    await expect(page.getByTestId('connection-flow-whatsapp')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByText('Enter your WhatsApp number')).toBeVisible();
+
+    await page.getByTestId('connection-phone-input').fill('123');
+    await page.getByRole('button', { name: 'Get link code' }).click();
+    await expect(page.getByTestId('connection-phone-error')).toBeVisible();
+
+    await page.getByTestId('connection-phone-input').fill('+15550001234');
+    await page.getByRole('button', { name: 'Get link code' }).click();
+    await expect(page.getByTestId('whatsapp-pairing-code')).toHaveText('ABCD EFGH');
+    await expect(page.getByText(/Link with phone number instead/).first()).toBeVisible();
+    await page.getByTestId('whatsapp-copy-code').click();
+    await expect(page.getByText('Copied')).toBeVisible();
   });
 
   // TG-1. Telegram connect: phone step renders
@@ -1040,16 +1084,14 @@ test.describe('Platform connect flows — mock backend', () => {
     await page.goto('/login');
     await expect(page.getByTestId('platform-login-screen')).toBeVisible();
 
-    // Click Telegram tile to open auth modal
+    // Open the full-screen Telegram flow.
     await page.getByTestId('platform-selector-telegram').click();
 
-    // Auth modal opens
-    await expect(page.getByTestId('platform-auth-modal')).toBeVisible({ timeout: 5_000 });
-
     // Phone entry step should be visible
-    await expect(page.getByTestId('telegram-phone-step')).toBeVisible({ timeout: 5_000 });
-    await expect(page.getByTestId('telegram-phone-input')).toBeVisible();
-    await expect(page.getByTestId('telegram-send-code-button')).toBeVisible();
+    await expect(page.getByTestId('connection-flow-telegram')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByText('Enter your Telegram number')).toBeVisible();
+    await expect(page.getByTestId('connection-phone-input')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Send verification code' })).toBeVisible();
   });
 
   // TG-2. Telegram connect: phone → code → connected
@@ -1081,25 +1123,25 @@ test.describe('Platform connect flows — mock backend', () => {
     await page.goto('/login');
     await expect(page.getByTestId('platform-login-screen')).toBeVisible();
 
-    // Open Telegram auth modal
+    // Open Telegram connection guide.
     await page.getByTestId('platform-selector-telegram').click();
-    await expect(page.getByTestId('platform-auth-modal')).toBeVisible({ timeout: 5_000 });
-    await expect(page.getByTestId('telegram-phone-step')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId('connection-flow-telegram')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByText('Enter your Telegram number')).toBeVisible({ timeout: 5_000 });
 
     // Enter phone number and tap Send Code
-    await page.getByTestId('telegram-phone-input').fill('+15550001234');
-    await page.getByTestId('telegram-send-code-button').click();
+    await page.getByTestId('connection-phone-input').fill('+15550001234');
+    await page.getByRole('button', { name: 'Send verification code' }).click();
 
     // Code entry step should appear (mock returns awaiting_auth with authData)
-    await expect(page.getByTestId('telegram-code-step')).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByText('Check Telegram for your code')).toBeVisible({ timeout: 8_000 });
     await expect(page.getByTestId('telegram-code-input')).toBeVisible();
 
     // Enter 6-digit verification code
     await page.getByTestId('telegram-code-input').fill('123456');
-    await page.getByTestId('telegram-verify-button').click();
+    await page.getByRole('button', { name: 'Verify and connect' }).click();
 
     // Success state should appear (mock returns connected)
-    await expect(page.getByTestId('platform-auth-success')).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByTestId('connection-success')).toBeVisible({ timeout: 8_000 });
   });
 
   // IG-1. Instagram connect: desktop companion guidance renders
@@ -1108,45 +1150,43 @@ test.describe('Platform connect flows — mock backend', () => {
     await expect(page.getByTestId('platform-login-screen')).toBeVisible();
 
     await page.getByTestId('platform-selector-instagram').click();
-    await expect(page.getByTestId('platform-auth-modal')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId('connection-flow-instagram')).toBeVisible({ timeout: 5_000 });
 
     await expect(page.getByTestId('instagram-companion-required')).toBeVisible({ timeout: 5_000 });
-    await expect(
-      page.getByTestId('instagram-companion-required').getByText('Connect with Claire Desktop')
-    ).toBeVisible();
-    await expect(page.getByText(/never ask you to paste a browser cookie/i)).toBeVisible();
+    await expect(page.getByText('Finish once in Claire Desktop')).toBeVisible();
+    await expect(page.getByText(/never ask you to paste browser cookies/i)).toBeVisible();
   });
 
   // IG-2. Instagram connect: companion instructions replace bridge credential UI
   test('Instagram connect flow — does not expose the legacy credential path', async ({ page }) => {
     await page.goto('/login');
     await page.getByTestId('platform-selector-instagram').click();
-    await expect(page.getByTestId('platform-auth-modal')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId('connection-flow-instagram')).toBeVisible({ timeout: 5_000 });
 
     await expect(page.getByTestId('instagram-login-trigger')).toHaveCount(0);
     await expect(page.getByTestId('instagram-cookie-input')).toHaveCount(0);
     await expect(page.getByTestId('instagram-credentials-form')).toHaveCount(0);
-    await expect(page.getByTestId('instagram-companion-refresh-button')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'I’ve finished — check connection' })).toBeVisible();
   });
 
   // IG-3. Instagram connect: users can return to the refreshed platform state
-  test('Instagram connect flow — refresh action returns to platform state', async ({ page }) => {
+  test('Instagram connect flow — check action preserves the guidance while disconnected', async ({ page }) => {
     await page.goto('/login');
     await page.getByTestId('platform-selector-instagram').click();
-    await expect(page.getByTestId('platform-auth-modal')).toBeVisible({ timeout: 5_000 });
-    await page.getByTestId('instagram-companion-refresh-button').click();
-    await expect(page.getByTestId('platform-auth-modal')).toHaveCount(0);
+    await expect(page.getByTestId('connection-flow-instagram')).toBeVisible({ timeout: 5_000 });
+    await page.getByRole('button', { name: 'I’ve finished — check connection' }).click();
+    await expect(page.getByTestId('instagram-companion-required')).toBeVisible();
   });
 
   test('iMessage connect flow — requires the Mac companion instead of a generic QR code', async ({ page }) => {
     await page.goto('/login');
     await page.getByTestId('platform-selector-imessage').click();
-    await expect(page.getByTestId('platform-auth-modal')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId('connection-flow-imessage')).toBeVisible({ timeout: 5_000 });
 
     await expect(page.getByTestId('imessage-companion-required')).toBeVisible({ timeout: 5_000 });
-    await expect(page.getByText(/Claire Desktop on your Mac/i)).toBeVisible();
+    await expect(page.getByText(/Claire Desktop on a Mac/i)).toBeVisible();
     await expect(page.getByTestId('qr-code-display')).toHaveCount(0);
-    await expect(page.getByTestId('imessage-companion-refresh-button')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'I’ve finished — check connection' })).toBeVisible();
   });
 
   // ---------------------------------------------------------------------------
