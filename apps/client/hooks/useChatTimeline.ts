@@ -27,7 +27,7 @@ import { cacheTimeline, cachedTimeline, usesNativeMobileCache } from '../service
 /** Columns the transcript renders. Deliberately explicit — `select('*')` here
  *  drags joined chat and contact rows onto all 100 messages. */
 const TIMELINE_COLUMNS =
-  'id, chat_id, content, timestamp, from_me, contact_name, contact_phone, content_type, media_url, media_mime_type, platform_message_id, reply_to_message_id, reply_to_platform_message_id';
+  'id, chat_id, content, timestamp, from_me, contact_name, contact_phone, content_type, media_url, media_mime_type, metadata, platform_message_id, reply_to_message_id, reply_to_platform_message_id';
 
 const TIMELINE_LIMIT = 100;
 

@@ -21,8 +21,9 @@ import { loginWithCredentials, submitTwoFactorCode } from '../services/instagram
 import { platformCatalog, platformCatalogVersion } from '../platform-catalog';
 import { supabase, type DbRow } from '../services/supabase';
 import { operationsTelemetry } from '../services/operations-telemetry';
-import { respondWithError } from '../utils/api-error';
+import { ClientFacingError, respondWithError } from '../utils/api-error';
 import { queueWhatsAppContactIdentitySync } from '../services/whatsapp-contact-backfill';
+import { transcodeVoiceToOggOpus } from '../services/audio-transcoder';
 
 // Railway services cannot reach each other through localhost. Railway does not
 // inject NODE_ENV by default, so its public-domain marker is also used to
@@ -75,6 +76,29 @@ const whatsappBridgeClient = new BridgeHttpClient(
 const router = Router();
 const INSTAGRAM_LOGIN_URL = 'https://www.instagram.com/accounts/login/';
 const REQUIRED_INSTAGRAM_COOKIES = ['sessionid', 'csrftoken', 'mid', 'ig_did', 'ds_user_id'];
+
+function voiceDurationMs(req: Request): number | undefined {
+  const rawHeader = req.header('x-claire-audio-duration-ms');
+  const rawLegacy = typeof req.query.durationSeconds === 'string' ? req.query.durationSeconds : undefined;
+  const value = rawHeader !== undefined ? Number(rawHeader) : rawLegacy !== undefined ? Number(rawLegacy) * 1000 : undefined;
+  if (value === undefined) return undefined;
+  if (!Number.isFinite(value) || value <= 0 || value > 60 * 60 * 1000) {
+    throw new ClientFacingError('Voice-note duration is invalid');
+  }
+  return Math.round(value);
+}
+
+function voiceWaveform(req: Request): number[] {
+  const value = req.header('x-claire-audio-waveform');
+  if (!value) return [];
+  const values = value.split(',');
+  if (values.length > 128) throw new ClientFacingError('Voice-note waveform is too long');
+  const waveform = values.map(Number);
+  if (waveform.some((sample) => !Number.isFinite(sample) || sample < 0 || sample > 255)) {
+    throw new ClientFacingError('Voice-note waveform is invalid');
+  }
+  return waveform.map(Math.round);
+}
 
 /**
  * GET /platforms/definitions
@@ -1191,11 +1215,21 @@ router.post(
 
       const startedAt = Date.now();
       try {
+        const durationMs = voiceDurationMs(req);
+        const waveform = voiceWaveform(req);
+        const voiceData = await transcodeVoiceToOggOpus(req.body);
         const message = await adapter.sendMessage(sessionId, chatId, {
           content: 'Voice message',
           contentType: MessageContentType.VOICE,
           replyToMessageId,
-          media: [{ type: MessageContentType.VOICE, data: req.body, mimeType, fileName: 'voice-note.m4a' }],
+          media: [{
+            type: MessageContentType.VOICE,
+            data: voiceData,
+            mimeType: 'audio/ogg; codecs=opus',
+            fileName: 'voice-note.ogg',
+            durationMs,
+            waveform,
+          }],
         });
         void operationsTelemetry.record({
           traceSource: message.platformMessageId || `voice:${sessionId}:${Date.now()}`,

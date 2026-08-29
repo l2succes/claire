@@ -13,7 +13,6 @@ import {
 } from 'react-native';
 import {
   ImageIcon,
-  Volume2,
   Video,
   FileText,
   AlertCircle,
@@ -73,9 +72,10 @@ import {
   chatMessageFromSend,
   groupReactions,
   isBridgeFailure,
+  isSingleEmojiMessage,
   isLocalSend,
-  isPlayableAudio,
   mergeChatMessage,
+  normalizeAudioPlaybackUrl,
   parseMediaCaption,
   normalizeMediaUrl as normalizeMediaUrlWithBase,
   removeReactionRow,
@@ -84,6 +84,8 @@ import {
   type ChatTimeline,
   type ReactionRow,
 } from '@claire/chat-core';
+import { VoiceMessageBubble } from '../../features/chat/voice-message-bubble';
+import { StandaloneEmojiMessage } from '../../features/chat/standalone-emoji-message';
 
 function InjectedBubble({
   animate,
@@ -127,6 +129,10 @@ try {
 // own; bind this client's once here.
 function normalizeMediaUrl(value?: string | null): string | null {
   return normalizeMediaUrlWithBase(value, API_BASE_URL);
+}
+
+function normalizeAudioUrl(value?: string | null, mime?: string | null): string | null {
+  return normalizeAudioPlaybackUrl(value, mime, API_BASE_URL);
 }
 
 /**
@@ -345,91 +351,6 @@ function MediaVideoPlayer({ uri, messageId }: { uri: string; messageId: string }
   );
 }
 
-function MediaAudio({
-  uri,
-  mime,
-  messageId,
-  label,
-}: {
-  uri: string;
-  mime?: string | null;
-  messageId: string;
-  label: string;
-}) {
-  const [started, setStarted] = useState(false);
-  const playable = isPlayableAudio(mime) && !!expoVideoModule;
-
-  return (
-    // The bubble sizes to its content, so a flex:1 child here would resolve to
-    // zero width and wrap the label one character per line. Give the row an
-    // explicit width to lay out against.
-    <View
-      testID={`media-audio-${messageId}`}
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: space[2],
-        minHeight: 40,
-        width: 210,
-      }}
-    >
-      <Pressable
-        testID={`media-audio-play-${messageId}`}
-        accessibilityRole="button"
-        accessibilityLabel={playable ? 'Play voice message' : 'Voice message cannot be played yet'}
-        accessibilityState={{ disabled: !playable }}
-        disabled={!playable || started}
-        onPress={() => setStarted(true)}
-        style={({ pressed }) => ({
-          width: 36,
-          height: 36,
-          borderRadius: 18,
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: playable ? colors.lime : colors.neutral[100],
-          opacity: pressed ? 0.85 : 1,
-        })}
-      >
-        {playable ? (
-          <Play size={17} color={colors.ink} fill={colors.ink} />
-        ) : (
-          <Volume2 size={17} color={colors.neutral[400]} />
-        )}
-      </Pressable>
-      <View style={{ flex: 1, minWidth: 0 }}>
-        <Text numberOfLines={1} style={{ ...mobileType.bodySmall, color: colors.ink }}>
-          {label}
-        </Text>
-        {!playable ? (
-          <Text numberOfLines={1} style={{ ...mobileType.label, color: colors.neutral[400] }}>
-            Playback needs a supported format
-          </Text>
-        ) : null}
-      </View>
-      {started && playable ? <MediaAudioPlayer uri={uri} messageId={messageId} /> : null}
-    </View>
-  );
-}
-
-function MediaAudioPlayer({ uri, messageId }: { uri: string; messageId: string }) {
-  const video = expoVideoModule!;
-  const player = video.useVideoPlayer(uri, (instance) => {
-    instance.loop = false;
-    instance.play();
-  });
-  const VideoView = video.VideoView;
-  // Audio-only source: keep the surface out of layout but mounted so the
-  // player stays attached while it plays.
-  return (
-    <VideoView
-      testID={`media-audio-player-${messageId}`}
-      player={player}
-      nativeControls={false}
-      style={{ width: 0, height: 0 }}
-    />
-  );
-}
-
 export default function ChatRoute() {
   const isDesktop = useIsDesktopLayout();
   const { chatId } = useLocalSearchParams<{ chatId: string }>();
@@ -503,6 +424,7 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
   const [inputText, setInputText] = useState('');
   const [replyTarget, setReplyTarget] = useState<ChatMessage | null>(null);
   const [messageActionTarget, setMessageActionTarget] = useState<ChatMessage | null>(null);
+  const [activeVoiceMessageId, setActiveVoiceMessageId] = useState<string | null>(null);
   const [suggestionRefreshKey, setSuggestionRefreshKey] = useState(0);
   const [showReplyOptions, setShowReplyOptions] = useState(false);
   const [connectionRefreshing, setConnectionRefreshing] = useState(false);
@@ -1018,6 +940,9 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
       content_type: 'audio',
       media_url: draft.uri,
       media_mime_type: draft.mimeType,
+      metadata: {
+        audio: { durationMs: draft.durationMs, waveform: draft.waveform, isVoice: true },
+      },
       timestamp: new Date().toISOString(),
       from_me: true,
       reply_to_message_id: replyTargetAtSend?.id ?? null,
@@ -1223,13 +1148,19 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
     }
 
     if (type === 'audio' || type === 'voice') {
-      const audioUri = normalizeMediaUrl(item.media_url);
+      const audioUri = normalizeAudioUrl(item.media_url, item.media_mime_type);
+      const audioMetadata = item.metadata?.audio;
       return (
-        <MediaAudio
+        <VoiceMessageBubble
           uri={audioUri || ''}
-          mime={audioUri ? item.media_mime_type : null}
           messageId={item.id}
-          label={caption.text || caption.badge || 'Voice message'}
+          durationMs={audioMetadata?.durationMs}
+          waveform={audioMetadata?.waveform}
+          active={activeVoiceMessageId === item.id}
+          onActivate={() => setActiveVoiceMessageId(item.id)}
+          onDeactivate={() =>
+            setActiveVoiceMessageId((current) => (current === item.id ? null : current))
+          }
         />
       );
     }
@@ -1361,6 +1292,13 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
     const hasActionsOpen = messageActionTarget?.id === item.id;
     const replySender = replySource?.from_me ? 'You' : replySource?.contact_name || displayName;
     const reactionChips = groupReactions(reactionsByMessage[item.id] || []);
+    const plainText = parseMediaCaption(item.content, { dropSelfLinks: false });
+    const standaloneEmoji =
+      (item.content_type || 'text') === 'text' &&
+      !replySource &&
+      !plainText.badge &&
+      !plainText.hint &&
+      isSingleEmojiMessage(plainText.text ?? item.content);
     return (
       <View
         style={{
@@ -1376,7 +1314,16 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
         testID={`message-row-${item.id}-${isMe ? 'outgoing' : 'incoming'}`}
       >
         <Pressable
-          style={{ width: '78%', maxWidth: '78%' }}
+          style={
+            standaloneEmoji
+              ? {
+                  minWidth: 44,
+                  minHeight: 44,
+                  maxWidth: '78%',
+                  alignItems: isMe ? 'flex-end' : 'flex-start',
+                }
+              : { width: '78%', maxWidth: '78%' }
+          }
           accessibilityRole={canReplyToMessage || Boolean(item.content) ? 'button' : undefined}
           accessibilityHint={canReplyToMessage || Boolean(item.content) ? 'Long press for message actions' : undefined}
           delayLongPress={350}
@@ -1396,16 +1343,32 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
               // explicit width it shrink-wraps its content, leaving this
               // percentage with no meaningful container and wrapping words
               // into narrow vertical bubbles.
-              width: '100%',
+              width: standaloneEmoji ? undefined : '100%',
               maxWidth: '100%',
-              backgroundColor: isMe ? colors.lime : colors.paper,
-              borderWidth: isHighlighted || hasActionsOpen ? 2 : 1,
-              borderColor: isHighlighted ? colors.focus : hasActionsOpen ? colors.ink : colors.neutral[200],
-              borderRadius: radius.card,
-              borderBottomRightRadius: isMe ? 6 : radius.card,
-              borderBottomLeftRadius: isMe ? radius.card : 6,
-              paddingHorizontal: space[3],
-              paddingVertical: space[2],
+              minWidth: standaloneEmoji ? 44 : undefined,
+              minHeight: standaloneEmoji ? 44 : undefined,
+              backgroundColor: standaloneEmoji
+                ? 'transparent'
+                : isMe
+                  ? colors.lime
+                  : colors.paper,
+              borderWidth: standaloneEmoji
+                ? isHighlighted || hasActionsOpen
+                  ? 2
+                  : 0
+                : isHighlighted || hasActionsOpen
+                  ? 2
+                  : 1,
+              borderColor: isHighlighted
+                ? colors.focus
+                : hasActionsOpen
+                  ? colors.ink
+                  : colors.neutral[200],
+              borderRadius: standaloneEmoji ? 10 : radius.card,
+              borderBottomRightRadius: standaloneEmoji ? 10 : isMe ? 6 : radius.card,
+              borderBottomLeftRadius: standaloneEmoji ? 10 : isMe ? radius.card : 6,
+              paddingHorizontal: standaloneEmoji ? 0 : space[3],
+              paddingVertical: standaloneEmoji ? 0 : space[2],
             }}
           >
             {!isMe && is_group === '1' && item.contact_name && (
@@ -1416,21 +1379,32 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
             {replySource ? (
               <MessageReplyPreview sender={replySender} content={replySource.content} />
             ) : null}
-            {renderMessageBody(item)}
-            <Text
-              style={{
-                ...mobileType.label,
-                fontSize: 10,
-                color: subtextColor,
-                marginTop: 3,
-                textAlign: isMe ? 'right' : 'left',
-              }}
-            >
-              {new Date(item.timestamp).toLocaleTimeString([], {
-                hour: '2-digit',
-                minute: '2-digit',
-              })}
-            </Text>
+            {standaloneEmoji ? (
+              <StandaloneEmojiMessage
+                messageId={item.id}
+                content={plainText.text ?? item.content}
+                timestamp={item.timestamp}
+                fromMe={isMe}
+              />
+            ) : (
+              <>
+                {renderMessageBody(item)}
+                <Text
+                  style={{
+                    ...mobileType.label,
+                    fontSize: 10,
+                    color: subtextColor,
+                    marginTop: 3,
+                    textAlign: isMe ? 'right' : 'left',
+                  }}
+                >
+                  {new Date(item.timestamp).toLocaleTimeString([], {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </Text>
+              </>
+            )}
           </InjectedBubble>
           {reactionChips.length ? (
             <View
