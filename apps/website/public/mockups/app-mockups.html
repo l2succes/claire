@@ -828,9 +828,106 @@ Maya is my product lead. Be concise and warm. Avoid over-explaining, and always 
               Value, authentication, and privacy are communicated together before permissions.
             </p>
           </article>
+          <article class="screen-case" data-kind="setup" data-screen="email-sign-in">
+            <div class="screen-meta"><b>12 / EMAIL SIGN IN</b><span>AUTHENTICATION</span></div>
+            <claire-phone>
+              <div class="island"></div>
+              <div class="status"><span>9:41</span><span>● ◒</span></div>
+              <div class="screen no-tab auth-screen">
+                <div class="auth-nav">
+                  <button class="round-button" type="button" aria-label="Go back">‹</button>
+                  <img src="/assets/brand/claire-app-icon-lime.svg" alt="" />
+                  <span aria-hidden="true"></span>
+                </div>
+                <div class="auth-content">
+                  <div class="tiny-label">WELCOME BACK</div>
+                  <h2>Sign in with email.</h2>
+                  <p class="auth-intro">
+                    Enter your email and we’ll send you a one-time verification code. No password
+                    needed.
+                  </p>
+                  <form class="email-auth-form" data-email-auth-form>
+                    <label for="mockup-email">EMAIL ADDRESS</label>
+                    <input
+                      id="mockup-email"
+                      name="email"
+                      type="email"
+                      value="luc@example.com"
+                      autocomplete="email"
+                      inputmode="email"
+                      aria-describedby="mockup-email-help"
+                    />
+                    <p id="mockup-email-help">We’ll only use this to sign you in.</p>
+                  </form>
+                </div>
+                <div class="auth-footer">
+                  <button class="auth-primary" type="button" data-auth-send-code>
+                    Send verification code
+                  </button>
+                  <p>Your messages are never used to train shared models.</p>
+                </div>
+              </div>
+            </claire-phone>
+            <p class="screen-note">
+              The email field sits with the title and explanation in the upper half. The primary
+              action remains easy to reach at the bottom.
+            </p>
+          </article>
+          <article class="screen-case" data-kind="setup" data-screen="email-verification">
+            <div class="screen-meta"><b>13 / VERIFY EMAIL</b><span>6-DIGIT OTP</span></div>
+            <claire-phone>
+              <div class="island"></div>
+              <div class="status"><span>9:41</span><span>● ◒</span></div>
+              <div class="screen no-tab auth-screen" data-otp-screen>
+                <div class="auth-nav">
+                  <button class="round-button" type="button" aria-label="Go back">‹</button>
+                  <img src="/assets/brand/claire-app-icon-lime.svg" alt="" />
+                  <span aria-hidden="true"></span>
+                </div>
+                <div class="auth-content">
+                  <div class="tiny-label">VERIFY YOUR EMAIL</div>
+                  <h2>Enter the 6-digit code.</h2>
+                  <p class="auth-intro">
+                    We sent a code to <strong data-otp-email>luc@example.com</strong>. It may take a
+                    few seconds to arrive.
+                  </p>
+                  <fieldset class="otp-fieldset">
+                    <legend>6-digit verification code</legend>
+                    <div class="otp-inputs" data-otp-inputs>
+                      <input
+                        aria-label="Digit 1"
+                        inputmode="numeric"
+                        autocomplete="one-time-code"
+                        maxlength="1"
+                      />
+                      <input aria-label="Digit 2" inputmode="numeric" maxlength="1" />
+                      <input aria-label="Digit 3" inputmode="numeric" maxlength="1" />
+                      <input aria-label="Digit 4" inputmode="numeric" maxlength="1" />
+                      <input aria-label="Digit 5" inputmode="numeric" maxlength="1" />
+                      <input aria-label="Digit 6" inputmode="numeric" maxlength="1" />
+                    </div>
+                  </fieldset>
+                  <div class="otp-resend" aria-live="polite">
+                    <span>Didn’t get it?</span>
+                    <button type="button" data-otp-resend>Resend code</button>
+                  </div>
+                </div>
+                <div class="auth-footer">
+                  <button class="auth-primary" type="button" data-otp-submit disabled>
+                    Verify &amp; continue
+                  </button>
+                  <button class="auth-secondary" type="button">Change email address</button>
+                </div>
+              </div>
+            </claire-phone>
+            <p class="screen-note">
+              Six large, separate inputs make the code easy to scan and correct. Paste, auto-advance,
+              and backspace all work in the prototype.
+            </p>
+          </article>
           <article class="screen-case" data-kind="setup" data-screen="connect-accounts">
             <div class="screen-meta">
-              <b>12 / CONNECT ACCOUNTS</b><span>ONBOARDING + SETTINGS</span>
+              <b>14 / CONNECT ACCOUNTS</b><span>ONBOARDING + SETTINGS</span>
             </div>
             <claire-phone>
               <div class="island"></div>
@@ -896,7 +993,7 @@ Maya is my product lead. Be concise and warm. Avoid over-explaining, and always 
             </p>
           </article>
           <article class="screen-case" data-kind="setup" data-screen="account-attention">
-            <div class="screen-meta"><b>13 / ACCOUNT ATTENTION</b><span>IN-APP RECOVERY</span></div>
+            <div class="screen-meta"><b>15 / ACCOUNT ATTENTION</b><span>IN-APP RECOVERY</span></div>
             <claire-phone>
               <div class="island"></div>
               <div class="status"><span>9:41</span><span>● ◒</span></div>
@@ -949,7 +1046,7 @@ Maya is my product lead. Be concise and warm. Avoid over-explaining, and always 
             </p>
           </article>
           <article class="screen-case" data-kind="setup" data-screen="reconnect-instagram">
-            <div class="screen-meta"><b>14 / RECONNECT INSTAGRAM</b><span>GUIDED FLOW</span></div>
+            <div class="screen-meta"><b>16 / RECONNECT INSTAGRAM</b><span>GUIDED FLOW</span></div>
             <claire-phone>
               <div class="island"></div>
               <div class="status"><span>9:41</span><span>● ◒</span></div>
@@ -998,7 +1095,7 @@ Maya is my product lead. Be concise and warm. Avoid over-explaining, and always 
             </p>
           </article>
           <article class="screen-case" data-kind="setup" data-screen="settings">
-            <div class="screen-meta"><b>15 / SETTINGS</b><span>PROFILE ENTRY</span></div>
+            <div class="screen-meta"><b>17 / SETTINGS</b><span>PROFILE ENTRY</span></div>
             <claire-phone>
               <div class="island"></div>
               <div class="status"><span>9:41</span><span>● ◒</span></div>
@@ -1084,7 +1181,7 @@ Maya is my product lead. Be concise and warm. Avoid over-explaining, and always 
             </p>
           </article>
           <article class="screen-case" data-kind="setup" data-screen="ai-and-privacy">
-            <div class="screen-meta"><b>16 / AI & PRIVACY</b><span>SETTINGS STACK</span></div>
+            <div class="screen-meta"><b>18 / AI & PRIVACY</b><span>SETTINGS STACK</span></div>
             <claire-phone>
               <div class="island"></div>
               <div class="status"><span>9:41</span><span>● ◒</span></div>
