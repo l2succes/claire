@@ -14,7 +14,6 @@ import { resolvePlatform, platformLabel } from '../../types/platform';
 import { formatInboxTimestamp } from '../../utils/messageTimestamp';
 import { computeUrgencyScore } from '../../utils/urgency';
 import { HomeSkeleton } from '../../components/claire/skeleton';
-import { installationId, listHandoffs, type WorkspaceHandoff } from '../../services/handoffs';
 import { loopTitle, type LoopItem } from '../../services/loops';
 
 interface UrgentMessage {
@@ -74,17 +73,6 @@ export function HomeScreen() {
     enabled: !!user?.id,
     staleTime: 60_000,
     queryFn: () => fetchHomeLoops(user!.id),
-  });
-  const handoffs = useQuery({
-    queryKey: ['workspace-handoffs', user?.id],
-    enabled: !!user?.id,
-    staleTime: 60_000,
-    queryFn: async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) return null;
-      const ownInstallation = await installationId();
-      return (await listHandoffs(session.access_token)).find((handoff) => handoff.installation_id !== ownInstallation) || null;
-    },
   });
 
   const firstName = user?.name?.trim().split(/\s+/)[0] || user?.email?.split('@')[0] || 'there';
@@ -192,7 +180,6 @@ export function HomeScreen() {
           </View>
         </Pressable>
 
-        {handoffs.data ? <ContinueElsewhere handoff={handoffs.data} /> : null}
 
         <View style={{ padding: space[4], backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.neutral[200], borderRadius: radius.card, gap: space[3] }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}><Text style={{ ...mobileType.monoLabel, color: colors.ink }}>FOCUS</Text><Text style={{ ...mobileType.bodySmall, flex: 1, color: colors.neutral[600] }}>{focusLoops.length} loop{focusLoops.length === 1 ? '' : 's'} worth attention</Text><Pressable onPress={() => router.push('/(tabs)/loops')}><Text style={{ ...mobileType.bodySmall, fontWeight: '700', color: colors.ink }}>All loops</Text></Pressable></View>
@@ -239,13 +226,3 @@ export function HomeScreen() {
   );
 }
 
-function ContinueElsewhere({ handoff }: { handoff: WorkspaceHandoff }) {
-  const route = handoff.payload.route || (handoff.payload.chatId ? `/chat/${handoff.payload.chatId}` : '/(tabs)/dashboard');
-  return <Pressable accessibilityRole="button" onPress={() => router.push(route as never)} style={({ pressed }) => ({ opacity: pressed ? 0.76 : 1 })} testID="continue-handoff">
-    <View style={{ padding: space[3], gap: 4, borderRadius: radius.card, borderWidth: 1, borderColor: colors.neutral[200], backgroundColor: colors.paper }}>
-      <Text style={{ ...mobileType.monoLabel, color: colors.neutral[600] }}>CONTINUE FROM {handoff.source_platform.toUpperCase()}</Text>
-      <Text style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>Pick up where you left off</Text>
-      <Text numberOfLines={1} style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{handoff.payload.draft ? 'Your draft is ready to continue.' : 'Restore your recent workspace context.'}</Text>
-    </View>
-  </Pressable>;
-}
