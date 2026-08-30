@@ -197,6 +197,40 @@ export async function cacheTimeline<T extends { id: string; chat_id: string; tim
  * visit. It still needs the full set; it just does not need the network to
  * supply it, because the directory barely changes between visits.
  */
+/**
+ * A conversation's category, contact profile and smart cards.
+ *
+ * Three Supabase round trips ran on every chat open to rebuild something that
+ * changes only when the user edits it or Claire learns something new — rarely,
+ * and never while the chat is being opened. Reading the last known answer off
+ * disk lets the quick-context card render with the transcript instead of
+ * arriving a beat behind it.
+ */
+export async function cachedConversationSettings(userId: string, chatId: string): Promise<Record<string, unknown> | null> {
+  if (!isNativeMobile) return null;
+  const db = await database(userId);
+  if (!db) return null;
+  const row = await db.getFirstAsync(
+    'SELECT payload FROM cache_conversation_settings WHERE chat_id = ?', chatId,
+  ) as { payload?: string } | null;
+  if (!row?.payload) return null;
+  try {
+    return JSON.parse(row.payload) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+export async function cacheConversationSettings(userId: string, chatId: string, settings: Record<string, unknown>): Promise<void> {
+  if (!isNativeMobile) return;
+  const db = await database(userId);
+  if (!db) return;
+  await db.runAsync(
+    'INSERT INTO cache_conversation_settings(chat_id, payload, updated_at) VALUES (?, ?, ?) ON CONFLICT(chat_id) DO UPDATE SET payload = excluded.payload, updated_at = excluded.updated_at',
+    chatId, JSON.stringify(settings), new Date().toISOString(),
+  );
+}
+
 export async function cachedContacts(userId: string): Promise<CachedContact[]> {
   if (!isNativeMobile) return [];
   const db = await database(userId);

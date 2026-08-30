@@ -6,10 +6,10 @@ import { host } from '@claire/host';
 export type CachedChat = Record<string, unknown> & { id: string; latest_message?: Record<string, unknown> | null };
 export type CachedMessage = { id: string; chat_id: string; timestamp: string; [key: string]: unknown };
 export type CachedContact = Record<string, unknown> & { id: string };
-export type MobileCacheSnapshot = { chats: CachedChat[]; messages: CachedMessage[]; contacts: CachedContact[]; contactsSyncedAt: string | null; loops: Record<string, unknown>[]; preferences: Record<string, unknown> | null; cursor: number | null; fullHistoryEnabled: boolean; lastSyncAt: string | null };
+export type MobileCacheSnapshot = { chats: CachedChat[]; messages: CachedMessage[]; contacts: CachedContact[]; contactsSyncedAt: string | null; conversationSettings: Record<string, Record<string, unknown>>; loops: Record<string, unknown>[]; preferences: Record<string, unknown> | null; cursor: number | null; fullHistoryEnabled: boolean; lastSyncAt: string | null };
 
 const memory = new Map<string, MobileCacheSnapshot>();
-const emptySnapshot = (): MobileCacheSnapshot => ({ chats: [], messages: [], contacts: [], contactsSyncedAt: null, loops: [], preferences: null, cursor: null, fullHistoryEnabled: false, lastSyncAt: null });
+const emptySnapshot = (): MobileCacheSnapshot => ({ chats: [], messages: [], contacts: [], contactsSyncedAt: null, conversationSettings: {}, loops: [], preferences: null, cursor: null, fullHistoryEnabled: false, lastSyncAt: null });
 const enabled = () => host.name === 'electron' && host.capabilities.encryptedCache;
 
 async function load(userId: string): Promise<MobileCacheSnapshot> {
@@ -40,6 +40,13 @@ export async function cacheTimeline<T extends { id: string; chat_id: string; tim
   const all = [...byId.values()];
   const retained = snapshot.fullHistoryEnabled ? all : all.filter((message) => message.chat_id !== chatId).concat(all.filter((message) => message.chat_id === chatId).sort((a, b) => b.timestamp.localeCompare(a.timestamp)).slice(0, 200));
   await persist(userId, { ...snapshot, messages: retained, lastSyncAt: new Date().toISOString() });
+}
+export async function cachedConversationSettings(userId: string, chatId: string): Promise<Record<string, unknown> | null> {
+  return (await load(userId)).conversationSettings?.[chatId] ?? null;
+}
+export async function cacheConversationSettings(userId: string, chatId: string, settings: Record<string, unknown>): Promise<void> {
+  const snapshot = await load(userId);
+  await persist(userId, { ...snapshot, conversationSettings: { ...(snapshot.conversationSettings || {}), [chatId]: settings } });
 }
 export async function cachedContacts(userId: string): Promise<CachedContact[]> {
   return (await load(userId)).contacts || [];
