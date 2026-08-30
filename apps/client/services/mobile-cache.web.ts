@@ -5,10 +5,11 @@ import { host } from '@claire/host';
  * to localStorage, IndexedDB, or the browser profile. */
 export type CachedChat = Record<string, unknown> & { id: string; latest_message?: Record<string, unknown> | null };
 export type CachedMessage = { id: string; chat_id: string; timestamp: string; [key: string]: unknown };
-export type MobileCacheSnapshot = { chats: CachedChat[]; messages: CachedMessage[]; loops: Record<string, unknown>[]; preferences: Record<string, unknown> | null; cursor: number | null; fullHistoryEnabled: boolean; lastSyncAt: string | null };
+export type CachedContact = Record<string, unknown> & { id: string };
+export type MobileCacheSnapshot = { chats: CachedChat[]; messages: CachedMessage[]; contacts: CachedContact[]; contactsSyncedAt: string | null; loops: Record<string, unknown>[]; preferences: Record<string, unknown> | null; cursor: number | null; fullHistoryEnabled: boolean; lastSyncAt: string | null };
 
 const memory = new Map<string, MobileCacheSnapshot>();
-const emptySnapshot = (): MobileCacheSnapshot => ({ chats: [], messages: [], loops: [], preferences: null, cursor: null, fullHistoryEnabled: false, lastSyncAt: null });
+const emptySnapshot = (): MobileCacheSnapshot => ({ chats: [], messages: [], contacts: [], contactsSyncedAt: null, loops: [], preferences: null, cursor: null, fullHistoryEnabled: false, lastSyncAt: null });
 const enabled = () => host.name === 'electron' && host.capabilities.encryptedCache;
 
 async function load(userId: string): Promise<MobileCacheSnapshot> {
@@ -39,6 +40,16 @@ export async function cacheTimeline<T extends { id: string; chat_id: string; tim
   const all = [...byId.values()];
   const retained = snapshot.fullHistoryEnabled ? all : all.filter((message) => message.chat_id !== chatId).concat(all.filter((message) => message.chat_id === chatId).sort((a, b) => b.timestamp.localeCompare(a.timestamp)).slice(0, 200));
   await persist(userId, { ...snapshot, messages: retained, lastSyncAt: new Date().toISOString() });
+}
+export async function cachedContacts(userId: string): Promise<CachedContact[]> {
+  return (await load(userId)).contacts || [];
+}
+export async function replaceCachedContacts(userId: string, contacts: CachedContact[]): Promise<void> {
+  const snapshot = await load(userId);
+  await persist(userId, { ...snapshot, contacts, contactsSyncedAt: new Date().toISOString() });
+}
+export async function cachedContactsSyncedAt(userId: string): Promise<string | null> {
+  return (await load(userId)).contactsSyncedAt ?? null;
 }
 export async function oldestCachedMessage(userId: string, chatId: string) { const row = (await load(userId)).messages.filter((message) => message.chat_id === chatId).sort((a, b) => a.timestamp.localeCompare(b.timestamp))[0]; return row ? { id: row.id, timestamp: row.timestamp } : null; }
 export async function cacheBootstrap(userId: string, bootstrap: { cursor: number; chats: CachedChat[]; loops: Record<string, unknown>[]; preferences: Record<string, unknown> | null }) {

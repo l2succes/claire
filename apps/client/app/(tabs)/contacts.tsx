@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, SectionList, Text, View } from 'react-native';
 import { Check, ListFilter, Search } from 'lucide-react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { colors, mobileType, space, useIsDesktopLayout } from '@claire/design-system';
 import { useAuthStore } from '../../stores/authStore';
 import { MobileAvatar, MobileChip, MobileHeader, MobileIconButton, MobileSearchField, MobileState } from '../../components/mobile/claire-mobile';
@@ -10,6 +10,7 @@ import { BottomSheet } from '../../components/mobile/bottom-sheet';
 import { PlatformIcon, PlatformName } from '../../components/PlatformIcon';
 import { Platform, platformLabel } from '../../types/platform';
 import { PeopleSkeleton } from '../../components/claire/skeleton';
+import { cachedContacts, replaceCachedContacts, usesNativeMobileCache } from '../../services/mobile-cache';
 import { contactsApi, type PeopleFilter, type PersonContact } from '../../services/contacts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { displayPersonDetails, displayPersonName } from '../../services/contact-display';
@@ -109,21 +110,63 @@ export default function ContactsScreen() {
     setSearchQuery(params.q || params.query || '');
   }, [params.q, params.query]);
 
+  const queryClient = useQueryClient();
+  const peopleQueryKey = useMemo(
+    () => ['people', user?.id, debouncedSearchQuery, platform, filter] as const,
+    [user?.id, debouncedSearchQuery, platform, filter],
+  );
+
+  // People still needs the whole directory in memory — the A–Z index jumps to a
+  // letter, so a partially loaded list would send "J" somewhere arbitrary. What
+  // changes is where it comes from. The directory barely moves between visits,
+  // so read it from the local cache and let the network refresh happen behind
+  // the already-rendered list rather than in front of an empty one.
   const peopleQuery = useQuery({
-    queryKey: ['people', user?.id, debouncedSearchQuery, platform, filter],
+    queryKey: peopleQueryKey,
     enabled: !!user?.id,
-    // The API and bridge sync share a 10k maximum. Loading that user-scoped
-    // directory as one virtualized list is what makes an A–Z index truthful:
-    // tapping J never jumps only within whichever page happened to be loaded.
-    queryFn: () => contactsApi.list({
-      limit: 10_000,
-      query: debouncedSearchQuery,
-      platform,
-      filter,
-    }),
-    // A foreground return should always pick up newly learned names/numbers.
-    refetchOnMount: 'always',
+    // The cache makes a revisit free; this only decides how long before a
+    // background refresh is worth the round trip.
+    staleTime: 5 * 60_000,
+    gcTime: 30 * 60_000,
+    queryFn: async () => {
+      const contacts = await contactsApi.listAll({
+        query: debouncedSearchQuery,
+        platform,
+        filter,
+      });
+      // Only the unfiltered directory is worth persisting: a search or filter
+      // result is a slice, and caching it would let a later cold open render
+      // that slice as though it were everyone.
+      if (user?.id && !debouncedSearchQuery && platform === 'all' && filter === 'all') {
+        void replaceCachedContacts(user.id, contacts as never).catch(() => undefined);
+      }
+      return { contacts, nextOffset: null };
+    },
   });
+
+  // Seed from disk so the list paints on the first frame. Guarded on the query
+  // having no data yet, so a completed network refresh is never overwritten by
+  // a slower cache read.
+  useEffect(() => {
+    if (!user?.id || !usesNativeMobileCache()) return;
+    if (debouncedSearchQuery || platform !== 'all' || filter !== 'all') return;
+    let active = true;
+    void cachedContacts(user.id)
+      .then((rows) => {
+        if (!active || !rows.length) return;
+        if (queryClient.getQueryData(peopleQueryKey)) return;
+        queryClient.setQueryData(
+          peopleQueryKey,
+          { contacts: rows as unknown as PersonContact[], nextOffset: null },
+          // Stale on purpose: this is a starting picture, not a fresh fetch.
+          { updatedAt: 0 },
+        );
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [queryClient, peopleQueryKey, user?.id, debouncedSearchQuery, platform, filter]);
 
   useEffect(() => {
     if (!user?.id || requestedIdentitySyncFor.current === user.id) return;

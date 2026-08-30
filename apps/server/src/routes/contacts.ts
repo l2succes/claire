@@ -72,8 +72,10 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
     // ~400KB request line, which the gateway rejects long before Postgres sees
     // it — the People screen then sat on its skeleton forever, because the
     // client's fetch has no timeout to turn the failure into an error state.
-    // Chunked, each request stays well inside every proxy's limit.
-    const CHAT_LOOKUP_CHUNK = 200;
+    // Measured against the deployed API: 500 ids still fails, 150 succeeds, so
+    // the ceiling sits between them. 100 (~4KB) leaves real margin rather than
+    // sitting on that edge.
+    const CHAT_LOOKUP_CHUNK = 100;
     for (let index = 0; index < contactIds.length; index += CHAT_LOOKUP_CHUNK) {
       const chunk = contactIds.slice(index, index + CHAT_LOOKUP_CHUNK);
       let chatQuery = supabase

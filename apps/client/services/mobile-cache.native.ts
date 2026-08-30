@@ -2,6 +2,7 @@ import { Platform } from 'react-native';
 
 export type CachedChat = Record<string, unknown> & { id: string; latest_message?: Record<string, unknown> | null };
 export type CachedMessage = { id: string; chat_id: string; timestamp: string; [key: string]: unknown };
+export type CachedContact = Record<string, unknown> & { id: string };
 export type MobileCacheSnapshot = {
   cursor: number;
   chats: CachedChat[];
@@ -185,6 +186,58 @@ export async function cacheTimeline<T extends { id: string; chat_id: string; tim
   });
   const fullHistory = await meta(db, 'full_history_enabled', 'false');
   if (fullHistory !== 'true') await trimRecentMessages(db, chatId);
+}
+
+/**
+ * The whole directory, straight off disk.
+ *
+ * People needs every contact in memory at once — its A–Z index jumps to a
+ * letter, so a partially loaded list would send "J" somewhere arbitrary. That
+ * requirement is why the screen used to ask the API for 10,000 rows on every
+ * visit. It still needs the full set; it just does not need the network to
+ * supply it, because the directory barely changes between visits.
+ */
+export async function cachedContacts(userId: string): Promise<CachedContact[]> {
+  if (!isNativeMobile) return [];
+  const db = await database(userId);
+  if (!db) return [];
+  const rows = await db.getAllAsync(
+    'SELECT payload FROM cache_contacts ORDER BY json_extract(payload, "$.name") IS NULL, json_extract(payload, "$.name") COLLATE NOCASE ASC, id ASC',
+  ) as Array<{ payload: string }>;
+  return rows.map(row => JSON.parse(row.payload) as CachedContact);
+}
+
+/**
+ * Replace the cached directory with a freshly synced one.
+ *
+ * A whole-set replace rather than an upsert, because upserting alone can never
+ * remove a contact that was deleted upstream — People would accumulate ghosts
+ * that no refresh could clear. One transaction so a failure part-way leaves the
+ * previous directory intact rather than a half-written one.
+ */
+export async function replaceCachedContacts(userId: string, contacts: CachedContact[]): Promise<void> {
+  if (!isNativeMobile) return;
+  const db = await database(userId);
+  if (!db) return;
+  await db.withTransactionAsync(async () => {
+    await db.runAsync('DELETE FROM cache_contacts');
+    const now = new Date().toISOString();
+    for (const contact of contacts) {
+      if (typeof contact.id !== 'string') continue;
+      await db.runAsync(
+        'INSERT INTO cache_contacts(id, payload, updated_at) VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET payload = excluded.payload, updated_at = excluded.updated_at',
+        contact.id, JSON.stringify(contact), now,
+      );
+    }
+  });
+  await setMeta(db, 'contacts_synced_at', new Date().toISOString());
+}
+
+export async function cachedContactsSyncedAt(userId: string): Promise<string | null> {
+  if (!isNativeMobile) return null;
+  const db = await database(userId);
+  if (!db) return null;
+  return (await meta(db, 'contacts_synced_at', '')) || null;
 }
 
 export async function oldestCachedMessage(userId: string, chatId: string): Promise<{ timestamp: string; id: string } | null> {

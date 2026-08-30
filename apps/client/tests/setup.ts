@@ -1,3 +1,16 @@
+// jsdom does not expose these Node/web globals, but application code and its
+// dependencies use them freely. Without them a module that merely constructs a
+// URLSearchParams fails to load, which reads as a broken test rather than a
+// missing environment.
+import { TextDecoder, TextEncoder } from 'util';
+import { URL as NodeURL, URLSearchParams as NodeURLSearchParams } from 'url';
+
+const globals = globalThis as unknown as Record<string, unknown>;
+if (!globals.TextEncoder) globals.TextEncoder = TextEncoder;
+if (!globals.TextDecoder) globals.TextDecoder = TextDecoder;
+if (!globals.URLSearchParams) globals.URLSearchParams = NodeURLSearchParams;
+if (!globals.URL) globals.URL = NodeURL;
+
 import '@testing-library/jest-native/extend-expect';
 
 // Mock expo modules
