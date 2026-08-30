@@ -67,12 +67,22 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
     const page = rows.slice(0, limit);
     const contactIds = page.map((contact: DbRow) => contact.id as string);
     const chatsByContact = new Map<string, DbRow>();
-    if (contactIds.length) {
+    // PostgREST takes its filters in the URL, so `.in()` spends roughly 40
+    // bytes of querystring per UUID. At this endpoint's 10k ceiling that is a
+    // ~400KB request line, which the gateway rejects long before Postgres sees
+    // it — the People screen then sat on its skeleton forever, because the
+    // client's fetch has no timeout to turn the failure into an error state.
+    // Measured against the deployed API: 500 ids still fails, 150 succeeds, so
+    // the ceiling sits between them. 100 (~4KB) leaves real margin rather than
+    // sitting on that edge.
+    const CHAT_LOOKUP_CHUNK = 100;
+    for (let index = 0; index < contactIds.length; index += CHAT_LOOKUP_CHUNK) {
+      const chunk = contactIds.slice(index, index + CHAT_LOOKUP_CHUNK);
       let chatQuery = supabase
         .from('chats')
         .select('id, contact_id, name, platform, is_group, last_message_at')
         .eq('user_id', userId)
-        .in('contact_id', contactIds)
+        .in('contact_id', chunk)
         .order('last_message_at', { ascending: false, nullsFirst: false });
       if (platform !== 'all') chatQuery = chatQuery.eq('platform', platform);
       const { data: linkedChats, error: linkedChatsError } = await chatQuery;

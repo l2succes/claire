@@ -5,6 +5,11 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { BellOff, Check, ChevronLeft, Mail, MapPin, Phone, RefreshCw, Sparkles } from 'lucide-react-native';
 import { colors, mobileType, radius, space } from '@claire/design-system';
 import { useAuthStore } from '../../../stores/authStore';
+import {
+  cacheConversationSettings,
+  cachedConversationSettings,
+  usesNativeMobileCache,
+} from '../../../services/mobile-cache';
 import { useConversationSettingsStore } from '../../../stores/conversationSettingsStore';
 import { supabase } from '../../../services/supabase';
 import { CategoryPicker } from '../../../components/CategoryPicker';
@@ -67,25 +72,52 @@ export default function ConversationSettingsScreen() {
   useEffect(() => {
     let active = true;
     if (!chatId) return undefined;
+
+    // Paint the last known header while the queries below run. Neither the
+    // number nor the mute state changes without the user doing something, so
+    // the cached copy is almost always what the network is about to confirm.
+    const userId = user?.id;
+    if (userId && usesNativeMobileCache()) {
+      void cachedConversationSettings(userId, chatId).then((cached) => {
+        if (!active || !cached) return;
+        if (typeof cached.sourcePhone === 'string') setSourcePhone(cached.sourcePhone);
+        if (typeof cached.isMuted === 'boolean') setIsMuted(cached.isMuted);
+      }).catch(() => undefined);
+    }
+
     void (async () => {
       // Contacts own the canonical phone number. A Matrix sender identifier can
       // instead be a WhatsApp LID, so only fall back to message metadata when
       // the contact record has not been populated yet.
-      const { data: chat } = await supabase.from('chats').select('contact_id,is_muted').eq('id', chatId).maybeSingle();
-      if (active) setIsMuted(chat?.is_muted === true);
-      let phone = '';
-      if (chat?.contact_id) {
-        const { data: contact } = await supabase.from('contacts').select('phone_number').eq('id', chat.contact_id).maybeSingle();
-        phone = contact?.phone_number || '';
-      }
+      //
+      // The contact is embedded rather than fetched separately: it used to be a
+      // second round trip that could not start until the first had returned,
+      // for one column.
+      const { data: chat } = await supabase
+        .from('chats')
+        .select('contact_id,is_muted,contacts(phone_number)')
+        .eq('id', chatId)
+        .maybeSingle();
+      if (!active) return;
+      const muted = chat?.is_muted === true;
+      setIsMuted(muted);
+
+      const embedded = chat?.contacts as { phone_number?: string | null } | Array<{ phone_number?: string | null }> | null | undefined;
+      const embeddedContact = Array.isArray(embedded) ? embedded[0] : embedded;
+      let phone = embeddedContact?.phone_number || '';
       if (!phone) {
         const { data: latestMessage } = await supabase.from('messages').select('contact_phone').eq('chat_id', chatId).not('contact_phone', 'is', null).order('timestamp', { ascending: false }).limit(1).maybeSingle();
+        if (!active) return;
         phone = latestMessage?.contact_phone || '';
       }
-      if (active) setSourcePhone(formatPhoneNumber(phone));
+      const formatted = formatPhoneNumber(phone);
+      setSourcePhone(formatted);
+      if (userId) {
+        void cacheConversationSettings(userId, chatId, { sourcePhone: formatted, isMuted: muted }).catch(() => undefined);
+      }
     })();
     return () => { active = false; };
-  }, [chatId]);
+  }, [chatId, user?.id]);
 
   useEffect(() => {
     const profile = chatSettings?.profile;

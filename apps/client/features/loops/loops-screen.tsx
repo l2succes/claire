@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { FlatList, Modal, Pressable, RefreshControl, Text, TextInput, View } from 'react-native';
 import { Plus, X } from 'lucide-react-native';
 import { router } from 'expo-router';
@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { colors, mobileType, radius, space } from '@claire/design-system';
 import { MobileChip, MobileHeader, MobileIconButton, MobileState } from '../../components/mobile/claire-mobile';
 import type { LoopItem } from '../../services/loop-types';
+import { hydrateMobileCache, usesNativeMobileCache } from '../../services/mobile-cache';
 import { useAuthStore } from '../../stores/authStore';
 import { supabase } from '../../services/supabase';
 import { LoopsSkeleton } from '../../components/claire/skeleton';
@@ -45,7 +46,28 @@ export function LoopsScreen() {
   const [filter, setFilter] = useState<LoopFilter>('for_you');
   const [showCreate, setShowCreate] = useState(false);
   const [newLoop, setNewLoop] = useState('');
-  const query = useQuery({ queryKey: ['mobile-loops', user?.id], enabled: !!user?.id, queryFn: () => fetchLoops(user!.id), staleTime: 60_000 });
+  const loopsQueryKey = useMemo(() => ['mobile-loops', user?.id] as const, [user?.id]);
+  const query = useQuery({ queryKey: loopsQueryKey, enabled: !!user?.id, queryFn: () => fetchLoops(user!.id), staleTime: 60_000 });
+
+  // The bootstrap sync already writes loops to the local cache and hydrates
+  // them into a snapshot nobody read. Seed from it so returning to this tab
+  // paints immediately instead of waiting on Supabase, and let the query
+  // refresh behind the rendered list. Stale on purpose: a starting picture, not
+  // a fetch, so refetchOnMount still runs.
+  useEffect(() => {
+    if (!user?.id || !usesNativeMobileCache()) return;
+    let active = true;
+    void hydrateMobileCache(user.id)
+      .then((snapshot) => {
+        if (!active || !snapshot.loops.length) return;
+        if (queryClient.getQueryData(loopsQueryKey)) return;
+        queryClient.setQueryData(loopsQueryKey, snapshot.loops as unknown as LoopItem[], { updatedAt: 0 });
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [queryClient, loopsQueryKey, user?.id]);
   const patch = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: LoopItem['status'] }) => {
       const { data, error } = await supabase
