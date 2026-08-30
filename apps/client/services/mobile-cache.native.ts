@@ -221,13 +221,20 @@ export async function cachedConversationSettings(userId: string, chatId: string)
   }
 }
 
+/**
+ * Merges rather than replaces, because two owners write here: the settings
+ * store contributes category/profile/smartCards, and the conversation detail
+ * screen contributes the resolved phone number and mute state. A replacing
+ * write would let whichever ran last erase the other's half.
+ */
 export async function cacheConversationSettings(userId: string, chatId: string, settings: Record<string, unknown>): Promise<void> {
   if (!isNativeMobile) return;
   const db = await database(userId);
   if (!db) return;
+  const existing = (await cachedConversationSettings(userId, chatId)) || {};
   await db.runAsync(
     'INSERT INTO cache_conversation_settings(chat_id, payload, updated_at) VALUES (?, ?, ?) ON CONFLICT(chat_id) DO UPDATE SET payload = excluded.payload, updated_at = excluded.updated_at',
-    chatId, JSON.stringify(settings), new Date().toISOString(),
+    chatId, JSON.stringify({ ...existing, ...settings }), new Date().toISOString(),
   );
 }
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, SectionList, Text, View } from 'react-native';
 import { Check, ListFilter, Search } from 'lucide-react-native';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -104,6 +104,9 @@ export default function ContactsScreen() {
   const user = useAuthStore(state => state.user);
   const requestedIdentitySyncFor = useRef<string | null>(null);
   const peopleListRef = useRef<SectionList<PersonContact>>(null);
+  // The letter a pending scroll is aiming at, so a failed attempt can be
+  // retried once the rows around it have been measured.
+  const pendingJumpRef = useRef<number | null>(null);
   const debouncedSearchQuery = useDebouncedValue(searchQuery);
 
   useEffect(() => {
@@ -198,6 +201,43 @@ export default function ContactsScreen() {
   );
   const sections = useMemo(() => alphabetizedSections(contacts), [contacts]);
 
+  const jumpToSection = useCallback((sectionIndex: number) => {
+    pendingJumpRef.current = sectionIndex;
+    peopleListRef.current?.scrollToLocation({ sectionIndex, itemIndex: 0, animated: true, viewOffset: 8 });
+  }, []);
+
+  /**
+   * A SectionList can only scroll to a row it has already measured, and this
+   * list is long enough that most letters are far offscreen. Without this
+   * handler React Native throws an invariant instead of scrolling — which it
+   * did on every tap of the A–Z index, and went unnoticed only because the
+   * screen used to fail to load at all, so the index was never tappable.
+   *
+   * Jump to an estimated offset, which forces the rows around it to render, and
+   * retry the real scroll once. Bounded to a single retry: the estimate is
+   * close enough that a second failure means the target genuinely is not there.
+   */
+  const handleScrollToIndexFailed = useCallback(
+    (info: { index: number; averageItemLength: number }) => {
+      const pending = pendingJumpRef.current;
+      pendingJumpRef.current = null;
+      peopleListRef.current?.getScrollResponder()?.scrollTo({
+        y: Math.max(0, info.averageItemLength * info.index),
+        animated: false,
+      });
+      if (pending === null) return;
+      requestAnimationFrame(() => {
+        peopleListRef.current?.scrollToLocation({
+          sectionIndex: pending,
+          itemIndex: 0,
+          animated: true,
+          viewOffset: 8,
+        });
+      });
+    },
+    [],
+  );
+
   // Keep every supported platform visible. A zero-result Instagram filter is
   // useful feedback that the account has no synced Instagram conversations;
   // hiding it made that distinction impossible to see.
@@ -284,6 +324,7 @@ export default function ContactsScreen() {
           style={{ backgroundColor: colors.paper }}
           contentContainerStyle={{ paddingLeft: space[4], paddingRight: 30, paddingBottom: 104 }}
           stickySectionHeadersEnabled={false}
+          onScrollToIndexFailed={handleScrollToIndexFailed}
           ItemSeparatorComponent={() => <View style={{ height: 1, backgroundColor: colors.neutral[200] }} />}
           renderSectionHeader={({ section }) => (
             <View style={{ paddingTop: space[3], paddingBottom: space[1] }}>
@@ -324,7 +365,7 @@ export default function ContactsScreen() {
               accessibilityRole="button"
               accessibilityLabel={`Jump to ${section.title}`}
               hitSlop={4}
-              onPress={() => peopleListRef.current?.scrollToLocation({ sectionIndex, itemIndex: 0, animated: true, viewOffset: 8 })}
+              onPress={() => jumpToSection(sectionIndex)}
               style={{ minHeight: 15, minWidth: 20, alignItems: 'center', justifyContent: 'center' }}
             >
               <Text style={{ fontSize: 10, lineHeight: 12, fontWeight: '800', color: colors.neutral[600] }}>{section.title}</Text>

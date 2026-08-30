@@ -89,3 +89,31 @@ describe('conversation settings cache', () => {
     expect(cachedMock).not.toHaveBeenCalled();
   });
 });
+
+describe('cache payload ownership', () => {
+  it('the store write preserves the detail screen half, and vice versa', async () => {
+    // Two writers share one row: the store owns category/profile/smartCards,
+    // the conversation detail screen owns the resolved phone and mute state.
+    // A replacing write would let whichever ran last erase the other's half.
+    jest.resetModules();
+    jest.doMock('react-native', () => ({ Platform: { OS: 'web' } }));
+    const cache = jest.requireActual('../services/mobile-cache.web') as typeof import('../services/mobile-cache.web');
+
+    await cache.cacheConversationSettings('u', 'c', { category: 'personal', smartCards: [] });
+    await cache.cacheConversationSettings('u', 'c', { sourcePhone: '+1 555 0100', isMuted: true });
+
+    const merged = await cache.cachedConversationSettings('u', 'c');
+    expect(merged).toMatchObject({
+      category: 'personal',
+      sourcePhone: '+1 555 0100',
+      isMuted: true,
+    });
+
+    // And the store writing again keeps the header the detail screen resolved.
+    await cache.cacheConversationSettings('u', 'c', { category: 'business' });
+    expect(await cache.cachedConversationSettings('u', 'c')).toMatchObject({
+      category: 'business',
+      sourcePhone: '+1 555 0100',
+    });
+  });
+});

@@ -46,7 +46,8 @@ export async function cachedConversationSettings(userId: string, chatId: string)
 }
 export async function cacheConversationSettings(userId: string, chatId: string, settings: Record<string, unknown>): Promise<void> {
   const snapshot = await load(userId);
-  await persist(userId, { ...snapshot, conversationSettings: { ...(snapshot.conversationSettings || {}), [chatId]: settings } });
+  const existing = snapshot.conversationSettings?.[chatId] || {};
+  await persist(userId, { ...snapshot, conversationSettings: { ...(snapshot.conversationSettings || {}), [chatId]: { ...existing, ...settings } } });
 }
 export async function cachedContacts(userId: string): Promise<CachedContact[]> {
   return (await load(userId)).contacts || [];
