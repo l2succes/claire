@@ -14,6 +14,7 @@ import { PlatformAuthModal } from '../../components/PlatformAuthModal';
 import { PlatformIcon } from '../../components/PlatformIcon';
 import { Platform, PlatformStatus, PLATFORM_DISPLAY } from '../../types/platform';
 import { useHasAnyConnection, usePlatformStore } from '../../stores/platformStore';
+import { useAuthStore } from '../../stores/authStore';
 import { colors, mobileType, radius, space } from '@claire/design-system';
 
 const CONNECT_COPY: Record<Platform, string> = {
@@ -30,6 +31,7 @@ export default function LoginScreen() {
 
   const { connectedSessions, initialize, fetchConnectedSessions, isInitialized } = usePlatformStore();
   const hasConnection = useHasAnyConnection();
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
 
   useEffect(() => {
     if (!isInitialized) {
@@ -38,6 +40,15 @@ export default function LoginScreen() {
     }
     void fetchConnectedSessions();
   }, [fetchConnectedSessions, initialize, isInitialized]);
+
+  // Expo restores the last route after a Metro reload. Once the session and
+  // server-authoritative platform state are restored, onboarding must not keep
+  // an already-connected person on this setup screen.
+  useEffect(() => {
+    if (isAuthenticated && isInitialized && hasConnection) {
+      router.replace('/(tabs)/dashboard');
+    }
+  }, [hasConnection, isAuthenticated, isInitialized]);
 
   const handlePlatformSelect = (platform: Platform) => {
     setSelectedPlatform(platform);

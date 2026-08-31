@@ -52,13 +52,14 @@ import { operationsTelemetry } from './services/operations-telemetry';
 import { autoReplyEngine } from './services/auto-reply-engine';
 import { notificationDeliveryService } from './services/notification-delivery';
 import { isAiProcessingEnabled } from './services/ai-policy';
-import { Platform, PlatformStatus } from './adapters/types';
+import { MessageContentType, Platform, PlatformStatus } from './adapters/types';
 import { whatsappAdapter } from './adapters/whatsapp';
 import { telegramAdapter } from './adapters/telegram';
 import { imessageAdapter } from './adapters/imessage';
 import { instagramAdapter } from './adapters/instagram';
 import { MatrixBridgeAdapter } from './adapters/matrix';
 import { mockBridgeAdapter } from './adapters/mock';
+import { transcodeVoiceToM4aOnce } from './services/audio-transcoder';
 
 // Initialise Sentry as early as possible (no-op when SENTRY_DSN is unset)
 initSentry();
@@ -76,6 +77,8 @@ async function notifyIncomingMessage(message: {
   chatId: string;
   platform: string;
   senderName?: string;
+  chatName?: string;
+  isGroup?: boolean;
   content: string;
   messageId: string;
 }): Promise<void> {
@@ -195,15 +198,25 @@ app.get('/media/:server/:mediaId', async (req, res) => {
       return res.status(upstream.status).json({ error: 'Media not found' });
     }
     const contentType = upstream.headers.get('content-type') || 'application/octet-stream';
+    const buffer = Buffer.from(await upstream.arrayBuffer());
+    if (req.query.format === 'm4a') {
+      if (!/(?:audio\/(?:ogg|opus)|application\/ogg)/i.test(contentType)) {
+        return res.status(415).json({ error: 'M4A conversion is only available for Ogg/Opus audio' });
+      }
+      const converted = await transcodeVoiceToM4aOnce(`${server}/${mediaId}:m4a`, buffer);
+      res.setHeader('Content-Type', 'audio/mp4');
+      res.setHeader('Content-Disposition', 'inline; filename="voice-note.m4a"');
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      return res.send(converted);
+    }
     res.setHeader('Content-Type', contentType);
     // Matrix media IDs are immutable. Cache aggressively so scrolling an
     // inbox or reopening a chat does not re-download every attachment.
     res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-    const buffer = await upstream.arrayBuffer();
-    return res.send(Buffer.from(buffer));
+    return res.send(buffer);
   } catch (err) {
     logger.error('Media proxy error:', err);
-    return res.status(500).json({ error: 'Failed to fetch media' });
+    return res.status(500).json({ error: 'Failed to prepare media' });
   }
 });
 
@@ -496,7 +509,7 @@ async function initializePlatforms() {
           },
           { onConflict: 'user_id,platform,platform_chat_id' }
         )
-        .select('id')
+        .select('id, name, is_group')
         .single();
 
       if (chatError || !chat) {
@@ -667,6 +680,37 @@ async function initializePlatforms() {
           errorClass: 'dependency',
         });
       } else {
+        // History repair replays immutable Matrix events. The normal insert is
+        // intentionally conflict-ignoring so it cannot duplicate unread work,
+        // but older audio rows may predate MSC1767/MSC3245 persistence. Repair
+        // just their media classification and metadata when the bridge supplies
+        // it, letting realtime clients pick up the recovered duration/waveform.
+        const repairedAudio = message.platformMetadata?.audio;
+        if (
+          isBackfill &&
+          repairedAudio &&
+          (message.contentType === MessageContentType.AUDIO ||
+            message.contentType === MessageContentType.VOICE)
+        ) {
+          const { error: repairError } = await supabase
+            .from('messages')
+            .update({
+              type: message.contentType,
+              content_type: message.contentType,
+              metadata: message.platformMetadata,
+              media_mime_type:
+                (message.platformMetadata?.mediaInfo as { mimetype?: string } | undefined)
+                  ?.mimetype || null,
+            })
+            .eq('user_id', message.userId)
+            .eq('whatsapp_id', message.platformMessageId);
+          if (repairError) {
+            logger.debug('Could not repair historical voice metadata', {
+              platform: message.platform,
+            });
+          }
+        }
+
         logger.debug('Platform message persisted', { platform: message.platform });
 
         // Resolve replies which arrived before this source message. The update
@@ -713,6 +757,8 @@ async function initializePlatforms() {
             chatId: chat.id,
             platform: message.platform,
             senderName: message.senderName,
+            chatName: chat.name || chatDisplayName,
+            isGroup: chat.is_group,
             content: message.content,
             messageId: savedMsg.id,
           }).catch((error) =>

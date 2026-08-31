@@ -120,6 +120,11 @@ export interface MatrixMessageContent {
     duration?: number;
     thumbnail_url?: string;
   };
+  'org.matrix.msc1767.audio'?: {
+    duration?: number;
+    waveform?: number[];
+  };
+  'org.matrix.msc3245.voice'?: Record<string, never>;
   geo_uri?: string;
   'm.relates_to'?: {
     'm.in_reply_to'?: {

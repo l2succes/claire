@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, SectionList, Text, View } from 'react-native';
 import { Check, ListFilter, Search } from 'lucide-react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { colors, mobileType, space, useIsDesktopLayout } from '@claire/design-system';
 import { useAuthStore } from '../../stores/authStore';
 import { MobileAvatar, MobileChip, MobileHeader, MobileIconButton, MobileSearchField, MobileState } from '../../components/mobile/claire-mobile';
@@ -10,6 +10,7 @@ import { BottomSheet } from '../../components/mobile/bottom-sheet';
 import { PlatformIcon, PlatformName } from '../../components/PlatformIcon';
 import { Platform, platformLabel } from '../../types/platform';
 import { PeopleSkeleton } from '../../components/claire/skeleton';
+import { cachedContacts, replaceCachedContacts, usesNativeMobileCache } from '../../services/mobile-cache';
 import { contactsApi, type PeopleFilter, type PersonContact } from '../../services/contacts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { displayPersonDetails, displayPersonName } from '../../services/contact-display';
@@ -103,27 +104,72 @@ export default function ContactsScreen() {
   const user = useAuthStore(state => state.user);
   const requestedIdentitySyncFor = useRef<string | null>(null);
   const peopleListRef = useRef<SectionList<PersonContact>>(null);
+  // The letter a pending scroll is aiming at, so a failed attempt can be
+  // retried once the rows around it have been measured.
+  const pendingJumpRef = useRef<number | null>(null);
   const debouncedSearchQuery = useDebouncedValue(searchQuery);
 
   useEffect(() => {
     setSearchQuery(params.q || params.query || '');
   }, [params.q, params.query]);
 
+  const queryClient = useQueryClient();
+  const peopleQueryKey = useMemo(
+    () => ['people', user?.id, debouncedSearchQuery, platform, filter] as const,
+    [user?.id, debouncedSearchQuery, platform, filter],
+  );
+
+  // People still needs the whole directory in memory — the A–Z index jumps to a
+  // letter, so a partially loaded list would send "J" somewhere arbitrary. What
+  // changes is where it comes from. The directory barely moves between visits,
+  // so read it from the local cache and let the network refresh happen behind
+  // the already-rendered list rather than in front of an empty one.
   const peopleQuery = useQuery({
-    queryKey: ['people', user?.id, debouncedSearchQuery, platform, filter],
+    queryKey: peopleQueryKey,
     enabled: !!user?.id,
-    // The API and bridge sync share a 10k maximum. Loading that user-scoped
-    // directory as one virtualized list is what makes an A–Z index truthful:
-    // tapping J never jumps only within whichever page happened to be loaded.
-    queryFn: () => contactsApi.list({
-      limit: 10_000,
-      query: debouncedSearchQuery,
-      platform,
-      filter,
-    }),
-    // A foreground return should always pick up newly learned names/numbers.
-    refetchOnMount: 'always',
+    // The cache makes a revisit free; this only decides how long before a
+    // background refresh is worth the round trip.
+    staleTime: 5 * 60_000,
+    gcTime: 30 * 60_000,
+    queryFn: async () => {
+      const contacts = await contactsApi.listAll({
+        query: debouncedSearchQuery,
+        platform,
+        filter,
+      });
+      // Only the unfiltered directory is worth persisting: a search or filter
+      // result is a slice, and caching it would let a later cold open render
+      // that slice as though it were everyone.
+      if (user?.id && !debouncedSearchQuery && platform === 'all' && filter === 'all') {
+        void replaceCachedContacts(user.id, contacts as never).catch(() => undefined);
+      }
+      return { contacts, nextOffset: null };
+    },
   });
+
+  // Seed from disk so the list paints on the first frame. Guarded on the query
+  // having no data yet, so a completed network refresh is never overwritten by
+  // a slower cache read.
+  useEffect(() => {
+    if (!user?.id || !usesNativeMobileCache()) return;
+    if (debouncedSearchQuery || platform !== 'all' || filter !== 'all') return;
+    let active = true;
+    void cachedContacts(user.id)
+      .then((rows) => {
+        if (!active || !rows.length) return;
+        if (queryClient.getQueryData(peopleQueryKey)) return;
+        queryClient.setQueryData(
+          peopleQueryKey,
+          { contacts: rows as unknown as PersonContact[], nextOffset: null },
+          // Stale on purpose: this is a starting picture, not a fresh fetch.
+          { updatedAt: 0 },
+        );
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [queryClient, peopleQueryKey, user?.id, debouncedSearchQuery, platform, filter]);
 
   useEffect(() => {
     if (!user?.id || requestedIdentitySyncFor.current === user.id) return;
@@ -154,6 +200,43 @@ export default function ContactsScreen() {
     [peopleQuery.data],
   );
   const sections = useMemo(() => alphabetizedSections(contacts), [contacts]);
+
+  const jumpToSection = useCallback((sectionIndex: number) => {
+    pendingJumpRef.current = sectionIndex;
+    peopleListRef.current?.scrollToLocation({ sectionIndex, itemIndex: 0, animated: true, viewOffset: 8 });
+  }, []);
+
+  /**
+   * A SectionList can only scroll to a row it has already measured, and this
+   * list is long enough that most letters are far offscreen. Without this
+   * handler React Native throws an invariant instead of scrolling — which it
+   * did on every tap of the A–Z index, and went unnoticed only because the
+   * screen used to fail to load at all, so the index was never tappable.
+   *
+   * Jump to an estimated offset, which forces the rows around it to render, and
+   * retry the real scroll once. Bounded to a single retry: the estimate is
+   * close enough that a second failure means the target genuinely is not there.
+   */
+  const handleScrollToIndexFailed = useCallback(
+    (info: { index: number; averageItemLength: number }) => {
+      const pending = pendingJumpRef.current;
+      pendingJumpRef.current = null;
+      peopleListRef.current?.getScrollResponder()?.scrollTo({
+        y: Math.max(0, info.averageItemLength * info.index),
+        animated: false,
+      });
+      if (pending === null) return;
+      requestAnimationFrame(() => {
+        peopleListRef.current?.scrollToLocation({
+          sectionIndex: pending,
+          itemIndex: 0,
+          animated: true,
+          viewOffset: 8,
+        });
+      });
+    },
+    [],
+  );
 
   // Keep every supported platform visible. A zero-result Instagram filter is
   // useful feedback that the account has no synced Instagram conversations;
@@ -241,6 +324,7 @@ export default function ContactsScreen() {
           style={{ backgroundColor: colors.paper }}
           contentContainerStyle={{ paddingLeft: space[4], paddingRight: 30, paddingBottom: 104 }}
           stickySectionHeadersEnabled={false}
+          onScrollToIndexFailed={handleScrollToIndexFailed}
           ItemSeparatorComponent={() => <View style={{ height: 1, backgroundColor: colors.neutral[200] }} />}
           renderSectionHeader={({ section }) => (
             <View style={{ paddingTop: space[3], paddingBottom: space[1] }}>
@@ -281,7 +365,7 @@ export default function ContactsScreen() {
               accessibilityRole="button"
               accessibilityLabel={`Jump to ${section.title}`}
               hitSlop={4}
-              onPress={() => peopleListRef.current?.scrollToLocation({ sectionIndex, itemIndex: 0, animated: true, viewOffset: 8 })}
+              onPress={() => jumpToSection(sectionIndex)}
               style={{ minHeight: 15, minWidth: 20, alignItems: 'center', justifyContent: 'center' }}
             >
               <Text style={{ fontSize: 10, lineHeight: 12, fontWeight: '800', color: colors.neutral[600] }}>{section.title}</Text>

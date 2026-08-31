@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Pressable, ScrollView } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
 import { Text, View, useMedia } from '@tamagui/core';
 import { Circle, PenLine, Search, Sparkles } from 'lucide-react-native';
 import { colors, type } from '@claire/design-system';
@@ -10,6 +11,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { MobileSearchField } from '../../components/mobile/claire-mobile';
 import { useInboxMessages, type InboxMessage } from '../../hooks/useInboxMessages';
 import { InboxConversationRow } from '../inbox/inbox-screen';
+import { chatTimelineOptions, warmChatTimelines } from '../../hooks/useChatTimeline';
 import { Platform } from '../../types/platform';
 import { PlatformBadge } from '../../components/PlatformIcon';
 
@@ -23,6 +25,7 @@ export function DesktopInboxWorkspace({ selectedChatId, conversation }: { select
   const user = useAuthStore((state) => state.user);
   const params = useLocalSearchParams<{ filter?: string }>();
   const inbox = useInboxMessages(user?.id, { filter: params.filter === 'needs_reply' ? 'needs_reply' : 'all' });
+  const queryClient = useQueryClient();
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<'all' | 'unread' | 'needs_reply'>(params.filter === 'needs_reply' ? 'needs_reply' : 'all');
   const [platform, setPlatform] = useState<Platform | 'all'>('all');
@@ -39,6 +42,17 @@ export function DesktopInboxWorkspace({ selectedChatId, conversation }: { select
 
   const chatRoute = (message: InboxMessage) => ({ pathname: '/chat/[chatId]' as const, params: { chatId: message.chat_id, contact_name: message.contact_name || '', chat_name: message.chat_name || '', platform: message.platform || '', is_group: message.is_group ? '1' : '0' } });
   const open = (message: InboxMessage) => router.push(chatRoute(message));
+  const warmChat = (message: InboxMessage) => {
+    void queryClient.prefetchQuery(chatTimelineOptions(queryClient, user?.id, message.chat_id));
+  };
+
+  // Same warm-up as the phone inbox, keyed on the first page's identity so
+  // feed refetches and realtime patches do not re-trigger it.
+  const firstPageKey = inbox.messages.slice(0, 12).map((message) => message.chat_id).join(',');
+  useEffect(() => {
+    if (!user?.id || !firstPageKey) return;
+    void warmChatTimelines(queryClient, user.id, firstPageKey.split(','));
+  }, [queryClient, user?.id, firstPageKey]);
 
   useEffect(() => {
     host.reportActiveConversation(selectedChatId || null);
@@ -47,8 +61,17 @@ export function DesktopInboxWorkspace({ selectedChatId, conversation }: { select
 
   // The desktop workspace is a master/detail view, not an interstitial. Its
   // first available row therefore opens directly into the conversation route.
+  //
+  // Guarded by target rather than by the effect's dependencies: on /(tabs)/messages
+  // this renders with no selectedChatId at all, and `selected` is derived from
+  // inbox.messages, so every feed refetch rebuilds it and would re-fire the
+  // replace — repeatedly yanking the user back to the first row.
+  const autoOpenedRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!selectedChatId && selected && !inbox.loading) router.replace(chatRoute(selected));
+    if (selectedChatId || !selected || inbox.loading) return;
+    if (autoOpenedRef.current === selected.chat_id) return;
+    autoOpenedRef.current = selected.chat_id;
+    router.replace(chatRoute(selected));
   }, [inbox.loading, selected, selectedChatId]);
 
   return (
@@ -68,7 +91,7 @@ export function DesktopInboxWorkspace({ selectedChatId, conversation }: { select
           </View>
           <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingTop: 3, paddingBottom: 24 }}>
             <View flexDirection="row" justifyContent="space-between" paddingHorizontal="$3" paddingVertical="$1"><Text style={{ ...type.monoLabel, fontSize: 9, color: colors.neutral[600] }}>RECENT</Text><Text style={{ ...type.monoLabel, fontSize: 9, color: colors.neutral[600] }}>{messages.length}</Text></View>
-            {messages.map((message) => <InboxConversationRow key={message.chat_id} message={message} layout="desktop" active={message.chat_id === selected?.chat_id} onPress={() => open(message)} />)}
+            {messages.map((message) => <InboxConversationRow key={message.chat_id} message={message} layout="desktop" active={message.chat_id === selected?.chat_id} onPress={() => open(message)} onPressIn={() => warmChat(message)} />)}
             {!inbox.loading && inbox.messages.length === 0 ? <Text padding="$4" color="$neutral600">No conversations yet.</Text> : null}
           </ScrollView>
         </View>

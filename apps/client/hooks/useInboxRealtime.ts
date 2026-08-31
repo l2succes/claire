@@ -9,6 +9,7 @@ import {
   patchInboxRealtimeMessage,
   type InboxRealtimeRow,
 } from './useInboxMessages';
+import { patchChatTimelineMessage } from './useChatTimeline';
 import { Platform } from '../types/platform';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001';
@@ -73,9 +74,14 @@ export function useInboxRealtime(userId?: string) {
         );
       }
       patchInboxRealtimeMessage(queryClient, userId, message);
+      // This is what makes a conversation current *before* the user opens it.
+      // The row is passed raw rather than as an InboxRealtimeRow because that
+      // type omits the media and reply columns the payload actually carries.
+      patchChatTimelineMessage(queryClient, userId, row as Record<string, unknown>);
     });
     channel.on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages', filter: `user_id=eq.${userId}` }, ({ new: row }) => {
       patchInboxRealtimeMessage(queryClient, userId, row as InboxRealtimeRow);
+      patchChatTimelineMessage(queryClient, userId, row as Record<string, unknown>);
     });
     channel.on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'chats', filter: `user_id=eq.${userId}` }, ({ new: row }) => {
       const chat = row as { id: string; platform?: Platform; unread_count?: number; is_pinned?: boolean };

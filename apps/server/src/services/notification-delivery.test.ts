@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'bun:test';
-import { isInQuietHours } from './notification-delivery';
+import { isInQuietHours, shouldNotifyConversation } from './notification-delivery';
 import { ExpoNotificationProvider } from './notification-providers';
 
 describe('notification eligibility', () => {
+  it('blocks a muted conversation while leaving unmuted conversations eligible', () => {
+    expect(shouldNotifyConversation(true, { notify_messages: true }, true)).toBe(false);
+    expect(shouldNotifyConversation(true, { notify_messages: true }, false)).toBe(true);
+    expect(shouldNotifyConversation(true, { notify_messages: true }, null)).toBe(true);
+  });
+
   it('handles quiet hours that cross midnight in the device timezone', () => {
     const options = { quiet_hours_enabled: true, quiet_hours_start: '22:00', quiet_hours_end: '08:00' };
     expect(isInQuietHours(options, 'UTC', new Date('2026-08-15T23:00:00Z'))).toBe(true);

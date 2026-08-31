@@ -27,6 +27,7 @@ RUN apt-get update && apt-get install -y \
     curl \
     build-essential \
     python3 \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \

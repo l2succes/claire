@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Modal, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
-import { PenSquare, Pin, Search, Sparkles, X } from 'lucide-react-native';
+import { CheckCircle2, PenSquare, Pin, Search, Sparkles, X } from 'lucide-react-native';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { colors, mobileType, radius, space, useIsDesktopLayout } from '@claire/design-system';
 import { MobileChip, MobileHeader, MobileIconButton, MobileSearchField, MobileState, SectionLabel } from '../../components/mobile/claire-mobile';
 import { useInboxMessages, type InboxMessage } from '../../hooks/useInboxMessages';
+import { chatTimelineOptions, warmChatTimelines } from '../../hooks/useChatTimeline';
 import { useAuthStore } from '../../stores/authStore';
 import { usePlatformStore } from '../../stores/platformStore';
 import { supabase, type DbRow } from '../../services/supabase';
@@ -66,6 +67,7 @@ export function InboxConversationRow({
   active = false,
   layout = 'mobile',
   onPress,
+  onPressIn,
   onLongPress,
 }: {
   message: InboxMessage;
@@ -73,6 +75,8 @@ export function InboxConversationRow({
   active?: boolean;
   layout?: 'mobile' | 'desktop';
   onPress: () => void;
+  /** Fires on touch-down, ahead of navigation — used to warm the transcript. */
+  onPressIn?: () => void;
   onLongPress?: () => void;
 }) {
   const [imageFailed, setImageFailed] = useState(false);
@@ -93,6 +97,7 @@ export function InboxConversationRow({
       accessibilityRole="button"
       accessibilityLabel={`${name}${message.unread_count ? `, ${message.unread_count} unread` : ''}`}
       onPress={onPress}
+      onPressIn={onPressIn}
       onLongPress={onLongPress}
       style={{
         height: rowHeight,
@@ -119,23 +124,30 @@ export function InboxConversationRow({
       </View>
 
       <View style={{ position: 'absolute', top: pinned ? 20 : desktop ? 13 : 14, left: inset + avatarSize + (desktop ? 9 : 14), right: inset, gap: desktop ? 1 : 3 }}>
-        <Text maxFontSizeMultiplier={1} selectable numberOfLines={1} style={{ paddingRight: 54, fontFamily: mobileType.body.fontFamily, fontSize: desktop ? 14 : 17, lineHeight: desktop ? 17 : 21, fontWeight: message.unread_count ? '700' : '600', color: colors.ink }}>{name}</Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingRight: message.unread_count ? 36 : 0 }}>
-          {preview.thumbnailUri && !thumbFailed ? (
-            <Image
-              source={{ uri: preview.thumbnailUri }}
-              style={{ width: 26, height: 26, borderRadius: 5, backgroundColor: colors.neutral[100] }}
-              contentFit="cover"
-              transition={120}
-              onError={() => setThumbFailed(true)}
-              testID={`inbox-preview-thumb-${message.chat_id}`}
-            />
-          ) : null}
-          <Text maxFontSizeMultiplier={1} selectable numberOfLines={1} style={{ flex: 1, fontFamily: mobileType.body.fontFamily, fontSize: desktop ? 12 : 14, lineHeight: desktop ? 15 : 19, color: colors.neutral[600], fontWeight: message.unread_count ? '500' : '400' }}>{preview.label}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Text maxFontSizeMultiplier={1} selectable numberOfLines={1} style={{ flex: 1, fontFamily: mobileType.body.fontFamily, fontSize: desktop ? 14 : 17, lineHeight: desktop ? 17 : 21, fontWeight: message.unread_count ? '700' : '600', color: colors.ink }}>{name}</Text>
+          <Text maxFontSizeMultiplier={1} selectable style={{ fontFamily: mobileType.monoLabel.fontFamily, fontSize: desktop ? 9 : 11, lineHeight: desktop ? 12 : 14, letterSpacing: 0.4, color: colors.neutral[400] }}>{formatInboxTimestamp(message.timestamp)}</Text>
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            {preview.thumbnailUri && !thumbFailed ? (
+              <Image
+                source={{ uri: preview.thumbnailUri }}
+                style={{ width: 26, height: 26, borderRadius: 5, backgroundColor: colors.neutral[100] }}
+                contentFit="cover"
+                transition={120}
+                onError={() => setThumbFailed(true)}
+                testID={`inbox-preview-thumb-${message.chat_id}`}
+              />
+            ) : null}
+            <Text maxFontSizeMultiplier={1} selectable numberOfLines={1} style={{ flex: 1, fontFamily: mobileType.body.fontFamily, fontSize: desktop ? 12 : 14, lineHeight: desktop ? 15 : 19, color: colors.neutral[600], fontWeight: message.unread_count ? '500' : '400' }}>{preview.label}</Text>
+          </View>
+          {(message.has_open_loop || message.unread_count) ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            {message.has_open_loop ? <View accessibilityLabel="Open loop in this conversation" style={{ width: desktop ? 18 : 22, height: desktop ? 18 : 22, borderRadius: 11, backgroundColor: colors.blush, alignItems: 'center', justifyContent: 'center' }}><CheckCircle2 size={desktop ? 12 : 15} color={colors.ink} strokeWidth={2.2} /></View> : null}
+            {message.unread_count ? <View style={{ minWidth: desktop ? 18 : 22, height: desktop ? 18 : 22, paddingHorizontal: 4, borderRadius: 11, backgroundColor: colors.lime, alignItems: 'center', justifyContent: 'center' }}><Text maxFontSizeMultiplier={1} style={{ ...mobileType.label, fontSize: desktop ? 9 : undefined, color: colors.ink, fontVariant: ['tabular-nums'] }}>{message.unread_count}</Text></View> : null}
+          </View> : null}
         </View>
       </View>
-      <Text maxFontSizeMultiplier={1} selectable style={{ position: 'absolute', right: inset, top: pinned ? 21 : desktop ? 13 : 16, fontFamily: mobileType.monoLabel.fontFamily, fontSize: desktop ? 9 : 11, lineHeight: desktop ? 12 : 14, letterSpacing: 0.4, color: colors.neutral[400] }}>{formatInboxTimestamp(message.timestamp)}</Text>
-      {message.unread_count ? <View style={{ position: 'absolute', right: inset, bottom: pinned ? 16 : desktop ? 10 : 14, minWidth: desktop ? 18 : 22, height: desktop ? 18 : 22, paddingHorizontal: 4, borderRadius: 11, backgroundColor: colors.lime, alignItems: 'center', justifyContent: 'center' }}><Text maxFontSizeMultiplier={1} style={{ ...mobileType.label, fontSize: desktop ? 9 : undefined, color: colors.ink, fontVariant: ['tabular-nums'] }}>{message.unread_count}</Text></View> : null}
     </Pressable>
   );
 }
@@ -191,6 +203,7 @@ export function InboxScreen() {
   const [locallySnoozed, setLocallySnoozed] = useState<Set<string>>(new Set());
 
   const inbox = useInboxMessages(user?.id, { search: debouncedQuery, filter, platform });
+  const queryClient = useQueryClient();
 
   // Changing a filter replaces the result set, so bring the viewport with it —
   // otherwise the list stays scrolled where the previous, longer result set
@@ -230,6 +243,22 @@ export function InboxScreen() {
     pathname: '/chat/[chatId]',
     params: { chatId: message.chat_id, contact_name: message.contact_name || '', chat_name: message.chat_name || '', platform: message.platform || '', is_group: message.is_group ? '1' : '0' },
   }), []);
+
+  // Touch-down to navigation commit is a couple of hundred milliseconds of
+  // animation that were previously doing nothing. prefetchQuery honours
+  // staleTime, so a repeat press or an already-warm chat costs nothing.
+  const warmChat = useCallback((message: InboxMessage) => {
+    void queryClient.prefetchQuery(chatTimelineOptions(queryClient, user?.id, message.chat_id));
+  }, [queryClient, user?.id]);
+
+  // Hold the most recent conversations warm so even a first-ever open has
+  // something to paint. Keyed on the first page's identity rather than on every
+  // feed update, so scrolling and realtime patches do not re-trigger it.
+  const firstPageKey = inbox.messages.slice(0, 12).map(message => message.chat_id).join(',');
+  useEffect(() => {
+    if (!user?.id || !firstPageKey) return;
+    void warmChatTimelines(queryClient, user.id, firstPageKey.split(','));
+  }, [queryClient, user?.id, firstPageKey]);
 
   const snooze = async (minutes: number) => {
     const target = snoozeTarget;
@@ -336,7 +365,7 @@ export function InboxScreen() {
         testID="messages-list"
         data={displayedMessages}
         keyExtractor={item => item.conversation_key}
-        renderItem={({ item }) => <InboxConversationRow message={item} onPress={() => openChat(item)} onLongPress={() => setSnoozeTarget(item)} />}
+        renderItem={({ item }) => <InboxConversationRow message={item} onPress={() => openChat(item)} onPressIn={() => warmChat(item)} onLongPress={() => setSnoozeTarget(item)} />}
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{ paddingBottom: 156 }}
         onEndReached={() => {

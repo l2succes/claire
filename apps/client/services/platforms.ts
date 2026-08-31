@@ -7,6 +7,7 @@
 
 import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios';
 import { supabase } from './supabase';
+import { clientSafeMessage } from './api-errors';
 import {
   Platform,
   PlatformStatus,
@@ -104,6 +105,7 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
+
 // Handle response errors
 api.interceptors.response.use(
   (response) => response,
@@ -118,12 +120,7 @@ api.interceptors.response.use(
       }
     }
 
-    const message = error.response?.data?.error
-      || error.response?.data?.message
-      || error.message
-      || 'An unexpected error occurred';
-
-    return Promise.reject(new Error(message));
+    return Promise.reject(new Error(clientSafeMessage(error)));
   }
 );
 
@@ -302,7 +299,7 @@ export const platformsApi = {
     platform: Platform,
     sessionId: string,
     chatId: string,
-    voice: { uri: string; mimeType: string; durationSeconds: number },
+    voice: { uri: string; mimeType: string; durationMs: number; waveform: number[] },
     replyToMessageId?: string
   ): Promise<{ success: boolean; message: unknown }> {
     const localFile = await fetch(voice.uri);
@@ -315,8 +312,18 @@ export const platformsApi = {
       `/platforms/${platform}/voice`,
       audio,
       {
-        params: { sessionId, chatId, replyToMessageId, durationSeconds: voice.durationSeconds },
-        headers: { 'Content-Type': voice.mimeType },
+        params: {
+          sessionId,
+          chatId,
+          replyToMessageId,
+          // Keep the legacy parameter during a server-first rolling deploy.
+          durationSeconds: voice.durationMs / 1000,
+        },
+        headers: {
+          'Content-Type': voice.mimeType,
+          'X-Claire-Audio-Duration-Ms': String(Math.max(0, Math.round(voice.durationMs))),
+          'X-Claire-Audio-Waveform': voice.waveform.slice(0, 128).join(','),
+        },
       }
     );
     return response.data;

@@ -136,9 +136,6 @@ function ParticipantRow({ participant }: { participant: LoopParticipant }) {
       <Text style={{ ...mobileType.bodySmall, flex: 1, color: colors.ink }}>
         {participant.is_self ? 'You' : participant.display_name}
       </Text>
-      {participant.role === 'owner' ? (
-        <Text style={{ ...mobileType.monoLabel, color: colors.neutral[600] }}>OWNER</Text>
-      ) : null}
     </View>
   );
 }

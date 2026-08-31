@@ -38,6 +38,7 @@ import {
   upsertLoopParticipants,
 } from './loop-store';
 import { resolveSelfIdentity, isWeakIdentity } from './identity';
+import { calculateLoopPriority } from './loop-priority';
 
 export type DetectionMode = 'queue' | 'inline' | 'off';
 
@@ -61,6 +62,13 @@ export interface DetectionResult {
   provider: string | null;
 }
 
+export interface DetectionRunOptions {
+  /** A bounded historical slice selected by a backfill runner. */
+  messageIds?: string[];
+  /** Historical slices must not move the live cursor until the scan finishes. */
+  advanceCursor?: boolean;
+}
+
 const EMPTY_RESULT: DetectionResult = {
   ran: false,
   skipReason: null,
@@ -82,14 +90,21 @@ const EMPTY_RESULT: DetectionResult = {
  * cursor is only advanced on a pass that actually completed, so a transient
  * model outage means the window is retried rather than skipped.
  */
-export async function detectLoopsForChat(userId: string, chatId: string): Promise<DetectionResult> {
+export async function detectLoopsForChat(
+  userId: string,
+  chatId: string,
+  options: DetectionRunOptions = {},
+): Promise<DetectionResult> {
   if (detectionMode() === 'off') {
     return { ...EMPTY_RESULT, skipReason: 'detection_mode_off' };
   }
 
   let context: LoopContext | null;
   try {
-    context = await buildLoopContext(userId, chatId);
+    context = await buildLoopContext(userId, chatId, {
+      messageIds: options.messageIds,
+      treatWindowAsDelta: !!options.messageIds,
+    });
   } catch (error) {
     logger.warn('[loops] context build failed', {
       chatId,
@@ -113,7 +128,9 @@ export async function detectLoopsForChat(userId: string, chatId: string): Promis
   if (!gate.run) {
     // Still advance the cursor: these messages have been considered and must not
     // be re-read forever. `producedOps: false` feeds the backoff.
-    await advanceCursor(userId, chatId, context.cursorTimestamp, context.cursorMessageId, false, gate.skipReason ?? 'skip');
+    if (options.advanceCursor !== false) {
+      await advanceCursor(userId, chatId, context.cursorTimestamp, context.cursorMessageId, false, gate.skipReason ?? 'skip');
+    }
     return { ...EMPTY_RESULT, gate, skipReason: gate.skipReason };
   }
 
@@ -150,9 +167,19 @@ export async function detectLoopsForChat(userId: string, chatId: string): Promis
       listKey: 'ops',
       schemaName: 'loop_operations',
       schemaDescription: 'Operations that bring open loops in line with the transcript.',
+      // On reasoning models the cap includes internal work. Leave room for a
+      // complete JSON operation list rather than truncating before emission.
+      maxOutputTokens: 3_500,
     });
 
-    ops = response.items;
+    ops = response.items.filter((op) => {
+      if (op.op !== 'create') return true;
+      const title = normalizeLoopText(op.title);
+      const summary = normalizeLoopText(op.state_summary);
+      const usable = Boolean(title && summary && title !== summary);
+      if (!usable) logger.warn('[loops] discarded create with non-distinct summary', { chatId });
+      return usable;
+    });
     inputTokens = response.inputTokens;
     outputTokens = response.outputTokens;
     provider = response.provider;
@@ -199,6 +226,16 @@ export async function detectLoopsForChat(userId: string, chatId: string): Promis
 
     const evidence = resolveEvidence(op.evidence_refs, context.window);
     const newest = evidence[evidence.length - 1];
+    const priority = calculateLoopPriority({
+      status: outcome.status,
+      visibility: outcome.visibility,
+      owner: op.owner,
+      state: op.state,
+      deadline: normalizeDeadline(op.deadline),
+      confidence: op.confidence,
+      relevance: outcome.relevance.score,
+      lastEvidenceAt: newest?.at ?? null,
+    });
 
     const stored = await createLoop({
       userId,
@@ -229,6 +266,9 @@ export async function detectLoopsForChat(userId: string, chatId: string): Promis
       suppressedReason: outcome.relevance.suppressedReason,
       dedupeKey: outcome.dedupeKey,
       confidence: op.confidence,
+      requester: op.requester,
+      priorityScore: priority.score,
+      priorityBreakdown: priority.breakdown,
     });
 
     if (!stored) continue;
@@ -251,7 +291,7 @@ export async function detectLoopsForChat(userId: string, chatId: string): Promis
       await upsertLoopParticipants(
         stored.id,
         userId,
-        buildParticipants(op.participants, context, op.owner_name ?? null),
+        buildParticipants(op.participants, context, op.owner, op.owner_name ?? null),
       );
     } else {
       // Lost a race, or the same intent restated: fold it into the live loop.
@@ -260,6 +300,10 @@ export async function detectLoopsForChat(userId: string, chatId: string): Promis
         userId,
         stateSummary: op.state_summary,
         threadState: op.state,
+        owner: op.owner,
+        requester: op.requester,
+        deadline: normalizeDeadline(op.deadline),
+        deadlinePrecision: op.deadline_precision,
         latestMessageId: newest?.id ?? null,
         lastEvidenceAt: newest?.at ?? null,
         confidence: op.confidence,
@@ -292,6 +336,7 @@ export async function detectLoopsForChat(userId: string, chatId: string): Promis
       threadState: op.state ?? null,
       status: op.status ?? null,
       owner: op.owner ?? null,
+      requester: op.requester ?? null,
       deadline: op.deadline === undefined ? undefined : normalizeDeadline(op.deadline),
       deadlinePrecision: op.deadline_precision ?? null,
       latestMessageId: newest?.id ?? null,
@@ -350,7 +395,9 @@ export async function detectLoopsForChat(userId: string, chatId: string): Promis
   }
 
   const producedOps = result.created + result.updated + result.closed + result.suppressed > 0;
-  await advanceCursor(userId, chatId, context.cursorTimestamp, context.cursorMessageId, producedOps, 'ran');
+  if (options.advanceCursor !== false) {
+    await advanceCursor(userId, chatId, context.cursorTimestamp, context.cursorMessageId, producedOps, 'ran');
+  }
 
   logger.info('[loops] detection pass', {
     chatId,
@@ -386,22 +433,33 @@ function normalizeDeadline(value: string | null | undefined): string | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
 }
 
+function normalizeLoopText(value: string): string {
+  return value.trim().toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+}
+
 /** Roster entries for the people a loop actually involves. */
-function buildParticipants(
+export function buildParticipants(
   names: string[],
   context: LoopContext,
+  owner: 'me' | 'them' | 'shared' | 'unknown',
   ownerName: string | null,
 ): Array<{ displayName: string; identityKey: string; contactId?: string | null; isSelf?: boolean; role?: 'owner' | 'counterparty' | 'mentioned' | 'observer' }> {
   const byName = new Map(context.roster.map((p) => [p.displayName.toLowerCase(), p]));
 
   return names.slice(0, 25).map((name) => {
     const match = byName.get(name.toLowerCase());
-    const isOwner = !!ownerName && name.toLowerCase() === ownerName.toLowerCase();
+    const isSelf = match?.isSelf ?? false;
+    // The model's optional name must never override the structured owner
+    // direction. In particular, a user cannot be labelled the owner of a loop
+    // whose `owner` is `them` merely because their name appeared in the prompt.
+    const isOwner = owner === 'me'
+      ? isSelf
+      : owner === 'them' && !isSelf && !!ownerName && name.toLowerCase() === ownerName.toLowerCase();
     return {
       displayName: name,
       identityKey: match?.identityKey ?? name.toLowerCase(),
       contactId: match?.contactId ?? null,
-      isSelf: match?.isSelf ?? false,
+      isSelf,
       role: isOwner ? ('owner' as const) : ('counterparty' as const),
     };
   });
