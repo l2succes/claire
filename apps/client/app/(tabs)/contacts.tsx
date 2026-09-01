@@ -132,11 +132,20 @@ export default function ContactsScreen() {
     staleTime: 5 * 60_000,
     gcTime: 30 * 60_000,
     queryFn: async () => {
-      const contacts = await contactsApi.listAll({
-        query: debouncedSearchQuery,
-        platform,
-        filter,
-      });
+      const contacts = await contactsApi.listAll(
+        { query: debouncedSearchQuery, platform, filter },
+        // Publish each page as it arrives. Writing to the cache mid-flight
+        // flips the query to success while isFetching stays true, so the list
+        // renders and keeps filling instead of holding a skeleton for the whole
+        // walk. Stale on purpose: this is a partial answer, not the result.
+        (soFar) => {
+          queryClient.setQueryData(
+            peopleQueryKey,
+            { contacts: [...soFar], nextOffset: null },
+            { updatedAt: 0 },
+          );
+        },
+      );
       // Only the unfiltered directory is worth persisting: a search or filter
       // result is a slice, and caching it would let a later cold open render
       // that slice as though it were everyone.
@@ -243,9 +252,17 @@ export default function ContactsScreen() {
   // hiding it made that distinction impossible to see.
   const platformOptions = PLATFORM_ORDER;
 
+  /**
+   * Every row opens the person, not the conversation.
+   *
+   * This used to require an existing chat and do nothing otherwise, which on a
+   * bridged directory means almost every row: 151 of 21,366 on the account this
+   * was measured against. The rest were dimmed and inert with nowhere to go.
+   * The detail view is that somewhere, and it owns the decision about whether a
+   * conversation can be opened or has to be started.
+   */
   const openContact = (contact: PersonContact) => {
-    if (!contact.chat) return;
-    router.push({ pathname: '/chat/[chatId]', params: { chatId: contact.chat.id, contact_name: personName(contact), chat_name: contact.chat.name || '', platform: contact.chat.platform || contact.platform || '', is_group: contact.chat.is_group ? '1' : '0' } });
+    router.push({ pathname: '/people/[contactId]', params: { contactId: contact.id } });
   };
 
   const selectPlatform = (value: PlatformFilter) => {
@@ -338,12 +355,8 @@ export default function ContactsScreen() {
             return (
               <Pressable
                 accessibilityRole="button"
-                disabled={!item.chat}
                 onPress={() => openContact(item)}
-                style={{
-                  backgroundColor: colors.paper,
-                  opacity: item.chat ? 1 : 0.6,
-                }}
+                style={{ backgroundColor: colors.paper }}
               >
                 <View style={{ minHeight: 78, flexDirection: 'row', alignItems: 'center', gap: space[3], paddingVertical: space[3] }}>
                   <MobileAvatar name={name} uri={item.avatar_url} size={48} isGroup={item.is_group} />
