@@ -6,6 +6,8 @@ export type PeopleFilter = 'all' | 'contacted' | 'needs_context' | 'groups';
 
 export interface PersonContact {
   id: string;
+  /** What the user has told Claire about this person. Feeds the prompt builder. */
+  notes?: string | null;
   name: string | null;
   phone_number: string | null;
   avatar_url?: string | null;
@@ -46,7 +48,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     response = await fetch(`${API_BASE_URL}${path}`, {
       ...init,
       signal: controller.signal,
-      headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
+      // Merge, never replace: a caller sending a body supplies its own
+      // Content-Type, and overwriting the whole object silently dropped it,
+      // which the server then reads as an empty body.
+      headers: {
+        ...(init?.headers as Record<string, string> | undefined),
+        ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+      },
     });
   } catch (cause) {
     if (controller.signal.aborted) throw new Error('People took too long to load. Try again.');
@@ -156,6 +164,15 @@ export const contactsApi = {
     });
     if (query.trim()) params.set('q', query.trim());
     return request<PeoplePage>(`/contacts?${params.toString()}`);
+  },
+  get(contactId: string) {
+    return request<PersonContact>(`/contacts/${encodeURIComponent(contactId)}`);
+  },
+  saveNotes(contactId: string, notes: string) {
+    return request<{ id: string; notes: string | null }>(
+      `/contacts/${encodeURIComponent(contactId)}`,
+      { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notes }) },
+    );
   },
   startIdentitySync() {
     return request<{ status: 'started' }>('/contacts/identity-backfill', { method: 'POST' });
