@@ -5,7 +5,7 @@
  * Handles platform state, authentication flows, and session management.
  */
 
-import { create } from 'zustand';
+import { create, type StoreApi } from 'zustand';
 import { platformsApi, pollAuthStatus } from '../services/platforms';
 import {
   Platform,
@@ -34,6 +34,8 @@ interface PlatformState {
   fetchAvailablePlatforms: () => Promise<void>;
   fetchConnectedSessions: () => Promise<PlatformSession[]>;
   connectPlatform: (platform: Platform, config?: Record<string, unknown>) => Promise<void>;
+  resumeAuthFlow: (platform: Platform) => Promise<boolean>;
+  refreshAuthFlow: () => Promise<PlatformSession | undefined>;
   disconnectPlatform: (platform: Platform, sessionId: string) => Promise<void>;
   reconnectPlatform: (platform: Platform, sessionId: string) => Promise<void>;
   submitVerificationCode: (code: string) => Promise<void>;
@@ -41,6 +43,85 @@ interface PlatformState {
   clearAuthFlow: () => void;
   clearError: () => void;
   reset: () => void;
+}
+
+type SetPlatformState = StoreApi<PlatformState>['setState'];
+type GetPlatformState = StoreApi<PlatformState>['getState'];
+
+const PENDING_AUTH_STATUSES = new Set<PlatformStatus>([
+  PlatformStatus.INITIALIZING,
+  PlatformStatus.AWAITING_AUTH,
+  PlatformStatus.AUTHENTICATING,
+  PlatformStatus.RECONNECTING,
+]);
+
+export function isPendingPlatformStatus(status: PlatformStatus): boolean {
+  return PENDING_AUTH_STATUSES.has(status);
+}
+
+function upsertSession(sessions: PlatformSession[], session: PlatformSession) {
+  return [...sessions.filter((candidate) => candidate.id !== session.id), session];
+}
+
+function applyAuthSessionUpdate(
+  set: SetPlatformState,
+  get: GetPlatformState,
+  session: PlatformSession,
+) {
+  const currentFlow = get().activeAuthFlow;
+  if (!currentFlow || currentFlow.sessionId !== session.id) {
+    set((state) => ({ connectedSessions: upsertSession(state.connectedSessions, session) }));
+    return;
+  }
+
+  if (session.status === PlatformStatus.CONNECTED) {
+    set((state) => ({
+      connectedSessions: upsertSession(state.connectedSessions, session),
+      activeAuthFlow: { ...currentFlow, step: 'success' },
+      _pollController: null,
+      error: null,
+    }));
+    return;
+  }
+
+  if (session.status === PlatformStatus.FAILED) {
+    set((state) => ({
+      connectedSessions: upsertSession(state.connectedSessions, session),
+      activeAuthFlow: {
+        ...currentFlow,
+        step: 'error',
+        error: session.error || 'Authentication failed',
+      },
+      _pollController: null,
+    }));
+    return;
+  }
+
+  set((state) => ({
+    connectedSessions: upsertSession(state.connectedSessions, session),
+    activeAuthFlow: {
+      ...currentFlow,
+      step: 'awaiting_input',
+      authData: session.authData || currentFlow.authData,
+    },
+  }));
+}
+
+function startAuthPolling(
+  set: SetPlatformState,
+  get: GetPlatformState,
+  platform: Platform,
+  sessionId: string,
+) {
+  get()._pollController?.stop();
+  const controller = pollAuthStatus(
+    platform,
+    sessionId,
+    (session) => applyAuthSessionUpdate(set, get, session),
+    2000,
+    platform === Platform.WHATSAPP ? 240000 : 300000,
+  );
+  set({ _pollController: controller });
 }
 
 export const usePlatformStore = create<PlatformState>((set, get) => ({
@@ -213,64 +294,106 @@ export const usePlatformStore = create<PlatformState>((set, get) => ({
         activeAuthFlow: authFlow,
       });
 
-      // Start polling for status updates
-      const pollController = pollAuthStatus(
-        platform,
-        response.session.id,
-        (session) => {
-          const currentFlow = get().activeAuthFlow;
-          if (!currentFlow || currentFlow.sessionId !== session.id) return;
-
-          if (session.status === PlatformStatus.CONNECTED) {
-            // Success! Update sessions and clear auth flow
-            set((state) => ({
-              connectedSessions: [...state.connectedSessions.filter(s => s.id !== session.id), session],
-              activeAuthFlow: { ...currentFlow, step: 'success' },
-              _pollController: null,
-            }));
-
-          } else if (session.status === PlatformStatus.FAILED) {
-            // Failed
-            set({
-              activeAuthFlow: {
-                ...currentFlow,
-                step: 'error',
-                error: session.error || 'Authentication failed',
-              },
-              _pollController: null,
-            });
-          } else if (session.authData?.qrCode && session.authData.qrCode !== currentFlow.authData?.qrCode) {
-            // QR code refreshed — update so user always sees the latest
-            set({
-              activeAuthFlow: {
-                ...currentFlow,
-                authData: session.authData,
-              },
-            });
-          } else if (session.authData?.pairingCode && session.authData.pairingCode !== currentFlow.authData?.pairingCode) {
-            // Pairing code arrived from bridge — update so user can enter it in WhatsApp
-            set({
-              activeAuthFlow: {
-                ...currentFlow,
-                authData: session.authData,
-              },
-            });
-          }
-        },
-        2000,
-        // Mautrix keeps phone-pairing codes active for several minutes. The
-        // previous 30-second timeout discarded a valid code while the user
-        // was still switching to WhatsApp and entering it.
-        platform === Platform.WHATSAPP ? 240000 : 300000
-      );
-
-      set({ _pollController: pollController });
+      startAuthPolling(set, get, platform, response.session.id);
     } catch (error) {
       set({
         isLoading: false,
         error: error instanceof Error ? error.message : 'Failed to connect',
         activeAuthFlow: null,
       });
+    }
+  },
+
+  /**
+   * Resume a server-authoritative pending login instead of creating another
+   * bridge session when a person returns from WhatsApp/Telegram or navigates
+   * back into setup.
+   */
+  resumeAuthFlow: async (platform: Platform) => {
+    set({ isLoading: true, error: null });
+    try {
+      const sessions = (await platformsApi.getPlatformStatus(platform))
+        .filter((session) => session.platform === platform);
+      set((state) => ({
+        connectedSessions: [
+          ...state.connectedSessions.filter((session) => session.platform !== platform),
+          ...sessions,
+        ],
+      }));
+
+      const connected = sessions.find((session) => session.status === PlatformStatus.CONNECTED);
+      if (connected) {
+        get()._pollController?.stop();
+        set({
+          isLoading: false,
+          _pollController: null,
+          activeAuthFlow: {
+            platform,
+            sessionId: connected.id,
+            step: 'success',
+            authData: connected.authData,
+          },
+        });
+        return true;
+      }
+
+      const pending = sessions
+        .filter((session) => PENDING_AUTH_STATUSES.has(session.status))
+        .sort((left, right) => {
+          if (!!left.authData?.pairingCode !== !!right.authData?.pairingCode) {
+            return left.authData?.pairingCode ? -1 : 1;
+          }
+          return new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime();
+        })[0];
+
+      if (!pending) {
+        set({ isLoading: false });
+        return false;
+      }
+
+      let authData = pending.authData;
+      if (!authData) {
+        try {
+          authData = await platformsApi.getAuthData(platform, pending.id);
+        } catch {
+          // Status still proves the session is resumable. Polling can populate
+          // auth data shortly, so do not turn a temporary auth-data miss into
+          // a second login attempt.
+        }
+      }
+
+      set({
+        isLoading: false,
+        activeAuthFlow: {
+          platform,
+          sessionId: pending.id,
+          step: 'awaiting_input',
+          authData: authData ? { ...authData, sessionId: pending.id } : undefined,
+        },
+      });
+      startAuthPolling(set, get, platform, pending.id);
+      return true;
+    } catch (error) {
+      set({
+        isLoading: false,
+        error: error instanceof Error ? error.message : 'Could not resume setup',
+      });
+      return false;
+    }
+  },
+
+  /** Reconcile the active login immediately after an app handoff or manual check. */
+  refreshAuthFlow: async () => {
+    const flow = get().activeAuthFlow;
+    if (!flow?.sessionId) return undefined;
+    try {
+      const sessions = await platformsApi.getPlatformStatus(flow.platform);
+      const session = sessions.find((candidate) => candidate.id === flow.sessionId);
+      if (session) applyAuthSessionUpdate(set, get, session);
+      return session;
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : 'Could not check connection' });
+      return undefined;
     }
   },
 
@@ -343,10 +466,13 @@ export const usePlatformStore = create<PlatformState>((set, get) => ({
       );
 
       if (response.session.status === PlatformStatus.CONNECTED) {
+        get()._pollController?.stop();
         set((state) => ({
-          connectedSessions: [...state.connectedSessions, response.session],
+          connectedSessions: upsertSession(state.connectedSessions, response.session),
           activeAuthFlow: { ...authFlow, step: 'success' },
           isLoading: false,
+          _pollController: null,
+          error: null,
         }));
 
       } else {
@@ -433,6 +559,11 @@ export const useHasAnyConnection = (): boolean => {
 export const usePlatformSession = (platform: Platform): PlatformSession | undefined => {
   const sessions = usePlatformStore((state) => state.connectedSessions);
   return sessions.find(s => s.platform === platform && s.status === PlatformStatus.CONNECTED);
+};
+
+export const usePendingPlatformSession = (platform: Platform): PlatformSession | undefined => {
+  const sessions = usePlatformStore((state) => state.connectedSessions);
+  return sessions.find((session) => session.platform === platform && isPendingPlatformStatus(session.status));
 };
 
 export const useIsPlatformConnected = (platform: Platform): boolean => {
