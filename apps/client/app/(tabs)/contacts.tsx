@@ -132,11 +132,20 @@ export default function ContactsScreen() {
     staleTime: 5 * 60_000,
     gcTime: 30 * 60_000,
     queryFn: async () => {
-      const contacts = await contactsApi.listAll({
-        query: debouncedSearchQuery,
-        platform,
-        filter,
-      });
+      const contacts = await contactsApi.listAll(
+        { query: debouncedSearchQuery, platform, filter },
+        // Publish each page as it arrives. Writing to the cache mid-flight
+        // flips the query to success while isFetching stays true, so the list
+        // renders and keeps filling instead of holding a skeleton for the whole
+        // walk. Stale on purpose: this is a partial answer, not the result.
+        (soFar) => {
+          queryClient.setQueryData(
+            peopleQueryKey,
+            { contacts: [...soFar], nextOffset: null },
+            { updatedAt: 0 },
+          );
+        },
+      );
       // Only the unfiltered directory is worth persisting: a search or filter
       // result is a slice, and caching it would let a later cold open render
       // that slice as though it were everyone.
