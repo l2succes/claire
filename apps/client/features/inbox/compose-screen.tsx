@@ -5,6 +5,7 @@ import { Stack, router } from 'expo-router';
 import { colors, mobileType, space } from '@claire/design-system';
 import { supabase, type DbRow } from '../../services/supabase';
 import { useAuthStore } from '../../stores/authStore';
+import { useProfileStore } from '../../stores/profileStore';
 import { MobileAvatar, MobileIconButton, MobileState, SectionLabel } from '../../components/mobile/claire-mobile';
 import { PeopleSkeleton } from '../../components/claire/skeleton';
 import { platformLabel } from '../../types/platform';
@@ -59,18 +60,19 @@ function ComposeCloseButton() {
 
 export function ComposeScreen() {
   const user = useAuthStore(state => state.user);
+  const profileId = useProfileStore(state => state.activeProfileId);
   const [query, setQuery] = useState('');
   const [recipients, setRecipients] = useState<ComposeRecipient[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!user?.id) {
+    if (!user?.id || !profileId) {
       setLoading(false);
       return;
     }
     Promise.all([
-      supabase.from('contacts').select('id,name,phone_number,avatar_url,inferred_name').eq('user_id', user.id),
-      supabase.from('chats').select('id,contact_id,name,platform,is_group,last_message_at').eq('user_id', user.id).order('last_message_at', { ascending: false }),
+      supabase.from('contacts').select('id,name,phone_number,avatar_url,inferred_name').eq('user_id', user.id).eq('profile_id', profileId),
+      supabase.from('chats').select('id,contact_id,name,platform,is_group,last_message_at').eq('user_id', user.id).eq('profile_id', profileId).order('last_message_at', { ascending: false }),
     ]).then(([contactResult, chatResult]) => {
       if (contactResult.error) throw contactResult.error;
       if (chatResult.error) throw chatResult.error;
@@ -90,7 +92,7 @@ export function ComposeScreen() {
         } satisfies ComposeRecipient;
       }));
     }).catch(error => console.error('[Compose] Failed to load recipients', error)).finally(() => setLoading(false));
-  }, [user?.id]);
+  }, [profileId, user?.id]);
 
   const normalizedQuery = query.trim().toLowerCase();
   const visible = useMemo(() => recipients.filter(recipient => matchesQuery(recipient, normalizedQuery)), [normalizedQuery, recipients]);

@@ -10,6 +10,7 @@ import {
   type InboxRealtimeRow,
 } from './useInboxMessages';
 import { Platform } from '../types/platform';
+import { useProfileStore } from '../stores/profileStore';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001';
 
@@ -43,9 +44,10 @@ function dropInboxChannels(userId: string) {
 
 export function useInboxRealtime(userId?: string) {
   const queryClient = useQueryClient();
+  const profileId = useProfileStore((state) => state.activeProfileId);
 
   useEffect(() => {
-    if (!userId) return;
+    if (!userId || !profileId) return;
 
     let cancelled = false;
     let fallbackTimer: ReturnType<typeof setInterval> | undefined;
@@ -53,16 +55,16 @@ export function useInboxRealtime(userId?: string) {
       if (cancelled) return;
       if (fallbackTimer) clearInterval(fallbackTimer);
       fallbackTimer = setInterval(() => {
-        if (!cancelled) void queryClient.invalidateQueries({ queryKey: inboxQueryPrefix(userId) });
+        if (!cancelled) void queryClient.invalidateQueries({ queryKey: inboxQueryPrefix(userId, profileId) });
       }, intervalMs);
     };
 
     startFallback(60_000);
     dropInboxChannels(userId);
 
-    const topic = `inbox-feed:${userId}:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 8)}`;
+    const topic = `inbox-feed:${userId}:${profileId}:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 8)}`;
     const channel = supabase.channel(topic);
-    channel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `user_id=eq.${userId}` }, ({ new: row }) => {
+    channel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `profile_id=eq.${profileId}` }, ({ new: row }) => {
       const message = row as InboxRealtimeRow;
       if (message.platform) void reportClientState('acknowledged', message.platform);
       if (!message.from_me) {
@@ -72,18 +74,18 @@ export function useInboxRealtime(userId?: string) {
           { type: 'new_message', chatId: message.chat_id, platform: message.platform },
         );
       }
-      patchInboxRealtimeMessage(queryClient, userId, message);
+      patchInboxRealtimeMessage(queryClient, userId, profileId, message);
     });
-    channel.on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages', filter: `user_id=eq.${userId}` }, ({ new: row }) => {
-      patchInboxRealtimeMessage(queryClient, userId, row as InboxRealtimeRow);
+    channel.on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages', filter: `profile_id=eq.${profileId}` }, ({ new: row }) => {
+      patchInboxRealtimeMessage(queryClient, userId, profileId, row as InboxRealtimeRow);
     });
-    channel.on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'chats', filter: `user_id=eq.${userId}` }, ({ new: row }) => {
+    channel.on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'chats', filter: `profile_id=eq.${profileId}` }, ({ new: row }) => {
       const chat = row as { id: string; platform?: Platform; unread_count?: number; is_pinned?: boolean };
-      patchInboxChat(queryClient, userId, chat);
+      patchInboxChat(queryClient, userId, profileId, chat);
     });
     channel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ai_suggestions', filter: `user_id=eq.${userId}` }, ({ new: row }) => {
       const messageId = (row as { message_id?: string }).message_id;
-      if (messageId) markInboxAiResponse(queryClient, userId, messageId);
+      if (messageId) markInboxAiResponse(queryClient, userId, profileId, messageId);
     });
     channel.subscribe((status, error) => {
       if (cancelled) return;
@@ -104,5 +106,5 @@ export function useInboxRealtime(userId?: string) {
       void reportClientState('disconnected');
       void supabase.removeChannel(channel);
     };
-  }, [queryClient, userId]);
+  }, [profileId, queryClient, userId]);
 }

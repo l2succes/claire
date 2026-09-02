@@ -185,6 +185,8 @@ export interface PlatformSession {
   id: string;
   platform: Platform;
   userId: string;
+  /** Workspace that owns this connected account. */
+  profileId?: string;
   status: PlatformStatus;
   authMethod: AuthMethod;
 

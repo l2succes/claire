@@ -21,6 +21,7 @@ import { platformCatalog, platformCatalogVersion } from '../platform-catalog';
 import { supabase, type DbRow } from '../services/supabase';
 import { operationsTelemetry } from '../services/operations-telemetry';
 import { queueWhatsAppContactIdentitySync } from '../services/whatsapp-contact-backfill';
+import { profileScopeError, resolveProfileId } from '../services/profile-context';
 
 // Railway services cannot reach each other through localhost. Railway does not
 // inject NODE_ENV by default, so its public-domain marker is also used to
@@ -240,6 +241,8 @@ router.get('/:platform/status', async (req: Request, res: Response) => {
         error: 'Unauthorized',
       });
     }
+    const profileId = await resolveProfileId(req, userId);
+    if (!profileId) return res.status(403).json({ success: false, ...profileScopeError() });
 
     if (!Object.values(Platform).includes(platform as Platform)) {
       return res.status(400).json({
@@ -260,7 +263,7 @@ router.get('/:platform/status', async (req: Request, res: Response) => {
     // /platforms/whatsapp/status can never make Telegram or Instagram appear
     // connected in the client cache.
     const sessions = (await adapter.getUserSessions(userId)).filter(
-      (session) => session.platform === platform,
+      (session) => session.platform === platform && session.profileId === profileId,
     );
 
     // Disable caching so polling always gets fresh session state / QR codes
@@ -271,6 +274,7 @@ router.get('/:platform/status', async (req: Request, res: Response) => {
       platform,
       sessions: sessions.map((s) => ({
         id: s.id,
+        profileId: s.profileId,
         platform: s.platform,
         status: s.status,
         authMethod: s.authMethod,
@@ -305,6 +309,8 @@ router.post('/instagram/login/start', async (req: Request, res: Response) => {
     if (!userId) {
       return res.status(401).json({ success: false, error: 'Unauthorized' });
     }
+    const profileId = await resolveProfileId(req, userId);
+    if (!profileId) return res.status(403).json({ success: false, ...profileScopeError() });
 
     const adapter = platformManager.getAdapter(Platform.INSTAGRAM);
     if (!adapter) {
@@ -316,7 +322,7 @@ router.post('/instagram/login/start', async (req: Request, res: Response) => {
     // explicitly retire it instead of accumulating duplicate sessions.
     const matrixAdapter = adapter as MatrixBridgeAdapter;
     const pendingSessions = (await adapter.getUserSessions(userId)).filter((session) => (
-      session.platform === Platform.INSTAGRAM
+      session.platform === Platform.INSTAGRAM && session.profileId === profileId
       && (session.status === PlatformStatus.INITIALIZING
         || session.status === PlatformStatus.AWAITING_AUTH
         || session.status === PlatformStatus.AUTHENTICATING
@@ -342,6 +348,7 @@ router.post('/instagram/login/start', async (req: Request, res: Response) => {
     sessionId = `instagram-${userId}-${Date.now()}`;
     await adapter.createSession(userId, sessionId, {
       platform: Platform.INSTAGRAM,
+      profileId,
       // Instagram uses the provisioning API below, not a Matrix bot command.
       skipBridgeAuth: true,
     } as never);
@@ -542,6 +549,8 @@ router.post('/:platform/connect', async (req: Request, res: Response) => {
         error: 'Unauthorized',
       });
     }
+    const profileId = await resolveProfileId(req, userId);
+    if (!profileId) return res.status(403).json({ success: false, ...profileScopeError() });
 
     if (!Object.values(Platform).includes(platform as Platform)) {
       return res.status(400).json({
@@ -558,11 +567,11 @@ router.post('/:platform/connect', async (req: Request, res: Response) => {
       });
     }
 
-    // Connection creation is idempotent per user and platform. This is the
+    // Connection creation is idempotent per profile and platform. This is the
     // server-side authority that protects against stale mobile caches, rapid
     // taps, and two clients opening the login screen at the same time.
     const existingSessions = (await adapter.getUserSessions(userId)).filter(
-      (existing) => existing.platform === platform,
+      (existing) => existing.platform === platform && existing.profileId === profileId,
     );
     const connectedSession = existingSessions.find(
       (existing) => existing.status === PlatformStatus.CONNECTED,
@@ -616,7 +625,7 @@ router.post('/:platform/connect', async (req: Request, res: Response) => {
       const session = await (adapter as MatrixBridgeAdapter).createSession(
         userId,
         newSessionId,
-        { platform: Platform.WHATSAPP, phoneNumber: config.phoneNumber, skipBridgeAuth: true } as never
+        { platform: Platform.WHATSAPP, profileId, phoneNumber: config.phoneNumber, skipBridgeAuth: true } as never
       );
       const pairingCode = codeStep.display_and_wait?.data;
       await (adapter as MatrixBridgeAdapter).setSessionAuthData(
@@ -677,7 +686,7 @@ router.post('/:platform/connect', async (req: Request, res: Response) => {
       });
     }
 
-    const session = await adapter.createSession(userId, newSessionId, config);
+    const session = await adapter.createSession(userId, newSessionId, { ...config, profileId });
 
     // For QR-based auth, return auth data
     const authData = await adapter.getAuthData(session.id);

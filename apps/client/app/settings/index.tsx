@@ -1,6 +1,6 @@
 import { useEffect, type ComponentType, type ReactNode } from 'react';
 import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
-import { Bell, Bot, Check, ChevronRight, DatabaseZap, KeyRound, Link2, LogOut, MessageCircle, Smile, Sparkles } from 'lucide-react-native';
+import { Bell, Bot, Check, ChevronRight, DatabaseZap, KeyRound, Link2, LogOut, MessageCircle, Smile, Sparkles, UsersRound } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { colors, mobileType, radius, space, useIsDesktopLayout } from '@claire/design-system';
 import { MobileAvatar, MobileHeader, SectionLabel } from '../../components/mobile/claire-mobile';
@@ -112,6 +112,7 @@ export default function SettingsScreen() {
   ];
 
   const appRows: SettingsRow[] = [
+    { title: 'Profiles', detail: 'Personal, Work, and custom workspaces', icon: UsersRound, href: '/settings/profiles', testID: 'settings-profiles', iconBackground: colors.mint },
     { title: 'Connected accounts', detail: `${connected} platform${connected === 1 ? '' : 's'} active`, icon: Link2, href: '/(tabs)/connections', testID: 'settings-connections', iconBackground: colors.lavender },
     { title: 'Notifications', detail: 'Priority people and quiet hours', icon: Bell, href: '/settings/notifications', testID: 'settings-notifications', iconBackground: colors.sky },
     { title: 'Chat', detail: 'Plus button and reply options', icon: MessageCircle, href: '/settings/chat', testID: 'settings-chat', iconBackground: colors.neutral[100] },

@@ -5,6 +5,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { colors, mobileType, space, useIsDesktopLayout } from '@claire/design-system';
 import { useAuthStore } from '../../stores/authStore';
+import { useProfileStore } from '../../stores/profileStore';
 import { MobileAvatar, MobileChip, MobileHeader, MobileIconButton, MobileSearchField, MobileState } from '../../components/mobile/claire-mobile';
 import { BottomSheet } from '../../components/mobile/bottom-sheet';
 import { PlatformIcon, PlatformName } from '../../components/PlatformIcon';
@@ -101,6 +102,7 @@ export default function ContactsScreen() {
   const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
   const [showPlatformFilter, setShowPlatformFilter] = useState(false);
   const user = useAuthStore(state => state.user);
+  const profileId = useProfileStore(state => state.activeProfileId);
   const requestedIdentitySyncFor = useRef<string | null>(null);
   const peopleListRef = useRef<SectionList<PersonContact>>(null);
   const debouncedSearchQuery = useDebouncedValue(searchQuery);
@@ -110,8 +112,8 @@ export default function ContactsScreen() {
   }, [params.q, params.query]);
 
   const peopleQuery = useQuery({
-    queryKey: ['people', user?.id, debouncedSearchQuery, platform, filter],
-    enabled: !!user?.id,
+    queryKey: ['people', user?.id, profileId, debouncedSearchQuery, platform, filter],
+    enabled: !!user?.id && !!profileId,
     // The API and bridge sync share a 10k maximum. Loading that user-scoped
     // directory as one virtualized list is what makes an A–Z index truthful:
     // tapping J never jumps only within whichever page happened to be loaded.

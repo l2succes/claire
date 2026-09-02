@@ -13,6 +13,7 @@ import { PlatformAuthModal } from '../../components/PlatformAuthModal';
 import { MobileHeader, MobileIconButton, MobileState, SectionLabel } from '../../components/mobile/claire-mobile';
 import { ConnectionsSkeleton } from '../../components/claire/skeleton';
 import { useAuthStore } from '../../stores/authStore';
+import { useProfileStore } from '../../stores/profileStore';
 
 function ConnectionMark({ definition }: { definition: PlatformDefinition }) {
   const platform = resolvePlatform(definition.id);
@@ -34,6 +35,7 @@ export default function ConnectionsScreen() {
   const [error, setError] = useState<string | null>(null);
   const accessToken = useAuthStore(state => state.token);
   const user = useAuthStore(state => state.user);
+  const profileId = useProfileStore(state => state.activeProfileId);
 
   const load = async () => {
     setError(null);
@@ -66,7 +68,7 @@ export default function ConnectionsScreen() {
     }
     if (definition.id === Platform.INSTAGRAM && host.name === 'electron' && accessToken) {
       setError(null);
-      const result = await host.startInstagramLogin({ apiUrl: API_BASE_URL, accessToken });
+      const result = await host.startInstagramLogin({ apiUrl: API_BASE_URL, accessToken, ...(profileId ? { profileId } : {}) });
       if (!result.success) setError(result.error || 'Instagram sign-in did not finish.');
       else await load();
       return;

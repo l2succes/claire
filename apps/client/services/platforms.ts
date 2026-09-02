@@ -7,6 +7,7 @@
 
 import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios';
 import { supabase } from './supabase';
+import { useProfileStore } from '../stores/profileStore';
 import {
   Platform,
   PlatformStatus,
@@ -101,6 +102,8 @@ api.interceptors.request.use(async (config) => {
   if (accessToken) {
     config.headers.Authorization = `Bearer ${accessToken}`;
   }
+  const profileId = useProfileStore.getState().activeProfileId;
+  if (profileId) config.headers['X-Claire-Profile-Id'] = profileId;
   return config;
 });
 

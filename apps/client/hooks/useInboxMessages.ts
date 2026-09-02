@@ -4,6 +4,7 @@ import { supabase, type DbRow } from '../services/supabase';
 import { Platform } from '../types/platform';
 import { cacheTimeline, hydrateMobileCache, usesNativeMobileCache, type CachedChat } from '../services/mobile-cache';
 import { displayContactName } from '../services/contact-display';
+import { useProfileStore } from '../stores/profileStore';
 
 export interface InboxMessage {
   id: string;
@@ -61,8 +62,8 @@ type InboxQueryData = InfiniteData<MessagePage, InboxCursor | null>;
 
 export type InboxServerFilter = 'all' | 'unread' | 'needs_reply' | 'groups';
 
-export function inboxQueryKey(userId?: string, search = '', filter: InboxServerFilter = 'all', platform = 'all') {
-  return ['messages-feed', userId, search, filter, platform] as const;
+export function inboxQueryKey(userId?: string, profileId?: string | null, search = '', filter: InboxServerFilter = 'all', platform = 'all') {
+  return ['messages-feed', userId, profileId, search, filter, platform] as const;
 }
 
 /**
@@ -71,8 +72,8 @@ export function inboxQueryKey(userId?: string, search = '', filter: InboxServerF
  * unfiltered, unsearched feed, so an exact match would leave an active search
  * or filter stale.
  */
-export function inboxQueryPrefix(userId?: string) {
-  return ['messages-feed', userId] as const;
+export function inboxQueryPrefix(userId?: string, profileId?: string | null) {
+  return ['messages-feed', userId, profileId] as const;
 }
 
 function inboxTrace(event: string, details: Record<string, unknown> = {}) {
@@ -177,11 +178,12 @@ export type InboxRealtimeRow = Partial<RawMessage> & { id: string; content?: str
 function updateInboxQueries(
   queryClient: QueryClient,
   userId: string | undefined,
+  profileId: string | null | undefined,
   updater: (old: InboxQueryData | undefined, canInsert: boolean) => InboxQueryData | undefined,
 ) {
-  const queries = queryClient.getQueryCache().findAll({ queryKey: inboxQueryPrefix(userId) });
+  const queries = queryClient.getQueryCache().findAll({ queryKey: inboxQueryPrefix(userId, profileId) });
   for (const query of queries) {
-    const [, , search, filter, platform] = query.queryKey as ReturnType<typeof inboxQueryKey>;
+    const [, , , search, filter, platform] = query.queryKey as ReturnType<typeof inboxQueryKey>;
     const canInsert = !search && filter === 'all' && platform === 'all';
     queryClient.setQueryData<InboxQueryData>(query.queryKey, (old) => updater(old, canInsert));
   }
@@ -190,6 +192,7 @@ function updateInboxQueries(
 export function patchInboxRealtimeMessage(
   queryClient: QueryClient,
   userId: string | undefined,
+  profileId: string | null | undefined,
   row: InboxRealtimeRow,
 ) {
   if (!row.chat_id && !row.id) return;
@@ -199,7 +202,7 @@ export function patchInboxRealtimeMessage(
   if (usesNativeMobileCache() && userId && row.chat_id && row.timestamp) {
     void cacheTimeline(userId, row.chat_id, [row as RawMessage & { id: string; chat_id: string; timestamp: string }]).catch(() => undefined);
   }
-  updateInboxQueries(queryClient, userId, (old, canInsert) => {
+  updateInboxQueries(queryClient, userId, profileId, (old, canInsert) => {
     if (!old) return old;
     let found = false;
     const pages = old.pages.map((page) => {
@@ -254,10 +257,11 @@ export function patchInboxRealtimeMessage(
 export function patchInboxChat(
   queryClient: QueryClient,
   userId: string | undefined,
+  profileId: string | null | undefined,
   chat: { id: string; platform?: Platform; unread_count?: number; is_pinned?: boolean },
 ) {
   const key = conversationKey(chat.id, chat.platform || Platform.WHATSAPP);
-  updateInboxQueries(queryClient, userId, (old) => {
+  updateInboxQueries(queryClient, userId, profileId, (old) => {
     if (!old) return old;
     let changed = false;
     const pages = old.pages.map((page) => ({
@@ -272,8 +276,8 @@ export function patchInboxChat(
   });
 }
 
-export function markInboxAiResponse(queryClient: QueryClient, userId: string | undefined, messageId: string) {
-  updateInboxQueries(queryClient, userId, (old) => {
+export function markInboxAiResponse(queryClient: QueryClient, userId: string | undefined, profileId: string | null | undefined, messageId: string) {
+  updateInboxQueries(queryClient, userId, profileId, (old) => {
     if (!old) return old;
     let changed = false;
     const pages = old.pages.map((page) => {
@@ -324,19 +328,27 @@ export function useInboxMessages(
   const search = options.search?.trim() ?? '';
   const filter = options.filter ?? 'all';
   const platformFilter = options.platform ?? 'all';
+  const profileId = useProfileStore((state) => state.activeProfileId);
   const queryClient = useQueryClient();
   // Search and filters are part of the identity of this feed: they are applied
   // in the database, so each combination is a different result set and must not
   // share a cache entry.
   const queryKey = useMemo(
-    () => inboxQueryKey(userId, search, filter, platformFilter),
-    [userId, search, filter, platformFilter],
+    () => inboxQueryKey(userId, profileId, search, filter, platformFilter),
+    [userId, profileId, search, filter, platformFilter],
   );
   const [cacheReady, setCacheReady] = useState(!usesNativeMobileCache());
 
   useEffect(() => {
     let active = true;
     setCacheReady(!usesNativeMobileCache());
+    // The existing offline snapshot predates workspace ownership. Never seed a
+    // profile-filtered inbox from it, or a fast profile switch could briefly
+    // reveal another workspace before the network response arrives.
+    if (profileId) {
+      setCacheReady(true);
+      return () => { active = false; };
+    }
     if (!userId || !usesNativeMobileCache()) return;
     void hydrateMobileCache(userId).then((snapshot) => {
       if (!active) return;
@@ -346,11 +358,11 @@ export function useInboxMessages(
       if (messages.length) queryClient.setQueryData<InboxQueryData>(queryKey, { pages: [{ messages, hasMore: false, nextCursor: null }], pageParams: [null] });
     }).catch(() => undefined).finally(() => { if (active) setCacheReady(true); });
     return () => { active = false; };
-  }, [queryClient, queryKey, userId]);
+  }, [profileId, queryClient, queryKey, userId]);
 
   const query = useInfiniteQuery<MessagePage, Error, InboxQueryData, typeof queryKey, InboxCursor | null>({
     queryKey,
-    enabled: !!userId && cacheReady,
+    enabled: !!userId && !!profileId && cacheReady,
     initialPageParam: null,
     staleTime: 60_000,
     gcTime: 30 * 60_000,
@@ -370,6 +382,7 @@ export function useInboxMessages(
         .from('conversation_feed')
         .select('*')
         .eq('user_id', userId)
+        .eq('profile_id', profileId)
         .eq('is_archived', false)
         // WhatsApp's status broadcast is a pseudo-chat, not a conversation.
         // Older rows carry no platform_chat_id, so match the name too.

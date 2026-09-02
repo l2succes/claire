@@ -9,12 +9,13 @@ type StoredPreferences = { ai_enabled?: unknown };
  * existing product behaviour; a database read failure fails closed so an
  * explicit privacy choice is never bypassed during an outage.
  */
-export async function isAiProcessingEnabled(userId: string): Promise<boolean> {
-  const { data, error } = await supabase
+export async function isAiProcessingEnabled(userId: string, profileId?: string): Promise<boolean> {
+  let query = supabase
     .from('user_preferences')
     .select('preferences')
-    .eq('user_id', userId)
-    .maybeSingle();
+    .eq('user_id', userId);
+  if (profileId) query = query.eq('profile_id', profileId);
+  const { data, error } = await query.maybeSingle();
   if (error) {
     logger.warn('Could not verify AI processing preference', { errorCode: error.code || 'preference_read_failed' });
     return false;

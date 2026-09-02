@@ -15,6 +15,7 @@ import { Platform } from '../../types/platform';
 import { PlatformBadge } from '../../components/PlatformIcon';
 import { formatInboxTimestamp } from '../../utils/messageTimestamp';
 import { InboxRowSkeleton, InboxSkeleton } from '../../components/claire/skeleton';
+import { ProfileSwitcher } from '../../components/profile-switcher';
 
 type InboxFilter = 'all' | 'unread' | 'needs_reply' | 'groups';
 type PlatformFilter = 'all' | Platform;
@@ -309,7 +310,7 @@ export function InboxScreen() {
       <MobileHeader
         title="Inbox"
         safeArea
-        actions={<View style={{ flexDirection: 'row', gap: space[2] }}>
+        actions={<View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}><ProfileSwitcher />
           <MobileIconButton label="Search everything" testID="inbox-open-search" onPress={() => router.push('/(tabs)/search' as never)}><Search size={20} color={colors.ink} /></MobileIconButton>
           <MobileIconButton label="New message" testID="inbox-compose" onPress={() => router.push('/compose' as never)}><PenSquare size={20} color={colors.ink} /></MobileIconButton>
         </View>}

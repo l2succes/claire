@@ -14,6 +14,7 @@ import { MobileHeader, MobileIconButton } from '../../components/mobile/claire-m
 import { supabase } from '../../services/supabase';
 import { API_BASE_URL } from '../../services/platforms';
 import { getNativeNotificationPermission, registerNotificationDevice, requestWebNotificationPermission, supportsWebNotifications } from '../../services/notifications';
+import { useProfileStore } from '../../stores/profileStore';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -50,9 +51,9 @@ const QUIET_HOURS_OPTIONS = [
 // Helpers
 // ---------------------------------------------------------------------------
 
-async function fetchNotificationPrefs(token: string): Promise<NotificationPrefs> {
+async function fetchNotificationPrefs(token: string, profileId?: string | null): Promise<NotificationPrefs> {
   const res = await fetch(`${API_BASE_URL}/preferences`, {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: { Authorization: `Bearer ${token}`, ...(profileId ? { 'X-Claire-Profile-Id': profileId } : {}) },
   });
   if (!res.ok) throw new Error('Failed to fetch preferences');
   const { data } = await res.json();
@@ -71,12 +72,13 @@ async function fetchNotificationPrefs(token: string): Promise<NotificationPrefs>
   return { ...DEFAULTS, ...prefs };
 }
 
-async function saveNotificationPrefs(token: string, prefs: NotificationPrefs): Promise<void> {
+async function saveNotificationPrefs(token: string, prefs: NotificationPrefs, profileId?: string | null): Promise<void> {
   const res = await fetch(`${API_BASE_URL}/preferences`, {
     method: 'PUT',
     headers: {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
+      ...(profileId ? { 'X-Claire-Profile-Id': profileId } : {}),
     },
     body: JSON.stringify({
       notification_enabled: prefs.notification_enabled,
@@ -185,6 +187,7 @@ function TimeSelector({
 }
 
 export default function NotificationsSettingsScreen() {
+  const profileId = useProfileStore((state) => state.activeProfileId);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [prefs, setPrefs] = useState<NotificationPrefs>(DEFAULTS);
@@ -196,7 +199,7 @@ export default function NotificationsSettingsScreen() {
         const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token;
         if (!token) return;
-        const loaded = await fetchNotificationPrefs(token);
+        const loaded = await fetchNotificationPrefs(token, profileId);
         setPrefs(loaded);
         setSystemPermission(await getNativeNotificationPermission());
       } catch {
@@ -205,7 +208,7 @@ export default function NotificationsSettingsScreen() {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [profileId]);
 
   const update = (patch: Partial<NotificationPrefs>) => setPrefs((p) => ({ ...p, ...patch }));
 
@@ -215,7 +218,7 @@ export default function NotificationsSettingsScreen() {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
       if (!token) throw new Error('Not authenticated');
-      await saveNotificationPrefs(token, prefs);
+      await saveNotificationPrefs(token, prefs, profileId);
       router.back();
     } catch {
       Alert.alert('Error', 'Failed to save notification preferences. Please try again.');

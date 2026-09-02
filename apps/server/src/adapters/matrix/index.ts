@@ -74,6 +74,7 @@ const matrixSdkLogger: MatrixSdkLogger = {
 
 export interface MatrixSessionConfig {
   platform: Platform;
+  profileId?: string;
   bridgeConfig?: BridgeAuthConfig;
 }
 
@@ -882,6 +883,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     const session = this.createDefaultSession(userId, sessionId);
     // Set the actual platform for this session
     (session as PlatformSession & { platform: Platform }).platform = platform;
+    session.profileId = config?.profileId;
 
     this.sessions.set(sessionId, session);
     this.sessionPlatforms.set(sessionId, platform);
@@ -1010,6 +1012,18 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     }
 
     const userSessions = [...sessions.values()];
+    // Redis sessions created before profiles do not contain profileId. Restore
+    // the durable ownership marker before exposing or routing them.
+    const missingProfileIds = userSessions.filter((session) => !session.profileId).map((session) => session.id);
+    if (missingProfileIds.length) {
+      const { data } = await supabase
+        .from('platform_sessions')
+        .select('session_id,profile_id')
+        .eq('user_id', userId)
+        .in('session_id', missingProfileIds);
+      const profileBySession = new Map((data || []).map((row) => [row.session_id, row.profile_id]));
+      for (const session of userSessions) session.profileId ||= profileBySession.get(session.id) || undefined;
+    }
 
     // Old versions persisted a session before confirming Instagram
     // provisioning was reachable. Retire those stale attempts as well as
@@ -1103,6 +1117,15 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     await this.saveSessionToRedis(session);
     this.bridgeAuthManager.markFailed(sessionId, error);
     this.emitPlatformEvent('auth_failure', sessionId, { error });
+  }
+
+  /** Keep Redis/durable bridge state aligned after a workspace account move. */
+  async assignSessionProfile(sessionId: string, profileId: string): Promise<void> {
+    const session = await this.getSession(sessionId);
+    if (!session) throw new Error('Session not found');
+    session.profileId = profileId;
+    this.sessions.set(sessionId, session);
+    await this.saveSessionToRedis(session);
   }
 
   async disconnectSession(sessionId: string): Promise<void> {
@@ -1621,7 +1644,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
         const { data, error } = await supabase
           .from('platform_sessions')
           .select(
-            'session_id,user_id,platform,status,platform_user_id,platform_username,phone_number,session_data,created_at,last_connected_at'
+            'session_id,user_id,profile_id,platform,status,platform_user_id,platform_username,phone_number,session_data,created_at,last_connected_at'
           )
           .eq('status', PlatformStatus.CONNECTED);
         if (error) {
@@ -1644,6 +1667,15 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
 
   private async restoreConnectedSession(session: PlatformSession): Promise<void> {
     const { id: sessionId, platform, selfGhostId } = session;
+    if (!session.profileId) {
+      const { data } = await supabase
+        .from('platform_sessions')
+        .select('profile_id')
+        .eq('session_id', sessionId)
+        .eq('user_id', session.userId)
+        .maybeSingle();
+      session.profileId = data?.profile_id || undefined;
+    }
     this.sessions.set(sessionId, session);
     this.sessionPlatforms.set(sessionId, platform);
     await this.resolveAndPersistSelfGhostIds(sessionId, session, platform);
@@ -1755,6 +1787,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
           phoneNumberFromPlatformContactId(contact.platform, contact.platformContactId);
         const payload: DbRow = {
           user_id: session.userId,
+          profile_id: session.profileId,
           platform: contact.platform,
           platform_contact_id: contact.platformContactId,
           whatsapp_id: contact.platformContactId,
@@ -1767,7 +1800,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
         };
         const { error } = await supabase
           .from('contacts')
-          .upsert(payload, { onConflict: 'user_id,platform,platform_contact_id' });
+          .upsert(payload, { onConflict: 'profile_id,platform,platform_contact_id' });
 
         if (!error) {
           synced++;
@@ -1780,6 +1813,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
               .from('chats')
               .update({ name })
               .eq('user_id', session.userId)
+              .eq('profile_id', session.profileId)
               .eq('platform', contact.platform)
               .eq('platform_chat_id', contact.platformContactId)
               .eq('is_group', false);

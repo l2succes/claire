@@ -21,6 +21,7 @@ import aiRoutes from './routes/ai';
 import platformRoutes from './routes/platforms';
 import conversationRoutes from './routes/conversations';
 import preferencesRoutes from './routes/preferences';
+import profileRoutes from './routes/profiles';
 import autoReplyRoutes from './routes/auto-reply';
 import { aiRateLimit, authRateLimit } from './middleware/rate-limit';
 import seedRoutes from './routes/seed';
@@ -73,6 +74,7 @@ app.set('trust proxy', 1);
 
 async function notifyIncomingMessage(message: {
   userId: string;
+  profileId: string;
   chatId: string;
   platform: string;
   senderName?: string;
@@ -130,6 +132,7 @@ app.use('/ai', aiRateLimit, aiRoutes);
 app.use('/platforms', platformRoutes);
 app.use('/conversations', conversationRoutes);
 app.use('/preferences', preferencesRoutes);
+app.use('/profiles', profileRoutes);
 // Seed/reset route — only functional when MOCK_BRIDGE=true (guarded inside route)
 app.use('/seed', seedRoutes);
 app.use('/loops', loopRoutes);
@@ -440,11 +443,22 @@ async function initializePlatforms() {
     });
 
     try {
+      // A message is always emitted from an explicit connection. Resolve its
+      // profile before any durable write so bridge traffic cannot leak into a
+      // similarly-named account on another workspace.
+      const sourceSession = await platformManager.getSession(message.sessionId);
+      const profileId = sourceSession?.profileId;
+      if (!profileId) {
+        logger.warn('Skipping message without a workspace profile', { platform: message.platform });
+        return;
+      }
       // Fast-path: skip duplicate messages (backfill replay) without touching the DB further
       const { data: existing } = await supabase
         .from('messages')
         .select('id,content,platform')
-        .eq('whatsapp_id', message.platformMessageId)
+        .eq('profile_id', profileId)
+        .eq('platform', message.platform)
+        .eq('platform_message_id', message.platformMessageId)
         .maybeSingle();
 
       if (existing) {
@@ -463,7 +477,7 @@ async function initializePlatforms() {
       }
 
       logger.info('New platform message accepted', { platform: message.platform });
-      const aiProcessingEnabled = await isAiProcessingEnabled(message.userId);
+      const aiProcessingEnabled = await isAiProcessingEnabled(message.userId, profileId);
 
       // A WhatsApp LID is an opaque bridge identifier, not a contact name or
       // number. Prefer the real bridge profile name and omit the field when
@@ -487,6 +501,8 @@ async function initializePlatforms() {
         .upsert(
           {
             user_id: message.userId,
+            profile_id: profileId,
+            platform_session_id: message.sessionId,
             whatsapp_chat_id: message.chatId,
             platform_chat_id: message.chatId,
             platform: message.platform,
@@ -494,7 +510,7 @@ async function initializePlatforms() {
             is_group: message.chatType === 'group',
             last_message_at: message.timestamp,
           },
-          { onConflict: 'user_id,platform,platform_chat_id' }
+          { onConflict: 'profile_id,platform_session_id,platform,platform_chat_id' }
         )
         .select('id')
         .single();
@@ -530,13 +546,14 @@ async function initializePlatforms() {
             .upsert(
               {
                 user_id: message.userId,
+                profile_id: profileId,
                 platform: message.platform,
                 platform_contact_id: platformContactId,
                 whatsapp_id: platformContactId,
                 ...(contactName ? { name: contactName } : {}),
                 ...(contactPhone ? { phone_number: contactPhone } : {}),
               },
-              { onConflict: 'user_id,platform,platform_contact_id' }
+              { onConflict: 'profile_id,platform,platform_contact_id' }
             )
             .select('id, name')
             .single();
@@ -607,6 +624,7 @@ async function initializePlatforms() {
         .upsert(
           {
             user_id: message.userId,
+            profile_id: profileId,
             chat_id: chat.id,
             whatsapp_id: message.platformMessageId,
             platform_message_id: message.platformMessageId,
@@ -649,7 +667,7 @@ async function initializePlatforms() {
               (message.platformMetadata?.mediaInfo as { mimetype?: string } | undefined)
                 ?.mimetype || null,
           },
-          { onConflict: 'whatsapp_id', ignoreDuplicates: true }
+          { onConflict: 'profile_id,platform,platform_message_id', ignoreDuplicates: true }
         )
         .select('id')
         .maybeSingle();
@@ -710,6 +728,7 @@ async function initializePlatforms() {
         if (!message.isFromMe && !isBackfill && savedMsg?.id) {
           void notifyIncomingMessage({
             userId: message.userId,
+            profileId,
             chatId: chat.id,
             platform: message.platform,
             senderName: message.senderName,

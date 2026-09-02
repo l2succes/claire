@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 import { API_BASE_URL } from './platforms';
 import type { Platform } from '../types/platform';
+import { useProfileStore } from '../stores/profileStore';
 
 export type PeopleFilter = 'all' | 'contacted' | 'needs_context' | 'groups';
 
@@ -32,7 +33,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const { data: { session } } = await supabase.auth.getSession();
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
-    headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
+    headers: { ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}), ...(useProfileStore.getState().activeProfileId ? { 'X-Claire-Profile-Id': useProfileStore.getState().activeProfileId! } : {}) },
   });
   const body = await response.json().catch(() => ({})) as { data?: T; error?: string };
   if (!response.ok) throw new Error(body.error || `Request failed (${response.status})`);

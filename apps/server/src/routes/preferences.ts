@@ -6,6 +6,7 @@ import { supabase } from '../services/supabase';
 import { logger } from '../utils/logger';
 import { voiceProfileService } from '../services/voice-profile-service';
 import { aiProcessingDisclosure, isAiProcessingEnabled } from '../services/ai-policy';
+import { profileScopeError, resolveProfileId } from '../services/profile-context';
 
 const router = Router();
 
@@ -50,11 +51,14 @@ const updatePreferencesSchema = z.object({
 router.get('/', requireAuth, async (req: Request, res: Response) => {
   const userId = req.user?.id;
   if (!userId) return res.status(401).json({ error: 'User not authenticated' });
+  const profileId = await resolveProfileId(req, userId);
+  if (!profileId) return res.status(403).json(profileScopeError());
 
   const { data, error } = await supabase
     .from('user_preferences')
     .select('tone, response_style, language, notification_enabled, preferences')
     .eq('user_id', userId)
+    .eq('profile_id', profileId)
     .single();
 
   if (error && error.code !== 'PGRST116') {
@@ -85,10 +89,12 @@ router.put(
   async (req: Request, res: Response) => {
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ error: 'User not authenticated' });
+    const profileId = await resolveProfileId(req, userId);
+    if (!profileId) return res.status(403).json(profileScopeError());
 
     const { tone, response_style, language, notification_enabled, preferences } = req.body;
 
-    const updates: Record<string, unknown> = { user_id: userId };
+    const updates: Record<string, unknown> = { user_id: userId, profile_id: profileId };
     if (tone !== undefined) updates.tone = tone;
     if (response_style !== undefined) updates.response_style = response_style;
     if (language !== undefined) updates.language = language;
@@ -98,6 +104,7 @@ router.put(
         .from('user_preferences')
         .select('preferences')
         .eq('user_id', userId)
+        .eq('profile_id', profileId)
         .maybeSingle();
       // Preference updates are partial from different clients. Preserve keys the
       // current desktop/client does not know about rather than clobbering them.
@@ -106,7 +113,7 @@ router.put(
 
     const { data, error } = await supabase
       .from('user_preferences')
-      .upsert(updates, { onConflict: 'user_id' })
+      .upsert(updates, { onConflict: 'user_id,profile_id' })
       .select('tone, response_style, language, notification_enabled, preferences')
       .single();
 

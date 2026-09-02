@@ -10,6 +10,7 @@ import { ClaireThemeProvider } from '@claire/design-system';
 import * as Sentry from '@sentry/react-native';
 import { useAuthStore } from '../stores/authStore';
 import { usePlatformStore } from '../stores/platformStore';
+import { useProfileStore } from '../stores/profileStore';
 import {
   addPushTokenRotationListener,
   getActiveNotificationChat,
@@ -86,6 +87,7 @@ export default function RootLayout() {
   const token = useAuthStore((state) => state.token);
   const initializePlatforms = usePlatformStore((state) => state.initialize);
   const fetchConnectedSessions = usePlatformStore((state) => state.fetchConnectedSessions);
+  const initializeProfiles = useProfileStore((state) => state.initialize);
 
   useEffect(() => {
     async function init() {
@@ -105,8 +107,12 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (!token) return;
-    void initializePlatforms();
     const userId = useAuthStore.getState().user?.id;
+    if (userId) {
+      void initializeProfiles(userId).then(() => initializePlatforms());
+    } else {
+      void initializePlatforms();
+    }
     if (userId) {
       // Native cache hydration happens before individual screens query. A
       // failed cache sync never blocks normal online Supabase behavior.
@@ -120,7 +126,7 @@ export default function RootLayout() {
       }
     });
     return () => subscription.remove();
-  }, [fetchConnectedSessions, initializePlatforms, token]);
+  }, [fetchConnectedSessions, initializePlatforms, initializeProfiles, token]);
 
   useEffect(() => {
     if (!token) return;
@@ -155,8 +161,10 @@ export default function RootLayout() {
   useEffect(() => {
     if (Platform.OS === 'web') return;
     const openNotification = (notification: Notifications.Notification) => {
-      const data = notification.request.content.data as { chatId?: unknown; messageId?: unknown };
+      const data = notification.request.content.data as { chatId?: unknown; messageId?: unknown; profileId?: unknown };
       if (typeof data.chatId !== 'string') return;
+      const userId = useAuthStore.getState().user?.id;
+      if (userId && typeof data.profileId === 'string') void useProfileStore.getState().setActiveProfile(userId, data.profileId);
       router.push({ pathname: '/chat/[chatId]', params: {
         chatId: data.chatId,
         ...(typeof data.messageId === 'string' ? { highlightMessageId: data.messageId } : {}),

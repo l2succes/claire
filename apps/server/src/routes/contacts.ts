@@ -5,12 +5,15 @@ import { logger } from '../utils/logger';
 import { queueWhatsAppContactIdentitySync } from '../services/whatsapp-contact-backfill';
 import { phoneNumberFromPlatformContactId } from '../services/contact-identity';
 import { Platform } from '../adapters/types';
+import { profileScopeError, resolveProfileId } from '../services/profile-context';
 
 const router = Router();
 
 router.get('/', requireAuth, async (req: Request, res: Response) => {
   const userId = req.user?.id;
   if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });
+  const profileId = await resolveProfileId(req, userId);
+  if (!profileId) return res.status(403).json({ success: false, ...profileScopeError() });
 
   try {
     // People is an address book as well as a conversation workspace. The
@@ -27,6 +30,7 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
         .from('contacts')
         .select('id, name, phone_number, platform_contact_id, avatar_url, inferred_name, inferred_relationship, is_group, platform, username')
         .eq('user_id', userId)
+        .eq('profile_id', profileId)
         .order('name', { ascending: true, nullsFirst: false })
         .order('id', { ascending: true });
 
@@ -72,6 +76,7 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
         .from('chats')
         .select('id, contact_id, name, platform, is_group, last_message_at')
         .eq('user_id', userId)
+        .eq('profile_id', profileId)
         .in('contact_id', contactIds)
         .order('last_message_at', { ascending: false, nullsFirst: false });
       if (platform !== 'all') chatQuery = chatQuery.eq('platform', platform);

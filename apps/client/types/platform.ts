@@ -55,6 +55,7 @@ export interface PlatformSession {
   id: string;
   platform: Platform;
   userId: string;
+  profileId?: string;
   status: PlatformStatus;
   authMethod: AuthMethod;
   platformUserId?: string;

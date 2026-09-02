@@ -17,7 +17,7 @@ function validRequest(value: unknown): value is InstagramLoginRequest {
 export async function startInstagramLogin(value: unknown): Promise<InstagramLoginResult> {
   if (!validRequest(value)) return { success: false, error: 'Sign-in context is invalid. Please sign in again.' };
   const response = await fetch(new URL('/platforms/instagram/login/start', value.apiUrl), {
-    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${value.accessToken}` }, body: JSON.stringify({ client: 'web' }),
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${value.accessToken}`, ...(value.profileId ? { 'X-Claire-Profile-Id': value.profileId } : {}) }, body: JSON.stringify({ client: 'web' }),
   });
   if (!response.ok) return { success: false, error: 'Could not start Instagram sign-in.' };
   const start = await response.json() as { sessionId: string; loginId: string; stepId: string; loginUrl?: string };

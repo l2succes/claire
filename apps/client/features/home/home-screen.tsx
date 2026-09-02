@@ -14,6 +14,7 @@ import { resolvePlatform, platformLabel } from '../../types/platform';
 import { formatInboxTimestamp } from '../../utils/messageTimestamp';
 import { computeUrgencyScore } from '../../utils/urgency';
 import { HomeSkeleton } from '../../components/claire/skeleton';
+import { ProfileSwitcher } from '../../components/profile-switcher';
 import { installationId, listHandoffs, type WorkspaceHandoff } from '../../services/handoffs';
 import { loopTitle, type LoopItem } from '../../services/loops';
 
@@ -164,11 +165,7 @@ export function HomeScreen() {
         title={`${greeting()},\n${firstName}.`}
         subtitle={actionCount === 0 ? "You're clear right now." : `${actionCount} item${actionCount === 1 ? '' : 's'} need${actionCount === 1 ? 's' : ''} your attention.`}
         safeArea
-        profile={
-          <Pressable accessibilityRole="button" accessibilityLabel="Open settings" onPress={() => router.push('/settings')}>
-            <MobileAvatar name={user?.name || user?.email || 'You'} uri={user?.avatar_url} size={44} badge={<View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: colors.lime, borderWidth: 2, borderColor: colors.cream }} />} />
-          </Pressable>
-        }
+        profile={<View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><ProfileSwitcher /><Pressable accessibilityRole="button" accessibilityLabel="Open settings" onPress={() => router.push('/settings')}><MobileAvatar name={user?.name || user?.email || 'You'} uri={user?.avatar_url} size={44} badge={<View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: colors.lime, borderWidth: 2, borderColor: colors.cream }} />} /></Pressable></View>}
       />
 
       <View style={{ paddingHorizontal: space[4], gap: space[4] }}>

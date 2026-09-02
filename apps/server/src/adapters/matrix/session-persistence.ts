@@ -9,6 +9,7 @@ import {
 export interface PersistedMatrixSessionRow {
   session_id: string;
   user_id: string;
+  profile_id?: string | null;
   platform: string;
   status: string;
   platform_user_id?: string | null;
@@ -32,6 +33,7 @@ export function toPersistedMatrixSession(session: PlatformSession) {
   return {
     session_id: session.id,
     user_id: session.userId,
+    profile_id: session.profileId || null,
     platform: session.platform,
     status: session.status,
     platform_user_id: session.platformUserId || null,
@@ -68,6 +70,7 @@ export function fromPersistedMatrixSession(
   return {
     id: row.session_id,
     userId: row.user_id,
+    profileId: row.profile_id || undefined,
     platform: row.platform as Platform,
     status: row.status as PlatformStatus,
     authMethod,

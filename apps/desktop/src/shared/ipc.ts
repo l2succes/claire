@@ -76,7 +76,7 @@ export type CompanionStatus = {
   encryptedCache: EncryptedCacheInfo;
   pushHelper: 'unsupported' | 'not_configured' | 'ready';
 };
-export type InstagramLoginRequest = { apiUrl: string; accessToken: string };
+export type InstagramLoginRequest = { apiUrl: string; accessToken: string; profileId?: string };
 export type InstagramLoginResult = { success: boolean; error?: string };
 export type IMessageSendRequest = { recipient: string; text: string };
 export type IMessageSendResult = { success: true } | { success: false; error: string };

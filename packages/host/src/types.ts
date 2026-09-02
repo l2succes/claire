@@ -44,6 +44,7 @@ export type ClaireInstagramLoginRequest = {
   /** Ephemeral, authenticated server context. Never persisted by the host. */
   apiUrl: string;
   accessToken: string;
+  profileId?: string;
 };
 
 export type ClaireInstagramLoginResult = { success: boolean; error?: string };

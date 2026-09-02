@@ -57,6 +57,7 @@ import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-na
 import { MobileAvatar, MobileIconButton } from '../../components/mobile/claire-mobile';
 import { cacheTimeline, cachedTimeline, usesNativeMobileCache } from '../../services/mobile-cache';
 import { inboxQueryPrefix, patchInboxChat } from '../../hooks/useInboxMessages';
+import { useProfileStore } from '../../stores/profileStore';
 import {
   chatMessageFromSend,
   groupReactions,
@@ -432,6 +433,7 @@ export default function ChatRoute() {
 
 export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
   const queryClient = useQueryClient();
+  const profileId = useProfileStore((state) => state.activeProfileId);
   const { chatId, contact_name, chat_name, platform, is_group, highlightMessageId, draft } =
     useLocalSearchParams<{
       chatId: string;
@@ -632,17 +634,17 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
       // it can arrive after someone has already navigated back. Patch every
       // cached inbox view now and refetch filter variants (especially Unread)
       // so neither the row nor the app badge retains a stale count.
-      patchInboxChat(queryClient, user?.id, {
+      patchInboxChat(queryClient, user?.id, profileId, {
         id: chatId,
         platform: platform as Platform,
         unread_count: 0,
       });
-      void queryClient.invalidateQueries({ queryKey: inboxQueryPrefix(user?.id) });
+      void queryClient.invalidateQueries({ queryKey: inboxQueryPrefix(user?.id, profileId) });
       await syncNotificationBadge().catch(() => undefined);
     } catch (error) {
       console.warn('Failed to mark conversation read:', error);
     }
-  }, [chatId, platform, connectedSessions, queryClient, user?.id]);
+  }, [chatId, platform, connectedSessions, profileId, queryClient, user?.id]);
 
   useEffect(() => {
     if (!chatId) return;

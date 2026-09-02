@@ -19,6 +19,7 @@ interface NotificationDevice {
 
 export interface IncomingNotificationEvent {
   userId: string;
+  profileId: string;
   chatId: string;
   platform: string;
   senderName?: string;
@@ -100,9 +101,9 @@ export class NotificationDeliveryService {
   async enqueueIncomingMessage(event: IncomingNotificationEvent): Promise<number> {
     this.start();
     const [{ data: preferences, error: preferenceError }, { data: devices, error: deviceError }, { data: chat, error: chatError }] = await Promise.all([
-      supabase.from('user_preferences').select('notification_enabled,preferences').eq('user_id', event.userId).maybeSingle(),
+      supabase.from('user_preferences').select('notification_enabled,preferences').eq('user_id', event.userId).eq('profile_id', event.profileId).maybeSingle(),
       supabase.from('notification_devices').select('id,user_id,device_id,platform,provider,token,enabled,timezone').eq('user_id', event.userId).eq('enabled', true),
-      supabase.from('chats').select('is_muted').eq('id', event.chatId).eq('user_id', event.userId).maybeSingle(),
+      supabase.from('chats').select('is_muted').eq('id', event.chatId).eq('user_id', event.userId).eq('profile_id', event.profileId).maybeSingle(),
     ]);
     if (preferenceError) throw preferenceError;
     if (deviceError) throw deviceError;
@@ -140,6 +141,7 @@ export class NotificationDeliveryService {
           type: 'new_message',
           messageId: event.messageId,
           chatId: event.chatId,
+          profileId: event.profileId,
           platform: event.platform,
           url: `claire://chat/${event.chatId}?messageId=${event.messageId}`,
         },
