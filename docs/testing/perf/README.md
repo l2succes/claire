@@ -27,19 +27,23 @@ reveal until auth is initialised and the index route renders nothing while it
 is loading. That is addressed by exposing the stored session immediately and
 refreshing the token behind the paint.
 
-## Navigation, warm
+## Per screen, release build, verified on device
 
-From a single instrumented session (Debug build, so absolute numbers are
-inflated; the mount-to-paint delta is the meaningful part).
+Mount to first paint, from an instrumented release session on the real
+account. Every screen paints in the same millisecond it mounts.
 
-| transition | mount to first paint | source |
-| --- | ---: | --- |
-| launch to Home | 2ms | cache |
-| Home to Messages | 4ms | cache |
+| screen | mount to first paint | source | settled |
+| --- | ---: | --- | ---: |
+| Home | 0ms | cache | +715ms |
+| Inbox | 0ms | cache | +0ms |
+| Chat | 0ms | cache | +451ms |
+| People | 0ms | cache | still refreshing |
 
-For comparison, before this work the inbox could not paint until an SQLite read
-*and* a network round trip had both completed, because the query was gated on
-the cache read.
+People is the clearest illustration of the intended behaviour: it paints the
+cached directory immediately, and the A-Z index fills in to its full range
+when the paginated network walk lands behind it. Before this work the inbox
+could not paint at all until an SQLite read *and* a network round trip had both
+completed, because the query was gated on the cache read.
 
 ## Caveats
 
