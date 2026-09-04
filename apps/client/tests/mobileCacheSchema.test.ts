@@ -44,6 +44,7 @@ describe('encrypted cache schema', () => {
 
   it('creates every table the module reads from', async () => {
     const { sql, db } = mockNativeSqlite();
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const cache = require('../services/mobile-cache.native') as typeof import('../services/mobile-cache.native');
     await cache.hydrateMobileCache('user-1');
 
@@ -67,7 +68,9 @@ describe('encrypted cache schema', () => {
 
   it('every table the module queries exists in the schema', () => {
     const { sql: _sql } = mockNativeSqlite();
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const cache = require('../services/mobile-cache.native') as typeof import('../services/mobile-cache.native');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const source = require('fs').readFileSync(require.resolve('../services/mobile-cache.native'), 'utf8') as string;
 
     const declared = new Set([...cache.SCHEMA_SQL.matchAll(/CREATE TABLE IF NOT EXISTS (\w+)/g)].map((m) => m[1]));
@@ -82,6 +85,7 @@ describe('snapshot memoisation', () => {
 
   it('reads the tables once and serves later calls from memory', async () => {
     const { db } = mockNativeSqlite();
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const cache = require('../services/mobile-cache.native') as typeof import('../services/mobile-cache.native');
 
     await cache.hydrateMobileCache('user-1');
@@ -94,6 +98,7 @@ describe('snapshot memoisation', () => {
 
   it('shares one read between callers racing in the same tick', async () => {
     const { db } = mockNativeSqlite();
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const cache = require('../services/mobile-cache.native') as typeof import('../services/mobile-cache.native');
 
     await Promise.all([
@@ -108,6 +113,7 @@ describe('snapshot memoisation', () => {
 
   it('re-reads after a write invalidates the snapshot', async () => {
     const { db } = mockNativeSqlite();
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const cache = require('../services/mobile-cache.native') as typeof import('../services/mobile-cache.native');
 
     await cache.hydrateMobileCache('user-1');

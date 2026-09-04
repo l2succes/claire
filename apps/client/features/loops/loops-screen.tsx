@@ -122,7 +122,7 @@ export function LoopsScreen() {
     return { open: openItems, completed: completedItems, waiting: waitingItems, today: dueToday, forYou: forYouItems, needsAttention: attention };
   }, [query.data]);
   const visible = filter === 'done' ? completed : filter === 'waiting' ? waiting : filter === 'for_you' ? forYou : open;
-  useScreenLoadMark('loops', { hasData: !query.isCold, isFetching: query.isFetching, source: query.localSettled ? 'cache' : 'network' });
+  useScreenLoadMark('loops', { hasData: !query.isCold, isFetching: query.isFetching, source: query.isFetching ? 'cache' : 'network' });
 
   return (
     <View testID="loops-screen" style={{ flex: 1, backgroundColor: colors.cream }}>

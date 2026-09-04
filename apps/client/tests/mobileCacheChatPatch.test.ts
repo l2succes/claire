@@ -12,6 +12,7 @@ describe('cached chat write-through', () => {
     jest.doMock('@claire/host', () => ({
       host: { name: 'electron', capabilities: { encryptedCache: true }, readEncryptedCache: async () => null, writeEncryptedCache: async () => undefined, clearEncryptedCache: async () => undefined },
     }));
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
     cache = require('../services/mobile-cache.web') as typeof import('../services/mobile-cache.web');
     await cache.cacheBootstrap('u', {
       cursor: 1,

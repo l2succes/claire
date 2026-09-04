@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { Check, ChevronRight, Laptop, Plus, RefreshCw, Smartphone } from 'lucide-react-native';
@@ -12,6 +12,7 @@ import { PlatformAuthModal } from '../../features/connections/legacy-platform-au
 import { MobileHeader, MobileIconButton, MobileState, SectionLabel } from '../../components/mobile/claire-mobile';
 import { ConnectionsSkeleton } from '../../components/claire/skeleton';
 import { useAuthStore } from '../../stores/authStore';
+import { readQuerySnapshot, writeQuerySnapshot } from '../../services/mobile-cache';
 import { ConnectionPlatformMark } from '../../features/connections/connection-platform-mark';
 import { ConnectionRow, type ConnectionRowState } from '../../features/connections/connection-row';
 import { CONNECTION_PLATFORM_CONFIG, connectionRoute } from '../../features/connections/connection-platform-config';
@@ -48,21 +49,46 @@ export default function ConnectionsScreen() {
       ]);
       setDefinitions(catalog);
       setRequested(interests);
+      const userId = useAuthStore.getState().user?.id;
+      if (userId) void writeQuerySnapshot(userId, 'platform-definitions', catalog).catch(() => undefined);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not load connections.');
     } finally {
       setLoading(false);
     }
   }, [fetchSessions]);
+  // The catalog is effectively static between releases, but this screen threw
+  // it away on every unmount and showed a skeleton again on the way back in.
+  // Seed from the last known answer, then let the focus refresh correct it
+  // behind the rendered list.
+  useEffect(() => {
+    const userId = useAuthStore.getState().user?.id;
+    if (!userId) return;
+    let active = true;
+    void readQuerySnapshot<PlatformDefinition[]>(userId, 'platform-definitions')
+      .then((snapshot) => {
+        if (!active || !snapshot?.data?.length) return;
+        setDefinitions((current) => (current.length ? current : snapshot.data));
+        setLoading(false);
+      })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, []);
+
   useFocusEffect(useCallback(() => {
     void load();
   }, [load]));
 
   const connectedPlatforms = useMemo(() => new Set(sessions.filter(session => session.status === PlatformStatus.CONNECTED).map(session => session.platform)), [sessions]);
   const canConnectOnMobile = (definition: PlatformDefinition) => definition.setupSurface === 'phone' && Object.values(Platform).includes(definition.id as Platform);
-  const available = definitions.filter(item => item.supportStatus === 'available' || item.supportStatus === 'beta');
-  const otherAvailable = available.filter(item => !resolvePlatform(item.id));
-  const roadmap = definitions.filter(item => item.supportStatus === 'planned' || item.supportStatus === 'unavailable');
+  const { available, otherAvailable, roadmap } = useMemo(() => {
+    const availableItems = definitions.filter(item => item.supportStatus === 'available' || item.supportStatus === 'beta');
+    return {
+      available: availableItems,
+      otherAvailable: availableItems.filter(item => !resolvePlatform(item.id)),
+      roadmap: definitions.filter(item => item.supportStatus === 'planned' || item.supportStatus === 'unavailable'),
+    };
+  }, [definitions]);
 
   const act = async (definition: PlatformDefinition) => {
     const platform = resolvePlatform(definition.id);

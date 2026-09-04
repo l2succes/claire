@@ -6,7 +6,11 @@ type ScreenLoadState = {
   hasData: boolean;
   /** True while a network request for this screen is in flight. */
   isFetching?: boolean;
-  /** Where the first painted data came from. */
+  /**
+   * Where the data came from. Resolved at first paint, not at settle: a screen
+   * that paints from disk and then refreshes over the network is exactly the
+   * behaviour being measured, and recording the later source would erase it.
+   */
   source?: PerfSource;
 };
 
@@ -23,6 +27,7 @@ type ScreenLoadState = {
 export function useScreenLoadMark(screen: string, state: ScreenLoadState): void {
   const painted = useRef(false);
   const settled = useRef(false);
+  const paintSource = useRef<PerfSource | undefined>(undefined);
 
   useEffect(() => {
     perfMark(screen, 'mount');
@@ -31,17 +36,21 @@ export function useScreenLoadMark(screen: string, state: ScreenLoadState): void 
     return () => {
       painted.current = false;
       settled.current = false;
+      paintSource.current = undefined;
     };
   }, [screen]);
 
   useEffect(() => {
     if (state.hasData && !painted.current) {
       painted.current = true;
+      paintSource.current = state.source;
       perfMark(screen, 'first-paint', { source: state.source });
     }
     if (state.hasData && !state.isFetching && !settled.current) {
       settled.current = true;
-      perfMark(screen, 'settled', { source: state.source });
+      // Reports the source of the *first* paint, so a cache-then-network screen
+      // is not retroactively recorded as having come from the network.
+      perfMark(screen, 'settled', { source: paintSource.current ?? state.source });
     }
   }, [screen, state.hasData, state.isFetching, state.source]);
 }

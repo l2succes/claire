@@ -341,7 +341,7 @@ export function InboxScreen() {
   useScreenLoadMark('inbox', {
     hasData: painted,
     isFetching: inbox.isFetching,
-    source: inbox.localSettled && inbox.isFetching ? 'cache' : 'network',
+    source: inbox.isFetching ? 'cache' : 'network',
   });
 
   const searching = query.trim().length > 0;

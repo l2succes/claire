@@ -93,7 +93,7 @@ export function HomeScreen() {
   useScreenLoadMark('home', {
     hasData: !(brief.isCold && inbox.isCold && loops.isCold),
     isFetching: brief.isFetching || loops.isFetching || inbox.isFetching,
-    source: brief.localSettled || loops.localSettled ? 'cache' : 'network',
+    source: (brief.isFetching || loops.isFetching) ? 'cache' : 'network',
   });
 
   const firstName = user?.name?.trim().split(/\s+/)[0] || user?.email?.split('@')[0] || 'there';

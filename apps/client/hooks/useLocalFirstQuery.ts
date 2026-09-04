@@ -126,7 +126,8 @@ export function useLocalSeed<TData>(
     return () => {
       active = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Keyed on the serialised query key rather than the array identity, so an
+    // inline key does not restart the read on every render.
   }, [queryClient, keyHash, seedEnabled]);
 
   return { localSettled };

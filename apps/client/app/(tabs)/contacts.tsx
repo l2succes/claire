@@ -226,7 +226,7 @@ export default function ContactsScreen() {
   useScreenLoadMark('people', {
     hasData: !peopleQuery.isCold,
     isFetching: peopleQuery.isFetching,
-    source: peopleQuery.localSettled ? 'cache' : 'network',
+    source: peopleQuery.isFetching ? 'cache' : 'network',
   });
 
   const jumpToSection = useCallback((sectionIndex: number) => {

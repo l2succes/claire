@@ -13,6 +13,8 @@ import { colors, mobileType, radius } from '@claire/design-system';
 import { MobileHeader, MobileIconButton } from '../../components/mobile/claire-mobile';
 import { supabase } from '../../services/supabase';
 import { API_BASE_URL } from '../../services/platforms';
+import { useAuthStore } from '../../stores/authStore';
+import { readQuerySnapshot, writeQuerySnapshot } from '../../services/mobile-cache';
 import { getNativeNotificationPermission, registerNotificationDevice, requestWebNotificationPermission, supportsWebNotifications } from '../../services/notifications';
 
 // ---------------------------------------------------------------------------
@@ -191,6 +193,23 @@ export default function NotificationsSettingsScreen() {
   const [systemPermission, setSystemPermission] = useState('unknown');
 
   useEffect(() => {
+    // Preferences change only when the user edits them, so the last known set
+    // is the right first frame. Without this the screen showed a spinner on
+    // every open while it re-read values it already had.
+    const userId = useAuthStore.getState().user?.id;
+    if (!userId) return;
+    let active = true;
+    void readQuerySnapshot<NotificationPrefs>(userId, 'preferences:notifications')
+      .then((snapshot) => {
+        if (!active || !snapshot?.data) return;
+        setPrefs(snapshot.data);
+        setLoading(false);
+      })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
     (async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
@@ -198,6 +217,8 @@ export default function NotificationsSettingsScreen() {
         if (!token) return;
         const loaded = await fetchNotificationPrefs(token);
         setPrefs(loaded);
+        const userId = useAuthStore.getState().user?.id;
+        if (userId) void writeQuerySnapshot(userId, 'preferences:notifications', loaded).catch(() => undefined);
         setSystemPermission(await getNativeNotificationPermission());
       } catch {
         // silently use defaults
