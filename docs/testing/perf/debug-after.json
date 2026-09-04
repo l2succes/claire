@@ -1,0 +1,153 @@
+{
+  "label": "debug-after",
+  "bundle": "com.claire.app",
+  "udid": "6C6955AC-4A9D-4119-9C43-7D44B9E98EC5",
+  "runs": [
+    {
+      "launchedAt": 1788519300792,
+      "marks": []
+    },
+    {
+      "launchedAt": 1788519349510,
+      "marks": [
+        {
+          "screen": "app",
+          "event": "interaction",
+          "t": 1788519362101,
+          "detail": {
+            "phase": "auth-resolved"
+          }
+        },
+        {
+          "screen": "home",
+          "event": "mount",
+          "t": 1788519362629,
+          "sinceMount": 0
+        },
+        {
+          "screen": "home",
+          "event": "first-paint",
+          "t": 1788519362631,
+          "sinceMount": 2,
+          "source": "cache"
+        },
+        {
+          "screen": "app",
+          "event": "interaction",
+          "t": 1788519362769,
+          "detail": {
+            "phase": "splash-hidden"
+          }
+        },
+        {
+          "screen": "app",
+          "event": "interaction",
+          "t": 1788519363209,
+          "detail": {
+            "phase": "reveal-finished"
+          }
+        },
+        {
+          "screen": "home",
+          "event": "settled",
+          "t": 1788519363622,
+          "sinceMount": 993,
+          "source": "cache"
+        }
+      ]
+    },
+    {
+      "launchedAt": 1788519372894,
+      "marks": [
+        {
+          "screen": "app",
+          "event": "interaction",
+          "t": 1788519380189,
+          "detail": {
+            "phase": "auth-resolved"
+          }
+        },
+        {
+          "screen": "home",
+          "event": "mount",
+          "t": 1788519380687,
+          "sinceMount": 0
+        },
+        {
+          "screen": "home",
+          "event": "first-paint",
+          "t": 1788519380689,
+          "sinceMount": 2,
+          "source": "cache"
+        },
+        {
+          "screen": "app",
+          "event": "interaction",
+          "t": 1788519380823,
+          "detail": {
+            "phase": "splash-hidden"
+          }
+        },
+        {
+          "screen": "app",
+          "event": "interaction",
+          "t": 1788519381259,
+          "detail": {
+            "phase": "reveal-finished"
+          }
+        },
+        {
+          "screen": "home",
+          "event": "settled",
+          "t": 1788519381836,
+          "sinceMount": 1149,
+          "source": "cache"
+        }
+      ]
+    }
+  ],
+  "rows": [
+    {
+      "name": "app:auth-resolved",
+      "median": 9943,
+      "min": 7295,
+      "max": 12591,
+      "samples": 2
+    },
+    {
+      "name": "home:mount",
+      "median": 10456,
+      "min": 7793,
+      "max": 13119,
+      "samples": 2
+    },
+    {
+      "name": "home:first-paint",
+      "median": 10458,
+      "min": 7795,
+      "max": 13121,
+      "samples": 2
+    },
+    {
+      "name": "app:splash-hidden",
+      "median": 10594,
+      "min": 7929,
+      "max": 13259,
+      "samples": 2
+    },
+    {
+      "name": "app:reveal-finished",
+      "median": 11032,
+      "min": 8365,
+      "max": 13699,
+      "samples": 2
+    },
+    {
+      "name": "home:settled",
+      "median": 11527,
+      "min": 8942,
+      "max": 14112,
+      "samples": 2
+    }
+  ]
+}

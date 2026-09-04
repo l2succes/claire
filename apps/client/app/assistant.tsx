@@ -10,6 +10,8 @@ import { AskComposer, AskToolGrid } from '../components/claire/composer';
 import { ClaireMark } from '../components/claire/mark';
 import { AskClaireSkeleton, DesktopAskClaireSkeleton } from '../components/claire/skeleton';
 import { useChromeStore } from '../stores/chromeStore';
+import { useAuthStore } from '../stores/authStore';
+import { readQuerySnapshot, writeQuerySnapshot } from '../services/mobile-cache';
 import {
   AssistantCitation,
   AssistantIndexStatus,
@@ -141,13 +143,14 @@ export function AssistantScreen({ inTab = false }: { inTab?: boolean }) {
 
   const refresh = useCallback(async () => {
     try {
-      setLoading(true);
       const [savedThreads, status] = await Promise.all([
         conversationAssistantApi.listThreads(),
         conversationAssistantApi.getIndexStatus(),
       ]);
       setThreads(savedThreads);
       setIndexStatus(status);
+      const userId = useAuthStore.getState().user?.id;
+      if (userId) void writeQuerySnapshot(userId, 'assistant-threads', savedThreads).catch(() => undefined);
       if (status.status !== 'ready') void conversationAssistantApi.startIndex().catch(() => {});
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not load Ask Claire.');
@@ -156,7 +159,24 @@ export function AssistantScreen({ inTab = false }: { inTab?: boolean }) {
     }
   }, []);
 
-  useEffect(() => { void refresh(); }, [refresh]);
+  // Paint the thread list from the last visit rather than a skeleton. This tab
+  // is remounted every time it is opened, so it re-fetched from scratch on
+  // every visit and showed a full-screen skeleton while it did.
+  useEffect(() => {
+    let active = true;
+    const userId = useAuthStore.getState().user?.id;
+    if (userId) {
+      void readQuerySnapshot<AssistantThread[]>(userId, 'assistant-threads')
+        .then((snapshot) => {
+          if (!active || !snapshot?.data?.length) return;
+          setThreads((current) => (current.length ? current : snapshot.data));
+          setLoading(false);
+        })
+        .catch(() => undefined);
+    }
+    void refresh();
+    return () => { active = false; };
+  }, [refresh]);
 
   const createThread = async () => {
     try {

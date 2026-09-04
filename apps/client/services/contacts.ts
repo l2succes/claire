@@ -125,7 +125,7 @@ export const contactsApi = {
      * indistinguishable from the screen being broken — and is what it looked
      * like. Hand back each page as it lands so the list fills in instead.
      */
-    onPage?: (soFar: PersonContact[]) => void,
+    onPage?: (soFar: PersonContact[], isLast: boolean) => void,
   ) {
     const contacts: PersonContact[] = [];
     let offset = 0;
@@ -133,8 +133,11 @@ export const contactsApi = {
     for (let page = 0; page < MAX_PAGES; page += 1) {
       const result = await contactsApi.list({ ...params, offset, limit: PAGE_SIZE });
       contacts.push(...result.contacts);
-      onPage?.(contacts);
-      if (result.nextOffset === null || !result.contacts.length) {
+      const isLast = result.nextOffset === null || !result.contacts.length;
+      // The consumer decides how often to publish, but it must never miss the
+      // final page: that is the one the A-Z index is measured against.
+      onPage?.(contacts, isLast);
+      if (isLast || result.nextOffset === null) {
         exhausted = true;
         break;
       }

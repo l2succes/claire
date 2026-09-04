@@ -13,6 +13,8 @@ import { colors, mobileType, radius } from '@claire/design-system';
 import { MobileHeader, MobileIconButton } from '../../components/mobile/claire-mobile';
 import { supabase } from '../../services/supabase';
 import { API_BASE_URL } from '../../services/platforms';
+import { useAuthStore } from '../../stores/authStore';
+import { readQuerySnapshot, writeQuerySnapshot } from '../../services/mobile-cache';
 
 const TONES = [
   { value: 'friendly', label: 'Friendly', description: 'Warm and approachable' },
@@ -82,6 +84,21 @@ export default function AISettingsScreen() {
   const [rebuildingVoice, setRebuildingVoice] = useState(false);
 
   useEffect(() => {
+    const userId = useAuthStore.getState().user?.id;
+    if (!userId) return;
+    let active = true;
+    void readQuerySnapshot<{ tone: string; style: string }>(userId, 'preferences:ai')
+      .then((snapshot) => {
+        if (!active || !snapshot?.data) return;
+        setTone(snapshot.data.tone as Tone);
+        setStyle(snapshot.data.style as Style);
+        setLoading(false);
+      })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
     (async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
@@ -94,6 +111,8 @@ export default function AISettingsScreen() {
         ]);
         setTone(prefs.tone as Tone);
         setStyle(prefs.response_style as Style);
+        const cacheUserId = useAuthStore.getState().user?.id;
+        if (cacheUserId) void writeQuerySnapshot(cacheUserId, 'preferences:ai', { tone: prefs.tone, style: prefs.response_style }).catch(() => undefined);
         setAiEnabled(prefs.preferences?.ai_enabled !== false);
         if (voiceResponse.ok) setVoiceProfiles((await voiceResponse.json()).data || []);
         if (privacyResponse.ok) setPrivacyDisclosure((await privacyResponse.json()).data);

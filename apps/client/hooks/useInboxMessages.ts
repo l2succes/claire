@@ -1,8 +1,16 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useRef } from 'react';
 import { useInfiniteQuery, useQueryClient, type InfiniteData, type QueryClient } from '@tanstack/react-query';
+import { useLocalSeed } from './useLocalFirstQuery';
 import { supabase, type DbRow } from '../services/supabase';
 import { Platform } from '../types/platform';
-import { cacheTimeline, hydrateMobileCache, usesNativeMobileCache, type CachedChat } from '../services/mobile-cache';
+import {
+  cacheTimeline,
+  hydrateMobileCache,
+  patchCachedChat,
+  touchCachedChatFromMessage,
+  usesNativeMobileCache,
+  type CachedChat,
+} from '../services/mobile-cache';
 import { displayContactName } from '../services/contact-display';
 
 export interface InboxMessage {
@@ -198,6 +206,11 @@ export function patchInboxRealtimeMessage(
   const incomingName = displayContactName(row.contact_name, platform, row.contact_phone);
   if (usesNativeMobileCache() && userId && row.chat_id && row.timestamp) {
     void cacheTimeline(userId, row.chat_id, [row as RawMessage & { id: string; chat_id: string; timestamp: string }]).catch(() => undefined);
+    // The conversation's own row has to move too. Caching only the message left
+    // cache_chats to be updated by the foreground sync alone, so a cold start
+    // painted previews and unread counts from the last time the app was
+    // foregrounded -- fast, and wrong.
+    void touchCachedChatFromMessage(userId, row as unknown as Record<string, unknown>).catch(() => undefined);
   }
   updateInboxQueries(queryClient, userId, (old, canInsert) => {
     if (!old) return old;
@@ -254,9 +267,16 @@ export function patchInboxRealtimeMessage(
 export function patchInboxChat(
   queryClient: QueryClient,
   userId: string | undefined,
-  chat: { id: string; platform?: Platform; unread_count?: number; is_pinned?: boolean },
+  chat: Record<string, unknown> & { id: string; platform?: Platform; unread_count?: number; is_pinned?: boolean },
 ) {
   const key = conversationKey(chat.id, chat.platform || Platform.WHATSAPP);
+  if (usesNativeMobileCache() && userId) {
+    // Merged, not replaced: this row is the `chats` table alone, with no
+    // contact join and no latest_message, and the cold-start paint is built
+    // from exactly those two fields.
+    const { latest_message: _latest, contact: _contact, ...rest } = chat;
+    void patchCachedChat(userId, chat.id, rest).catch(() => undefined);
+  }
   updateInboxQueries(queryClient, userId, (old) => {
     if (!old) return old;
     let changed = false;
@@ -332,25 +352,33 @@ export function useInboxMessages(
     () => inboxQueryKey(userId, search, filter, platformFilter),
     [userId, search, filter, platformFilter],
   );
-  const [cacheReady, setCacheReady] = useState(!usesNativeMobileCache());
+  // Only the unfiltered feed may be seeded. A cached snapshot is the whole
+  // conversation list; painting it into the Unread tab would show every
+  // conversation as unread until the server disagreed.
+  const canSeed = !search && filter === 'all' && platformFilter === 'all';
+  const seedRef = useRef<InboxMessage[]>([]);
 
-  useEffect(() => {
-    let active = true;
-    setCacheReady(!usesNativeMobileCache());
-    if (!userId || !usesNativeMobileCache()) return;
-    void hydrateMobileCache(userId).then((snapshot) => {
-      if (!active) return;
+  const { localSettled } = useLocalSeed<InboxQueryData>(queryClient, queryKey, {
+    enabled: !!userId && canSeed,
+    read: async () => {
+      if (!userId) return null;
+      const snapshot = await hydrateMobileCache(userId);
       const messages = cachedInboxMessages(snapshot.chats);
-      // The offline snapshot seeds page one only; the network fetch that
-      // follows supplies the real cursor.
-      if (messages.length) queryClient.setQueryData<InboxQueryData>(queryKey, { pages: [{ messages, hasMore: false, nextCursor: null }], pageParams: [null] });
-    }).catch(() => undefined).finally(() => { if (active) setCacheReady(true); });
-    return () => { active = false; };
-  }, [queryClient, queryKey, userId]);
+      if (!messages.length) return null;
+      seedRef.current = messages;
+      // hasMore stays true so the list keeps its "load more" affordance while
+      // the real first page and its cursor are on the way.
+      return { pages: [{ messages, hasMore: true, nextCursor: null }], pageParams: [null] };
+    },
+    isEmpty: (data) => !data.pages.some((page) => page.messages.length),
+  });
 
   const query = useInfiniteQuery<MessagePage, Error, InboxQueryData, typeof queryKey, InboxCursor | null>({
     queryKey,
-    enabled: !!userId && cacheReady,
+    // Never gated on the cache. Holding this false until SQLite resolved put
+    // the disk read on the critical path in front of the network rather than
+    // beside it, and re-ran on every keystroke because the key is part of it.
+    enabled: !!userId,
     initialPageParam: null,
     staleTime: 60_000,
     gcTime: 30 * 60_000,
@@ -432,16 +460,27 @@ export function useInboxMessages(
     getNextPageParam: (lastPage) => lastPage.nextCursor,
   });
 
+  const pages = query.data?.pages;
+  const hasNextPage = !!query.hasNextPage;
   const messages = useMemo(() => {
     const merged = new Map<string, InboxMessage>();
-    for (const page of query.data?.pages ?? []) {
+    for (const page of pages ?? []) {
       for (const message of page.messages) {
         const existing = merged.get(message.conversation_key);
         if (!existing || new Date(message.timestamp) > new Date(existing.timestamp)) merged.set(message.conversation_key, message);
       }
     }
+    // The server's first page is twenty conversations; the cache usually held
+    // far more. Without this the list visibly shrinks the moment the network
+    // answers, so the cached remainder stays on screen as a provisional tail
+    // until pagination has actually caught up with it.
+    if (hasNextPage && seedRef.current.length) {
+      for (const message of seedRef.current) {
+        if (!merged.has(message.conversation_key)) merged.set(message.conversation_key, message);
+      }
+    }
     return sortMessages([...merged.values()]);
-  }, [query.data]);
+  }, [pages, hasNextPage]);
 
   return {
     ...query,
@@ -451,5 +490,9 @@ export function useInboxMessages(
     hasMore: !!query.hasNextPage,
     fetchMessages: query.refetch,
     fetchNextMessages: query.fetchNextPage,
+    // The only condition a full-screen skeleton may use: the cache came back
+    // empty *and* the network has not answered.
+    isCold: localSettled && query.isPending,
+    localSettled,
   };
 }

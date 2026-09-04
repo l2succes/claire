@@ -6,6 +6,8 @@
  */
 
 import { create, type StoreApi } from 'zustand';
+import { createJSONStorage, persist } from 'zustand/middleware';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { platformsApi, pollAuthStatus } from '../services/platforms';
 import {
   Platform,
@@ -124,7 +126,7 @@ function startAuthPolling(
   set({ _pollController: controller });
 }
 
-export const usePlatformStore = create<PlatformState>((set, get) => ({
+export const usePlatformStore = create<PlatformState>()(persist((set, get) => ({
   // Initial state
   availablePlatforms: [],
   connectedSessions: [],
@@ -542,7 +544,34 @@ export const usePlatformStore = create<PlatformState>((set, get) => ({
       _pollController: null,
     });
 
+    void usePlatformStore.persist.clearStorage();
   },
+}), {
+  name: 'claire.platforms',
+  storage: createJSONStorage(() => AsyncStorage),
+  version: 1,
+  /**
+   * Connection metadata only, and never anything secret.
+   *
+   * The inbox's platform filter chips are built from connectedSessions, so
+   * without this they are absent on every cold start until the network answers
+   * and the row of filters appears a beat after the list it belongs to.
+   *
+   * Three exclusions are deliberate. `authData` carries live QR and pairing
+   * codes -- transient auth secrets that must never reach disk. Only connected
+   * sessions are stored, because a stale "awaiting_auth" chip on launch would
+   * offer to resume an auth flow that died with the last process. And
+   * `isInitialized` is left out so the store still refetches on every launch:
+   * what is persisted is a hint for the first frame, not an authority on what
+   * is actually connected.
+   */
+  partialize: (state) => ({
+    availablePlatforms: state.availablePlatforms,
+    activePlatformFilter: state.activePlatformFilter,
+    connectedSessions: state.connectedSessions
+      .filter((session) => session.status === PlatformStatus.CONNECTED)
+      .map(({ authData, error, ...session }) => session),
+  }),
 }));
 
 // Selector hooks for common queries

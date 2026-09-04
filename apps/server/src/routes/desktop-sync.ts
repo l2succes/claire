@@ -33,17 +33,35 @@ router.get('/bootstrap', requireAuth, async (req: Request, res: Response) => {
     if (cursorResult.error) throw cursorResult.error;
 
     const chats = chatsResult.data || [];
-    const chatIds = chats.map((chat: DbRow) => chat.id);
     const latestByChat = new Map<string, Record<string, unknown>>();
-    if (chatIds.length) {
-      const { data: latest, error } = await supabase
-        .from('messages')
-        .select('id, chat_id, content, content_type, media_mime_type, timestamp, from_me')
+    if (chats.length) {
+      // One row per conversation, straight from the feed view.
+      //
+      // This used to select every message the account had ever received --
+      // no limit, ordered by timestamp -- and then discard all but the newest
+      // per chat in JavaScript. On a real account that is the entire message
+      // history transferred and parsed on every cold start that finds an empty
+      // cache. conversation_feed already denormalises the latest message onto
+      // each chat through an indexed lateral join, which is the same answer
+      // for a bounded number of rows.
+      const { data: feed, error } = await supabase
+        .from('conversation_feed')
+        .select('chat_id, last_message_id, last_message_content, last_message_content_type, last_message_media_mime_type, last_message_from_me, last_message_at')
         .eq('user_id', userId)
-        .in('chat_id', chatIds)
-        .order('timestamp', { ascending: false });
+        .not('last_message_id', 'is', null);
       if (error) throw error;
-      for (const message of latest || []) if (message.chat_id && !latestByChat.has(message.chat_id)) latestByChat.set(message.chat_id, message);
+      for (const row of feed || []) {
+        if (!row.chat_id || !row.last_message_id) continue;
+        latestByChat.set(row.chat_id, {
+          id: row.last_message_id,
+          chat_id: row.chat_id,
+          content: row.last_message_content,
+          content_type: row.last_message_content_type,
+          media_mime_type: row.last_message_media_mime_type,
+          from_me: row.last_message_from_me,
+          timestamp: row.last_message_at,
+        });
+      }
     }
 
     res.json({

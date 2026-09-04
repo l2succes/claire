@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Modal, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { CheckCircle2, PenSquare, Pin, Search, Sparkles, X } from 'lucide-react-native';
 import { Image } from 'expo-image';
@@ -16,6 +16,8 @@ import { Platform } from '../../types/platform';
 import { PlatformBadge } from '../../components/PlatformIcon';
 import { formatInboxTimestamp } from '../../utils/messageTimestamp';
 import { InboxRowSkeleton, InboxSkeleton } from '../../components/claire/skeleton';
+import { signalFirstPaint } from '../../services/mobile-sync';
+import { useScreenLoadMark } from '../../hooks/useScreenLoadMark';
 
 type InboxFilter = 'all' | 'unread' | 'needs_reply' | 'groups';
 type PlatformFilter = 'all' | Platform;
@@ -61,7 +63,7 @@ function normalizeInboxMediaUrl(value: string): string | undefined {
 
 /** Shared conversation content for phone and desktop. The shell owns columns;
  * this row owns identity, platform, media, read state, and preview semantics. */
-export function InboxConversationRow({
+function InboxConversationRowInner({
   message,
   pinned,
   active = false,
@@ -183,6 +185,13 @@ function HighlightCard({ message, onPress }: { message: InboxMessage; onPress: (
   );
 }
 
+/**
+ * Memoised because the feed's identity changes on every realtime patch: the
+ * hook re-sorts and returns a new array, which re-rendered every visible row
+ * and had each one recompute its initials, avatar tone and preview.
+ */
+export const InboxConversationRow = memo(InboxConversationRowInner);
+
 export function InboxScreen() {
   const isDesktop = useIsDesktopLayout();
   const params = useLocalSearchParams<{ filter?: string }>();
@@ -254,7 +263,10 @@ export function InboxScreen() {
   // Hold the most recent conversations warm so even a first-ever open has
   // something to paint. Keyed on the first page's identity rather than on every
   // feed update, so scrolling and realtime patches do not re-trigger it.
-  const firstPageKey = inbox.messages.slice(0, 12).map(message => message.chat_id).join(',');
+  const firstPageKey = useMemo(
+    () => inbox.messages.slice(0, 12).map(message => message.chat_id).join(','),
+    [inbox.messages],
+  );
   useEffect(() => {
     if (!user?.id || !firstPageKey) return;
     void warmChatTimelines(queryClient, user.id, firstPageKey.split(','));
@@ -296,22 +308,42 @@ export function InboxScreen() {
     }
   };
 
-  const filters: Array<{ value: InboxFilter; label: string; count?: number }> = [
+  // Both of these were rebuilt on every render, and the unread count walked the
+  // entire loaded feed to do it.
+  const filters: Array<{ value: InboxFilter; label: string; count?: number }> = useMemo(() => [
     { value: 'all', label: 'All' },
-    { value: 'unread', label: 'Unread', count: inbox.messages.filter(message => !!message.unread_count).length },
+    { value: 'unread', label: 'Unread', count: inbox.messages.reduce((total, message) => total + (message.unread_count ? 1 : 0), 0) },
     { value: 'needs_reply', label: 'Needs reply' },
-  ];
-  const platformFilterOptions: Array<{ value: PlatformFilter; label: string }> = [
-    ...connectedSessions.filter(session => session.status === 'connected').map(session => ({
-      value: session.platform as PlatformFilter,
-      label: session.platform === 'whatsapp' ? 'WhatsApp' : session.platform[0].toUpperCase() + session.platform.slice(1),
-    })),
-  ];
-  const platformFilters = platformFilterOptions.filter((entry, index, rows) => rows.findIndex(candidate => candidate.value === entry.value) === index);
+  ], [inbox.messages]);
+  const platformFilters = useMemo(() => {
+    const seen = new Set<string>();
+    const options: Array<{ value: PlatformFilter; label: string }> = [];
+    for (const session of connectedSessions) {
+      if (session.status !== 'connected' || seen.has(session.platform)) continue;
+      seen.add(session.platform);
+      options.push({
+        value: session.platform as PlatformFilter,
+        label: session.platform === 'whatsapp' ? 'WhatsApp' : session.platform[0].toUpperCase() + session.platform.slice(1),
+      });
+    }
+    return options;
+  }, [connectedSessions]);
   const inboxRows = useMemo(
     () => visibleMessages.map(message => ({ ...message, has_open_loop: loopChats.data?.has(message.chat_id) || message.has_open_loop })),
     [loopChats.data, visibleMessages],
   );
+  // Staged startup sync waits on this: the heavy cold-start work belongs
+  // behind the first screen the user sees, not in front of it.
+  const painted = !inbox.isCold;
+  useEffect(() => {
+    if (painted) signalFirstPaint();
+  }, [painted]);
+  useScreenLoadMark('inbox', {
+    hasData: painted,
+    isFetching: inbox.isFetching,
+    source: inbox.isFetching ? 'cache' : 'network',
+  });
+
   const searching = query.trim().length > 0;
   const highlights = useMemo(() => searching ? [] : [...inboxRows]
     .map(message => ({
@@ -323,6 +355,18 @@ export function InboxScreen() {
     .slice(0, 3)
     .map(candidate => candidate.message), [inboxRows, searching]);
   const displayedMessages = inboxRows;
+  const renderConversation = useCallback(
+    ({ item }: { item: InboxMessage }) => (
+      <InboxConversationRow
+        message={item}
+        onPress={() => openChat(item)}
+        onPressIn={() => warmChat(item)}
+        onLongPress={() => setSnoozeTarget(item)}
+      />
+    ),
+    [openChat, warmChat],
+  );
+
   const refresh = useCallback(async () => {
     setIsRefreshing(true);
     try {
@@ -359,13 +403,13 @@ export function InboxScreen() {
         </ScrollView>
       </View>
 
-      {inbox.loading ? <InboxSkeleton testID="messages-loading" /> : (
+      {inbox.isCold ? <InboxSkeleton testID="messages-loading" /> : (
       <FlatList
         ref={listRef}
         testID="messages-list"
         data={displayedMessages}
         keyExtractor={item => item.conversation_key}
-        renderItem={({ item }) => <InboxConversationRow message={item} onPress={() => openChat(item)} onPressIn={() => warmChat(item)} onLongPress={() => setSnoozeTarget(item)} />}
+        renderItem={renderConversation}
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{ paddingBottom: 156 }}
         onEndReached={() => {

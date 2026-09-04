@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { AlertCircle, ArrowUpRight, CheckCircle2, MessageCircle, Settings, Sparkles } from 'lucide-react-native';
 import { router } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
+
 import { colors, mobileType, radius, space } from '@claire/design-system';
 import { MobileAvatar, MobileHeader, MobileIconButton, MobileState, SectionLabel } from '../../components/mobile/claire-mobile';
 import { PlatformIcon } from '../../components/PlatformIcon';
@@ -15,6 +15,9 @@ import { formatInboxTimestamp } from '../../utils/messageTimestamp';
 import { computeUrgencyScore } from '../../utils/urgency';
 import { HomeSkeleton } from '../../components/claire/skeleton';
 import { loopTitle, type LoopItem } from '../../services/loops';
+import { cachedLoops, readQuerySnapshot, writeQuerySnapshot } from '../../services/mobile-cache';
+import { useLocalFirstQuery } from '../../hooks/useLocalFirstQuery';
+import { useScreenLoadMark } from '../../hooks/useScreenLoadMark';
 
 interface UrgentMessage {
   id: string;
@@ -62,17 +65,35 @@ export function HomeScreen() {
   const user = useAuthStore(state => state.user);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const inbox = useInboxMessages(user?.id);
-  const brief = useQuery({
+  // The brief is a generated summary rather than a synced entity, so it is
+  // kept as an opaque keyed snapshot: last time's answer is a far better first
+  // frame than a skeleton, and it is replaced as soon as the new one arrives.
+  const brief = useLocalFirstQuery({
     queryKey: ['mobile-home-brief', user?.id],
     enabled: !!user?.id,
     staleTime: 60_000,
     queryFn: () => authJson<MorningBriefData>('/ai/morning-brief'),
+    local: {
+      enabled: !!user?.id,
+      read: async () => (user?.id ? (await readQuerySnapshot<MorningBriefData>(user.id, 'home-brief'))?.data ?? null : null),
+      write: async (data) => { if (user?.id) await writeQuerySnapshot(user.id, 'home-brief', data); },
+    },
   });
-  const loops = useQuery({
+  const loops = useLocalFirstQuery({
     queryKey: ['mobile-home-loops', user?.id],
     enabled: !!user?.id,
     staleTime: 60_000,
     queryFn: () => fetchHomeLoops(user!.id),
+    local: {
+      enabled: !!user?.id,
+      read: async () => (user?.id ? (await cachedLoops(user.id)) as unknown as LoopItem[] : null),
+    },
+  });
+
+  useScreenLoadMark('home', {
+    hasData: !(brief.isCold && inbox.isCold && loops.isCold),
+    isFetching: brief.isFetching || loops.isFetching || inbox.isFetching,
+    source: (brief.isFetching || loops.isFetching) ? 'cache' : 'network',
   });
 
   const firstName = user?.name?.trim().split(/\s+/)[0] || user?.email?.split('@')[0] || 'there';
@@ -98,8 +119,13 @@ export function HomeScreen() {
   // canonical on-device. Falling back here keeps Home useful during a deploy,
   // while offline after cached data loads, or when AI is unavailable.
   const urgent = brief.data?.urgent_messages?.length ? brief.data.urgent_messages : inboxUrgent;
-  const openLoops = loops.data ?? [];
-  const focusLoops = openLoops.filter(loop => (loop.priority_score ?? 0) >= 55).slice(0, 5);
+  // Memoised: these were recomputed on every render, including every render
+  // caused by a realtime message patch.
+  const openLoops = useMemo(() => loops.data ?? [], [loops.data]);
+  const focusLoops = useMemo(
+    () => openLoops.filter(loop => (loop.priority_score ?? 0) >= 55).slice(0, 5),
+    [openLoops],
+  );
   const actionCount = urgent.length + openLoops.length;
   const defaultBrief = actionCount
     ? `${actionCount} item${actionCount === 1 ? '' : 's'} need${actionCount === 1 ? 's' : ''} your attention${urgent[0] ? ` — starting with ${urgent[0].contact_name || urgent[0].chat_name || 'a conversation'}.` : '.'}`
@@ -165,7 +191,7 @@ export function HomeScreen() {
       />
 
       <View style={{ paddingHorizontal: space[4], gap: space[4] }}>
-        {(brief.isLoading && inbox.loading) || loops.isLoading ? (
+        {brief.isCold && inbox.isCold && loops.isCold ? (
           <HomeSkeleton />
         ) : (
           <>
