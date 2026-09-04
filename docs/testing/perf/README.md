@@ -54,30 +54,6 @@ completed, because the query was gated on the cache read.
   hides. It is included in every number above and is not dead time the app
   could reclaim without shortening the animation further.
 
-## Where cold start actually goes
-
-The decisive measurement. Splitting the cold start at the moment JavaScript
-begins executing:
-
-| segment | median |
-| --- | ---: |
-| process launch to JS start | ~3.6s |
-| JS start to Home painted from cache | 156ms |
-
-Everything the app's own code controls is now fast. Auth reads its stored
-session in 3ms; Home paints 156ms after the bundle starts running. The
-remaining cold-start time is native startup before any JavaScript runs, and no
-amount of local-first work in the app touches it.
-
-Two things are worth knowing about that window. `EXUpdatesLaunchWaitMs` is
-already 0, so the update check does not block launch. But `expo-dev-client`
-was applied as a plugin to *every* build variant, so the development launcher
-was linked into staging and production binaries (513 symbol matches in the
-release binary) and initialised on every cold start, even though only the
-`development` EAS profile ever uses it. That is now restricted to development
-builds. Confirming how much it is worth needs a fresh prebuild, which this
-machine cannot currently run (see the CocoaPods note in the benchmark doc).
-
 ## What was changed, in order of measured impact
 
 1. **Auth no longer blocks the first render.** Initialisation awaited a token
