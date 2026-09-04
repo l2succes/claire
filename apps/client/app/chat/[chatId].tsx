@@ -67,6 +67,7 @@ import {
   updateChatTimeline,
   useChatTimeline,
 } from '../../hooks/useChatTimeline';
+import { useScreenLoadMark } from '../../hooks/useScreenLoadMark';
 import {
   EMPTY_TIMELINE,
   chatMessageFromSend,
@@ -412,6 +413,11 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
   // Not bare isPending: a disabled query stays pending forever, which would turn
   // "no chatId" into a permanent skeleton instead of the empty state.
   const loading = !!chatId && !!user?.id && timeline.isPending;
+  useScreenLoadMark('chat', {
+    hasData: !loading,
+    isFetching: timeline.isFetching,
+    source: timeline.isFetching ? 'cache' : 'network',
+  });
 
   const patchTimeline = useCallback(
     (updater: (previous: ChatTimeline) => ChatTimeline, options?: { createIfMissing?: boolean }) =>
