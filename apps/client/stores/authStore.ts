@@ -126,15 +126,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             user: userFromSession(session),
           });
         } else {
-          // A session revoked server-side must not leave the previous account's
-          // messages readable by whoever signs in next on this device.
           const previousUserId = get().user?.id;
           set({ 
             isAuthenticated: false, 
             token: null, 
             user: null,
           });
-          if (previousUserId) void clearLocalUserData(previousUserId);
+          // Only a real sign-out wipes local data. A refresh that fails while
+          // the device is offline also arrives here with no session, and
+          // deleting the encrypted cache in that moment would destroy exactly
+          // the data the user needs to keep reading while disconnected.
+          const signedOut = event === 'SIGNED_OUT';
+          if (signedOut && previousUserId) void clearLocalUserData(previousUserId);
         }
       });
     } catch (error) {
