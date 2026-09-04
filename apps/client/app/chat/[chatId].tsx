@@ -714,11 +714,23 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
     hasScrolledToHighlight.current = false;
   }, [highlightMessageId]);
 
-  const listData = useMemo(() => [...messages].reverse(), [messages]);
-  const lastInbound = useMemo(
-    () => [...messages].reverse().find((message) => !message.from_me),
-    [messages]
-  );
+  // One reversed copy, three answers.
+  //
+  // This built three separate reversed copies of the timeline -- for the list,
+  // for the newest inbound message, and for the newest local send -- plus a Map
+  // over all of them, so every realtime patch walked a hundred-message
+  // conversation four times over.
+  const { listData, lastInbound, latestInjectedId } = useMemo(() => {
+    const reversed = [...messages].reverse();
+    let inbound: (typeof reversed)[number] | undefined;
+    let injected: string | null = null;
+    for (const message of reversed) {
+      if (!inbound && !message.from_me) inbound = message;
+      if (injected === null && message.from_me && isLocalSend(message.id)) injected = message.id;
+      if (inbound && injected !== null) break;
+    }
+    return { listData: reversed, lastInbound: inbound, latestInjectedId: injected };
+  }, [messages]);
 
   // Mark read once per newest inbound message, whatever delivered it: the first
   // fetch, the app-wide realtime channel, a local-cache seed, or a refetch after
@@ -746,12 +758,6 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
       if (!settled) handle.cancel();
     };
   }, [chatId, timeline.isPending, lastInbound?.id]);
-  const latestInjectedId = useMemo(
-    () =>
-      [...messages].reverse().find((message) => message.from_me && isLocalSend(message.id))?.id ??
-      null,
-    [messages]
-  );
   const messageById = useMemo(
     () => new Map(messages.map((message) => [message.id, message])),
     [messages]
@@ -1617,6 +1623,14 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
             contentContainerStyle={{ paddingVertical: space[3] }}
             keyboardShouldPersistTaps="handled"
             maintainVisibleContentPosition={{ minIndexForVisible: 0, autoscrollToTopThreshold: 80 }}
+            // A chat opens to the newest messages, so rendering the whole
+            // hundred-message page before the push animation finishes is work
+            // nobody sees. Left as FlatList on purpose: inverted plus
+            // maintainVisibleContentPosition is the one list in the app where
+            // swapping the implementation risks the scroll position.
+            initialNumToRender={15}
+            maxToRenderPerBatch={10}
+            windowSize={7}
             onScrollToIndexFailed={({ index, averageItemLength }) => {
               listRef.current?.scrollToOffset({
                 offset: Math.max(0, index * averageItemLength),
