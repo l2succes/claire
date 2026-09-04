@@ -6,6 +6,7 @@ import { deregisterNotificationDevice } from '../services/notifications';
 import { clearMobileCache } from '../services/mobile-cache';
 import { resetQueryClient } from '../services/query-client';
 import { usePlatformStore } from './platformStore';
+import { appMark } from '../services/perf-marks';
 
 interface User {
   id: string;
@@ -35,20 +36,12 @@ function userFromSession(session: Session): User {
   };
 }
 
-async function currentSession(): Promise<Session | null> {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session) return null;
-
-  // Native storage can restore an access token whose refresh timer stopped
-  // while iOS suspended Claire. Refresh before exposing it to API consumers.
-  const expiresSoon = !session.expires_at || session.expires_at * 1000 <= Date.now() + 60_000;
-  if (!expiresSoon) return session;
-
-  const { data, error } = await supabase.auth.refreshSession();
-  if (!error && data.session) return data.session;
-  return session;
+/**
+ * Native storage can restore an access token whose refresh timer stopped while
+ * iOS suspended Claire, so a restored session is often already stale.
+ */
+function isExpiringSoon(session: Session): boolean {
+  return !session.expires_at || session.expires_at * 1000 <= Date.now() + 60_000;
 }
 
 /**
@@ -81,17 +74,45 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   initialize: async () => {
     try {
       set({ isLoading: true });
-      
-      // Check for existing session
-      const session = await currentSession();
-      
-      if (session) {
-        set({ 
-          isAuthenticated: true, 
-          token: session.access_token,
-          user: userFromSession(session),
-          isLoading: false 
+
+      // Paint from the stored session, refresh behind it.
+      //
+      // This awaited a token refresh before anything could render: the root
+      // layout holds the launch reveal until `initialized`, and the index route
+      // renders null while `isLoading`, so a cold start with an expired token
+      // waited on a network round trip before the first screen even mounted --
+      // measured at about 3.6s on a release build. The identity in the stored
+      // session is what screens need to read their cache; the fresh token is
+      // only needed by the requests that follow, and every consumer already
+      // gets one lazily (`currentAccessToken` refreshes per request, and the
+      // response interceptor retries a 401 once).
+      appMark('auth-read-start');
+      const { data: { session: stored } } = await supabase.auth.getSession();
+      appMark('auth-read-end');
+
+      if (stored) {
+        set({
+          isAuthenticated: true,
+          token: stored.access_token,
+          user: userFromSession(stored),
+          isLoading: false,
         });
+
+        if (isExpiringSoon(stored)) {
+          // Not awaited. When it lands, the token in the store changes and the
+          // effects keyed on it re-run with the fresh one.
+          void supabase.auth.refreshSession()
+            .then(({ data, error }) => {
+              if (error || !data.session) return;
+              appMark('auth-refreshed');
+              set({
+                isAuthenticated: true,
+                token: data.session.access_token,
+                user: userFromSession(data.session),
+              });
+            })
+            .catch(() => undefined);
+        }
       } else {
         set({ isLoading: false });
       }
