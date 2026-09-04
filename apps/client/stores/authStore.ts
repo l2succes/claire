@@ -3,6 +3,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../services/supabase';
 import { deregisterNotificationDevice } from '../services/notifications';
+import { clearMobileCache } from '../services/mobile-cache';
+import { resetQueryClient } from '../services/query-client';
+import { usePlatformStore } from './platformStore';
 
 interface User {
   id: string;
@@ -48,6 +51,27 @@ async function currentSession(): Promise<Session | null> {
   return session;
 }
 
+/**
+ * Everything this device holds for one account.
+ *
+ * Sign-out used to clear AsyncStorage and nothing else, so the encrypted
+ * message database, its Keychain key, and a live in-memory query cache all
+ * survived logout -- only the Privacy screen ever removed them.
+ */
+let clearingFor: string | null = null;
+async function clearLocalUserData(userId: string | undefined): Promise<void> {
+  if (userId && clearingFor === userId) return;
+  clearingFor = userId ?? null;
+  try {
+    if (userId) await clearMobileCache(userId).catch(() => undefined);
+    resetQueryClient();
+    await Promise.resolve(usePlatformStore.persist.clearStorage()).catch(() => undefined);
+    await AsyncStorage.clear();
+  } finally {
+    clearingFor = null;
+  }
+}
+
 export const useAuthStore = create<AuthState>((set, get) => ({
   isAuthenticated: false,
   isLoading: true,
@@ -81,11 +105,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             user: userFromSession(session),
           });
         } else {
+          // A session revoked server-side must not leave the previous account's
+          // messages readable by whoever signs in next on this device.
+          const previousUserId = get().user?.id;
           set({ 
             isAuthenticated: false, 
             token: null, 
             user: null,
           });
+          if (previousUserId) void clearLocalUserData(previousUserId);
         }
       });
     } catch (error) {
@@ -179,9 +207,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   logout: async () => {
     try {
       const accessToken = get().token;
+      const userId = get().user?.id;
       if (accessToken) await deregisterNotificationDevice(accessToken).catch(() => undefined);
       await supabase.auth.signOut();
-      await AsyncStorage.clear();
+      await clearLocalUserData(userId);
       set({ 
         isAuthenticated: false, 
         token: null, 

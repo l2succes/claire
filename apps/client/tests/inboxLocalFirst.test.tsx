@@ -10,8 +10,8 @@ import { renderHook, waitFor } from '@testing-library/react-native';
 import { Platform } from '../types/platform';
 
 const mockHydrateMobileCache = jest.fn();
-const mockTouchCachedChatFromMessage = jest.fn(async () => undefined);
-const mockPatchCachedChat = jest.fn(async () => undefined);
+const mockTouchCachedChatFromMessage = jest.fn((..._args: unknown[]) => Promise.resolve(undefined));
+const mockPatchCachedChat = jest.fn((..._args: unknown[]) => Promise.resolve(undefined));
 
 jest.mock('../services/mobile-cache', () => ({
   usesNativeMobileCache: () => true,
@@ -142,7 +142,7 @@ describe('inbox realtime write-through', () => {
     patchInboxChat(client, USER, { id: 'c1', platform: Platform.WHATSAPP, unread_count: 3, is_pinned: true });
 
     expect(mockPatchCachedChat).toHaveBeenCalledWith(USER, 'c1', expect.objectContaining({ unread_count: 3, is_pinned: true }));
-    const [, , patch] = mockPatchCachedChat.mock.calls[0] as [string, string, Record<string, unknown>];
+    const patch = mockPatchCachedChat.mock.calls[0][2] as Record<string, unknown>;
     expect(patch).not.toHaveProperty('latest_message');
     expect(patch).not.toHaveProperty('contact');
   });

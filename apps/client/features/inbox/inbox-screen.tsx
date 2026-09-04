@@ -16,6 +16,8 @@ import { Platform } from '../../types/platform';
 import { PlatformBadge } from '../../components/PlatformIcon';
 import { formatInboxTimestamp } from '../../utils/messageTimestamp';
 import { InboxRowSkeleton, InboxSkeleton } from '../../components/claire/skeleton';
+import { signalFirstPaint } from '../../services/mobile-sync';
+import { useScreenLoadMark } from '../../hooks/useScreenLoadMark';
 
 type InboxFilter = 'all' | 'unread' | 'needs_reply' | 'groups';
 type PlatformFilter = 'all' | Platform;
@@ -312,6 +314,18 @@ export function InboxScreen() {
     () => visibleMessages.map(message => ({ ...message, has_open_loop: loopChats.data?.has(message.chat_id) || message.has_open_loop })),
     [loopChats.data, visibleMessages],
   );
+  // Staged startup sync waits on this: the heavy cold-start work belongs
+  // behind the first screen the user sees, not in front of it.
+  const painted = !inbox.isCold;
+  useEffect(() => {
+    if (painted) signalFirstPaint();
+  }, [painted]);
+  useScreenLoadMark('inbox', {
+    hasData: painted,
+    isFetching: inbox.isFetching,
+    source: inbox.localSettled && inbox.isFetching ? 'cache' : 'network',
+  });
+
   const searching = query.trim().length > 0;
   const highlights = useMemo(() => searching ? [] : [...inboxRows]
     .map(message => ({
