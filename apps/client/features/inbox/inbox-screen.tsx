@@ -359,7 +359,7 @@ export function InboxScreen() {
         </ScrollView>
       </View>
 
-      {inbox.loading ? <InboxSkeleton testID="messages-loading" /> : (
+      {inbox.isCold ? <InboxSkeleton testID="messages-loading" /> : (
       <FlatList
         ref={listRef}
         testID="messages-list"

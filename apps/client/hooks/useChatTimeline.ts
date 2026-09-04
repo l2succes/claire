@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
 import { queryOptions, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
+import { useLocalSeed } from './useLocalFirstQuery';
 import {
   EMPTY_TIMELINE,
   groupReactionsByMessage,
@@ -277,28 +277,17 @@ export function useChatTimeline(
   const query = useQuery(chatTimelineOptions(queryClient, userId, chatId, highlightId));
 
   // Race the local cache against the network rather than gating the query on it.
-  // Holding `enabled` false until SQLite resolves — the pattern the inbox uses —
-  // would reintroduce exactly the async hop this hook exists to remove.
-  useEffect(() => {
-    if (!userId || !chatId || !usesNativeMobileCache()) return;
-    const key = chatTimelineKey(userId, chatId, highlightId);
-    if (queryClient.getQueryData(key)) return;
-    let active = true;
-    void cachedTimeline(userId, chatId, 200)
-      .then((rows) => {
-        if (!active || !rows.length) return;
-        if (queryClient.getQueryData(key)) return; // the network got there first
-        queryClient.setQueryData<ChatTimeline>(
-          key,
-          { messages: rows as unknown as ChatMessage[], reactions: {} },
-          { updatedAt: 0 },
-        );
-      })
-      .catch(() => undefined);
-    return () => {
-      active = false;
-    };
-  }, [queryClient, userId, chatId, highlightId]);
+  // Holding `enabled` false until SQLite resolves — the pattern the inbox used
+  // to use — would reintroduce exactly the async hop this hook exists to remove.
+  useLocalSeed<ChatTimeline>(queryClient, chatTimelineKey(userId ?? '', chatId ?? '', highlightId), {
+    enabled: !!userId && !!chatId,
+    read: async () => {
+      if (!userId || !chatId) return null;
+      const rows = await cachedTimeline(userId, chatId, 200);
+      return rows.length ? { messages: rows as unknown as ChatMessage[], reactions: {} } : null;
+    },
+    isEmpty: (timeline) => !timeline.messages.length,
+  });
 
   return query;
 }

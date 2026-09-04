@@ -165,7 +165,7 @@ export function HomeScreen() {
       />
 
       <View style={{ paddingHorizontal: space[4], gap: space[4] }}>
-        {(brief.isLoading && inbox.loading) || loops.isLoading ? (
+        {(brief.isLoading && inbox.isCold) || loops.isLoading ? (
           <HomeSkeleton />
         ) : (
           <>
