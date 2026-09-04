@@ -28,6 +28,17 @@ interchangeable.
 A plain browser is neither of those. It has no local cache at all, which makes
 it the worst place to judge anything about load or navigation performance.
 
+### Real two-device test loop (Lucas)
+
+For end-to-end bridge and AI-grounding tests, use **Lucas** as the dedicated
+test peer: Claire runs on the iOS Simulator and Lucas runs on the separate
+Android WhatsApp test device. Follow
+[`docs/testing/lucas-two-device-test-spec.md`](docs/testing/lucas-two-device-test-spec.md).
+It defines the test-only account boundary, synthetic-message convention, and
+the approval required before login, pairing, sending a bridged message, or
+deleting test history. Do not depend on WhatsApp running in a simulator or
+emulator; use the Android test device (or another dedicated physical device).
+
 ## Architecture
 
 Claire bridges messaging platforms (WhatsApp, Telegram, Instagram) through Matrix (Synapse) using mautrix bridges. A single `MatrixBridgeAdapter` handles all platforms by routing through Matrix rooms.

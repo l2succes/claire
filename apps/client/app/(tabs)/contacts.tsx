@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, SectionList, Text, View } from 'react-native';
 import { Check, ListFilter, Search } from 'lucide-react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { colors, mobileType, space, useIsDesktopLayout } from '@claire/design-system';
 import { useAuthStore } from '../../stores/authStore';
 import { MobileAvatar, MobileChip, MobileHeader, MobileIconButton, MobileSearchField, MobileState } from '../../components/mobile/claire-mobile';
@@ -10,7 +10,9 @@ import { BottomSheet } from '../../components/mobile/bottom-sheet';
 import { PlatformIcon, PlatformName } from '../../components/PlatformIcon';
 import { Platform, platformLabel } from '../../types/platform';
 import { PeopleSkeleton } from '../../components/claire/skeleton';
-import { cachedContacts, replaceCachedContacts, usesNativeMobileCache } from '../../services/mobile-cache';
+import { cachedContacts, replaceCachedContacts } from '../../services/mobile-cache';
+import { useLocalFirstQuery } from '../../hooks/useLocalFirstQuery';
+import { useScreenLoadMark } from '../../hooks/useScreenLoadMark';
 import { contactsApi, type PeopleFilter, type PersonContact } from '../../services/contacts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { displayPersonDetails, displayPersonName } from '../../services/contact-display';
@@ -66,31 +68,19 @@ function personDetails(contact: PersonContact): string | null {
 
 type PeopleSection = { title: string; data: PersonContact[] };
 
-function alphabetLetter(contact: PersonContact): string {
-  const initial = personName(contact)
+// One collator for the whole screen. localeCompare with options builds a new
+// one on every call, which is the expensive part of comparing two names.
+const collator = new Intl.Collator(undefined, { sensitivity: 'base' });
+
+/** The A-Z bucket for a name that has already been resolved. */
+function letterFor(name: string): string {
+  const initial = name
     .trim()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .charAt(0)
     .toUpperCase();
   return /^[A-Z]$/.test(initial) ? initial : '#';
-}
-
-function alphabetizedSections(contacts: PersonContact[]): PeopleSection[] {
-  const grouped = new Map<string, PersonContact[]>();
-  for (const contact of contacts) {
-    const letter = alphabetLetter(contact);
-    const section = grouped.get(letter) || [];
-    section.push(contact);
-    grouped.set(letter, section);
-  }
-  return [...grouped.entries()]
-    .sort(([left], [right]) => {
-      if (left === '#') return 1;
-      if (right === '#') return -1;
-      return left.localeCompare(right);
-    })
-    .map(([title, data]) => ({ title, data }));
 }
 
 export default function ContactsScreen() {
@@ -107,6 +97,7 @@ export default function ContactsScreen() {
   // The letter a pending scroll is aiming at, so a failed attempt can be
   // retried once the rows around it have been measured.
   const pendingJumpRef = useRef<number | null>(null);
+  const lastPublishRef = useRef(0);
   const debouncedSearchQuery = useDebouncedValue(searchQuery);
 
   useEffect(() => {
@@ -124,9 +115,22 @@ export default function ContactsScreen() {
   // changes is where it comes from. The directory barely moves between visits,
   // so read it from the local cache and let the network refresh happen behind
   // the already-rendered list rather than in front of an empty one.
-  const peopleQuery = useQuery({
+  const isUnfilteredDirectory = !debouncedSearchQuery && platform === 'all' && filter === 'all';
+  const peopleQuery = useLocalFirstQuery({
     queryKey: peopleQueryKey,
     enabled: !!user?.id,
+    local: {
+      // Only the unfiltered directory is worth seeding: a search or filter
+      // result is a slice, and painting it as though it were everyone would be
+      // worse than a skeleton.
+      enabled: !!user?.id && isUnfilteredDirectory,
+      read: async () => {
+        if (!user?.id) return null;
+        const rows = await cachedContacts(user.id);
+        return rows.length ? { contacts: rows as unknown as PersonContact[], nextOffset: null } : null;
+      },
+      isEmpty: (data) => !data.contacts.length,
+    },
     // The cache makes a revisit free; this only decides how long before a
     // background refresh is worth the round trip.
     staleTime: 5 * 60_000,
@@ -138,7 +142,14 @@ export default function ContactsScreen() {
         // flips the query to success while isFetching stays true, so the list
         // renders and keeps filling instead of holding a skeleton for the whole
         // walk. Stale on purpose: this is a partial answer, not the result.
-        (soFar) => {
+        (soFar, isLast) => {
+          // The walk publishes after each 1,000-row page, and every publish
+          // re-sorts and re-sections the whole directory. At 22 pages that is
+          // 22 full passes over 21,000 contacts while the user is scrolling.
+          // Publish at most every 400ms, and always publish the last page.
+          const now = Date.now();
+          if (!isLast && now - lastPublishRef.current < 400) return;
+          lastPublishRef.current = now;
           queryClient.setQueryData(
             peopleQueryKey,
             { contacts: [...soFar], nextOffset: null },
@@ -156,59 +167,67 @@ export default function ContactsScreen() {
     },
   });
 
-  // Seed from disk so the list paints on the first frame. Guarded on the query
-  // having no data yet, so a completed network refresh is never overwritten by
-  // a slower cache read.
-  useEffect(() => {
-    if (!user?.id || !usesNativeMobileCache()) return;
-    if (debouncedSearchQuery || platform !== 'all' || filter !== 'all') return;
-    let active = true;
-    void cachedContacts(user.id)
-      .then((rows) => {
-        if (!active || !rows.length) return;
-        if (queryClient.getQueryData(peopleQueryKey)) return;
-        queryClient.setQueryData(
-          peopleQueryKey,
-          { contacts: rows as unknown as PersonContact[], nextOffset: null },
-          // Stale on purpose: this is a starting picture, not a fresh fetch.
-          { updatedAt: 0 },
-        );
-      })
-      .catch(() => undefined);
-    return () => {
-      active = false;
-    };
-  }, [queryClient, peopleQueryKey, user?.id, debouncedSearchQuery, platform, filter]);
-
   useEffect(() => {
     if (!user?.id || requestedIdentitySyncFor.current === user.id) return;
     requestedIdentitySyncFor.current = user.id;
     // This only starts a per-user, metadata-only bridge sync. It is safe to
     // ignore a missing/disconnected WhatsApp account; People still renders
     // the identities already stored for other platforms.
-    // The task is asynchronous. Refresh a few times while a linked account's
-    // bounded directory import runs, instead of repeatedly downloading a
-    // possible 10k-person directory for the entire life of the screen.
-    const refreshTimers = [3_000, 15_000, 45_000].map((delay) => setTimeout(() => {
-      void peopleQuery.refetch();
-    }, delay));
+    // The import is asynchronous, so the directory is worth re-reading once it
+    // has had time to land. This was three unconditional refetches at 3s, 15s
+    // and 45s, each re-walking the whole directory -- on an account with 21,000
+    // contacts, sixty-odd network round trips and three full re-sorts for a
+    // directory that usually had not changed at all.
+    const refreshTimer = setTimeout(() => { void peopleQuery.refetch(); }, 15_000);
     void contactsApi.startIdentitySync().catch(() => undefined);
-    return () => refreshTimers.forEach(clearTimeout);
+    return () => clearTimeout(refreshTimer);
   }, [user?.id, peopleQuery.refetch]);
-  const contacts = useMemo(
-    () => (peopleQuery.data?.contacts || [])
-      .slice()
-      .sort((left, right) => {
-        const leftName = personName(left);
-        const rightName = personName(right);
-        const leftUnknown = leftName === 'WhatsApp contact' || leftName === 'Unknown person';
-        const rightUnknown = rightName === 'WhatsApp contact' || rightName === 'Unknown person';
-        if (leftUnknown !== rightUnknown) return leftUnknown ? 1 : -1;
-        return leftName.localeCompare(rightName, undefined, { sensitivity: 'base' });
-      }),
-    [peopleQuery.data],
-  );
-  const sections = useMemo(() => alphabetizedSections(contacts), [contacts]);
+  // Decorate once, then sort and section in the same pass.
+  //
+  // This sorted the raw list with personName() called inside the comparator --
+  // twice per comparison, each call spreading a new identity object -- so a
+  // 21,000-person directory did on the order of half a million name
+  // computations per sort, and sorted again after every page the paginated
+  // walk published. Now each contact's name and letter are computed once, and
+  // the comparator only compares strings.
+  const { contacts, sections } = useMemo(() => {
+    const decorated = (peopleQuery.data?.contacts || []).map((contact) => {
+      const name = personName(contact);
+      return {
+        contact,
+        name,
+        letter: letterFor(name),
+        unknown: name === 'WhatsApp contact' || name === 'Unknown person',
+      };
+    });
+    decorated.sort((left, right) => {
+      if (left.unknown !== right.unknown) return left.unknown ? 1 : -1;
+      return collator.compare(left.name, right.name);
+    });
+
+    const grouped = new Map<string, PersonContact[]>();
+    const ordered: PersonContact[] = [];
+    for (const entry of decorated) {
+      ordered.push(entry.contact);
+      const section = grouped.get(entry.letter);
+      if (section) section.push(entry.contact);
+      else grouped.set(entry.letter, [entry.contact]);
+    }
+    const built = [...grouped.entries()]
+      .sort(([left], [right]) => {
+        if (left === '#') return 1;
+        if (right === '#') return -1;
+        return left.localeCompare(right);
+      })
+      .map(([title, data]) => ({ title, data }));
+    return { contacts: ordered, sections: built };
+  }, [peopleQuery.data]);
+
+  useScreenLoadMark('people', {
+    hasData: !peopleQuery.isCold,
+    isFetching: peopleQuery.isFetching,
+    source: peopleQuery.localSettled ? 'cache' : 'network',
+  });
 
   const jumpToSection = useCallback((sectionIndex: number) => {
     pendingJumpRef.current = sectionIndex;
@@ -289,7 +308,7 @@ export default function ContactsScreen() {
       contacts={contacts}
       selected={selected}
       searchQuery={searchQuery}
-      loading={peopleQuery.isLoading}
+      loading={peopleQuery.isCold}
       onSearch={setSearchQuery}
       onSelect={setSelectedContactId}
       onOpen={openContact}
@@ -331,7 +350,7 @@ export default function ContactsScreen() {
           />
         </ScrollView>
       </View>
-        {peopleQuery.isLoading ? <View style={{ paddingHorizontal: space[4] }}><PeopleSkeleton /></View> : (
+        {peopleQuery.isCold ? <View style={{ paddingHorizontal: space[4] }}><PeopleSkeleton /></View> : (
         <View style={{ flex: 1, minHeight: 0 }}>
         <SectionList
           ref={peopleListRef}

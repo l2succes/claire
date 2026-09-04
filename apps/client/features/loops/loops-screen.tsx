@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { FlatList, Modal, Pressable, RefreshControl, Text, TextInput, View } from 'react-native';
 import { Plus, X } from 'lucide-react-native';
 import { router } from 'expo-router';
@@ -6,7 +6,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { colors, mobileType, radius, space } from '@claire/design-system';
 import { MobileChip, MobileHeader, MobileIconButton, MobileState } from '../../components/mobile/claire-mobile';
 import type { LoopItem } from '../../services/loop-types';
-import { hydrateMobileCache, usesNativeMobileCache } from '../../services/mobile-cache';
+import { cachedLoops } from '../../services/mobile-cache';
+import { useLocalFirstQuery } from '../../hooks/useLocalFirstQuery';
+import { useScreenLoadMark } from '../../hooks/useScreenLoadMark';
 import { useAuthStore } from '../../stores/authStore';
 import { supabase } from '../../services/supabase';
 import { LoopsSkeleton } from '../../components/claire/skeleton';
@@ -47,27 +49,18 @@ export function LoopsScreen() {
   const [showCreate, setShowCreate] = useState(false);
   const [newLoop, setNewLoop] = useState('');
   const loopsQueryKey = useMemo(() => ['mobile-loops', user?.id] as const, [user?.id]);
-  const query = useQuery({ queryKey: loopsQueryKey, enabled: !!user?.id, queryFn: () => fetchLoops(user!.id), staleTime: 60_000 });
-
-  // The bootstrap sync already writes loops to the local cache and hydrates
-  // them into a snapshot nobody read. Seed from it so returning to this tab
-  // paints immediately instead of waiting on Supabase, and let the query
-  // refresh behind the rendered list. Stale on purpose: a starting picture, not
-  // a fetch, so refetchOnMount still runs.
-  useEffect(() => {
-    if (!user?.id || !usesNativeMobileCache()) return;
-    let active = true;
-    void hydrateMobileCache(user.id)
-      .then((snapshot) => {
-        if (!active || !snapshot.loops.length) return;
-        if (queryClient.getQueryData(loopsQueryKey)) return;
-        queryClient.setQueryData(loopsQueryKey, snapshot.loops as unknown as LoopItem[], { updatedAt: 0 });
-      })
-      .catch(() => undefined);
-    return () => {
-      active = false;
-    };
-  }, [queryClient, loopsQueryKey, user?.id]);
+  // The sync stream already keeps cache_loops current; reading it costs one
+  // indexed table rather than the whole snapshot, which also parses every chat.
+  const query = useLocalFirstQuery<LoopItem[]>({
+    queryKey: loopsQueryKey,
+    enabled: !!user?.id,
+    queryFn: () => fetchLoops(user!.id),
+    staleTime: 60_000,
+    local: {
+      enabled: !!user?.id,
+      read: async () => (user?.id ? (await cachedLoops(user.id)) as unknown as LoopItem[] : null),
+    },
+  });
   const patch = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: LoopItem['status'] }) => {
       const { data, error } = await supabase
@@ -103,16 +96,33 @@ export function LoopsScreen() {
     onSuccess: () => { setNewLoop(''); setShowCreate(false); queryClient.invalidateQueries({ queryKey: ['mobile-loops', user?.id] }); },
   });
 
-  const items = query.data ?? [];
-  const open = items.filter(item => LIVE_STATUSES.includes(item.status));
-  const completed = items.filter(item => item.status === 'done');
-  // "I'm waiting" means someone else owes the next move — not merely that the
-  // loop was detected from an inbound message.
-  const waiting = open.filter(item => (item.owner ? item.owner === 'them' : !item.from_me));
-  const today = open.filter(item => item.deadline && new Date(item.deadline).toDateString() === new Date().toDateString()).length;
-  const forYou = open.filter(item => item.owner === 'me' || (!item.owner && item.from_me));
+  // One pass, memoised. These were six chained filters recomputed on every
+  // render -- including every chip tap and every optimistic status toggle --
+  // over as many as two hundred loops.
+  const { open, completed, waiting, today, forYou, needsAttention } = useMemo(() => {
+    const items = query.data ?? [];
+    const todayKey = new Date().toDateString();
+    const openItems: LoopItem[] = [];
+    const completedItems: LoopItem[] = [];
+    const waitingItems: LoopItem[] = [];
+    const forYouItems: LoopItem[] = [];
+    let dueToday = 0;
+    let attention = 0;
+    for (const item of items) {
+      if (item.status === 'done') completedItems.push(item);
+      if (!LIVE_STATUSES.includes(item.status)) continue;
+      openItems.push(item);
+      // "I'm waiting" means someone else owes the next move — not merely that
+      // the loop was detected from an inbound message.
+      if (item.owner ? item.owner === 'them' : !item.from_me) waitingItems.push(item);
+      if (item.owner === 'me' || (!item.owner && item.from_me)) forYouItems.push(item);
+      if (item.deadline && new Date(item.deadline).toDateString() === todayKey) dueToday += 1;
+      if ((item.priority_score ?? 0) >= 80) attention += 1;
+    }
+    return { open: openItems, completed: completedItems, waiting: waitingItems, today: dueToday, forYou: forYouItems, needsAttention: attention };
+  }, [query.data]);
   const visible = filter === 'done' ? completed : filter === 'waiting' ? waiting : filter === 'for_you' ? forYou : open;
-  const needsAttention = open.filter(item => (item.priority_score ?? 0) >= 80).length;
+  useScreenLoadMark('loops', { hasData: !query.isCold, isFetching: query.isFetching, source: query.localSettled ? 'cache' : 'network' });
 
   return (
     <View testID="loops-screen" style={{ flex: 1, backgroundColor: colors.cream }}>
@@ -129,7 +139,7 @@ export function LoopsScreen() {
           <MobileChip label="All" active={filter === 'all'} count={open.length} onPress={() => setFilter('all')} testID="loops-tab-all" />
         </View>
       </View>
-      {query.isLoading ? <LoopsSkeleton /> : (
+      {query.isCold ? <LoopsSkeleton /> : (
         <FlatList testID="loops-list" data={visible} renderItem={({ item }) => <LoopRow item={item} onOpen={() => router.push({ pathname: '/loops/[id]', params: { id: item.id } })} onToggle={() => patch.mutate({ id: item.id, status: item.status === 'done' ? 'open' : 'done' })} />} keyExtractor={item => item.id} contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ paddingHorizontal: space[4], paddingBottom: 112 }} refreshControl={<RefreshControl refreshing={query.isRefetching} onRefresh={() => void query.refetch()} tintColor={colors.ink} />} ListEmptyComponent={<MobileState title={filter === 'done' ? 'Nothing completed yet' : filter === 'waiting' ? "You're not waiting on anyone" : 'No open loops'} message="Claire will surface commitments from your conversations here." />} />
       )}
 
