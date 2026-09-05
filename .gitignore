@@ -101,6 +101,10 @@ Thumbs.db
 /wt-96/
 /turbo-fieldfare/
 
+# Local Ruby/CocoaPods installs (machine-generated; never commit vendored gems or binaries).
+/desktop/macos/vendor/
+/desktop/macos/.bundle/
+
 # NX local cache and daemon state
 .nx/
 
