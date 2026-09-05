@@ -6,7 +6,27 @@
 - **Platform mode**: `PLATFORM_MODE=matrix` in `server/.env`
 - **Server**: port 3001, run with `bun run --watch src/index.ts` from project root
 - **Client**: Expo SDK 55, React Native 0.83.4, React 19, new architecture (Bridgeless)
-- **iOS build**: `bunx expo prebuild --clean --platform ios && bunx expo run:ios` from `client/`
+- **iOS build**: `bunx expo prebuild --clean --platform ios && bunx expo run:ios` from `apps/client/`
+
+## Testing surfaces
+
+Verify a change on the surface it ships to. The renderer is shared, but the
+host, the caches and the navigation stack are not, so these are not
+interchangeable.
+
+- **Mobile → the iOS Simulator.** Run the real app (`bun run ios` from
+  `apps/client`, or `bun run mobile:ios:staging` from the root), not the web
+  build. Expo web is useful only for confirming a bundle compiles and boots: it
+  exercises no native path, and `usesNativeMobileCache()` is `false` there, so
+  anything touching the encrypted SQLite cache is silently skipped.
+- **Desktop → the Electron app** (`bun run desktop:dev`). Not a browser tab.
+  Electron is the only web-based host where `usesNativeMobileCache()` is true
+  (it gates on `host.name === 'electron' && host.capabilities.encryptedCache`),
+  and it is where the desktop layout — `useIsDesktopLayout`,
+  `DesktopInboxWorkspace` — actually runs.
+
+A plain browser is neither of those. It has no local cache at all, which makes
+it the worst place to judge anything about load or navigation performance.
 
 ## Architecture
 
@@ -22,15 +42,16 @@ Mobile App  <-->  Bun Server  <-->  Synapse (Matrix)  <-->  mautrix bridges  <--
 
 Official docs: https://docs.mau.fi/ (source: https://github.com/mautrix/docs)
 
-**Local docs clone**: `docs/mautrix/` — search here first when implementing any bridge feature:
+**Optional local docs clone**: `vendor/mautrix-docs/` — initialize only for bridge work:
 ```bash
-grep -r "keyword" docs/mautrix/bridges/
+git submodule update --init vendor/mautrix-docs
+grep -r "keyword" vendor/mautrix-docs/bridges/
 ```
 Key paths:
-- `docs/mautrix/bridges/general/` — encryption, backfill, double-puppeting, troubleshooting
-- `docs/mautrix/bridges/go/whatsapp/` — WhatsApp-specific
-- `docs/mautrix/bridges/go/telegram/` — Telegram-specific
-- `docs/mautrix/bridges/go/meta/` — Instagram/Meta-specific
+- `vendor/mautrix-docs/bridges/general/` — encryption, backfill, double-puppeting, troubleshooting
+- `vendor/mautrix-docs/bridges/go/whatsapp/` — WhatsApp-specific
+- `vendor/mautrix-docs/bridges/go/telegram/` — Telegram-specific
+- `vendor/mautrix-docs/bridges/go/meta/` — Instagram/Meta-specific
 
 ### Key docs to consult:
 - **WhatsApp auth**: https://docs.mau.fi/bridges/go/whatsapp/authentication.html
@@ -99,10 +120,47 @@ docker exec supabase-db psql -U postgres -d postgres -c "NOTIFY pgrst, 'reload s
 
 ## Key Client Files
 
-- `client/app/(tabs)/dashboard.tsx` — Unified inbox
-- `client/app/(tabs)/contacts.tsx` — Contacts list
-- `client/app/chat/[chatId].tsx` — Chat detail screen
-- `client/components/MessageCard.tsx` — Message display with platform badges
+- `mobile/app/(tabs)/dashboard.tsx` — Unified inbox
+- `mobile/app/(tabs)/contacts.tsx` — Contacts list
+- `mobile/app/chat/[chatId].tsx` — Chat detail screen
+- `mobile/components/MessageCard.tsx` — Message display with platform badges
+
+## Mobile Code Conventions
+
+Keep screens thin and composable. A screen file should read as layout; anything
+else belongs in a subcomponent, a hook, or a data module.
+
+- **Extract subcomponents.** A repeated row, card, or sheet body gets its own
+  named component in the same feature folder rather than an inline block inside
+  a `.map()`. See `features/more/more-sheet.tsx` (`MoreSheetRow`).
+- **Business logic goes in hooks or stores**, never inline in a screen. State
+  that outlives one screen belongs in a zustand store under `hooks/` or
+  `stores/` (`hooks/useMoreSheet.ts`); data fetching belongs in a query hook
+  (`hooks/useInboxMessages.ts`).
+- **Feature folders.** Screen-level UI lives in `features/<feature>/`, with
+  static config split out (`features/more/more-destinations.ts`) so the view
+  imports data rather than declaring it.
+- **Reusable shells live in `components/mobile/`.** Shared chrome — sheets,
+  chips, headers, buttons — goes here so features do not re-implement it
+  (`components/mobile/bottom-sheet.tsx`).
+- **Route files stay trivial.** Files under `app/` should wire params and render
+  a feature component; keep the implementation in `features/`.
+- **Replacing a screen? Keep the old one.** Move it to
+  `features/<feature>/legacy-*.tsx` and leave a comment naming the one edit that
+  reverts the change, until the replacement has shipped.
+
+### Mobile gotchas
+
+- **`Pressable`'s `({ pressed }) => style` callback does not apply.** NativeWind's
+  `react-native-css-interop` wraps `Pressable` and drops the callback result, so
+  the element renders with no style at all (a row loses `flexDirection` and
+  collapses into a column). Use a static style object and track pressed state
+  with `onPressIn`/`onPressOut`.
+- **Content-sized bubbles collapse `flex: 1` children to zero width**, which
+  wraps text one character per line. Give such rows an explicit width.
+- **The floating tab bar is absolutely positioned** (58pt above the safe-area
+  inset). Anything anchored to the bottom must reserve that space — see
+  `bottomSheetInset()` in `components/mobile/bottom-sheet.tsx`.
 
 ## Known Conventions
 

@@ -1,0 +1,18 @@
+Claire
+Copyright (c) 2025-2026 Claire contributors
+
+This product includes software developed by Claire contributors.
+
+Licensing
+---------
+Server, Docker, Supabase, and operational service code: AGPL-3.0-only.
+Mobile, desktop, website, packages, examples, and public documentation: Apache-2.0.
+See LICENSE and LICENSES/ for the full texts.
+
+Third-party notices
+-------------------
+- Heroicons: MIT License. See apps/website/THIRD_PARTY_NOTICES.md.
+- mautrix documentation (optional submodule under vendor/mautrix-docs): copyright the mautrix authors.
+- Platform marks (WhatsApp, Telegram, Instagram, and others) are trademarks of their respective owners and are used only for identification.
+
+This NOTICE file is provided for attribution and does not modify the licenses.

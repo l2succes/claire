@@ -1,0 +1,22 @@
+# Debug channel.
+#
+# A separate appId and productName make this a distinct application to the OS,
+# so it installs alongside the production build, keeps its own userData, and
+# does not trip the production app's single-instance lock. The black icon makes
+# the two obvious apart in the Dock.
+extends: electron-builder.yml
+
+appId: com.claire.desktop.dev
+productName: Claire Dev
+
+mac:
+  identity: null
+
+directories:
+  output: release/dev
+
+icon: build/icon-dev.png
+
+# The production build owns the claire:// OAuth scheme. Registering it twice
+# would make which app receives a callback a coin flip.
+protocols: []

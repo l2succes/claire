@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Claire — Type lab</title>
+    <meta
+      name="description"
+      content="Try open-source typefaces across Claire's product surfaces before committing to one."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="/mockups/tokens.css" />
+    <link rel="stylesheet" href="./type-lab.css" />
+    <link rel="icon" href="/assets/brand/claire-app-icon.svg" type="image/svg+xml" />
+    <script src="/mockups/heroicons.js" defer></script>
+    <script src="./type-lab.js" defer></script>
+  </head>
+  <body>
+    <!-- ------------------------------------------------ control bar -->
+    <header class="lab-bar">
+      <a class="lab-brand" href="/lab" target="_top">
+        <img src="/assets/brand/claire-app-icon-lime.svg" alt="" />
+        claire <span>/ lab / type</span>
+      </a>
+
+      <div class="lab-controls">
+        <label class="lab-field">
+          <span>Base sans</span>
+          <select id="sans-select"></select>
+        </label>
+        <div class="lab-stepper">
+          <button type="button" id="sans-prev" aria-label="Previous sans">‹</button>
+          <button type="button" id="sans-next" aria-label="Next sans">›</button>
+        </div>
+        <label class="lab-field">
+          <span>Mono</span>
+          <select id="mono-select"></select>
+        </label>
+        <label class="lab-field lab-field-range">
+          <span>Display tracking <b id="track-value">-0.06em</b></span>
+          <input id="track-range" type="range" min="-100" max="0" step="5" value="-60" />
+        </label>
+      </div>
+
+      <button class="lab-reset" type="button" id="reset">Reset</button>
+    </header>
+
+    <main>
+      <!-- ------------------------------------------------ now showing -->
+      <section class="now">
+        <div class="now-copy">
+          <div class="kicker">NOW SHOWING</div>
+          <h1 id="now-name">Inter</h1>
+          <p id="now-note">Loading…</p>
+          <dl class="now-meta">
+            <div><dt>License</dt><dd id="now-license">—</dd></div>
+            <div><dt>Source</dt><dd id="now-source">—</dd></div>
+            <div><dt>Pairs with</dt><dd id="now-mono">DM Mono</dd></div>
+          </dl>
+          <div class="now-verdict" id="now-verdict"></div>
+        </div>
+        <div class="now-sample" aria-hidden="true">
+          <div class="now-glyphs"><b>Aa</b><span>Gg</span><i>Rg</i></div>
+          <div class="now-line">All your chats. One AI.</div>
+        </div>
+      </section>
+
+      <!-- ------------------------------------------------ specimen -->
+      <section class="specimen">
+        <div class="section-head">
+          <div>
+            <div class="kicker">SPECIMEN</div>
+            <h2>How it behaves at every size.</h2>
+          </div>
+          <p>
+            Claire uses one sans for display and UI. The display line has to hold at -0.06em
+            tracking, and the 12px label has to stay readable next to it.
+          </p>
+        </div>
+
+        <div class="waterfall">
+          <div class="wf-row"><small>96 / -0.075em</small><p class="wf-display">Promises don’t slip.</p></div>
+          <div class="wf-row"><small>48 / -0.05em</small><p class="wf-h2">Every network, one client.</p></div>
+          <div class="wf-row"><small>24 / -0.04em</small><p class="wf-h3">Claire caught a promise in this thread.</p></div>
+          <div class="wf-row">
+            <small>16 / body</small>
+            <p class="wf-body">
+              Bring WhatsApp, Telegram, Instagram, and more into one intelligent client. Search every
+              conversation, get relationship-aware help, and never lose track of what you promised.
+            </p>
+          </div>
+          <div class="wf-row">
+            <small>13 / dense UI</small>
+            <p class="wf-small">
+              Views for unassigned, mine, priority, waiting, and saved segments. Collision detection
+              prevents two people replying to the same customer.
+            </p>
+          </div>
+        </div>
+
+        <div class="specimen-grid">
+          <article class="spec-card">
+            <small>WEIGHT LADDER</small>
+            <p style="font-weight: 400">400 Regular — the person you owe a reply</p>
+            <p style="font-weight: 500">500 Medium — navigation and quiet labels</p>
+            <p style="font-weight: 600">600 Semibold — display titles and buttons</p>
+            <p style="font-weight: 700">700 Bold — section headings and card titles</p>
+          </article>
+          <article class="spec-card">
+            <small>AMBIGUITY CHECK</small>
+            <p class="glyph-test">Il1 | O0Q | rn m | 5S | 8B | ,;. | ()[]{}</p>
+            <p class="glyph-note">
+              If <b>I</b>, <b>l</b> and <b>1</b> collapse, connector IDs and phone numbers get
+              risky in the app.
+            </p>
+            <p class="glyph-test">+1 (516) 610-0494 · $10/mo · 94%</p>
+          </article>
+          <article class="spec-card">
+            <small>NUMERALS IN UI</small>
+            <div class="numeral-rows">
+              <span><b>18</b> open</span>
+              <span><b>02:41</b> ago</span>
+              <span><b>$10</b> / month</span>
+              <span><b>4,182</b> messages</span>
+            </div>
+            <p class="glyph-note">Watch whether numerals sit on the cap line or the x-height.</p>
+          </article>
+          <article class="spec-card">
+            <small>MONO PARTNER</small>
+            <p class="mono-line">TEAM INBOX · 18 OPEN</p>
+            <p class="mono-line">risk: low_write · reversible</p>
+            <p class="mono-line">bun run dev — ready in 1.2s</p>
+            <p class="glyph-note">
+              The mono carries kickers, pills, and metadata. It should feel quieter than the sans,
+              not louder.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <!-- ------------------------------------------------ app mockups -->
+      <section class="apps">
+        <div class="section-head inverse">
+          <div>
+            <div class="kicker">IN THE PRODUCT</div>
+            <h2>The only test that counts.</h2>
+          </div>
+          <p>
+            A typeface that looks great in a specimen can fall apart in a 13px conversation row.
+            These are the surfaces the font actually has to survive.
+          </p>
+        </div>
+
+        <div class="phones">
+          <!-- phone 1 : inbox -->
+          <article class="phone-case">
+            <div class="mock-label"><b>MOBILE · HOME</b><span>DENSE LIST</span></div>
+            <div class="phone">
+              <div class="island"></div>
+              <div class="phone-status"><span>9:41</span><span>● ◒</span></div>
+              <div class="phone-screen">
+                <small class="screen-kicker">TUESDAY · 3 NEED YOU</small>
+                <h3 class="screen-title">Good morning.</h3>
+                <div class="screen-search"><i data-heroicon="search"></i><span>Search everything</span></div>
+                <div class="screen-chips"><b>All</b><span>Unread</span><span>Promises</span></div>
+                <div class="row selected">
+                  <div class="av av-maya">MK</div>
+                  <div><b>Maya Kim</b><p>Can you send that deck?</p></div>
+                  <time>2m</time>
+                </div>
+                <div class="row">
+                  <div class="av av-noah">NO</div>
+                  <div><b>Noah Oliver</b><p>Voice message · 0:24</p></div>
+                  <time>18m</time>
+                </div>
+                <div class="row">
+                  <div class="av av-studio">ST</div>
+                  <div><b>Studio team</b><p>Lea: latest screens are in</p></div>
+                  <time>1h</time>
+                </div>
+                <div class="row">
+                  <div class="av av-priya">PN</div>
+                  <div><b>Priya Nair</b><p>Order #4482 — where is it?</p></div>
+                  <time>3h</time>
+                </div>
+                <div class="screen-tabs">
+                  <span class="on"><i data-heroicon="home"></i><small>Home</small></span>
+                  <span><i data-heroicon="inbox"></i><small>Inbox</small></span>
+                  <span><i data-heroicon="sparkles"></i><small>Ask</small></span>
+                  <span><i data-heroicon="promises"></i><small>Promises</small></span>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <!-- phone 2 : ask claire -->
+          <article class="phone-case">
+            <div class="mock-label"><b>MOBILE · ASK CLAIRE</b><span>MIXED SIZES</span></div>
+            <div class="phone">
+              <div class="island"></div>
+              <div class="phone-status"><span>9:41</span><span>● ◒</span></div>
+              <div class="phone-screen">
+                <small class="screen-kicker">CLAIRE AI · ALL CHATS</small>
+                <h3 class="screen-title">What did I promise Maya?</h3>
+                <p class="screen-sub">Searching WhatsApp, Telegram, and Instagram…</p>
+                <div class="answer">
+                  <span class="answer-mark"><i data-heroicon="sparkles"></i></span>
+                  <div>
+                    <small>ANSWER WITH SOURCES</small>
+                    <b>Send the Q3 deck before 10 tomorrow.</b>
+                  </div>
+                </div>
+                <div class="screen-section"><b>Found in your chats</b><small>2 SOURCES</small></div>
+                <div class="src">
+                  <i class="src-wa"></i>
+                  <div><b>WhatsApp · Maya Kim</b><small>“Can you send that deck?”</small></div>
+                  <time>2m</time>
+                </div>
+                <div class="src">
+                  <i class="src-ok"><i data-heroicon="check-circle"></i></i>
+                  <div><b>Your reply</b><small>“I’ll send it before 10 tomorrow.”</small></div>
+                  <time>now</time>
+                </div>
+                <div class="next-step">
+                  <small>NEXT STEP</small>
+                  <b>Track this promise and draft the reply?</b>
+                  <div class="next-actions"><button>Track it</button><span>Not now</span></div>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <!-- phone 3 : promise detail -->
+          <article class="phone-case">
+            <div class="mock-label"><b>MOBILE · PROMISE</b><span>NUMERALS + META</span></div>
+            <div class="phone">
+              <div class="island"></div>
+              <div class="phone-status"><span>9:41</span><span>● ◒</span></div>
+              <div class="phone-screen">
+                <div class="screen-nav"><i data-heroicon="back"></i><span>Promises</span></div>
+                <div class="promise-hero">
+                  <small>DUE TOMORROW · 10:00</small>
+                  <h3>Send Maya the updated deck</h3>
+                  <div class="promise-tags"><span>WhatsApp</span><span>Work</span></div>
+                </div>
+                <div class="timeline">
+                  <div><b>09:12</b><span>Maya asked for the deck</span></div>
+                  <div><b>09:14</b><span>You promised “before 10 tomorrow”</span></div>
+                  <div class="tl-now"><b>Now</b><span>Claire is holding the reminder</span></div>
+                </div>
+                <div class="promise-card">
+                  <div class="pc-row"><span>Person</span><b>Maya Kim</b></div>
+                  <div class="pc-row"><span>Network</span><b>WhatsApp</b></div>
+                  <div class="pc-row"><span>Confidence</span><b>94%</b></div>
+                  <div class="pc-row"><span>Created</span><b>Aug 17, 09:14</b></div>
+                </div>
+                <button class="promise-cta">Draft the message</button>
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <!-- desktop -->
+        <article class="desk-case">
+          <div class="mock-label"><b>DESKTOP · UNIFIED WORKSPACE</b><span>SMALLEST TEXT IN THE PRODUCT</span></div>
+          <div class="desk">
+            <div class="desk-bar"><i></i><i></i><i></i><span>Claire</span></div>
+            <div class="desk-body">
+              <aside class="desk-rail">
+                <b>LM</b>
+                <span class="on"><i data-heroicon="home"></i></span>
+                <span><i data-heroicon="inbox"></i></span>
+                <span><i data-heroicon="sparkles"></i></span>
+                <span><i data-heroicon="promises"></i></span>
+              </aside>
+              <section class="desk-list">
+                <div class="desk-list-head"><b>Inbox</b><small>18 OPEN</small></div>
+                <div class="desk-search"><i data-heroicon="search"></i><span>Search everything</span></div>
+                <div class="desk-row on">
+                  <div class="av av-maya">MK</div>
+                  <div><b>Maya Kim</b><p>Can you send that deck?</p></div>
+                  <time>2m</time>
+                </div>
+                <div class="desk-row">
+                  <div class="av av-noah">NO</div>
+                  <div><b>Noah Oliver</b><p>Voice message · 0:24</p></div>
+                  <time>18m</time>
+                </div>
+                <div class="desk-row">
+                  <div class="av av-studio">ST</div>
+                  <div><b>Studio team</b><p>Lea: latest screens are in</p></div>
+                  <time>1h</time>
+                </div>
+              </section>
+              <section class="desk-thread">
+                <header>
+                  <div class="av av-maya">MK</div>
+                  <div><b>Maya Kim</b><small>WhatsApp · active now</small></div>
+                </header>
+                <div class="bubble in">Hey! Are we still good for the product review tomorrow?</div>
+                <div class="bubble out">Absolutely. I’ll send the updated deck before 10.</div>
+                <div class="catch">
+                  <span><i data-heroicon="sparkles"></i></span>
+                  <div>
+                    <small>CLAIRE CAUGHT A PROMISE</small>
+                    <b>Send Maya the updated deck</b>
+                    <p>Tomorrow · before 10:00 AM</p>
+                  </div>
+                  <button>Track</button>
+                </div>
+                <div class="composer"><span>Write a message…</span><i data-heroicon="send"></i></div>
+              </section>
+              <aside class="desk-context">
+                <small>CROSS-CHAT CONTEXT</small>
+                <p class="ctx-brief">
+                  Maya is waiting on the Q3 deck. Your review is tomorrow at 11, and you promised to
+                  send it by 10.
+                </p>
+                <small>OPEN PROMISE</small>
+                <div class="ctx-task"><b>Send updated deck</b><span>Due tomorrow, 10:00</span></div>
+              </aside>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <!-- ------------------------------------------------ marketing -->
+      <section class="marketing">
+        <div class="section-head">
+          <div>
+            <div class="kicker">MARKETING VOICE</div>
+            <h2>And how it shouts.</h2>
+          </div>
+          <p>
+            The site leans on very large, very tight headlines with a lime underline. Some faces
+            fall apart below -0.05em tracking — that is what the slider above is for.
+          </p>
+        </div>
+        <div class="mk-stage">
+          <div class="mk-eyebrow"><span></span>The AI-native multi-chat client</div>
+          <p class="mk-display">All your chats.<br /><span class="mk-underline">One AI.</span></p>
+          <p class="mk-copy">
+            Bring every network into one intelligent client. Search every conversation, get
+            relationship-aware help, and never lose track of what you promised.
+          </p>
+          <div class="mk-actions">
+            <span class="mk-button">Download</span>
+            <span class="mk-link">See the workspace →</span>
+          </div>
+          <div class="mk-chips">
+            <span>TYPED ACTIONS</span><span>SCOPED CONTEXT</span><span>DECLARED RISK</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ------------------------------------------------ compare -->
+      <section class="compare">
+        <div class="section-head">
+          <div>
+            <div class="kicker">SIDE BY SIDE</div>
+            <h2>Every candidate, one line.</h2>
+          </div>
+          <p>
+            Loads all candidate families at once so you can scan the whole set. Click any row to
+            make it the active font.
+          </p>
+        </div>
+        <button class="load-all" type="button" id="load-all">
+          Load every candidate <i data-heroicon="arrow-right"></i>
+        </button>
+        <div class="compare-list" id="compare-list"></div>
+      </section>
+    </main>
+
+    <footer class="lab-footer">
+      <p>
+        Every candidate is under the SIL Open Font License, so it can ship inside the mobile and
+        desktop apps as well as the website.
+      </p>
+      <nav>
+        <a href="/developers" target="_top">Developers</a>
+        <a href="/mockups/mobile" target="_top">Mobile</a>
+        <a href="/mockups/desktop" target="_top">Desktop</a>
+        <a href="/mockups/plugins" target="_top">Plugins</a>
+      </nav>
+    </footer>
+  </body>
+</html>

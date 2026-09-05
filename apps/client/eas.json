@@ -1,0 +1,57 @@
+{
+  "cli": {
+    "version": ">= 12.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "environment": "development",
+      "env": {
+        "APP_VARIANT": "development",
+        "EXPO_PUBLIC_ENV": "development",
+        "EXPO_PUBLIC_API_URL": "http://localhost:3001"
+      },
+      "channel": "development"
+    },
+    "staging": {
+      "distribution": "internal",
+      "environment": "preview",
+      "env": {
+        "APP_VARIANT": "staging",
+        "EXPO_PUBLIC_ENV": "staging"
+      },
+      "channel": "staging"
+    },
+    "preview": {
+      "extends": "staging",
+      "channel": "preview"
+    },
+    "production": {
+      "distribution": "internal",
+      "environment": "production",
+      "env": {
+        "APP_VARIANT": "production",
+        "EXPO_PUBLIC_ENV": "production"
+      },
+      "channel": "production"
+    },
+    "production-store": {
+      "extends": "production",
+      "distribution": "store",
+      "channel": "production",
+      "autoIncrement": true
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "ascAppId": "6803265140"
+      }
+    },
+    "production-store": {
+      "extends": "production"
+    }
+  }
+}

@@ -1,6 +1,6 @@
-import { platformCatalog, platformCatalogVersion } from '../server/src/platform-catalog';
+import { platformCatalog, platformCatalogVersion } from '../packages/platform-catalog/src/index';
 
-const target = new URL('../landing/platform-catalog.js', import.meta.url);
+const target = new URL('../apps/website/public/scripts/platform-catalog.js', import.meta.url);
 const payload = {
   version: platformCatalogVersion,
   source: 'https://github.com/mautrix/docs/blob/master/bridges/SUMMARY.md',

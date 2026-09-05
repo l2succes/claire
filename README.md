@@ -57,16 +57,7 @@ Each platform has its own auth method:
 
 For detailed bridge API docs, see [docs/MATRIX_BRIDGE_REFERENCE.md](docs/MATRIX_BRIDGE_REFERENCE.md) and the [official mautrix docs](https://docs.mau.fi/).
 
-## Production
-
-| Service             | URL                                                    |
-| ------------------- | ------------------------------------------------------ |
-| Claire server       | https://claire-production-1450.up.railway.app          |
-| Supabase API (Kong) | https://kong-production-2679.up.railway.app            |
-| Supabase Studio     | https://supabase-studio-production-b766.up.railway.app |
-| Postgres (external) | `hopper.proxy.rlwy.net:46800` user: `supabase_admin`   |
-
-See [docs/deployment/PRODUCTION_SETUP.md](docs/deployment/PRODUCTION_SETUP.md) for health checks, EAS env var setup, and CI.
+See [docs/deployment/PRODUCTION_SETUP.md](docs/deployment/PRODUCTION_SETUP.md) for a generic production checklist. Live hostnames and operator credentials are not published in this repository.
 
 ---
 
@@ -83,11 +74,13 @@ See [docs/deployment/PRODUCTION_SETUP.md](docs/deployment/PRODUCTION_SETUP.md) f
 ```bash
 git clone https://github.com/l2succes/claire.git
 cd claire
-
-# Install dependencies
-cd server && bun install
-cd ../client && bun install
+bun run setup
+bun run dev
 ```
+
+`bun run setup` copies example env files and installs workspaces. Mock mode does not need WhatsApp, Telegram, Instagram, Matrix, Supabase Cloud, or a paid AI key. Details: [docs/getting-started/repository-setup.md](docs/getting-started/repository-setup.md).
+
+To run the optional real local stack instead:
 
 ### 2. Start infrastructure
 
@@ -119,8 +112,8 @@ cp server/.env.example server/.env
 # Set: SUPABASE_URL, SUPABASE_ANON_KEY, DATABASE_URL, OPENAI_API_KEY, PLATFORM_MODE=matrix
 # Set: MATRIX_HOMESERVER_URL, MATRIX_SERVER_NAME, MATRIX_ADMIN_TOKEN, MATRIX_BOT_USER_ID
 
-# Client
-cp client/.env.example client/.env
+# Mobile
+cp mobile/.env.example mobile/.env
 # Set: EXPO_PUBLIC_SUPABASE_URL, EXPO_PUBLIC_SUPABASE_ANON_KEY, EXPO_PUBLIC_SERVER_URL
 ```
 
@@ -133,34 +126,34 @@ bun run dev
 # Server only
 bun run dev:server
 
-# Client only (local infra, Expo QR)
-bun run dev:client
+# Mobile only (local infra, Expo QR)
+bun run dev:mobile
 ```
 
 #### Run client against Railway (production backend)
 
 ```bash
 # Expo QR code (local server + Railway Supabase)
-bun run client:prod
+bun run mobile:prod
 
 # iOS simulator → Railway
-bun run client:ios:prod
+bun run mobile:ios:prod
 
 # Connected device → Railway
-bun run client:ios:prod:device
+bun run mobile:ios:prod:device
 ```
 
 | Script                           | Environment                         |
 | -------------------------------- | ----------------------------------- |
 | `bun run dev`                    | Local server + local Supabase       |
-| `bun run client:prod`            | Local server + **Railway** Supabase |
-| `bun run client:ios:prod`        | Simulator → **Railway**             |
-| `bun run client:ios:prod:device` | Physical device → **Railway**       |
+| `bun run mobile:prod`            | Local server + **Railway** Supabase |
+| `bun run mobile:ios:prod`        | Simulator → **Railway**             |
+| `bun run mobile:ios:prod:device` | Physical device → **Railway**       |
 
 ### Building for device / distribution
 
 ```bash
-cd client
+cd mobile
 bun run build:dev      # dev client build (EAS, internal)
 bun run build:preview  # preview build pointing at Railway (EAS, internal)
 bun run build:prod     # production build for App Store (EAS)
@@ -185,25 +178,24 @@ EAS environment variables are stored in the cloud — no `.env` file needed on C
 │       ├── services/          # Business logic
 │       ├── routes/            # API routes
 │       └── config/            # Configuration
-├── client/                    # Expo React Native app
-│   ├── app/                   # Expo Router screens
-│   │   ├── (tabs)/            # Tab screens (dashboard, contacts, settings)
-│   │   └── chat/              # Chat detail screen
-│   ├── components/            # UI components
-│   └── stores/                # Zustand state
+├── mobile/                    # Expo iOS, Android, and mobile web
+├── apps/desktop/              # Electron desktop app
+├── website/                   # Marketing site, docs, Storybook
+├── packages/                  # design-system, platform-catalog, plugin-sdk
+├── examples/plugins/          # Local fixture plugins
 ├── docker/
 │   ├── supabase/              # Supabase Docker Compose + config
 │   └── matrix/                # Synapse + mautrix bridges
 ├── supabase/
 │   └── migrations/            # Database migrations
-└── docs/
-    ├── MATRIX_BRIDGE_REFERENCE.md  # Mautrix API reference
-    └── plans/                 # Architecture plans
+├── docs/                      # Canonical Markdown consumed by /docs
+└── vendor/mautrix-docs        # Optional upstream docs submodule
 ```
 
 ## Documentation
 
-- [Production Setup](docs/deployment/PRODUCTION_SETUP.md) — Railway stack, Supabase dashboard, EAS env vars, CI
+- [Repository setup](docs/getting-started/repository-setup.md) — clone, `bun run setup`, mock mode
+- [Production Setup](docs/deployment/PRODUCTION_SETUP.md) — generic production checklist (no live hosts)
 - [Railway Deployment](docs/deployment/RAILWAY.md) — Railway service configuration
 - [Environment Setup](docs/ENVIRONMENT_SETUP.md) — Local vs device vs production environments
 - [Matrix Bridge Reference](docs/MATRIX_BRIDGE_REFERENCE.md) — mautrix bridge API quick reference
@@ -216,9 +208,14 @@ EAS environment variables are stored in the cloud — no `.env` file needed on C
 - [Payments & AI Credits Spec](docs/PAYMENTS_AND_AI_CREDITS_SPEC.md) — Claire Plus consumer subscription, prepaid managed-AI credits, BYOK, ledger, entitlements, and payment controls
 - [Security Claims & Validation Roadmap](docs/SECURITY_CLAIMS_AND_ROADMAP.md) — Current public claims, data boundaries, and evidence gates for stronger privacy statements
 - [Claire Plugin System Spec](docs/CLAIRE_PLUGIN_SYSTEM_SPEC.md) — Plugin manifests, permissions, conversation triggers, approvals, execution, audit, and rollout
-- [Interactive Product Mockups](landing/README.md) — Landing page, mobile screens, desktop screens, and visual style guide
+- [Website and Claire Lab](apps/website/README.md) — Marketing pages, mobile and desktop references, visual style guide, and the Close your loops campaign
 - [Official mautrix docs](https://docs.mau.fi/) — Upstream bridge documentation
 
 ## License
 
-MIT
+Claire uses a split license:
+
+- **AGPL-3.0-only** for `server/`, `docker/`, `supabase/`, and operational service code
+- **Apache-2.0** for `mobile/`, `desktop/`, `website/`, `packages/`, `examples/`, and public documentation
+
+See [LICENSE](LICENSE), [LICENSES/](LICENSES/), and [NOTICE](NOTICE). The Claire name and marks are reserved; see [TRADEMARKS.md](TRADEMARKS.md).

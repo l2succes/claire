@@ -34,7 +34,7 @@ autonomously, until the bound in `$ARGUMENTS` is hit. Full spec: `docs/AUTONOMOU
 5. **Gate locally** (all must pass):
    ```bash
    cd server && bun run lint && bun run typecheck && bun test
-   cd ../client && bun run lint && bun run typecheck && bun test && MOCK_BRIDGE=true bunx playwright test
+   cd ../mobile && bun run lint && bun run typecheck && bun test && MOCK_BRIDGE=true bunx playwright test
    ```
    If red: fix in-loop, **max 2 retries**. Still red → label the issue `blocked`, comment the failure, remove `ready`, go to the next ticket.
 6. **PR:** commit, push, then:

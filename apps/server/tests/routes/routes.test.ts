@@ -1,0 +1,464 @@
+/**
+ * Route smoke tests — supertest harness (issue #13).
+ *
+ * Uses the lightweight app-factory (no real Supabase/Redis/adapters).
+ * Compatible with both Jest (CI) and bun test (local dev).
+ *
+ * Verifies for each resource group:
+ *   • Unauthenticated requests → 401
+ *   • Authenticated requests   → 2xx with expected shape
+ *   • Unknown routes           → 404
+ */
+
+import supertest from 'supertest';
+import { createApp } from './app-factory';
+
+let request: ReturnType<typeof supertest>;
+
+beforeAll(() => {
+  request = supertest(createApp());
+});
+
+// ---------------------------------------------------------------------------
+// /health
+// ---------------------------------------------------------------------------
+describe('GET /health', () => {
+  it('returns 200 with status ok (no auth required)', async () => {
+    const res = await request.get('/health');
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('ok');
+    expect(typeof res.body.timestamp).toBe('string');
+  });
+
+  it('includes per-dependency checks object', async () => {
+    const res = await request.get('/health');
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('checks');
+    expect(res.body.checks).toHaveProperty('db');
+    expect(res.body.checks).toHaveProperty('redis');
+    expect(res.body.checks.db.status).toBe('ok');
+    expect(res.body.checks.redis.status).toBe('ok');
+  });
+
+  it('includes uptime and environment fields', async () => {
+    const res = await request.get('/health');
+    expect(res.status).toBe(200);
+    expect(typeof res.body.uptime).toBe('number');
+    expect(typeof res.body.environment).toBe('string');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// /messages
+// ---------------------------------------------------------------------------
+describe('/messages', () => {
+  it('GET / — 401 without token', async () => {
+    const res = await request.get('/messages');
+    expect(res.status).toBe(401);
+    expect(res.body).toHaveProperty('error');
+  });
+
+  it('GET / — 200 with valid token', async () => {
+    const res = await request
+      .get('/messages')
+      .set('Authorization', 'Bearer valid-token');
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.messages)).toBe(true);
+  });
+
+  it('POST /send — 401 without token', async () => {
+    const res = await request.post('/messages/send').send({
+      sessionId: 's1',
+      to: '+1234567890',
+      message: 'hello',
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it('POST /send — 400 missing fields', async () => {
+    const res = await request
+      .post('/messages/send')
+      .set('Authorization', 'Bearer valid-token')
+      .send({});
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty('error');
+  });
+
+  it('POST /send — 200 with required fields', async () => {
+    const res = await request
+      .post('/messages/send')
+      .set('Authorization', 'Bearer valid-token')
+      .send({ sessionId: 's1', to: '+1234567890', message: 'hello' });
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// /ai
+// ---------------------------------------------------------------------------
+describe('/ai', () => {
+  it('POST /responses/generate — 401 without token', async () => {
+    const res = await request
+      .post('/ai/responses/generate')
+      .send({ messageId: 'msg1', content: 'hello' });
+    expect(res.status).toBe(401);
+  });
+
+  it('POST /responses/generate — 400 missing fields', async () => {
+    const res = await request
+      .post('/ai/responses/generate')
+      .set('Authorization', 'Bearer valid-token')
+      .send({});
+    expect(res.status).toBe(400);
+  });
+
+  it('POST /responses/generate — 200 with valid payload', async () => {
+    const res = await request
+      .post('/ai/responses/generate')
+      .set('Authorization', 'Bearer valid-token')
+      .send({ messageId: 'msg1', content: 'hello' });
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.suggestions)).toBe(true);
+  });
+
+  it('POST /responses/feedback — 401 without token', async () => {
+    const res = await request
+      .post('/ai/responses/feedback')
+      .send({ messageId: 'msg1', action: 'accept' });
+    expect(res.status).toBe(401);
+  });
+
+  it('POST /responses/feedback — accept action persists (200)', async () => {
+    const res = await request
+      .post('/ai/responses/feedback')
+      .set('Authorization', 'Bearer valid-token')
+      .send({ messageId: 'msg1', selectedIndex: 0, feedback: 'positive' });
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+  });
+
+  it('POST /responses/feedback — reject action persists (200)', async () => {
+    const res = await request
+      .post('/ai/responses/feedback')
+      .set('Authorization', 'Bearer valid-token')
+      .send({ messageId: 'msg1', feedback: 'negative' });
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+  });
+
+  it('POST /responses/feedback — edit action (customResponse) persists (200)', async () => {
+    const res = await request
+      .post('/ai/responses/feedback')
+      .set('Authorization', 'Bearer valid-token')
+      .send({ messageId: 'msg1', customResponse: 'My edited reply' });
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+  });
+
+  it('GET /analytics — 401 without token', async () => {
+    const res = await request.get('/ai/analytics');
+    expect(res.status).toBe(401);
+  });
+
+  it('GET /analytics — 200 with valid token', async () => {
+    const res = await request
+      .get('/ai/analytics')
+      .set('Authorization', 'Bearer valid-token');
+    expect(res.status).toBe(200);
+    expect(typeof res.body.total).toBe('number');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// /platforms
+// ---------------------------------------------------------------------------
+describe('/platforms', () => {
+  it('GET /status — 401 without token', async () => {
+    const res = await request.get('/platforms/status');
+    expect(res.status).toBe(401);
+  });
+
+  it('GET /status — 200 with valid token', async () => {
+    const res = await request
+      .get('/platforms/status')
+      .set('Authorization', 'Bearer valid-token');
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.platforms)).toBe(true);
+  });
+
+  it('POST /whatsapp/connect — 401 without token', async () => {
+    const res = await request.post('/platforms/whatsapp/connect').send({});
+    expect(res.status).toBe(401);
+  });
+
+  it('POST /whatsapp/connect — 200 with valid token', async () => {
+    const res = await request
+      .post('/platforms/whatsapp/connect')
+      .set('Authorization', 'Bearer valid-token')
+      .send({});
+    expect(res.status).toBe(200);
+    expect(res.body.platform).toBe('whatsapp');
+  });
+
+  it('POST /unknown-platform/connect — 404', async () => {
+    const res = await request
+      .post('/platforms/unknown-platform/connect')
+      .set('Authorization', 'Bearer valid-token')
+      .send({});
+    expect(res.status).toBe(404);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// /loops
+// ---------------------------------------------------------------------------
+describe('/loops', () => {
+  it('GET / — 401 without token', async () => {
+    const res = await request.get('/loops');
+    expect(res.status).toBe(401);
+    expect(res.body).toHaveProperty('error');
+  });
+
+  it('GET / — 200 with valid token, returns array', async () => {
+    const res = await request
+      .get('/loops')
+      .set('Authorization', 'Bearer valid-token');
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.loops)).toBe(true);
+    expect(typeof res.body.total).toBe('number');
+  });
+
+  it('GET /:id — 200 for existing loop', async () => {
+    const res = await request
+      .get('/loops/loop-1')
+      .set('Authorization', 'Bearer valid-token');
+    expect(res.status).toBe(200);
+    expect(res.body.loop).toHaveProperty('id', 'loop-1');
+    expect(res.body.loop).toHaveProperty('status');
+    expect(res.body.loop).toHaveProperty('content');
+  });
+
+  it('GET /:id — 404 for unknown loop', async () => {
+    const res = await request
+      .get('/loops/no-such-loop')
+      .set('Authorization', 'Bearer valid-token');
+    expect(res.status).toBe(404);
+    expect(res.body).toHaveProperty('error');
+  });
+
+  it('PATCH /:id — 401 without token', async () => {
+    const res = await request
+      .patch('/loops/loop-1')
+      .send({ status: 'completed' });
+    expect(res.status).toBe(401);
+  });
+
+  it('PATCH /:id — 200 marks loop completed', async () => {
+    const res = await request
+      .patch('/loops/loop-1')
+      .set('Authorization', 'Bearer valid-token')
+      .send({ status: 'completed' });
+    expect(res.status).toBe(200);
+    expect(res.body.loop).toHaveProperty('status', 'completed');
+  });
+
+  it('POST /:id/snooze — 200 returns updated deadline', async () => {
+    const until = new Date(Date.now() + 2 * 86_400_000).toISOString();
+    const res = await request
+      .post('/loops/loop-1/snooze')
+      .set('Authorization', 'Bearer valid-token')
+      .send({ until });
+    expect(res.status).toBe(200);
+    expect(res.body.loop).toHaveProperty('deadline', until);
+  });
+
+  it('DELETE /:id — 401 without token', async () => {
+    const res = await request.delete('/loops/loop-1');
+    expect(res.status).toBe(401);
+  });
+
+  it('DELETE /:id — 200 with valid token', async () => {
+    const res = await request
+      .delete('/loops/loop-1')
+      .set('Authorization', 'Bearer valid-token');
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// /preferences (notification prefs)
+// ---------------------------------------------------------------------------
+describe('/preferences', () => {
+  it('GET / — 401 without token', async () => {
+    const res = await request.get('/preferences');
+    expect(res.status).toBe(401);
+    expect(res.body).toHaveProperty('error');
+  });
+
+  it('GET / — 200 with valid token, returns notification fields', async () => {
+    const res = await request
+      .get('/preferences')
+      .set('Authorization', 'Bearer valid-token');
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(typeof res.body.data.notification_enabled).toBe('boolean');
+    expect(typeof res.body.data.preferences.quiet_hours_enabled).toBe('boolean');
+    expect(typeof res.body.data.preferences.quiet_hours_start).toBe('string');
+    expect(typeof res.body.data.preferences.notify_messages).toBe('boolean');
+    expect(typeof res.body.data.preferences.notify_loops).toBe('boolean');
+    expect(typeof res.body.data.preferences.notify_ai_suggestions).toBe('boolean');
+  });
+
+  it('PUT / — 401 without token', async () => {
+    const res = await request
+      .put('/preferences')
+      .send({ notification_enabled: false });
+    expect(res.status).toBe(401);
+  });
+
+  it('PUT / — 200 persists notification_enabled', async () => {
+    const res = await request
+      .put('/preferences')
+      .set('Authorization', 'Bearer valid-token')
+      .send({ notification_enabled: false });
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.notification_enabled).toBe(false);
+  });
+
+  it('PUT / — 200 persists quiet_hours preferences', async () => {
+    const res = await request
+      .put('/preferences')
+      .set('Authorization', 'Bearer valid-token')
+      .send({
+        preferences: {
+          quiet_hours_enabled: true,
+          quiet_hours_start: '23:00',
+          quiet_hours_end: '07:00',
+          notify_messages: false,
+          notify_loops: true,
+          notify_ai_suggestions: false,
+        },
+      });
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.preferences.quiet_hours_enabled).toBe(true);
+    expect(res.body.data.preferences.quiet_hours_start).toBe('23:00');
+    expect(res.body.data.preferences.notify_messages).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// /push-tokens
+// ---------------------------------------------------------------------------
+describe('/push-tokens', () => {
+  it('POST / — 401 without token', async () => {
+    const res = await request
+      .post('/push-tokens')
+      .send({ token: 'ExponentPushToken[abc123]' });
+    expect(res.status).toBe(401);
+    expect(res.body).toHaveProperty('error');
+  });
+
+  it('POST / — 400 missing token field', async () => {
+    const res = await request
+      .post('/push-tokens')
+      .set('Authorization', 'Bearer valid-token')
+      .send({});
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty('error');
+  });
+
+  it('POST / — 200 persists valid token', async () => {
+    const res = await request
+      .post('/push-tokens')
+      .set('Authorization', 'Bearer valid-token')
+      .send({ token: 'ExponentPushToken[abc123]' });
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// /auto-reply
+// ---------------------------------------------------------------------------
+describe('/auto-reply', () => {
+  it('GET / — 401 without token', async () => {
+    const res = await request.get('/auto-reply');
+    expect(res.status).toBe(401);
+  });
+
+  it('GET / — 200 returns rules array', async () => {
+    const res = await request
+      .get('/auto-reply')
+      .set('Authorization', 'Bearer valid-token');
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.rules)).toBe(true);
+  });
+
+  it('POST / — 401 without token', async () => {
+    const res = await request.post('/auto-reply').send({
+      name: 'Test',
+      trigger_type: 'birthday',
+      reply_template: 'Happy birthday!',
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it('POST / — 400 missing required fields', async () => {
+    const res = await request
+      .post('/auto-reply')
+      .set('Authorization', 'Bearer valid-token')
+      .send({});
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty('error');
+  });
+
+  it('POST / — 201 with valid payload', async () => {
+    const res = await request
+      .post('/auto-reply')
+      .set('Authorization', 'Bearer valid-token')
+      .send({
+        name: 'Birthday Auto Reply',
+        trigger_type: 'birthday',
+        reply_template: 'Happy birthday, {name}!',
+      });
+    expect(res.status).toBe(201);
+    expect(res.body.rule).toHaveProperty('name', 'Birthday Auto Reply');
+  });
+
+  it('PATCH /:id — 200 toggles enabled', async () => {
+    const res = await request
+      .patch('/auto-reply/rule-1')
+      .set('Authorization', 'Bearer valid-token')
+      .send({ enabled: false });
+    expect(res.status).toBe(200);
+    expect(res.body.rule.enabled).toBe(false);
+  });
+
+  it('DELETE /:id — 200 removes rule', async () => {
+    const res = await request
+      .delete('/auto-reply/rule-1')
+      .set('Authorization', 'Bearer valid-token');
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 404 catch-all
+// ---------------------------------------------------------------------------
+describe('404 handler', () => {
+  it('unknown route returns 404', async () => {
+    const res = await request.get('/this-route-does-not-exist');
+    expect(res.status).toBe(404);
+    expect(res.body).toHaveProperty('error');
+  });
+
+  it('POST to unknown route returns 404', async () => {
+    const res = await request.post('/no-such-endpoint').send({});
+    expect(res.status).toBe(404);
+  });
+});

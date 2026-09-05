@@ -18,7 +18,7 @@ sleep 2
 
 # Start client
 echo -e "${GREEN}Starting client on port 8085...${NC}"
-cd ../client && bunx expo start --port 8085 &
+cd ../mobile && bunx expo start --port 8085 &
 CLIENT_PID=$!
 
 echo ""

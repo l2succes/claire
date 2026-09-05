@@ -1,7 +1,7 @@
 # Claire Backend Server - Production Dockerfile
 # Uses Bun runtime with Puppeteer support for WhatsApp web.js
 
-FROM oven/bun:1.1-debian AS base
+FROM oven/bun:1.3-debian AS base
 
 # Install dependencies for Puppeteer/Chromium and native module compilation
 RUN apt-get update && apt-get install -y \
@@ -25,12 +25,11 @@ RUN apt-get update && apt-get install -y \
     xdg-utils \
     ca-certificates \
     curl \
-    # Build tools for native modules (better-sqlite3, etc.)
     build-essential \
     python3 \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
-# Tell Puppeteer to use system Chromium
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
     PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium \
     HOME=/app \
@@ -38,69 +37,61 @@ ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
 
 WORKDIR /app
 
-# ============================================
-# Dependencies stage
-# ============================================
-FROM base AS deps
+# Workspace manifests required to resolve @claire/server and its local
+# @claire/platform-catalog dependency without copying the whole repository.
+FROM base AS manifests
+COPY package.json bun.lockb ./
+COPY apps/client/package.json ./apps/client/package.json
+COPY apps/desktop/package.json ./apps/desktop/package.json
+COPY apps/server/package.json ./apps/server/package.json
+COPY apps/website/package.json ./apps/website/package.json
+COPY packages/chat-core/package.json ./packages/chat-core/package.json
+COPY packages/design-system/package.json ./packages/design-system/package.json
+COPY packages/emails/package.json ./packages/emails/package.json
+COPY packages/host/package.json ./packages/host/package.json
+COPY packages/platform-catalog/package.json ./packages/platform-catalog/package.json
+COPY packages/plugin-sdk/package.json ./packages/plugin-sdk/package.json
+COPY packages/shell/package.json ./packages/shell/package.json
+COPY packages/tokens/package.json ./packages/tokens/package.json
+COPY examples/plugins/calendar/package.json ./examples/plugins/calendar/package.json
+COPY examples/plugins/task-manager/package.json ./examples/plugins/task-manager/package.json
 
-# Copy package files
-COPY server/package.json ./
+FROM manifests AS deps
+# Production dependencies; scripts are skipped because better-sqlite3 is optional
+# and Puppeteer uses the system Chromium installed above.
+RUN bun install --production --ignore-scripts --filter @claire/server
 
-# Install production dependencies
-# --ignore-scripts prevents better-sqlite3 from compiling native binaries in Docker
-# (it's an optional dep only used for iMessage on macOS, PUPPETEER_SKIP_CHROMIUM_DOWNLOAD handles puppeteer)
-RUN bun install --production --ignore-scripts
+FROM manifests AS builder
+# Build dependencies for the server.
+RUN bun install --ignore-scripts --filter @claire/server
 
-# ============================================
-# Build stage
-# ============================================
-FROM base AS builder
+COPY apps/server/src ./apps/server/src
+COPY apps/server/tsconfig.json ./apps/server/tsconfig.json
+COPY packages/platform-catalog/src ./packages/platform-catalog/src
 
-WORKDIR /app
-
-# Copy package files and install dependencies for TypeScript build
-# --ignore-scripts skips native module compilation (we only need types)
-COPY server/package.json ./
-RUN bun install --ignore-scripts
-
-# Copy source code
-COPY server/src ./src
-COPY server/tsconfig.json ./
-
-# Build the application
+WORKDIR /app/apps/server
 RUN bun build src/index.ts --target=bun --outdir=dist
 
-# ============================================
-# Production stage
-# ============================================
 FROM base AS production
 
 WORKDIR /app
 
-# Create non-root user for security
 RUN groupadd -r claire && useradd -r -g claire claire
-
-# Create directories for sessions and data
 RUN mkdir -p /app/sessions /app/.wwebjs_auth /app/.wwebjs_cache /app/.config /data \
     && chown -R claire:claire /app /data
 
-# Copy production dependencies from deps stage
 COPY --from=deps --chown=claire:claire /app/node_modules ./node_modules
+# Bun preserves workspace links in node_modules, so include the local dependency.
+COPY --from=builder --chown=claire:claire /app/packages/platform-catalog ./packages/platform-catalog
+COPY --from=builder --chown=claire:claire /app/apps/server/dist ./dist
+COPY --from=builder --chown=claire:claire /app/apps/server/src/routes/email-confirm.html ./dist/routes/email-confirm.html
+COPY --from=builder --chown=claire:claire /app/apps/server/package.json ./
 
-# Copy built application from builder stage
-COPY --from=builder --chown=claire:claire /app/dist ./dist
-COPY --from=builder --chown=claire:claire /app/src/routes/email-confirm.html ./dist/routes/email-confirm.html
-COPY --from=builder --chown=claire:claire /app/package.json ./
-
-# Switch to non-root user
 USER claire
 
-# Expose server port
 EXPOSE 3001
 
-# Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:3001/health || exit 1
+    CMD curl -f http://localhost:3001/healthz || exit 1
 
-# Start the server
 CMD ["bun", "run", "dist/index.js"]

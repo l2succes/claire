@@ -1,0 +1,15 @@
+"$schema" = "https://conductor.build/schemas/settings.repo.schema.json"
+
+[scripts]
+setup = """
+if [ "${CONDUCTOR_IS_LOCAL:-0}" = "1" ] && [ ! -e "$CONDUCTOR_WORKSPACE_PATH/apps/client/.env.local" ]; then
+  for source_env in "$CONDUCTOR_ROOT_PATH/apps/client/.env.local" "$CONDUCTOR_ROOT_PATH/client/.env.local"; do
+    if [ -f "$source_env" ]; then
+      cp "$source_env" "$CONDUCTOR_WORKSPACE_PATH/apps/client/.env.local"
+      break
+    fi
+  done
+fi
+
+bun run setup
+"""

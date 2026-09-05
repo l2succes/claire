@@ -1,0 +1,24 @@
+{
+  "name": "@claire/emails",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "bun run src/build.tsx",
+    "dev": "email dev --dir src --port 3004"
+  },
+  "dependencies": {
+    "@react-email/components": "^1.0.12",
+    "@react-email/render": "^2.1.0",
+    "react": "^19.2.0"
+  },
+  "devDependencies": {
+    "@react-email/ui": "^6.9.2",
+    "react-email": "^6.9.2"
+  }
+}

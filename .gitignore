@@ -28,12 +28,18 @@ lerna-debug.log*
 .env.test.local
 .env.production.local
 # Expo overrides / local backups that may hold real URLs / tokens
-client/.env.override
-client/.env.local.backup
-client/.env.production
+apps/client/.env.override
+apps/client/.env.local.backup
+apps/client/.env.production
 # Explicit catch-all for real .env files in any subdirectory
 **/.env.production
 **/.env.local
+# 1Password runtime references and operator manifests. The tracked examples
+# contain no credentials; local copies may contain vault/account metadata.
+.env.op
+**/.env.op
+ops/secrets/*.json
+!ops/secrets/*.example.json
 
 # IDE
 .vscode/
@@ -86,3 +92,21 @@ Thumbs.db
 # Claude (ignore local settings/plans, but keep shared project commands tracked)
 .claude/*
 !.claude/commands/
+
+# Leftover local trees after earlier client/ renames and worktree experiments.
+# Keep the native project in apps/client/ios (Xcode + Podfile); never commit Pods.
+/mobile/
+/website/
+/client/
+/wt-96/
+/turbo-fieldfare/
+
+# NX local cache and daemon state
+.nx/
+
+# Vercel CLI project links are machine-local account metadata.
+.vercel/
+**/.vercel/
+
+# Tamagui compiler cache
+.tamagui/

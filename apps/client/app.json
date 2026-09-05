@@ -1,0 +1,100 @@
+{
+  "expo": {
+    "name": "Claire",
+    "slug": "claire",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#DFFF64"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.claire.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "This app uses the camera to scan QR codes for WhatsApp login.",
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "appleTeamId": "T74H9G4334"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.claire.app",
+      "permissions": [
+        "CAMERA"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-dev-client",
+      "expo-router",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#ffffff"
+        }
+      ],
+      [
+        "expo-font",
+        {
+          "fonts": [
+            "./assets/fonts/PublicSans-Regular.ttf",
+            "./assets/fonts/PublicSans-Medium.ttf",
+            "./assets/fonts/PublicSans-SemiBold.ttf",
+            "./assets/fonts/PublicSans-Bold.ttf",
+            "./assets/fonts/Inter-SemiBold.ttf",
+            "./assets/fonts/Inter-Bold.ttf",
+            "./assets/fonts/DMMono-Regular.ttf",
+            "./assets/fonts/DMMono-Medium.ttf"
+          ]
+        }
+      ],
+      "expo-web-browser",
+      "expo-video",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Allow Claire to access your microphone so you can record voice notes.",
+          "enableBackgroundRecording": false,
+          "enableBackgroundPlayback": true
+        }
+      ],
+      [
+        "expo-sqlite",
+        {
+          "useSQLCipher": true
+        }
+      ],
+      "expo-secure-store"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "scheme": "claire",
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "366bc316-ee01-407b-b681-dd8eed7d02be"
+      }
+    },
+    "updates": {
+      "url": "https://u.expo.dev/366bc316-ee01-407b-b681-dd8eed7d02be"
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    }
+  }
+}

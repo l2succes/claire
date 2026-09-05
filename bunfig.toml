@@ -5,6 +5,11 @@
 # This allows for better compatibility with packages that have native dependencies
 native = true
 
+# Metro and Babel `require()` transitive plugins by bare name at runtime, which
+# Bun's default isolated layout does not expose. Hoisting keeps the Expo app
+# bundleable from a clean `bun install`.
+linker = "hoisted"
+
 # Lockfile settings
 [install.lockfile]
 # Save the lockfile after every install

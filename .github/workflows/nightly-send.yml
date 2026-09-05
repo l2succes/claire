@@ -49,7 +49,7 @@ jobs:
             chat_id_secret: IG_LOOPBACK_CHAT_ID
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
@@ -57,13 +57,13 @@ jobs:
           bun-version: latest
 
       - name: Install server dependencies
-        working-directory: ./server
+        working-directory: ./apps/server
         run: bun install --frozen-lockfile
 
       # Start the Bun server in PLATFORM_MODE=matrix with real Matrix config.
       # The server process is kept alive for the duration of the send test.
       - name: Start server
-        working-directory: ./server
+        working-directory: ./apps/server
         env:
           PORT: 3001
           PLATFORM_MODE: matrix

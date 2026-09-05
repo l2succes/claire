@@ -1,0 +1,945 @@
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import morgan from 'morgan';
+import * as Sentry from '@sentry/node';
+import { config, platformConfig, matrixConfig, mockBridgeConfig, serverConfig } from './config';
+import { initSentry } from './utils/sentry';
+import { logger, stream } from './utils/logger';
+
+import { supabase } from './services/supabase';
+import { redis } from './services/redis';
+import { sessionMonitor } from './services/session-monitor';
+import { reminderScheduler } from './services/reminder-scheduler';
+import { verifySchemaCached } from './services/schema-verification';
+import { resolvePlatformMode } from './config/platform-mode';
+import authRoutes from './routes/auth';
+import { buildOAuthCallbackUrl, resolveOAuthClient } from './utils/oauth-callback';
+import messageRoutes from './routes/messages';
+import { BridgeHttpClient } from './adapters/matrix/bridge-http-client';
+import aiRoutes from './routes/ai';
+import platformRoutes from './routes/platforms';
+import conversationRoutes from './routes/conversations';
+import preferencesRoutes from './routes/preferences';
+import autoReplyRoutes from './routes/auto-reply';
+import { aiRateLimit, authRateLimit } from './middleware/rate-limit';
+import seedRoutes from './routes/seed';
+import loopRoutes from './routes/loops';
+import pushTokenRoutes from './routes/push-tokens';
+import notificationDeviceRoutes from './routes/notification-devices';
+import operationsRoutes from './routes/operations';
+import telemetryRoutes from './routes/telemetry';
+import contactRoutes from './routes/contacts';
+import deviceRoutes from './routes/devices';
+import searchRoutes from './routes/search';
+import desktopSyncRoutes from './routes/desktop-sync';
+import handoffRoutes from './routes/handoffs';
+import { ensureCompanionSchema } from './services/companion-schema';
+import { platformManager } from './adapters';
+import { aiProcessor } from './services/ai-processor';
+import { conversationAssistant } from './services/conversation-assistant';
+import { voiceProfileService } from './services/voice-profile-service';
+import {
+  displayNameFromBridge,
+  incomingContactId,
+  phoneNumberFromBridgeIdentifiers,
+  phoneNumberFromPlatformContactId,
+  resolveMentions,
+} from './services/contact-identity';
+import { scheduleChat } from './services/loops/loop-queue';
+import { operationsMonitor } from './services/operations-monitor';
+import { operationsTelemetry } from './services/operations-telemetry';
+import { autoReplyEngine } from './services/auto-reply-engine';
+import { notificationDeliveryService } from './services/notification-delivery';
+import { isAiProcessingEnabled } from './services/ai-policy';
+import { MessageContentType, Platform, PlatformStatus } from './adapters/types';
+import { whatsappAdapter } from './adapters/whatsapp';
+import { telegramAdapter } from './adapters/telegram';
+import { imessageAdapter } from './adapters/imessage';
+import { instagramAdapter } from './adapters/instagram';
+import { MatrixBridgeAdapter } from './adapters/matrix';
+import { mockBridgeAdapter } from './adapters/mock';
+import { transcodeVoiceToM4aOnce } from './services/audio-transcoder';
+
+// Initialise Sentry as early as possible (no-op when SENTRY_DSN is unset)
+initSentry();
+
+const app = express();
+const PORT = config.PORT;
+
+// Railway terminates TLS at its edge and forwards the client address. Trust its
+// immediately preceding proxy so rate limiting can use the real client IP and
+// no longer emits noisy X-Forwarded-For validation errors.
+app.set('trust proxy', 1);
+
+async function notifyIncomingMessage(message: {
+  userId: string;
+  chatId: string;
+  platform: string;
+  senderName?: string;
+  chatName?: string;
+  isGroup?: boolean;
+  content: string;
+  messageId: string;
+}): Promise<void> {
+  await notificationDeliveryService.enqueueIncomingMessage(message);
+}
+
+// Sentry request handler — must come first in the middleware chain
+if (config.SENTRY_DSN) {
+  Sentry.setupExpressErrorHandler(app);
+}
+
+// Middleware
+app.use(helmet());
+app.use(
+  cors({
+    origin:
+      process.env.NODE_ENV === 'production'
+        ? (origin, callback) => {
+            if (!origin || serverConfig.corsOrigins.includes(origin)) {
+              callback(null, true);
+              return;
+            }
+
+            callback(new Error(`Origin ${origin} is not allowed by CORS`));
+          }
+        : true,
+    credentials: true,
+  })
+);
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+// Keep HTTP diagnostics useful without recording search terms, OAuth values,
+// or other query parameters that can contain private data.
+app.use(
+  morgan(
+    (tokens, req, res) =>
+      [
+        tokens.method(req, res),
+        req.path,
+        tokens.status(req, res),
+        tokens.res(req, res, 'content-length') || '-',
+        `${tokens['response-time'](req, res)} ms`,
+      ].join(' '),
+    { stream }
+  )
+);
+
+// Routes
+app.use('/auth', authRateLimit, authRoutes);
+app.use('/messages', messageRoutes);
+app.use('/ai', aiRateLimit, aiRoutes);
+app.use('/platforms', platformRoutes);
+app.use('/conversations', conversationRoutes);
+app.use('/preferences', preferencesRoutes);
+// Seed/reset route — only functional when MOCK_BRIDGE=true (guarded inside route)
+app.use('/seed', seedRoutes);
+app.use('/loops', loopRoutes);
+app.use('/push-tokens', pushTokenRoutes);
+app.use('/notification-devices', notificationDeviceRoutes);
+app.use('/operations', operationsRoutes);
+app.use('/telemetry', telemetryRoutes);
+app.use('/contacts', contactRoutes);
+app.use('/devices', deviceRoutes);
+app.use('/search', searchRoutes);
+app.use('/desktop', desktopSyncRoutes);
+app.use('/handoffs', handoffRoutes);
+app.use('/auto-reply', autoReplyRoutes);
+
+// GoTrue sends an OAuth authorization code to its configured site URL when a
+// custom mobile/desktop redirect is not allow-listed. The production site URL
+// is this service, so forward only the known OAuth callback fields to the
+// registered Claire Desktop scheme instead of trying to render the email
+// confirmation page (which previously became a generic 500 response).
+app.get('/', (req, res, next) => {
+  const code = typeof req.query.code === 'string' ? req.query.code : null;
+  const error = typeof req.query.error === 'string' ? req.query.error : null;
+  const errorDescription =
+    typeof req.query.error_description === 'string' ? req.query.error_description : null;
+
+  if (code || error) {
+    const client = resolveOAuthClient(req.query.client, req.get('user-agent') || '');
+    const callback = buildOAuthCallbackUrl({
+      client,
+      code,
+      error,
+      errorDescription,
+    });
+    logger.info('Forwarding Supabase OAuth callback to Claire client', {
+      client,
+      hasCode: Boolean(code),
+      hasError: Boolean(error),
+    });
+    res.setHeader('Cache-Control', 'no-store');
+    return res.redirect(302, callback);
+  }
+
+  // Supabase email confirmations use fragment parameters, which are not sent
+  // to the server. Keep the browser confirmation page for that flow.
+  return res.sendFile(__dirname + '/routes/email-confirm.html', (sendError) => {
+    if (sendError) next(sendError);
+  });
+});
+
+// Matrix media proxy — serves mxc:// content via the admin token
+// Client uses: GET /media/:server/:mediaId
+app.get('/media/:server/:mediaId', async (req, res) => {
+  if (!matrixConfig.enabled || !matrixConfig.homeserverUrl || !matrixConfig.adminToken) {
+    return res.status(503).json({ error: 'Matrix not configured' });
+  }
+  const { server, mediaId } = req.params;
+  const url = `${matrixConfig.homeserverUrl}/_matrix/client/v1/media/download/${server}/${mediaId}`;
+  try {
+    const upstream = await fetch(url, {
+      headers: { Authorization: `Bearer ${matrixConfig.adminToken}` },
+    });
+    if (!upstream.ok) {
+      return res.status(upstream.status).json({ error: 'Media not found' });
+    }
+    const contentType = upstream.headers.get('content-type') || 'application/octet-stream';
+    const buffer = Buffer.from(await upstream.arrayBuffer());
+    if (req.query.format === 'm4a') {
+      if (!/(?:audio\/(?:ogg|opus)|application\/ogg)/i.test(contentType)) {
+        return res.status(415).json({ error: 'M4A conversion is only available for Ogg/Opus audio' });
+      }
+      const converted = await transcodeVoiceToM4aOnce(`${server}/${mediaId}:m4a`, buffer);
+      res.setHeader('Content-Type', 'audio/mp4');
+      res.setHeader('Content-Disposition', 'inline; filename="voice-note.m4a"');
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      return res.send(converted);
+    }
+    res.setHeader('Content-Type', contentType);
+    // Matrix media IDs are immutable. Cache aggressively so scrolling an
+    // inbox or reopening a chat does not re-download every attachment.
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    return res.send(buffer);
+  } catch (err) {
+    logger.error('Media proxy error:', err);
+    return res.status(500).json({ error: 'Failed to prepare media' });
+  }
+});
+
+async function collectReadiness() {
+  const checks: Record<
+    string,
+    { status: 'ok' | 'error'; latencyMs?: number; error?: string; detail?: unknown }
+  > = {};
+
+  // --- Supabase / DB ---
+  try {
+    const t0 = Date.now();
+    const { error } = await supabase.from('chats').select('id').limit(1);
+    checks.db = error
+      ? { status: 'error', error: error.message }
+      : { status: 'ok', latencyMs: Date.now() - t0 };
+  } catch (err) {
+    checks.db = { status: 'error', error: (err as Error).message };
+  }
+
+  // --- Schema drift (#99): deploy must not be ahead of the DB schema ---
+  if (checks.db?.status === 'ok') {
+    try {
+      const t0 = Date.now();
+      const result = await verifySchemaCached();
+      checks.schema = result.ok
+        ? { status: 'ok', latencyMs: Date.now() - t0 }
+        : {
+            status: 'error',
+            error: `Schema drift: ${result.drift.map((d) => d.table).join(', ')}`,
+            detail: result.drift,
+          };
+    } catch (err) {
+      checks.schema = { status: 'error', error: (err as Error).message };
+    }
+  }
+
+  // --- Redis ---
+  try {
+    const t0 = Date.now();
+    const ok = await redis.ping();
+    checks.redis = ok
+      ? { status: 'ok', latencyMs: Date.now() - t0 }
+      : { status: 'error', error: 'PONG not received' };
+  } catch (err) {
+    checks.redis = { status: 'error', error: (err as Error).message };
+  }
+
+  // --- Matrix (only when PLATFORM_MODE=matrix) ---
+  if (matrixConfig.enabled && matrixConfig.homeserverUrl) {
+    try {
+      const t0 = Date.now();
+      const resp = await fetch(`${matrixConfig.homeserverUrl}/_matrix/client/versions`, {
+        signal: AbortSignal.timeout(3000),
+      });
+      checks.matrix = resp.ok
+        ? { status: 'ok', latencyMs: Date.now() - t0 }
+        : { status: 'error', error: `HTTP ${resp.status}` };
+    } catch (err) {
+      checks.matrix = { status: 'error', error: (err as Error).message };
+    }
+  }
+
+  const allOk = Object.values(checks).every((c) => c.status === 'ok');
+  return { checks, allOk };
+}
+
+// Public liveness endpoint for Railway and load balancers. It deliberately
+// reports only whether this HTTP process is running; dependency readiness is
+// available through the protected /health diagnostic below. This lets a newly
+// deployed staging API start before fixture schema/data provisioning is done.
+app.get('/healthz', (_req, res) => {
+  return res.status(200).json({ status: 'ok' });
+});
+
+// Detailed readiness is an operator diagnostic. Public traffic should use
+// /healthz; production access to this endpoint requires a separate secret.
+app.get('/health', async (req, res) => {
+  if (config.NODE_ENV === 'production') {
+    const token = req.get('x-health-check-token');
+    if (!serverConfig.healthcheckToken || token !== serverConfig.healthcheckToken) {
+      return res.status(404).json({ error: 'Route not found' });
+    }
+  }
+
+  const { checks, allOk } = await collectReadiness();
+
+  return res.status(allOk ? 200 : 503).json({
+    status: allOk ? 'ok' : 'degraded',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    environment: config.NODE_ENV,
+    platformMode: resolvePlatformMode({
+      mockBridge: mockBridgeConfig.enabled,
+      platformMode: matrixConfig.mode,
+    }),
+    checks,
+    mockBridge: mockBridgeConfig.enabled,
+  });
+});
+
+// Error handling middleware
+app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  logger.error('Unhandled error:', err);
+  if (config.SENTRY_DSN) {
+    Sentry.captureException(err);
+  }
+  res.status(err.status || 500).json({
+    error: config.NODE_ENV === 'production' ? 'Internal server error' : err.message,
+  });
+});
+
+// 404 handler
+app.use((_req, res) => {
+  res.status(404).json({ error: 'Route not found' });
+});
+
+// Initialize platform adapters
+async function initializePlatforms() {
+  if (mockBridgeConfig.enabled) {
+    // Mock mode: replace all real adapters with a scripted fake adapter
+    logger.info('MOCK_BRIDGE=true — using mock bridge adapter (no Docker/Matrix required)');
+    platformManager.setMatrixMode(mockBridgeAdapter);
+  } else {
+    const mode = matrixConfig.enabled ? 'matrix' : 'direct';
+    logger.info(`Initializing platform adapters in ${mode} mode...`);
+
+    // #96: direct mode in production diverges from the documented Matrix
+    // architecture. Config validation already blocks a *silent* default, so
+    // reaching here means direct mode was chosen explicitly — flag it loudly.
+    if (config.NODE_ENV === 'production' && mode === 'direct') {
+      logger.warn(
+        '⚠️  Running platform adapters in DIRECT mode in production — this diverges ' +
+          'from the documented Synapse/mautrix architecture. Set PLATFORM_MODE=matrix if unintended.'
+      );
+    }
+
+    if (matrixConfig.enabled) {
+      // Matrix mode: Use MatrixBridgeAdapter for all platforms via bridges
+      logger.info('Using Matrix bridges for platform integration');
+
+      const matrixAdapter = new MatrixBridgeAdapter({
+        homeserverUrl: matrixConfig.homeserverUrl!,
+        serverName: matrixConfig.serverName!,
+        adminAccessToken: matrixConfig.adminToken,
+        botUserId: matrixConfig.botUserId,
+        configuredSelfGhostIds: {
+          [Platform.WHATSAPP]: (process.env.WHATSAPP_SELF_GHOST_IDS || '')
+            .split(',')
+            .map((id) => id.trim())
+            .filter(Boolean),
+        },
+        resolveSelfGhostIds: async (platform, platformUserId) => {
+          if (platform !== Platform.WHATSAPP || !process.env.WHATSAPP_BRIDGE_SECRET) {
+            return [];
+          }
+
+          const bridge = new BridgeHttpClient(
+            process.env.WHATSAPP_BRIDGE_URL || 'http://mautrixwhatsapp.railway.internal:29318',
+            process.env.WHATSAPP_BRIDGE_SECRET,
+            process.env.WHATSAPP_BRIDGE_USER_ID || '@claire_bot:claire.local'
+          );
+          // The provisioning resolver returns the bridge's canonical phone
+          // ghost. Keep it as an additional exact alias; deployment-known LID
+          // aliases above cover primary-device events until mautrix exposes
+          // the phone<->LID map through provisioning.
+          const resolved = await bridge.resolveIdentifier(platformUserId, platformUserId);
+          return resolved.mxid ? [resolved.mxid] : [];
+        },
+        resolveContactIdentity: async (platform, platformContactId) => {
+          if (platform !== Platform.WHATSAPP || !process.env.WHATSAPP_BRIDGE_SECRET) {
+            return null;
+          }
+          const bridge = new BridgeHttpClient(
+            process.env.WHATSAPP_BRIDGE_URL || 'http://mautrixwhatsapp.railway.internal:29318',
+            process.env.WHATSAPP_BRIDGE_SECRET,
+            process.env.WHATSAPP_BRIDGE_USER_ID || '@claire_bot:claire.local'
+          );
+          // mautrix resolves an already-known contact profile through the
+          // authenticated bridge user. `platformUserId` is a WhatsApp phone
+          // or LID, not a provisioning login ID, so passing it here prevents
+          // profile enrichment on some bridge versions.
+          const resolved = await bridge.resolveIdentifier(platformContactId);
+          return {
+            displayName: resolved.name,
+            phoneNumber: phoneNumberFromBridgeIdentifiers([
+              resolved.name,
+              ...(resolved.identifiers || []),
+              resolved.id,
+            ]) || undefined,
+            avatarUrl: resolved.avatar_url,
+          };
+        },
+      });
+
+      platformManager.setMatrixMode(matrixAdapter);
+    } else {
+      // Direct mode: Use native platform adapters
+      logger.info('Using direct platform adapters');
+
+      if (platformConfig.whatsapp.enabled) {
+        platformManager.registerAdapter(whatsappAdapter);
+      }
+      if (platformConfig.telegram.enabled) {
+        platformManager.registerAdapter(telegramAdapter);
+      }
+      if (platformConfig.imessage.enabled) {
+        platformManager.registerAdapter(imessageAdapter);
+      }
+      if (platformConfig.instagram.enabled) {
+        platformManager.registerAdapter(instagramAdapter);
+      }
+    }
+  }
+
+  // Setup unified message handler BEFORE initialize so backfill is captured
+  platformManager.onMessage(async (message) => {
+    logger.debug('Platform message received', { platform: message.platform });
+
+    // Skip WhatsApp status broadcasts
+    if (message.chatId === 'status@broadcast' || message.platformMetadata?.isStatus) {
+      return;
+    }
+
+    const receivedAt = Date.now();
+    const direction = message.isFromMe ? ('outbound' as const) : ('inbound' as const);
+    void operationsTelemetry.record({
+      traceSource: message.platformMessageId,
+      userId: message.userId,
+      platform: message.platform,
+      direction,
+      stage: 'api',
+      outcome: 'accepted',
+    });
+
+    try {
+      // Fast-path: skip duplicate messages (backfill replay) without touching the DB further
+      const { data: existing } = await supabase
+        .from('messages')
+        .select('id,content,platform')
+        .eq('whatsapp_id', message.platformMessageId)
+        .maybeSingle();
+
+      if (existing) {
+        // Replaying a Mac history sync is also our repair path when a newer
+        // local Messages decoder can recover text that an older build could
+        // not read. Keep the operation idempotent and never overwrite content
+        // that was already imported successfully.
+        if (message.platform === Platform.IMESSAGE && message.content && !existing.content) {
+          await supabase
+            .from('messages')
+            .update({ content: message.content })
+            .eq('id', existing.id)
+            .eq('user_id', message.userId);
+        }
+        return; // already processed — skip chat/AI/contact upserts
+      }
+
+      logger.info('New platform message accepted', { platform: message.platform });
+      const aiProcessingEnabled = await isAiProcessingEnabled(message.userId);
+
+      // A WhatsApp LID is an opaque bridge identifier, not a contact name or
+      // number. Prefer the real bridge profile name and omit the field when
+      // the bridge has not supplied one; omitting it preserves a previously
+      // learned name on conflict instead of overwriting it with a LID.
+      const senderContactId = incomingContactId(message);
+      const resolvedContactPhone = phoneNumberFromBridgeIdentifiers([
+        typeof message.platformMetadata?.contactPhone === 'string'
+          ? message.platformMetadata.contactPhone
+          : undefined,
+      ]);
+      const chatDisplayName =
+        message.chatType === 'group'
+          ? message.chatName || message.chatId
+          : displayNameFromBridge(message.chatName, message.platform, message.chatId) ||
+            displayNameFromBridge(message.senderName, message.platform, senderContactId);
+
+      // 1. Upsert chat record to get its UUID
+      const { data: chat, error: chatError } = await supabase
+        .from('chats')
+        .upsert(
+          {
+            user_id: message.userId,
+            whatsapp_chat_id: message.chatId,
+            platform_chat_id: message.chatId,
+            platform: message.platform,
+            ...(chatDisplayName ? { name: chatDisplayName } : {}),
+            is_group: message.chatType === 'group',
+            last_message_at: message.timestamp,
+          },
+          { onConflict: 'user_id,platform,platform_chat_id' }
+        )
+        .select('id, name, is_group')
+        .single();
+
+      if (chatError || !chat) {
+        logger.error('Failed to upsert chat:', chatError);
+        return;
+      }
+
+      // History replays and own-device messages must never create unread
+      // badges. Only a newly inserted live incoming message increments the
+      // local conversation counter below.
+      const isBackfill = message.platformMetadata?.syncKind === 'backfill';
+
+      // Link incoming messages to the resolved Matrix contact. This gives the
+      // inbox a stable avatar/name relationship instead of trying to infer it
+      // from the latest message row on every render.
+      let contactId: string | null = null;
+      let storedContactName: string | null = null;
+      if (senderContactId) {
+        const platformContactId = senderContactId;
+        const contactName = displayNameFromBridge(
+          message.senderName,
+          message.platform,
+          platformContactId
+        );
+        const contactPhone =
+          resolvedContactPhone ||
+          phoneNumberFromPlatformContactId(message.platform, platformContactId);
+        {
+          const { data: contact, error: contactError } = await supabase
+            .from('contacts')
+            .upsert(
+              {
+                user_id: message.userId,
+                platform: message.platform,
+                platform_contact_id: platformContactId,
+                whatsapp_id: platformContactId,
+                ...(contactName ? { name: contactName } : {}),
+                ...(contactPhone ? { phone_number: contactPhone } : {}),
+              },
+              { onConflict: 'user_id,platform,platform_contact_id' }
+            )
+            .select('id, name')
+            .single();
+          if (contactError) {
+            logger.debug('Failed to upsert contact:', contactError);
+          } else {
+            contactId = contact?.id || null;
+            storedContactName = displayNameFromBridge(
+              contact?.name,
+              message.platform,
+              platformContactId
+            );
+          }
+        }
+      }
+      if (contactId && message.chatType === 'individual') {
+        await supabase.from('chats').update({ contact_id: contactId }).eq('id', chat.id);
+      }
+      if (message.chatType === 'individual' && !chatDisplayName) {
+        // Outgoing messages do not have a remote sender to upsert above, and
+        // some bridges only learn the profile name during contact sync. Reuse
+        // that canonical record to repair a previously anonymous chat.
+        let resolvedName = storedContactName;
+        if (!resolvedName) {
+          const { data: knownContact } = await supabase
+            .from('contacts')
+            .select('name')
+            .eq('user_id', message.userId)
+            .eq('platform', message.platform)
+            .eq('platform_contact_id', message.chatId)
+            .maybeSingle();
+          resolvedName = displayNameFromBridge(
+            knownContact?.name,
+            message.platform,
+            message.chatId
+          );
+        }
+        if (resolvedName) {
+          await supabase.from('chats').update({ name: resolvedName }).eq('id', chat.id);
+        }
+      }
+
+      // A bridge may deliver a reply before its referenced message (especially
+      // during history backfill). Preserve the platform identifier either way,
+      // and link the local UUID as soon as it is available for fast quote
+      // rendering in the clients.
+      let replyToInternalMessageId: string | null = null;
+      if (message.replyToMessageId) {
+        const { data: replyTarget, error: replyTargetError } = await supabase
+          .from('messages')
+          .select('id')
+          .eq('user_id', message.userId)
+          .eq('chat_id', chat.id)
+          .eq('platform_message_id', message.replyToMessageId)
+          .maybeSingle();
+        if (replyTargetError) {
+          logger.debug('Could not resolve reply target during message ingest', {
+            platform: message.platform,
+          });
+        } else {
+          replyToInternalMessageId = replyTarget?.id || null;
+        }
+      }
+
+      // 2. Insert message record (ignoreDuplicates as a safety net)
+      const { data: savedMsg, error: msgError } = await supabase
+        .from('messages')
+        .upsert(
+          {
+            user_id: message.userId,
+            chat_id: chat.id,
+            whatsapp_id: message.platformMessageId,
+            platform_message_id: message.platformMessageId,
+            platform: message.platform,
+            content: message.content,
+            from_me: message.isFromMe,
+            type: message.contentType,
+            content_type: message.contentType,
+            timestamp: message.timestamp,
+            is_group: message.chatType === 'group',
+            contact_id: contactId,
+            contact_name: message.isFromMe
+              ? null
+              : displayNameFromBridge(message.senderName, message.platform, senderContactId),
+            contact_phone: message.isFromMe
+              ? null
+              : resolvedContactPhone ||
+                phoneNumberFromPlatformContactId(message.platform, senderContactId),
+            reply_to_message_id: replyToInternalMessageId,
+            reply_to_platform_message_id: message.replyToMessageId || null,
+            thread_root_platform_id: message.threadRootId || null,
+            mentions: resolveMentions(message.mentions),
+            mentions_room: message.mentionsRoom === true,
+            formatted_body: message.formattedBody || null,
+            metadata: message.platformMetadata || null,
+            media_url: (() => {
+              const mediaUrl = message.platformMetadata?.mediaUrl;
+              if (!mediaUrl || typeof mediaUrl !== 'string') return null;
+              if (mediaUrl.startsWith('/media/')) return mediaUrl;
+              const match =
+                mediaUrl.match(/^mxc:\/\/([^/]+)\/(.+)$/) ||
+                mediaUrl.match(
+                  /\/_matrix\/(?:client\/v1\/media|media\/v3)\/(?:thumbnail|download)\/([^/]+)\/([^?]+)/
+                );
+              return match
+                ? `/media/${encodeURIComponent(match[1])}/${encodeURIComponent(match[2])}`
+                : mediaUrl;
+            })(),
+            media_mime_type:
+              (message.platformMetadata?.mediaInfo as { mimetype?: string } | undefined)
+                ?.mimetype || null,
+          },
+          { onConflict: 'whatsapp_id', ignoreDuplicates: true }
+        )
+        .select('id')
+        .maybeSingle();
+
+      if (msgError) {
+        logger.error('Failed to upsert message:', msgError);
+        void operationsTelemetry.record({
+          traceSource: message.platformMessageId,
+          userId: message.userId,
+          platform: message.platform,
+          direction,
+          stage: 'database',
+          outcome: 'failed',
+          durationMs: Date.now() - receivedAt,
+          errorClass: 'dependency',
+        });
+      } else {
+        // History repair replays immutable Matrix events. The normal insert is
+        // intentionally conflict-ignoring so it cannot duplicate unread work,
+        // but older audio rows may predate MSC1767/MSC3245 persistence. Repair
+        // just their media classification and metadata when the bridge supplies
+        // it, letting realtime clients pick up the recovered duration/waveform.
+        const repairedAudio = message.platformMetadata?.audio;
+        if (
+          isBackfill &&
+          repairedAudio &&
+          (message.contentType === MessageContentType.AUDIO ||
+            message.contentType === MessageContentType.VOICE)
+        ) {
+          const { error: repairError } = await supabase
+            .from('messages')
+            .update({
+              type: message.contentType,
+              content_type: message.contentType,
+              metadata: message.platformMetadata,
+              media_mime_type:
+                (message.platformMetadata?.mediaInfo as { mimetype?: string } | undefined)
+                  ?.mimetype || null,
+            })
+            .eq('user_id', message.userId)
+            .eq('whatsapp_id', message.platformMessageId);
+          if (repairError) {
+            logger.debug('Could not repair historical voice metadata', {
+              platform: message.platform,
+            });
+          }
+        }
+
+        logger.debug('Platform message persisted', { platform: message.platform });
+
+        // Resolve replies which arrived before this source message. The update
+        // is intentionally scoped by account and chat so a platform identifier
+        // can never cross a conversation boundary.
+        if (savedMsg?.id) {
+          const { error: replyResolutionError } = await supabase
+            .from('messages')
+            .update({ reply_to_message_id: savedMsg.id })
+            .eq('user_id', message.userId)
+            .eq('chat_id', chat.id)
+            .eq('reply_to_platform_message_id', message.platformMessageId)
+            .is('reply_to_message_id', null);
+          if (replyResolutionError) {
+            logger.debug('Could not reconcile deferred reply references', {
+              platform: message.platform,
+            });
+          }
+        }
+
+        void operationsTelemetry.record({
+          traceSource: message.platformMessageId,
+          userId: message.userId,
+          platform: message.platform,
+          direction,
+          stage: 'database',
+          outcome: 'persisted',
+          durationMs: Date.now() - receivedAt,
+        });
+
+        if (!message.isFromMe && !isBackfill && savedMsg?.id) {
+          const { error: unreadError } = await supabase.rpc('increment_chat_unread', {
+            target_chat_id: chat.id,
+            target_user_id: message.userId,
+          });
+          if (unreadError) {
+            logger.warn('Failed to increment chat unread count', { error: unreadError });
+          }
+        }
+
+        if (!message.isFromMe && !isBackfill && savedMsg?.id) {
+          void notifyIncomingMessage({
+            userId: message.userId,
+            chatId: chat.id,
+            platform: message.platform,
+            senderName: message.senderName,
+            chatName: chat.name || chatDisplayName,
+            isGroup: chat.is_group,
+            content: message.content,
+            messageId: savedMsg.id,
+          }).catch((error) =>
+            logger.debug('Incoming push notification skipped:', (error as Error).message)
+          );
+        }
+
+        // Generate AI response suggestion for incoming messages (fire-and-forget)
+        if (
+          !message.isFromMe &&
+          savedMsg?.id &&
+          message.content?.trim() &&
+          aiProcessingEnabled &&
+          aiProcessor.isConfigured
+        ) {
+          const chatType = message.chatType === 'group' ? 'group' : 'individual';
+          aiProcessor
+            .generateAndStore(savedMsg.id, message.content, message.userId, chatType)
+            .catch((err) => logger.debug('AI suggestion skipped:', (err as Error).message));
+        }
+
+        // Keep the global Ask Claire index current for new text/caption rows.
+        if (
+          savedMsg?.id &&
+          message.content?.trim() &&
+          aiProcessingEnabled &&
+          conversationAssistant.isConfigured
+        ) {
+          void conversationAssistant
+            .indexMessage({
+              id: savedMsg.id,
+              user_id: message.userId,
+              content: message.content,
+              contact_name: message.isFromMe ? null : message.senderName || null,
+              from_me: message.isFromMe,
+              timestamp:
+                message.timestamp instanceof Date
+                  ? message.timestamp.toISOString()
+                  : String(message.timestamp),
+              platform: message.platform,
+            })
+            .catch((err) =>
+              logger.debug('Conversation assistant index skipped:', (err as Error).message)
+            );
+        }
+
+        // Voice summaries are derived only from messages sent by the account
+        // owner; profiles store aggregate guidance, never the source text.
+        if (
+          savedMsg?.id &&
+          message.isFromMe &&
+          message.content?.trim() &&
+          aiProcessingEnabled &&
+          voiceProfileService.isConfigured
+        ) {
+          void voiceProfileService
+            .markSentMessage(message.userId)
+            .catch((err) => logger.debug('Voice profile refresh skipped:', (err as Error).message));
+        }
+
+        // Detection is debounced per conversation and excludes backfill, so a
+        // burst is reconciled as one thread of intent rather than one row per
+        // message. The loop detector applies its own per-user enablement gate.
+        if (savedMsg?.id && !isBackfill && message.content?.trim() && chat?.id) {
+          void scheduleChat(message.userId, chat.id).catch((err) =>
+            logger.debug('Loop detection skipped:', (err as Error).message)
+          );
+        }
+
+        // Evaluate auto-reply rules for incoming messages (fire-and-forget)
+        if (!message.isFromMe && message.content?.trim()) {
+          autoReplyEngine
+            .evaluate({
+              id: savedMsg?.id ?? message.platformMessageId,
+              userId: message.userId,
+              chatId: message.chatId,
+              platform: message.platform,
+              content: message.content,
+              senderName: message.senderName,
+            })
+            .then(async (result) => {
+              if (result.fired && result.reply) {
+                logger.info('Auto-reply rule fired and reply queued', {
+                  platform: message.platform,
+                });
+                try {
+                  const sessions = await platformManager.getUserSessions(message.userId);
+                  const session = sessions.find(
+                    (candidate) =>
+                      candidate.platform === message.platform &&
+                      candidate.status === PlatformStatus.CONNECTED
+                  );
+                  if (session) {
+                    await platformManager.sendMessage(
+                      message.platform,
+                      session.id,
+                      message.chatId,
+                      { content: result.reply }
+                    );
+                  } else {
+                    logger.warn('Auto-reply skipped because no active session exists', {
+                      platform: message.platform,
+                    });
+                  }
+                } catch (err) {
+                  logger.warn('Auto-reply send failed:', (err as Error).message);
+                }
+              }
+            })
+            .catch((err: Error) => logger.debug('Auto-reply evaluation skipped:', err.message));
+        }
+      }
+    } catch (err) {
+      logger.error('Error saving message to DB:', err);
+      void operationsTelemetry.record({
+        traceSource: message.platformMessageId,
+        userId: message.userId,
+        platform: message.platform,
+        direction,
+        stage: 'api',
+        outcome: 'failed',
+        durationMs: Date.now() - receivedAt,
+        errorClass: 'dependency',
+      });
+    }
+  });
+
+  // Initialize all registered adapters (after handler is registered so backfill is captured)
+  await platformManager.initialize();
+
+  logger.info('Platform adapters initialized');
+}
+
+// Bind the liveness port before optional schema housekeeping. Database
+// migrations run as a separate deployment step, and blocking the listener on
+// a companion-table check makes an otherwise healthy process unavailable
+// during transient database startup or a fresh staging bootstrap.
+const serverReady = Promise.resolve(
+  app.listen(PORT, async () => {
+    logger.info(`Server running on port ${PORT} in ${config.NODE_ENV} mode`);
+
+    // The legacy session monitor probes direct WhatsApp-web.js clients. In
+    // Matrix mode those clients intentionally do not exist; running it would
+    // misclassify healthy mautrix sessions as disconnected and overwrite the
+    // durable bridge-session mapping needed after a restart.
+    if (!matrixConfig.enabled && !mockBridgeConfig.enabled) {
+      sessionMonitor.start();
+    } else {
+      logger.info('Skipping direct session monitor in Matrix/mock bridge mode');
+    }
+
+    // Start loop reminder scheduler
+    reminderScheduler.start();
+
+    // Matrix room registration may backfill a substantial history. The
+    // watchdog must not wait for that optional work, or a slow bridge startup
+    // would leave production unmonitored exactly when it needs observation.
+    setTimeout(() => operationsMonitor.start(), 10_000);
+
+    // Initialize platforms
+    await initializePlatforms();
+  })
+);
+
+void ensureCompanionSchema().catch((error) => {
+  logger.error('Companion schema bootstrap failed:', error);
+});
+
+// Graceful shutdown
+process.on('SIGTERM', async () => {
+  logger.info('SIGTERM received, shutting down gracefully');
+
+  sessionMonitor.stop();
+  await reminderScheduler.stop();
+  await platformManager.shutdown();
+
+  const server = await serverReady;
+  server.close(() => {
+    logger.info('Server closed');
+    process.exit(0);
+  });
+});
+
+export default app;

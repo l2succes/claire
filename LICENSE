@@ -1,0 +1,33 @@
+Claire is dual-licensed by path.
+
+Copyright (c) 2025-2026 Claire contributors
+
+1. Server, infrastructure, and operational service code
+   Licensed under the GNU Affero General Public License v3.0 only.
+   See LICENSES/AGPL-3.0.txt.
+
+   This applies to:
+   - server/
+   - docker/
+   - supabase/
+   - root Docker Compose files, Dockerfile, and railway.toml
+   - operational scripts that provision or run those services
+
+2. Clients, website, documentation, shared packages, and examples
+   Licensed under the Apache License, Version 2.0.
+   See LICENSES/Apache-2.0.txt.
+
+   This applies to:
+   - mobile/
+   - desktop/
+   - website/
+   - packages/
+   - examples/
+   - docs/ (public documentation)
+
+If a file includes an SPDX-License-Identifier header, that header controls
+for that file. If you are unsure which license applies, treat server-side
+runtime and infrastructure as AGPL-3.0-only and everything else as Apache-2.0.
+
+The Claire name, logo, and marks are not licensed for use except as described
+in TRADEMARKS.md.

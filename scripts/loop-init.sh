@@ -102,7 +102,7 @@ M7="M7 — Security & Production hardening"
 # ---- M0 ----
 ensure_issue "Make the web build pass under react-native-web" \
   "area/client,type/chore,p1,risk/human-gate,ready" "$M0" \
-$'**Scope:** Fix native-only modules under `react-native-web` (react-native-webview, @react-native-cookies/cookies, expo-notifications, reanimated/worklets) via `.web.tsx` shims / `Platform` guards.\n\n**Acceptance:**\n- `cd client && bunx expo export -p web` succeeds with no module-resolution errors.\n- e2e: app boots at `/` in a headless browser.\n\n**Risk:** human-gate (touches build config / native shims).\n**Depends on:** nothing. Part of M0 (lands before all e2e work).'
+$'**Scope:** Fix native-only modules under `react-native-web` (react-native-webview, @react-native-cookies/cookies, expo-notifications, reanimated/worklets) via `.web.tsx` shims / `Platform` guards.\n\n**Acceptance:**\n- `cd mobile && bunx expo export -p web` succeeds with no module-resolution errors.\n- e2e: app boots at `/` in a headless browser.\n\n**Risk:** human-gate (touches build config / native shims).\n**Depends on:** nothing. Part of M0 (lands before all e2e work).'
 
 ensure_issue "Add MOCK_BRIDGE server mode + seeded fixtures" \
   "area/server,area/testing,type/feature,p0,risk/human-gate,ready" "$M0" \
@@ -114,7 +114,7 @@ $'**Scope:** Add stable `testID`s (map to `data-testid` on web) across inbox, ch
 
 ensure_issue "Playwright e2e: core flows vs mock backend" \
   "area/testing,type/test,p0,risk/auto-merge,ready" "$M0" \
-$'**Scope:** Playwright specs covering: auth -> inbox renders seeded messages -> open chat -> send -> AI suggestion shows -> Promises tab lists a promise -> mark complete.\n\n**Acceptance:**\n- `cd client && bunx playwright test` green against the MOCK_BRIDGE backend.\n\n**Risk:** auto-merge.\n**Depends on:** #1, #2, #3.'
+$'**Scope:** Playwright specs covering: auth -> inbox renders seeded messages -> open chat -> send -> AI suggestion shows -> Promises tab lists a promise -> mark complete.\n\n**Acceptance:**\n- `cd mobile && bunx playwright test` green against the MOCK_BRIDGE backend.\n\n**Risk:** auto-merge.\n**Depends on:** #1, #2, #3.'
 
 ensure_issue "CI: gate on mock e2e + fix unit tests + typecheck" \
   "area/infra,area/testing,type/chore,p1,risk/human-gate,ready" "$M0" \
@@ -130,7 +130,7 @@ $'**Scope:** `supertest` harness + fixtures; smoke tests for `/messages`, `/ai`,
 
 ensure_issue "Remove duplicate inbox tab (dashboard vs messages)" \
   "area/client,type/chore,p2,risk/auto-merge,ready" "$M0" \
-$'**Scope:** Reconcile `client/app/(tabs)/dashboard.tsx` and `messages.tsx` into one canonical inbox; remove the dead screen + tab entry.\n\n**Acceptance:**\n- Single inbox tab; no dead screen; e2e inbox still green.\n\n**Risk:** auto-merge.'
+$'**Scope:** Reconcile `mobile/app/(tabs)/dashboard.tsx` and `messages.tsx` into one canonical inbox; remove the dead screen + tab entry.\n\n**Acceptance:**\n- Single inbox tab; no dead screen; e2e inbox still green.\n\n**Risk:** auto-merge.'
 
 # ---- M1 ----
 ensure_issue "Wire promise detection into live Matrix ingestion path" \
@@ -147,7 +147,7 @@ $'**Scope:** New `server/src/routes/promises.ts`: list (filters status/platform/
 
 ensure_issue "Promises screen — real UI" \
   "area/client,area/promises,type/feature,p0,risk/auto-merge,ready" "$M1" \
-$'**Scope:** Replace stub `client/app/(tabs)/promises.tsx` with a list (open/done/overdue), source-message link, complete + snooze actions, and empty state. Reuse `NudgeCard.tsx`/`SmartCard.tsx` patterns + react-query.\n\n**Acceptance:**\n- e2e: seeded promise visible; mark-complete moves it to Done.\n\n**Risk:** auto-merge.\n**Depends on:** #11.'
+$'**Scope:** Replace stub `mobile/app/(tabs)/promises.tsx` with a list (open/done/overdue), source-message link, complete + snooze actions, and empty state. Reuse `NudgeCard.tsx`/`SmartCard.tsx` patterns + react-query.\n\n**Acceptance:**\n- e2e: seeded promise visible; mark-complete moves it to Done.\n\n**Risk:** auto-merge.\n**Depends on:** #11.'
 
 ensure_issue "Promise badge + dashboard surfacing" \
   "area/client,area/promises,type/feature,p1,risk/auto-merge,ready" "$M1" \
@@ -160,7 +160,7 @@ $'**Scope:** Detector cases, `/promises` API, and Promises screen flow.\n\n**Acc
 # ---- M2 ----
 ensure_issue "Surface stored AI suggestions in chat" \
   "area/client,area/ai,type/feature,p1,risk/auto-merge,ready" "$M2" \
-$'**Scope:** Wire `client/components/ResponseSuggestion.tsx` into `client/app/chat/[chatId].tsx`. Read the suggestion stored by `aiProcessor.generateAndStore`; provide accept/edit/reject. (Component is currently imported nowhere.)\n\n**Acceptance:**\n- e2e: suggestion chip appears on an inbound message; Accept fills the composer.\n\n**Risk:** auto-merge.\n**Depends on:** #4.'
+$'**Scope:** Wire `mobile/components/ResponseSuggestion.tsx` into `mobile/app/chat/[chatId].tsx`. Read the suggestion stored by `aiProcessor.generateAndStore`; provide accept/edit/reject. (Component is currently imported nowhere.)\n\n**Acceptance:**\n- e2e: suggestion chip appears on an inbound message; Accept fills the composer.\n\n**Risk:** auto-merge.\n**Depends on:** #4.'
 
 ensure_issue "On-demand 'Draft reply' button" \
   "area/client,area/ai,type/feature,p2,risk/auto-merge,ready" "$M2" \
@@ -177,7 +177,7 @@ $'**Scope:** Settings UI for tone/personality persisted to user memory; injected
 # ---- M3 ----
 ensure_issue "Register Expo push token -> server" \
   "area/client,area/notifications,area/db,type/feature,p1,risk/human-gate,ready" "$M3" \
-$'**Scope:** `client/services/notifications.ts` posts the Expo push token to a new server route; add a `push_tokens` table. Web: graceful no-op.\n\n**Acceptance:**\n- Token persisted on login; web build does not crash.\n\n**Risk:** human-gate (DB + new route).'
+$'**Scope:** `mobile/services/notifications.ts` posts the Expo push token to a new server route; add a `push_tokens` table. Web: graceful no-op.\n\n**Acceptance:**\n- Token persisted on login; web build does not crash.\n\n**Risk:** human-gate (DB + new route).'
 
 ensure_issue "Server push-send service (Expo Push API)" \
   "area/server,area/notifications,type/feature,p1,risk/human-gate,ready" "$M3" \

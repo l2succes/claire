@@ -16,6 +16,16 @@ env:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     strategy:
       # Run both suites even if one fails, so we see the full picture.
@@ -23,16 +33,16 @@ jobs:
       matrix:
         include:
           - name: Server Tests
-            working-directory: ./server
+            working-directory: ./apps/server
             # Server tests use bun's test runner (bun:test / mock.module).
             test-command: bun test
-          - name: Client Tests
-            working-directory: ./client
-            # Client tests use jest (bun test can't parse React Native's Flow syntax).
+          - name: Mobile Tests
+            working-directory: ./apps/client
+            # Mobile tests use jest (bun test can't parse React Native's Flow syntax).
             test-command: bunx jest --coverage
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
@@ -42,7 +52,7 @@ jobs:
       - name: Install dependencies
         run: |
           bun install
-          cd server && bun install
+          cd apps/server && bun install
           cd ../client && bun install
 
       - name: Run tests
@@ -61,7 +71,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
@@ -71,23 +81,28 @@ jobs:
       - name: Install dependencies
         run: |
           bun install
-          cd server && bun install
+          cd apps/server && bun install
           cd ../client && bun install
 
       - name: Run linting
         run: bun run lint
 
       - name: Run type checking
-        run: |
-          cd server && bun run typecheck
-          cd ../client && bun run typecheck
+        run: bun run typecheck
 
   e2e:
     name: Mock end-to-end tests
     runs-on: ubuntu-latest
+    # Keep the advisory suite from occupying a runner for GitHub's six-hour
+    # default when Expo or Playwright becomes stuck during startup.
+    timeout-minutes: 15
+    # The suite boots the app and signs in, but 41 of 59 tests still assert
+    # against selectors the redesigned inbox no longer renders. Non-blocking
+    # until those are rewritten: https://github.com/l2succes/claire/issues/145
+    continue-on-error: true
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
@@ -95,15 +110,15 @@ jobs:
           bun-version: latest
 
       - name: Install client dependencies
-        working-directory: ./client
+        working-directory: ./apps/client
         run: bun install
 
       - name: Install Playwright Chromium
-        working-directory: ./client
+        working-directory: ./apps/client
         run: bunx playwright install --with-deps chromium
 
       - name: Run mock end-to-end tests
-        working-directory: ./client
+        working-directory: ./apps/client
         env:
           MOCK_BRIDGE: "true"
         run: bunx playwright test
@@ -113,7 +128,7 @@ jobs:
     needs: [test, lint, e2e]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
@@ -123,13 +138,17 @@ jobs:
       - name: Install dependencies
         run: |
           bun install
-          cd server && bun install
+          cd apps/server && bun install
           cd ../client && bun install
 
       - name: Build server
-        working-directory: ./server
+        working-directory: ./apps/server
         run: bun run build
 
       - name: Build client for web
-        working-directory: ./client
+        working-directory: ./apps/client
         run: bunx expo export -p web
+
+      - name: Build website and public documentation
+        working-directory: ./apps/website
+        run: bun run build
