@@ -122,8 +122,8 @@ export function WaitlistForm({ source, tone = 'light' }: WaitlistFormProps) {
           ? submission.message
           : (
               <>
-                By joining, you agree to receive short build notes and your beta invitation. No
-                inbox filler; unsubscribe anytime. <Link href="/legal/privacy">Privacy</Link>
+                By joining, you agree to receive short build notes and your beta invitation. You can
+                {' '}unsubscribe anytime. <Link href="/legal/privacy">Privacy</Link>
               </>
             )}
       </p>

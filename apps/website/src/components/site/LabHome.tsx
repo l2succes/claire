@@ -8,7 +8,7 @@ const labDestinations = [
     href: '/lab/style',
     eyebrow: 'FOUNDATIONS',
     title: 'Style guide',
-    body: 'Color, type, surfaces, component anatomy, and the writing system that holds Claire together.',
+    body: 'Color, type, surfaces, component anatomy, and the writing rules used across Claire.',
   },
   {
     href: '/lab/logo',
@@ -26,7 +26,7 @@ const labDestinations = [
     href: '/mockups/mobile',
     eyebrow: 'PRODUCT',
     title: 'Mobile reference',
-    body: 'The mobile information architecture and high-fidelity screen gallery.',
+    body: 'The mobile information architecture and screen gallery.',
   },
   {
     href: '/lab/ask',
@@ -61,8 +61,8 @@ export function LabHome() {
             <span className="claire-underline">feel inevitable.</span>
           </h1>
           <p>
-            The working source for Claire’s visual language, product references, and exploratory AI
-            experiences. These are living references—not a separate product.
+            The working source for Claire’s visual language, product references, and AI experiments.
+            These are working references, not a separate product.
           </p>
         </section>
         <section className="lab-home__grid" aria-label="Claire Lab destinations">
