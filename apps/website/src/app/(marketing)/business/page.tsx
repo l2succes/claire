@@ -145,7 +145,7 @@ export default function BusinessPage() {
           </h1>
           <p className="hero-copy">
             Manage Instagram, WhatsApp, LinkedIn, SMS, Messenger, and more from one shared
-            inbox—with AI that qualifies leads, prepares replies, routes work, and follows through.
+            inbox. AI can qualify leads, prepare replies, route work, and handle follow-ups.
           </p>
           <div className="hero-actions">
             <a className="button button-dark" href="#contact">
@@ -304,7 +304,7 @@ export default function BusinessPage() {
             </div>
             <p>
               Customer messaging is already spread across personal apps, shared logins, and a phone
-              on someone’s desk. Claire’s job is to collapse that into a single accountable queue.
+              on someone’s desk. Claire brings it into one queue with a clear owner.
             </p>
           </header>
           <div className="shift-grid">
@@ -389,8 +389,8 @@ export default function BusinessPage() {
               </h2>
             </div>
             <p>
-              Claire Business combines a shared inbox, customer context, AI assistance, assignments,
-              and automation without turning every conversation into a ticket.
+              Claire Business brings together a shared inbox, customer context, AI assistance,
+              assignments, and automation without treating every conversation like a ticket.
             </p>
           </header>
           <div className="workspace-grid">
@@ -459,7 +459,7 @@ export default function BusinessPage() {
               </div>
               <div className="workspace-copy">
                 <span>AI COPILOT</span>
-                <h3>Answers grounded in your business.</h3>
+                <h3>Answers based on your business.</h3>
                 <p>Draft replies from approved knowledge, inventory, policies, and history.</p>
               </div>
             </article>

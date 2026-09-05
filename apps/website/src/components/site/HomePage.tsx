@@ -22,14 +22,10 @@ export function HomePage() {
             <span className="claire-underline">One AI.</span>
           </h1>
           <p className="hero-copy">
-            Bring WhatsApp, Telegram, Instagram, and more into one intelligent client. Search every
-            conversation, get relationship-aware help, and never lose track of what you promised.
+            Bring WhatsApp, Telegram, Instagram, and more into one client. Search your conversations,
+            get help that understands the relationship, and keep track of what you promised.
           </p>
           <div className="hero-actions" id="waitlist">
-            <p className="hero-waitlist-copy">
-              Join the waitlist to get the beta—and short, honest notes on what shipped, what
-              broke, and what I learned along the way.
-            </p>
             <WaitlistForm source="homepage_hero" />
           </div>
           <div className="hero-art" aria-label="Claire application preview">
@@ -517,8 +513,8 @@ export function HomePage() {
               </h2>
             </div>
             <p>
-              Claire connects your chat networks, then gives its AI the context to help you find,
-              understand, reply, and follow through—without losing the human thread.
+              Claire brings your chat networks together and gives its AI the context to help you find,
+              understand, reply, and follow through.
             </p>
           </div>
           <div className="feature-grid">
@@ -562,7 +558,7 @@ export function HomePage() {
                 </div>
               </div>
               <div>
-                <h3>Conversation becomes follow-through.</h3>
+                <h3>Keep promises moving.</h3>
                 <p>
                   Claire notices commitments in your chats and turns them into gentle follow-through.
                 </p>
@@ -681,7 +677,7 @@ export function HomePage() {
         <section className="stories" id="stories">
           <div className="shell">
             <div className="kicker">PEOPLE HAVE ENOUGH TO JUGGLE</div>
-            <h2>Claire keeps the human things close.</h2>
+            <h2>Keep the people who matter in view.</h2>
             <div className="quotes">
               <blockquote>
                 <p>
@@ -823,7 +819,7 @@ export function HomePage() {
           <div className="pricing-teaser-foot">
             <p>
               AI use is metered separately from the subscription, with a visible balance and a hard
-              cap. Model costs never become a surprise.
+              cap, so model costs stay predictable.
             </p>
             <Link className="button button-dark" href="/pricing">
               Compare all plans <HeroIcon name="arrow-right" />

@@ -152,7 +152,7 @@ export default function DevelopersPage() {
             <p>
               Claire is an AI-native, multi-network messenger with open references for mobile,
               desktop, connectors, and conversation plugins. Clone it, run the whole stack in mock
-              mode, and make one part dramatically better.
+              mode, and improve one part at a time.
             </p>
             <div className="dev-hero-actions">
               <a className="button button-dark" href="#start">
@@ -725,7 +725,7 @@ export default function DevelopersPage() {
               <span className="claire-underline">Operate with care.</span>
             </h2>
             <p>
-              The community can make Claire broader and more trustworthy: connectors for underserved
+              The community can make Claire more useful and more trustworthy: connectors for underserved
               networks, local-first deployments, plugins for real workflows, translations,
               accessibility, and deeper platform-native experiences.
             </p>

@@ -22,7 +22,7 @@ const loopSteps = [
     number: '01',
     label: 'SWEEP',
     title: 'Read every connected chat.',
-    body: 'One pass across every network on the account—not one conversation at a time, and not only the threads you happened to open.',
+    body: 'One pass across every network on the account, including conversations you have not opened.',
     chips: ['WhatsApp', 'Telegram', 'Instagram'],
   },
   {
@@ -50,7 +50,7 @@ const tiers = [
     title: 'Get your chats in one place.',
     price: '$0',
     unit: 'forever',
-    body: 'Every network in one inbox, with a weekly Loop so nothing important quietly disappears.',
+    body: 'Every network in one inbox, with a weekly Loop to help important threads stay in view.',
     loop: '1 Loop run per week',
     features: [
       'Up to 5 connected networks',
@@ -69,7 +69,7 @@ const tiers = [
     title: 'The full AI, on demand.',
     price: '$10',
     unit: 'USD / month',
-    body: 'Everything Claire’s AI can do, with Loop runs you can fire whenever the inbox gets loud.',
+    body: 'Everything Claire’s AI can do, with Loop runs whenever the inbox gets busy.',
     loop: 'Up to 3 Loop runs per day',
     features: [
       'Every supported network, 3 accounts each',
@@ -281,7 +281,7 @@ const questions = [
   ],
   [
     'What happens when I use up my Loop runs?',
-    'Messaging, search, connections, promises, and reminders all keep working. The next Loop waits for your allowance to reset, or you move up a plan. Claire never silently bills you for another run.',
+    'Messaging, search, connections, promises, and reminders all keep working. The next Loop waits for your allowance to reset, or you move up a plan. Claire does not bill you automatically for another run.',
   ],
   [
     'Can I bring my own OpenAI or Anthropic key?',
@@ -489,8 +489,8 @@ export default function PricingPage() {
               </h2>
             </div>
             <p>
-              Loop runs and AI credits are metered separately from the subscription, so model costs
-              never become a surprise line on a card statement.
+              Loop runs and AI credits are metered separately from the subscription, so you can track
+              model costs separately from your plan.
             </p>
           </header>
           <div className="usage-grid">
@@ -512,7 +512,7 @@ export default function PricingPage() {
                   <span>hard cap · no overage</span>
                 </div>
               </div>
-              <small>Credits settle against actual model usage—not a made-up “one request” unit.</small>
+              <small>Credits reflect actual model usage, not a flat “one request” unit.</small>
             </article>
             <article className="usage-card">
               <span className="usage-icon">
@@ -551,8 +551,8 @@ export default function PricingPage() {
                 </h2>
               </div>
               <p>
-                Same Loop, running continuously across the whole workspace—except now it can act.
-                Connect your systems and let Claire turn what customers say into work that is done.
+                The same Loop runs continuously across the workspace and can take approved actions.
+                Connect your systems and let Claire turn customer messages into work for the team.
               </p>
             </header>
 
@@ -586,7 +586,7 @@ export default function PricingPage() {
               <h3>Connect the systems the work actually lives in.</h3>
               <p>
                 A plugin declares what it can do, how risky each action is, and whether a person has
-                to approve it. Availability is listed honestly—nothing here pretends to be finished.
+                to approve it. The catalog shows what is available now and what is still planned.
               </p>
             </div>
             <div className="pr-plugin-grid">

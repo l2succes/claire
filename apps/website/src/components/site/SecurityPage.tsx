@@ -37,8 +37,7 @@ export function SecurityPage() {
               <HeroIcon name="shield" size="xl" />
             </div>
             <p>
-              Security should make the product easier to understand—not hide its trade-offs behind a
-              badge.
+              Security should make the product easier to understand and make its trade-offs clear.
             </p>
           </aside>
         </section>
@@ -116,7 +115,7 @@ export function SecurityPage() {
               <div className="kicker">HOW DATA MOVES</div>
               <h2 id="map-title">One message, named boundaries.</h2>
             </div>
-            <p>We prefer showing the flow to making blanket privacy claims.</p>
+            <p>We show the flow instead of making blanket privacy claims.</p>
           </div>
           <div className="security-map-grid">
             <article className="security-map-step">
@@ -163,7 +162,7 @@ export function SecurityPage() {
             <div className="kicker">WHAT WE WILL EARN</div>
             <h2 id="roadmap-title">Stronger claims require stronger proof.</h2>
             <p>
-              We will only upgrade our language when a real configuration, test suite, and review
+              We will only make stronger claims when a real configuration, test suite, and review
               demonstrate the behavior in production.
             </p>
           </div>
