@@ -42,6 +42,10 @@
 
 :root {
   /* Families come from @claire/design-system tokens.css — do not redeclare here. */
+  /* Marketing-page headlines share one deliberate scale across every launch surface. */
+  --marketing-title-size: clamp(3.5rem, 6vw, 5.75rem);
+  --marketing-title-leading: 0.9;
+  --marketing-title-tracking: -0.07em;
   --color-fd-background: var(--claire-cream);
   --color-fd-foreground: var(--claire-ink);
   --color-fd-muted: var(--neutral-100);
@@ -78,6 +82,20 @@ h1,
 h2,
 .price-amount strong {
   font-family: var(--font-display);
+}
+
+.marketing-title {
+  font-family: var(--font-display);
+  font-size: var(--marketing-title-size);
+  font-weight: 600;
+  letter-spacing: var(--marketing-title-tracking);
+  line-height: var(--marketing-title-leading);
+}
+
+@media (max-width: 700px) {
+  .marketing-title {
+    font-size: clamp(3.2rem, 15vw, 4.8rem);
+  }
 }
 
 a:focus-visible,

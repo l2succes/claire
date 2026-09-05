@@ -26,7 +26,7 @@ export function PageHero({
         <span className="status-dot" />
         {eyebrow}
       </div>
-      <h1>
+      <h1 className="marketing-title">
         {title}
         {highlight ? (
           <>

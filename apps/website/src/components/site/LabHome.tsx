@@ -55,7 +55,11 @@ export function LabHome() {
       <main className="lab-home shell">
         <section className="lab-home__hero">
           <p className="eyebrow">CLAIRE LAB</p>
-          <h1>Make the system<br />feel inevitable.</h1>
+          <h1 className="marketing-title">
+            Make the system
+            <br />
+            <span className="claire-underline">feel inevitable.</span>
+          </h1>
           <p>
             The working source for Claire’s visual language, product references, and exploratory AI
             experiences. These are living references—not a separate product.

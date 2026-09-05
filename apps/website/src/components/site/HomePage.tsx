@@ -4,6 +4,7 @@ import { HeroIcon } from '@/components/site/HeroIcon';
 import { PlatformCatalog, PlatformRail } from '@/components/site/PlatformCatalog';
 import { SiteFooter } from '@/components/site/SiteFooter';
 import { SiteHeader } from '@/components/site/SiteHeader';
+import { WaitlistForm } from '@/components/site/WaitlistForm';
 
 export function HomePage() {
   return (
@@ -13,21 +14,23 @@ export function HomePage() {
         <section className="hero shell">
           <div className="eyebrow">
             <span className="status-dot" />
-            The AI-native multi-chat client
+            Building Claire in public
           </div>
-          <h1>
+          <h1 className="marketing-title">
             All your chats.
             <br />
-            <span>One AI.</span>
+            <span className="claire-underline">One AI.</span>
           </h1>
           <p className="hero-copy">
             Bring WhatsApp, Telegram, Instagram, and more into one intelligent client. Search every
             conversation, get relationship-aware help, and never lose track of what you promised.
           </p>
-          <div className="hero-actions">
-            <Link className="button button-dark" href="#start">
-              Download
-            </Link>
+          <div className="hero-actions" id="waitlist">
+            <p className="hero-waitlist-copy">
+              Join the waitlist to get the beta—and short, honest notes on what shipped, what
+              broke, and what I learned along the way.
+            </p>
+            <WaitlistForm source="homepage_hero" />
           </div>
           <div className="hero-art" aria-label="Claire application preview">
             <div className="orbit orbit-one" />
@@ -197,7 +200,7 @@ export function HomePage() {
               <div className="kicker">EVERYONE IS SOMEWHERE DIFFERENT</div>
               <h2>
                 Your people aren’t all in one app.
-                <br />
+                {' '}
                 <span>Claire can be.</span>
               </h2>
             </div>
@@ -880,20 +883,21 @@ export function HomePage() {
           </div>
         </section>
 
-        <section className="final-cta shell">
+        <section className="final-cta shell" aria-labelledby="final-cta-title">
           <div>
             <span className="asterisk">
               <HeroIcon name="sparkles" />
             </span>
-            <h2>
-              Give every chat
+            <h2 id="final-cta-title">
+              Follow the build
               <br />
-              one intelligent home.
+              from here.
             </h2>
-            <p>A multi-chat client with an AI that helps you remember, reply, and follow through.</p>
-            <Link className="button button-dark" href="/pricing">
-              See the plans <HeroIcon name="arrow-right" />
-            </Link>
+            <p>
+              I’m documenting the road to launch—the decisions, rough edges, releases, and lessons.
+              Join early and help shape Claire as it becomes real.
+            </p>
+            <WaitlistForm source="homepage_footer" tone="transparent" />
           </div>
         </section>
       </main>
