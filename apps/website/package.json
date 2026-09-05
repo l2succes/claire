@@ -24,9 +24,11 @@
   "dependencies": {
     "@ai-sdk/openai": "^4.0.42",
     "@claire/design-system": "workspace:*",
+    "@claire/emails": "workspace:*",
     "@claire/platform-catalog": "workspace:*",
     "@claire/tokens": "workspace:*",
     "@heroicons/react": "^2.2.0",
+    "@react-email/render": "^2.1.0",
     "@supabase/supabase-js": "^2.39.1",
     "ai": "^7.0.66",
     "class-variance-authority": "^0.7.1",
