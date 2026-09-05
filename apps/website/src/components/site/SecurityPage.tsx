@@ -16,10 +16,10 @@ export function SecurityPage() {
               <span className="status-dot" />
               Security & privacy
             </div>
-            <h1>
+            <h1 className="marketing-title">
               Clear boundaries.
               <br />
-              <span>Real accountability.</span>
+              <span className="claire-underline">Real accountability.</span>
             </h1>
             <div className="security-hero-networks" aria-label="Connected networks keep their own security model">
               <PlatformCluster

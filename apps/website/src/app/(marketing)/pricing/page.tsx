@@ -332,10 +332,10 @@ export default function PricingPage() {
             <span className="status-dot" />
             Pricing · Claire Cloud
           </div>
-          <h1>
+          <h1 className="marketing-title">
             Every chat in one place.
             <br />
-            <span>Priced by how often Claire looks.</span>
+            <span className="claire-underline">Priced by how often Claire looks.</span>
           </h1>
           <p className="hero-copy">
             Claire’s Loop reads every connected conversation and tells you what is still open. Free

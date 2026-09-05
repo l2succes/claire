@@ -16,10 +16,10 @@ export function HomePage() {
             <span className="status-dot" />
             Building Claire in public
           </div>
-          <h1>
+          <h1 className="marketing-title">
             All your chats.
             <br />
-            <span>One AI.</span>
+            <span className="claire-underline">One AI.</span>
           </h1>
           <p className="hero-copy">
             Bring WhatsApp, Telegram, Instagram, and more into one intelligent client. Search every
@@ -200,7 +200,7 @@ export function HomePage() {
               <div className="kicker">EVERYONE IS SOMEWHERE DIFFERENT</div>
               <h2>
                 Your people aren’t all in one app.
-                <br />
+                {' '}
                 <span>Claire can be.</span>
               </h2>
             </div>

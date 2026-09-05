@@ -271,28 +271,7 @@ button {
   border-radius: 50%;
 }
 .hero h1 {
-  font-size: var(--text-display);
-  letter-spacing: -0.075em;
-  line-height: 0.88;
   margin: 24px 0 28px;
-  font-weight: 600;
-}
-.hero h1 span {
-  position: relative;
-  isolation: isolate;
-  z-index: 0;
-}
-.hero h1 span:after {
-  content: '';
-  position: absolute;
-  height: 0.28em;
-  background: var(--claire-lime);
-  left: -0.04em;
-  right: -0.04em;
-  bottom: 0.04em;
-  z-index: -1;
-  transform: rotate(-1deg);
-  border-radius: 4px;
 }
 .hero-copy {
   font-size: var(--text-lg);
@@ -340,8 +319,8 @@ button {
   color: var(--neutral-400);
 }
 .waitlist-form:focus-within {
-  outline: 3px solid var(--focus);
-  outline-offset: 3px;
+  border-color: var(--claire-ink);
+  box-shadow: 0 0 0 1px var(--claire-ink), 4px 4px 0 rgb(16 18 15 / 14%);
 }
 .waitlist-form button {
   min-height: 44px;
@@ -1582,6 +1561,7 @@ button {
 .setup-paths-heading h2 {
   margin: 10px 0 0;
   font-size: clamp(2rem, 3.6vw, 3.5rem);
+  line-height: 0.98;
   letter-spacing: -0.05em;
 }
 .setup-paths-heading > p {
@@ -3311,9 +3291,6 @@ code {
   }
   .hero {
     padding-top: 55px;
-  }
-  .hero h1 {
-    font-size: clamp(3.2rem, 17vw, 5rem);
   }
   .hero-copy {
     font-size: 15px;

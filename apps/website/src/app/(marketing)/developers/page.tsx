@@ -142,7 +142,7 @@ export default function DevelopersPage() {
               <span className="status-dot" />
               Open product reference
             </div>
-            <h1>
+            <h1 className="marketing-title">
               Build the place
               <br />
               where conversations

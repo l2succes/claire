@@ -138,10 +138,10 @@ export default function BusinessPage() {
             <span className="status-dot" />
             Claire for Business
           </div>
-          <h1>
+          <h1 className="marketing-title">
             Every customer conversation.
             <br />
-            <span>One smart team.</span>
+            <span className="claire-underline">One smart team.</span>
           </h1>
           <p className="hero-copy">
             Manage Instagram, WhatsApp, LinkedIn, SMS, Messenger, and more from one shared
