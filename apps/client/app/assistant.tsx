@@ -3,6 +3,7 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput,
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
+import * as Crypto from 'expo-crypto';
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CheckCircle2, MessageCircle, Plus, Search, Send, Sparkles, X } from 'lucide-react-native';
 import { colors, mobileType, radius, space, useIsDesktopLayout } from '@claire/design-system';
 import { MobileIconButton, SectionLabel } from '../components/mobile/claire-mobile';
@@ -14,6 +15,7 @@ import { PlatformName } from '../components/PlatformIcon';
 import { useChromeStore } from '../stores/chromeStore';
 import { useAuthStore } from '../stores/authStore';
 import { readQuerySnapshot, writeQuerySnapshot } from '../services/mobile-cache';
+import { useAssistantStream } from '../hooks/useAssistantStream';
 import {
   AssistantCitation,
   AssistantIndexStatus,
@@ -110,7 +112,7 @@ function Sources({ citations, onExpand }: { citations: AssistantCitation[]; onEx
   );
 }
 
-function SearchingStatus() {
+function SearchingStatus({ phase, onStop }: { phase: 'planning' | 'reading' | 'saving' | null; onStop: () => void }) {
   const opacity = useSharedValue(0.55);
   useEffect(() => {
     opacity.value = withRepeat(withTiming(1, { duration: 720, easing: Easing.inOut(Easing.quad) }), -1, true);
@@ -119,7 +121,12 @@ function SearchingStatus() {
   return (
     <Animated.View style={[{ flexDirection: 'row', alignItems: 'center', gap: space[2], padding: space[3] }, pulse]}>
       <ClaireMark size={16} />
-      <Text style={{ ...mobileType.bodySmall, color: colors.neutral[800] }}>Claire is searching your conversations…</Text>
+      <Text style={{ ...mobileType.bodySmall, color: colors.neutral[800], flex: 1 }}>
+        {phase === 'planning' ? 'Claire is understanding the question…' : phase === 'saving' ? 'Claire is saving the answer…' : 'Claire is reading the relevant conversations…'}
+      </Text>
+      <Pressable accessibilityRole="button" accessibilityLabel="Stop Claire" onPress={onStop} style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.neutral[400] }}>
+        <Text style={{ ...mobileType.label, color: colors.ink }}>Stop</Text>
+      </Pressable>
     </Animated.View>
   );
 }
@@ -198,7 +205,7 @@ export function AssistantScreen({ inTab = false }: { inTab?: boolean }) {
   const [question, setQuestion] = useState('');
   const [indexStatus, setIndexStatus] = useState<AssistantIndexStatus | null>(null);
   const [loading, setLoading] = useState(true);
-  const [asking, setAsking] = useState(false);
+  const { start: startStream, stop: stopStream, isStreaming: asking, phase: streamPhase } = useAssistantStream();
   const [error, setError] = useState<string | null>(null);
   const [mentions, setMentions] = useState<AssistantMentionCandidate[]>([]);
   const [mentionCandidates, setMentionCandidates] = useState<AssistantMentionCandidate[]>([]);
@@ -312,43 +319,64 @@ export function AssistantScreen({ inTab = false }: { inTab?: boolean }) {
     const text = prompt.trim();
     if (!text || asking) return;
     interactiveRequestEpoch.current += 1;
-    setAsking(true);
     setError(null);
     try {
-      const thread = activeThread || await createThread();
-      if (!thread) return;
+      const requestId = Crypto.randomUUID();
+      const isNewThread = !activeThread;
+      const thread: AssistantThread = activeThread || {
+        id: `pending-${requestId}`,
+        title: text.slice(0, 72),
+        chat_id: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      if (isNewThread) {
+        setActiveThread(thread);
+        setTurns([]);
+      }
       const scopeChatIds = mentions.map((mention) => mention.id);
       const optimistic: AssistantTurn = {
-        id: `optimistic-${Date.now()}`,
+        id: `user-${requestId}`,
         role: 'user',
         content: text,
         citations: [],
         scope_chat_ids: scopeChatIds,
         created_at: new Date().toISOString(),
       };
-      setTurns((current) => [...current, optimistic]);
+      const streamingTurn: AssistantTurn = {
+        id: `assistant-${requestId}`,
+        role: 'assistant',
+        content: '',
+        citations: [],
+        actions: [],
+        scope_chat_ids: scopeChatIds,
+        status: 'streaming',
+        request_id: requestId,
+        created_at: new Date().toISOString(),
+      };
+      setTurns((current) => [...current, optimistic, streamingTurn]);
       setQuestion('');
       setMentionCandidates([]);
-      const result = await conversationAssistantApi.ask(thread.id, text, scopeChatIds);
-      setTurns((current) => [...current, {
-        id: `assistant-${Date.now()}`,
-        role: 'assistant',
-        content: result.answer,
-        citations: result.citations,
-        actions: result.actions,
-        scope_chat_ids: scopeChatIds,
-        created_at: new Date().toISOString(),
-      }]);
+      const result = await startStream(
+        isNewThread
+          ? { kind: 'new', question: text, chatIds: scopeChatIds, requestId }
+          : { kind: 'thread', threadId: thread.id, question: text, chatIds: scopeChatIds, requestId },
+        { onDelta: (delta) => setTurns((current) => current.map((turn) => turn.id === streamingTurn.id ? { ...turn, content: turn.content + delta } : turn)) },
+      );
+      setTurns((current) => current.map((turn) => turn.id === streamingTurn.id
+        ? result.assistantTurn || { ...turn, content: result.answer, citations: result.citations, actions: result.actions, status: 'completed' }
+        : turn));
       setIndexStatus(result.indexing);
       setError(null);
       setMentions([]);
       const refreshed = await conversationAssistantApi.listThreads();
       setThreads(refreshed);
-      setActiveThread(refreshed.find((item) => item.id === thread.id) || thread);
+      const persistedThread = result.thread || thread;
+      setActiveThread(refreshed.find((item) => item.id === persistedThread.id) || persistedThread);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Claire could not answer that right now.');
-    } finally {
-      setAsking(false);
+      const message = cause instanceof Error ? cause.message : 'Claire could not answer that right now.';
+      setError(message);
+      setTurns((current) => current.map((turn) => turn.status === 'streaming' ? { ...turn, status: message === 'Answer stopped.' ? 'cancelled' : 'failed' } : turn));
     }
   };
 
@@ -441,7 +469,7 @@ export function AssistantScreen({ inTab = false }: { inTab?: boolean }) {
                 {turn.role === 'assistant' ? <Sources citations={turn.citations || []} onExpand={() => requestAnimationFrame(() => conversationScrollRef.current?.scrollToEnd({ animated: true }))} /> : null}
               </View>
             ))}
-            {asking ? <SearchingStatus /> : null}
+            {asking ? <SearchingStatus phase={streamPhase} onStop={stopStream} /> : null}
           </ScrollView>
           {error ? <Text testID="assistant-error" style={{ ...mobileType.bodySmall, color: colors.danger, paddingHorizontal: space[4], paddingBottom: space[2] }}>{error}</Text> : null}
           <View style={{ paddingHorizontal: space[4], paddingTop: space[2], paddingBottom: Math.max(insets.bottom, space[3]), backgroundColor: colors.sky }}>

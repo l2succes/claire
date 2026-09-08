@@ -40,7 +40,9 @@ export const REQUIRED_SCHEMA: SchemaRequirement[] = [
   { table: 'contact_profiles', columns: ['key_facts'] },
   { table: 'smart_cards', columns: ['dismissed'] },
   { table: 'conversation_assistant_threads', columns: ['user_id', 'chat_id', 'updated_at'] },
-  { table: 'conversation_assistant_turns', columns: ['thread_id', 'scope_chat_ids', 'citations', 'actions'] },
+  { table: 'conversation_assistant_turns', columns: ['thread_id', 'scope_chat_ids', 'citations', 'actions', 'status', 'request_id', 'query_plan', 'provider', 'model', 'input_tokens', 'output_tokens'] },
+  { table: 'conversation_message_embeddings', columns: ['message_id', 'content_hash', 'embedding_model', 'embedding_dimensions'] },
+  { table: 'assistant_relationship_metrics', columns: ['user_id', 'chat_id', 'interaction_count_30d', 'interaction_count_90d'] },
   { table: 'platform_interest_requests', columns: ['user_id', 'platform_id', 'source'] },
 ];
 

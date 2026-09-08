@@ -15,7 +15,7 @@
 import { createAzure } from '@ai-sdk/azure';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
-import type { LanguageModel } from 'ai';
+import type { EmbeddingModel, LanguageModel } from 'ai';
 
 import { aiConfig } from '../../config';
 import { logger } from '../../utils/logger';
@@ -26,12 +26,18 @@ import { logger } from '../../utils/logger';
  * on a strong model longest because tool calling is the leakiest part of the
  * abstraction. Migrate role by role, never all at once.
  */
-export type ModelRole = 'triage' | 'extraction' | 'assistant';
+export type ModelRole = 'triage' | 'extraction' | 'grounded' | 'assistant';
 
 export type ProviderId = 'azure' | 'openai' | 'kimi' | 'compatible';
 
 export interface RoleResolution {
   model: LanguageModel;
+  provider: ProviderId;
+  modelId: string;
+}
+
+export interface EmbeddingResolution {
+  model: EmbeddingModel;
   provider: ProviderId;
   modelId: string;
 }
@@ -45,21 +51,25 @@ const DEFAULT_MODEL_IDS: Record<ProviderId, Record<ModelRole, string>> = {
   openai: {
     triage: process.env.LOOP_MODEL_TRIAGE_OPENAI || 'gpt-5-nano',
     extraction: process.env.LOOP_MODEL_EXTRACTION_OPENAI || 'gpt-5.6-luna',
+    grounded: process.env.AI_MODEL_GROUNDED_OPENAI || 'gpt-5.6-luna',
     assistant: process.env.LOOP_MODEL_ASSISTANT_OPENAI || 'gpt-5.6-terra',
   },
   azure: {
     triage: process.env.LOOP_MODEL_TRIAGE_AZURE || 'phi-4-mini',
     extraction: process.env.LOOP_MODEL_EXTRACTION_AZURE || 'gpt-4.1',
+    grounded: process.env.AI_MODEL_GROUNDED_AZURE || process.env.LOOP_MODEL_ASSISTANT_AZURE || 'gpt-4.1',
     assistant: process.env.LOOP_MODEL_ASSISTANT_AZURE || 'gpt-4.1',
   },
   kimi: {
     triage: aiConfig.kimi.model,
     extraction: aiConfig.kimi.model,
+    grounded: aiConfig.kimi.model,
     assistant: aiConfig.kimi.model,
   },
   compatible: {
     triage: process.env.LOOP_MODEL_TRIAGE_COMPATIBLE || '',
     extraction: process.env.LOOP_MODEL_EXTRACTION_COMPATIBLE || '',
+    grounded: process.env.AI_MODEL_GROUNDED_COMPATIBLE || '',
     assistant: process.env.LOOP_MODEL_ASSISTANT_COMPATIBLE || '',
   },
 };
@@ -68,8 +78,10 @@ function fallbackModelIds(provider: ProviderId, role: ModelRole, primary: string
   // Luna is the inexpensive steady-state extractor. Terra is invoked only if
   // Luna cannot produce a schema-valid object, so a transient provider/model
   // formatting failure does not make an entire chat unscannable.
-  if (provider === 'openai' && role === 'extraction') {
-    const fallback = process.env.LOOP_MODEL_EXTRACTION_OPENAI_FALLBACK || 'gpt-5.6-terra';
+  if (provider === 'openai' && (role === 'extraction' || role === 'grounded')) {
+    const fallback = role === 'grounded'
+      ? process.env.AI_MODEL_GROUNDED_OPENAI_FALLBACK || 'gpt-5.6-terra'
+      : process.env.LOOP_MODEL_EXTRACTION_OPENAI_FALLBACK || 'gpt-5.6-terra';
     return fallback && fallback !== primary ? [primary, fallback] : [primary];
   }
   return [primary];
@@ -81,7 +93,7 @@ function fallbackModelIds(provider: ProviderId, role: ModelRole, primary: string
  * the post-credits path. Override with LOOP_PROVIDER_ORDER.
  */
 function providerOrder(): ProviderId[] {
-  const raw = process.env.LOOP_PROVIDER_ORDER;
+  const raw = process.env.AI_PROVIDER_ORDER || process.env.LOOP_PROVIDER_ORDER;
   if (raw) {
     return raw
       .split(',')
@@ -93,23 +105,34 @@ function providerOrder(): ProviderId[] {
   return ['azure', 'openai', 'kimi', 'compatible'];
 }
 
-let cachedProviders: Partial<Record<ProviderId, (modelId: string) => LanguageModel>> | null = null;
+interface ProviderFactories {
+  language: (modelId: string) => LanguageModel;
+  embedding?: (modelId: string) => EmbeddingModel;
+}
 
-function buildProviders(): Partial<Record<ProviderId, (modelId: string) => LanguageModel>> {
+let cachedProviders: Partial<Record<ProviderId, ProviderFactories>> | null = null;
+
+function buildProviders(): Partial<Record<ProviderId, ProviderFactories>> {
   if (cachedProviders) return cachedProviders;
 
-  const providers: Partial<Record<ProviderId, (modelId: string) => LanguageModel>> = {};
+  const providers: Partial<Record<ProviderId, ProviderFactories>> = {};
 
   const azureName = process.env.AZURE_OPENAI_RESOURCE_NAME;
   const azureKey = process.env.AZURE_OPENAI_API_KEY;
   if (azureName && azureKey) {
     const azure = createAzure({ resourceName: azureName, apiKey: azureKey });
-    providers.azure = (modelId) => azure(modelId);
+    providers.azure = {
+      language: (modelId) => azure(modelId),
+      embedding: (modelId) => azure.embedding(modelId),
+    };
   }
 
   if (aiConfig.openai.apiKey) {
     const openai = createOpenAI({ apiKey: aiConfig.openai.apiKey });
-    providers.openai = (modelId) => openai(modelId);
+    providers.openai = {
+      language: (modelId) => openai(modelId),
+      embedding: (modelId) => openai.embedding(modelId),
+    };
   }
 
   if (aiConfig.kimi.apiKey) {
@@ -119,7 +142,10 @@ function buildProviders(): Partial<Record<ProviderId, (modelId: string) => Langu
       apiKey: aiConfig.kimi.apiKey,
       baseURL: aiConfig.kimi.baseUrl,
     });
-    providers.kimi = (modelId) => kimi(modelId);
+    providers.kimi = {
+      language: (modelId) => kimi(modelId),
+      embedding: (modelId) => kimi.embeddingModel(modelId),
+    };
   }
 
   const compatibleUrl = process.env.LOOP_COMPATIBLE_BASE_URL;
@@ -129,7 +155,10 @@ function buildProviders(): Partial<Record<ProviderId, (modelId: string) => Langu
       apiKey: process.env.LOOP_COMPATIBLE_API_KEY || 'unused',
       baseURL: compatibleUrl,
     });
-    providers.compatible = (modelId) => compatible(modelId);
+    providers.compatible = {
+      language: (modelId) => compatible(modelId),
+      embedding: (modelId) => compatible.embeddingModel(modelId),
+    };
   }
 
   cachedProviders = providers;
@@ -162,17 +191,37 @@ export function resolveRole(role: ModelRole): RoleResolution[] {
   const resolutions: RoleResolution[] = [];
 
   for (const provider of providerOrder()) {
-    const factory = providers[provider];
-    if (!factory) continue;
+    const factories = providers[provider];
+    if (!factories) continue;
 
     const override = process.env[`LOOP_MODEL_${role.toUpperCase()}`];
     const modelId = override || DEFAULT_MODEL_IDS[provider][role];
     if (!modelId) continue;
 
     for (const candidateModelId of fallbackModelIds(provider, role, modelId)) {
-      resolutions.push({ model: factory(candidateModelId), provider, modelId: candidateModelId });
+      resolutions.push({ model: factories.language(candidateModelId), provider, modelId: candidateModelId });
     }
   }
 
+  return resolutions;
+}
+
+/**
+ * Resolve the vector model separately from text generation. This keeps Ask
+ * Claire's stored 1536-dimension vectors stable while allowing answer models
+ * to move between providers without a re-index.
+ */
+export function resolveEmbeddingRole(): EmbeddingResolution[] {
+  const providers = buildProviders();
+  const resolutions: EmbeddingResolution[] = [];
+  for (const provider of providerOrder()) {
+    const embedding = providers[provider]?.embedding;
+    if (!embedding) continue;
+    const modelId = provider === 'openai'
+      ? aiConfig.openai.embeddingModel
+      : process.env[`AI_EMBEDDING_MODEL_${provider.toUpperCase()}`];
+    if (!modelId) continue;
+    resolutions.push({ model: embedding(modelId), provider, modelId });
+  }
   return resolutions;
 }
