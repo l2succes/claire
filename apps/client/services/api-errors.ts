@@ -23,6 +23,7 @@ export interface FailedRequest {
 export const GENERIC_SERVER_ERROR = 'Something went wrong on our end. Please try again.';
 export const GENERIC_REQUEST_ERROR = 'Something went wrong. Please try again.';
 export const UNREACHABLE_ERROR = 'Could not reach Claire. Check your connection and try again.';
+export const SESSION_ERROR = 'Your session needs to be refreshed. Please try again.';
 
 export function clientSafeMessage(error: FailedRequest): string {
   const status = error.response?.status;
@@ -33,6 +34,8 @@ export function clientSafeMessage(error: FailedRequest): string {
     if (body) console.warn('[api] server error detail (not shown to user):', body);
     return GENERIC_SERVER_ERROR;
   }
+
+  if (status === 401) return SESSION_ERROR;
 
   // No response at all: the request never completed.
   if (status === undefined) return UNREACHABLE_ERROR;

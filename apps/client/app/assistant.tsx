@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
-import { ChevronLeft, CheckCircle2, MessageCircle, Plus, Search, Send, Sparkles, X } from 'lucide-react-native';
+import { router, useLocalSearchParams } from 'expo-router';
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CheckCircle2, MessageCircle, Plus, Search, Send, Sparkles, X } from 'lucide-react-native';
 import { colors, mobileType, radius, space, useIsDesktopLayout } from '@claire/design-system';
 import { MobileIconButton, SectionLabel } from '../components/mobile/claire-mobile';
 import { AskComposer, AskToolGrid } from '../components/claire/composer';
@@ -29,37 +29,59 @@ function formatThreadTime(value: string) {
   return new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
-function Sources({ citations }: { citations: AssistantCitation[] }) {
-  const [showAll, setShowAll] = useState(false);
+function Sources({ citations, onExpand }: { citations: AssistantCitation[]; onExpand: () => void }) {
+  const [expanded, setExpanded] = useState(false);
   if (!citations.length) return null;
-  const visible = showAll ? citations : citations.slice(0, 3);
   return (
     <View style={{ gap: space[2] }} testID="assistant-sources">
-      <SectionLabel title="Sources" />
-      {visible.map((citation) => (
-        <Pressable
-          key={citation.messageId}
-          testID={`assistant-source-${citation.messageId}`}
-          onPress={() => router.push({
-            pathname: '/chat/[chatId]',
-            params: {
-              chatId: citation.chatId,
-              contact_name: citation.fromMe ? citation.chatName || 'Conversation' : citation.senderName,
-              chat_name: citation.chatName || citation.senderName,
-              platform: citation.platform,
-              is_group: citation.isGroup ? '1' : '0',
-              highlightMessageId: citation.messageId,
-            },
-          })}
-        >
-          <View style={{ gap: 3, padding: space[3], borderRadius: radius.control, borderCurve: 'continuous', borderWidth: 1, borderColor: colors.neutral[300], backgroundColor: colors.paper }}>
-            <Text maxFontSizeMultiplier={1} style={{ ...mobileType.label, color: colors.ink }}>{citation.fromMe ? 'You' : citation.senderName} · {new Date(citation.timestamp).toLocaleDateString()} · {citation.platform}</Text>
-            {citation.isPreferredScope === false ? <Text maxFontSizeMultiplier={1} style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>Also relevant from another conversation</Text> : null}
-            <Text maxFontSizeMultiplier={1} numberOfLines={3} style={{ ...mobileType.bodySmall, color: colors.neutral[800] }}>{citation.excerpt}</Text>
-          </View>
-        </Pressable>
-      ))}
-      {citations.length > 3 ? <Pressable onPress={() => setShowAll((current) => !current)} testID="assistant-sources-toggle"><Text style={{ ...mobileType.label, color: colors.ink }}>{showAll ? 'Show less' : `View ${citations.length - 3} more`}</Text></Pressable> : null}
+      <Pressable
+        testID="assistant-sources-toggle"
+        accessibilityRole="button"
+        accessibilityState={{ expanded }}
+        accessibilityLabel={`${expanded ? 'Hide' : 'Show'} ${citations.length} sources`}
+        onPress={() => setExpanded((current) => {
+          const next = !current;
+          if (next) onExpand();
+          return next;
+        })}
+      >
+        <View style={{ minHeight: 40, flexDirection: 'row', alignItems: 'center', gap: space[2], paddingHorizontal: space[3], borderRadius: radius.control, borderCurve: 'continuous', borderWidth: 1, borderColor: colors.neutral[300], backgroundColor: colors.neutral[100] }}>
+          <Text selectable maxFontSizeMultiplier={1} numberOfLines={1} style={{ ...mobileType.label, flex: 1, color: colors.ink }}>Sources · {citations.length}</Text>
+          {expanded ? <ChevronUp size={17} color={colors.ink} /> : <ChevronDown size={17} color={colors.ink} />}
+        </View>
+      </Pressable>
+      {expanded ? (
+        <ScrollView horizontal style={{ height: 140 }} showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space[2], paddingRight: space[4], paddingBottom: space[1] }} testID="assistant-sources-carousel">
+          {citations.map((citation) => (
+            <Pressable
+              key={citation.messageId}
+              testID={`assistant-source-${citation.messageId}`}
+              accessibilityRole="button"
+              accessibilityLabel={`Open source from ${citation.fromMe ? 'you' : citation.senderName}`}
+              onPress={() => router.push({
+                pathname: '/chat/[chatId]',
+                params: {
+                  chatId: citation.chatId,
+                  contact_name: citation.fromMe ? citation.chatName || 'Conversation' : citation.senderName,
+                  chat_name: citation.chatName || citation.senderName,
+                  platform: citation.platform,
+                  is_group: citation.isGroup ? '1' : '0',
+                  highlightMessageId: citation.messageId,
+                },
+              })}
+            >
+              <View style={{ width: 272, minHeight: 132, justifyContent: 'space-between', gap: space[2], padding: space[3], borderRadius: radius.control, borderCurve: 'continuous', borderWidth: 1, borderColor: colors.neutral[300], backgroundColor: colors.cream }}>
+                <View style={{ gap: 3 }}>
+                  <Text selectable maxFontSizeMultiplier={1} numberOfLines={1} style={{ ...mobileType.label, fontWeight: '800', color: colors.ink }}>{citation.fromMe ? 'You' : citation.senderName} · {new Date(citation.timestamp).toLocaleDateString()}</Text>
+                  <Text selectable maxFontSizeMultiplier={1} numberOfLines={1} style={{ ...mobileType.label, color: colors.neutral[600] }}>{citation.platform}{citation.isPreferredScope === false ? ' · also relevant' : ''}</Text>
+                </View>
+                <Text selectable maxFontSizeMultiplier={1} numberOfLines={4} style={{ ...mobileType.bodySmall, color: colors.neutral[800] }}>{citation.excerpt}</Text>
+                <Text maxFontSizeMultiplier={1} style={{ ...mobileType.label, color: colors.neutral[600] }}>Open conversation →</Text>
+              </View>
+            </Pressable>
+          ))}
+        </ScrollView>
+      ) : null}
     </View>
   );
 }
@@ -88,7 +110,61 @@ function IndexStatusBanner({ status }: { status: AssistantIndexStatus | null }) 
   );
 }
 
+const HOME_RECOMMENDATIONS = [
+  {
+    id: 'next-step',
+    eyebrow: 'START HERE',
+    title: 'Find what needs a next step',
+    detail: 'Surface promises, questions, and plans that need your attention.',
+    prompt: 'What commitments, questions, or plans are still unresolved?',
+    icon: CheckCircle2,
+  },
+  {
+    id: 'catch-up',
+    eyebrow: 'GET ORIENTED',
+    title: 'Catch up before you reply',
+    detail: 'Get a concise read on the conversations that matter right now.',
+    prompt: 'Catch me up on the conversations that need my attention.',
+    icon: Sparkles,
+  },
+] as const;
+
+function AssistantHomeSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <View style={{ gap: space[2], paddingBottom: space[2] }}>
+      <SectionLabel title={title} />
+      {children}
+    </View>
+  );
+}
+
+function AskRecommendationRail({ onSelect }: { onSelect: (prompt: string) => void }) {
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space[3] }} testID="assistant-recommendations">
+      {HOME_RECOMMENDATIONS.map((recommendation) => {
+        const Icon = recommendation.icon;
+        return (
+          <Pressable key={recommendation.id} accessibilityRole="button" accessibilityLabel={recommendation.title} onPress={() => onSelect(recommendation.prompt)} testID={`assistant-recommendation-${recommendation.id}`}>
+            <View style={{ width: 274, minHeight: 150, justifyContent: 'space-between', gap: space[3], padding: space[3], borderRadius: radius.card, borderCurve: 'continuous', borderWidth: 1, borderColor: colors.ink, backgroundColor: colors.paper }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Text maxFontSizeMultiplier={1} style={{ ...mobileType.monoLabel, color: colors.neutral[600] }}>{recommendation.eyebrow}</Text>
+                <View style={{ width: 30, height: 30, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: colors.lime }}><Icon size={17} color={colors.ink} /></View>
+              </View>
+              <View style={{ gap: 3 }}>
+                <Text maxFontSizeMultiplier={1} style={{ ...mobileType.body, fontWeight: '800', color: colors.ink }}>{recommendation.title}</Text>
+                <Text maxFontSizeMultiplier={1} numberOfLines={2} style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{recommendation.detail}</Text>
+              </View>
+              <Text maxFontSizeMultiplier={1} style={{ ...mobileType.label, color: colors.ink }}>Ask Claire →</Text>
+            </View>
+          </Pressable>
+        );
+      })}
+    </ScrollView>
+  );
+}
+
 export function AssistantScreen({ inTab = false }: { inTab?: boolean }) {
+  const { threadId } = useLocalSearchParams<{ threadId?: string }>();
   const isDesktop = useIsDesktopLayout();
   const insets = useSafeAreaInsets();
   const setTabBarHidden = useChromeStore((state) => state.setTabBarHidden);
@@ -102,6 +178,9 @@ export function AssistantScreen({ inTab = false }: { inTab?: boolean }) {
   const [error, setError] = useState<string | null>(null);
   const [mentions, setMentions] = useState<AssistantMentionCandidate[]>([]);
   const [mentionCandidates, setMentionCandidates] = useState<AssistantMentionCandidate[]>([]);
+  const openedThreadId = useRef<string | null>(null);
+  const conversationScrollRef = useRef<ScrollView>(null);
+  const interactiveRequestEpoch = useRef(0);
 
   const inThread = Boolean(activeThread);
 
@@ -132,6 +211,14 @@ export function AssistantScreen({ inTab = false }: { inTab?: boolean }) {
     setError(null);
   }, []);
 
+  useEffect(() => {
+    if (!threadId || loading || openedThreadId.current === threadId) return;
+    const thread = threads.find((item) => item.id === threadId);
+    if (!thread) return;
+    openedThreadId.current = threadId;
+    void loadThread(thread);
+  }, [loadThread, loading, threadId, threads]);
+
   const goHome = () => {
     setActiveThread(null);
     setTurns([]);
@@ -142,6 +229,7 @@ export function AssistantScreen({ inTab = false }: { inTab?: boolean }) {
   };
 
   const refresh = useCallback(async () => {
+    const requestEpoch = interactiveRequestEpoch.current;
     try {
       const [savedThreads, status] = await Promise.all([
         conversationAssistantApi.listThreads(),
@@ -153,7 +241,11 @@ export function AssistantScreen({ inTab = false }: { inTab?: boolean }) {
       if (userId) void writeQuerySnapshot(userId, 'assistant-threads', savedThreads).catch(() => undefined);
       if (status.status !== 'ready') void conversationAssistantApi.startIndex().catch(() => {});
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not load Ask Claire.');
+      // An initial/background load can finish after a person has already asked
+      // a question. Never let that older failure overwrite a newer answer.
+      if (requestEpoch === interactiveRequestEpoch.current) {
+        setError(cause instanceof Error ? cause.message : 'Could not load Ask Claire.');
+      }
     } finally {
       setLoading(false);
     }
@@ -195,6 +287,7 @@ export function AssistantScreen({ inTab = false }: { inTab?: boolean }) {
   const ask = async (prompt = question) => {
     const text = prompt.trim();
     if (!text || asking) return;
+    interactiveRequestEpoch.current += 1;
     setAsking(true);
     setError(null);
     try {
@@ -222,6 +315,7 @@ export function AssistantScreen({ inTab = false }: { inTab?: boolean }) {
         created_at: new Date().toISOString(),
       }]);
       setIndexStatus(result.indexing);
+      setError(null);
       setMentions([]);
       const refreshed = await conversationAssistantApi.listThreads();
       setThreads(refreshed);
@@ -292,23 +386,15 @@ export function AssistantScreen({ inTab = false }: { inTab?: boolean }) {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.sky }} edges={['top']} testID="assistant-screen">
-      {inTab ? null : <View style={{ alignSelf: 'center', width: 48, height: 5, borderRadius: radius.pill, backgroundColor: colors.neutral[400], opacity: 0.58, marginTop: space[3], marginBottom: space[4] }} />}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[3], paddingHorizontal: space[4], paddingBottom: space[4], paddingTop: inTab ? space[4] : 0 }}>
         {inThread ? <MobileIconButton label="Back to Ask Claire" onPress={goHome}><ChevronLeft size={22} color={colors.ink} /></MobileIconButton> : null}
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text maxFontSizeMultiplier={1} style={{ ...mobileType.screenTitle, color: colors.ink }}>{inThread ? (activeThread?.title || 'New') : 'Ask Claire'}</Text>
+          <Text maxFontSizeMultiplier={1} style={{ ...(inThread ? { ...mobileType.screenTitle, fontSize: 24, lineHeight: 28, letterSpacing: -0.45 } : mobileType.screenTitle), color: colors.ink }}>{inThread ? (activeThread?.title || 'New') : 'Ask Claire'}</Text>
           <Text maxFontSizeMultiplier={1} numberOfLines={1} style={{ ...mobileType.body, color: colors.neutral[600] }}>
             {inThread ? 'Use @ to focus on a person or chat' : 'Across your connected conversations'}
           </Text>
         </View>
-        {inThread ? null : (
-          <Pressable accessibilityRole="button" accessibilityLabel="New Ask Claire thread" onPress={() => void createThread()} testID="assistant-new-thread">
-            <View style={{ minHeight: 34, flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 11, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.ink, backgroundColor: colors.lime }}>
-              <Plus size={15} color={colors.ink} />
-              <Text style={{ ...mobileType.label, color: colors.ink }}>New</Text>
-            </View>
-          </Pressable>
-        )}
+        {inThread ? null : <MobileIconButton selected label="New Ask Claire thread" onPress={() => void createThread()} testID="assistant-new-thread"><Plus size={21} color={colors.ink} /></MobileIconButton>}
         {inTab ? null : <MobileIconButton label="Close Ask Claire" onPress={close}><X size={21} color={colors.ink} /></MobileIconButton>}
       </View>
       <IndexStatusBanner status={indexStatus} />
@@ -316,7 +402,7 @@ export function AssistantScreen({ inTab = false }: { inTab?: boolean }) {
         <AskClaireSkeleton />
       ) : inThread ? (
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <ScrollView contentContainerStyle={{ paddingHorizontal: space[4], paddingTop: space[2], paddingBottom: space[4], gap: space[4] }} keyboardShouldPersistTaps="handled" testID="assistant-turn-list">
+          <ScrollView ref={conversationScrollRef} contentContainerStyle={{ paddingHorizontal: space[4], paddingTop: space[2], paddingBottom: space[4], gap: space[4] }} keyboardShouldPersistTaps="handled" testID="assistant-turn-list">
             {!turns.length ? (
               <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>
                 Claire never sends messages from here. She only reads connected conversations and cites what she used.
@@ -326,7 +412,7 @@ export function AssistantScreen({ inTab = false }: { inTab?: boolean }) {
                 <View style={{ padding: space[4], borderRadius: radius.card, borderCurve: 'continuous', borderWidth: turn.role === 'assistant' ? 1 : 0, borderColor: colors.ink, backgroundColor: turn.role === 'user' ? colors.ink : colors.paper }}>
                   <Text selectable style={{ ...mobileType.body, color: turn.role === 'user' ? colors.paper : colors.ink }}>{turn.content}</Text>
                 </View>
-                {turn.role === 'assistant' ? <Sources citations={turn.citations || []} /> : null}
+                {turn.role === 'assistant' ? <Sources citations={turn.citations || []} onExpand={() => requestAnimationFrame(() => conversationScrollRef.current?.scrollToEnd({ animated: true }))} /> : null}
               </View>
             ))}
             {asking ? <SearchingStatus /> : null}
@@ -353,9 +439,14 @@ export function AssistantScreen({ inTab = false }: { inTab?: boolean }) {
       ) : (
         <ScrollView contentContainerStyle={{ paddingHorizontal: space[4], paddingTop: space[2], paddingBottom: inTab ? 120 : space[8], gap: space[4] }} testID="assistant-home">
           {error ? <Text testID="assistant-error" style={{ ...mobileType.bodySmall, color: colors.danger }}>{error}</Text> : null}
-          <View>
-            <SectionLabel title="Recent" detail={threads.length ? String(threads.length) : undefined} />
-            {threads.length ? threads.map((thread) => (
+          <AssistantHomeSection title="Recommended for you">
+            <AskRecommendationRail onSelect={(prompt) => void ask(prompt)} />
+          </AssistantHomeSection>
+          <AssistantHomeSection title="More ways I can help">
+            <AskToolGrid onSelect={(prompt) => void ask(prompt)} />
+          </AssistantHomeSection>
+          <AssistantHomeSection title="Recent">
+            {threads.length ? threads.slice(0, 4).map((thread) => (
               <Pressable key={thread.id} onPress={() => void loadThread(thread)} testID={`assistant-thread-${thread.id}`}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[3], paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.neutral[200] }}>
                   <View style={{ width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.paper }}>
@@ -373,11 +464,8 @@ export function AssistantScreen({ inTab = false }: { inTab?: boolean }) {
                 New starts a thread. Claire never sends messages from here.
               </Text>
             )}
-          </View>
-          <View>
-            <SectionLabel title="More ways I can help" />
-            <AskToolGrid onSelect={(prompt) => void ask(prompt)} />
-          </View>
+            {threads.length > 4 ? <Pressable testID="assistant-see-more" accessibilityRole="button" accessibilityLabel={`See ${threads.length - 4} more Ask Claire conversations`} onPress={() => router.push('/assistant/recents')}><View style={{ minHeight: 50, flexDirection: 'row', alignItems: 'center', gap: space[2], borderBottomWidth: 1, borderBottomColor: colors.neutral[200] }}><Text style={{ ...mobileType.bodySmall, flex: 1, fontWeight: '800', color: colors.ink }}>See more conversations</Text><Text style={{ ...mobileType.monoLabel, color: colors.neutral[600] }}>{threads.length - 4}</Text><ChevronRight size={17} color={colors.ink} /></View></Pressable> : null}
+          </AssistantHomeSection>
         </ScrollView>
       )}
     </SafeAreaView>
@@ -399,7 +487,6 @@ function DesktopAssistantWorkspace({ threads, activeThread, turns, loading, ques
 }) {
   if (loading) return <DesktopAskClaireSkeleton />;
 
-  const title = activeThread?.title || threads[0]?.title || 'New conversation';
   const shownTurns = turns.slice(-2);
   return <View style={{ flex: 1, minHeight: 0, flexDirection: 'row', backgroundColor: '#FAF9F5' }} testID="desktop-assistant-screen">
     <View style={{ width: 210, flexShrink: 0, padding: space[3], backgroundColor: '#F4F2EC', borderRightWidth: 1, borderColor: colors.neutral[200] }}><View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 16 }}><Sparkles size={16} color={colors.ink} /><Text style={{ ...mobileType.monoLabel, color: colors.ink }}>ASK CLAIRE</Text><Pressable onPress={onCreate} style={{ marginLeft: 'auto' }}><View style={{ width: 26, height: 26, borderRadius: 8, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' }}><Plus size={15} color={colors.paper} /></View></Pressable></View>{threads.map((thread, index) => <Pressable key={thread.id} onPress={() => onSelect(thread)}><View style={{ padding: 10, borderRadius: 11, borderWidth: activeThread?.id === thread.id || (!activeThread && index === 0) ? 1 : 0, borderColor: colors.ink, backgroundColor: activeThread?.id === thread.id || (!activeThread && index === 0) ? colors.lime : 'transparent', marginBottom: 5 }}><Text numberOfLines={1} style={{ ...mobileType.bodySmall, fontWeight: '700', color: colors.ink }}>{thread.title || 'Untitled'}</Text><Text numberOfLines={1} style={{ ...mobileType.label, color: colors.neutral[600] }}>Conversation context · {formatThreadTime(thread.updated_at || thread.created_at)}</Text></View></Pressable>)}{!threads.length ? <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>Start a private question about your conversations.</Text> : null}<View style={{ marginTop: 'auto', paddingTop: 14, borderTopWidth: 1, borderColor: colors.neutral[200] }}><Text style={{ ...mobileType.monoLabel, color: colors.neutral[600] }}>PRIVATE BY DEFAULT</Text><Text style={{ ...mobileType.label, color: colors.neutral[600], marginTop: 5 }}>Claire cites connected messages and never sends from this workspace.</Text></View></View>

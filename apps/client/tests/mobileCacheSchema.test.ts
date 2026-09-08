@@ -124,3 +124,24 @@ describe('snapshot memoisation', () => {
     expect(db.getAllAsync.mock.calls.length).toBeGreaterThan(afterFirst);
   });
 });
+
+describe('loop snapshot write-through', () => {
+  beforeEach(() => { jest.resetModules(); });
+
+  it('atomically replaces the loop replica after a network fetch', async () => {
+    const { db } = mockNativeSqlite();
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const cache = require('../services/mobile-cache.native') as typeof import('../services/mobile-cache.native');
+
+    await cache.replaceCachedLoops('user-1', [
+      { id: 'loop-1', content: 'Send the deck' },
+      { id: 'loop-2', content: 'Confirm dinner' },
+    ]);
+
+    expect(db.withTransactionAsync).toHaveBeenCalledTimes(1);
+    expect(db.runAsync.mock.calls.some((call) => call[0] === 'DELETE FROM cache_loops')).toBe(true);
+    const loopWrites = db.runAsync.mock.calls.filter((call) => String(call[0]).includes('INSERT INTO cache_loops'));
+    expect(loopWrites).toHaveLength(2);
+    expect(db.runAsync.mock.calls.some((call) => call[1] === 'loops_snapshot_at')).toBe(true);
+  });
+});

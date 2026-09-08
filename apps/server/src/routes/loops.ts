@@ -74,6 +74,7 @@ const updateLoopSchema = z.object({
   }),
   body: z.object({
     status: z.enum(['open', 'waiting', 'snoozed', 'done', 'dropped']).optional(),
+    owner: z.enum(['me', 'them', 'shared', 'unknown']).optional(),
     notes: z.string().optional(),
     deadline: z.string().datetime().optional(),
     priority: z.enum(['low', 'medium', 'high']).optional(),
@@ -372,7 +373,7 @@ router.post(
 
 /**
  * PATCH /loops/:id
- * Update status, notes, deadline, or priority of a loop.
+ * Update workflow, ownership, notes, deadline, or priority of a loop.
  */
 router.patch(
   '/:id',

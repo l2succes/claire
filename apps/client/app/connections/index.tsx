@@ -15,6 +15,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { readQuerySnapshot, writeQuerySnapshot } from '../../services/mobile-cache';
 import { ConnectionPlatformMark } from '../../features/connections/connection-platform-mark';
 import { ConnectionRow, type ConnectionRowState } from '../../features/connections/connection-row';
+import { RoadmapConnectionRow } from '../../features/connections/roadmap-connection-row';
 import { CONNECTION_PLATFORM_CONFIG, connectionRoute } from '../../features/connections/connection-platform-config';
 
 function ConnectionMark({ definition }: { definition: PlatformDefinition }) {
@@ -128,8 +129,12 @@ export default function ConnectionsScreen() {
       return;
     }
     if (definition.supportStatus === 'planned' || definition.supportStatus === 'unavailable') {
-      await platformsApi.requestPlatformInterest(definition.id);
-      setRequested(current => current.includes(definition.id) ? current : [...current, definition.id]);
+      try {
+        await platformsApi.requestPlatformInterest(definition.id);
+        setRequested(current => current.includes(definition.id) ? current : [...current, definition.id]);
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : `Could not request ${definition.name}.`);
+      }
     }
   };
 
@@ -250,9 +255,17 @@ export default function ConnectionsScreen() {
             ) : null}
             {roadmap.length ? (
               <View>
-                <SectionLabel title="On the roadmap" detail="Vote with a tap" />
+                <SectionLabel title="On the roadmap" detail="Request the networks you want next" />
                 <View style={{ backgroundColor: colors.paper, borderRadius: radius.card, paddingHorizontal: space[3], marginTop: space[2] }}>
-                  {roadmap.map((item, index) => renderRow(item, index === roadmap.length - 1))}
+                  {roadmap.map((item, index) => (
+                    <RoadmapConnectionRow
+                      key={item.id}
+                      definition={item}
+                      requested={requested.includes(item.id)}
+                      isLast={index === roadmap.length - 1}
+                      onRequest={() => void act(item)}
+                    />
+                  ))}
                 </View>
               </View>
             ) : null}

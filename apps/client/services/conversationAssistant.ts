@@ -1,5 +1,6 @@
-import { supabase } from './supabase';
 import { API_BASE_URL } from './platforms';
+import { authenticatedFetch } from './authenticated-fetch';
+import { clientSafeMessage } from './api-errors';
 
 export interface AssistantCitation {
   messageId: string;
@@ -47,17 +48,17 @@ export interface AssistantIndexStatus {
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const { data: { session } } = await supabase.auth.getSession();
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await authenticatedFetch(`${API_BASE_URL}${path}`, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
-      ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
       ...init.headers,
     },
   });
   const body = await response.json().catch(() => ({})) as { data?: T; error?: string };
-  if (!response.ok) throw new Error(body.error || `Request failed (${response.status})`);
+  if (!response.ok) {
+    throw new Error(clientSafeMessage({ response: { status: response.status, data: body } }));
+  }
   return body.data as T;
 }
 

@@ -59,6 +59,7 @@ import { MobileAvatar, MobileIconButton } from '../../components/mobile/claire-m
 import { cacheTimeline } from '../../services/mobile-cache';
 import {
   inboxQueryPrefix,
+  markInboxConversationRead,
   patchInboxChat,
   patchInboxRealtimeMessage,
 } from '../../hooks/useInboxMessages';
@@ -87,6 +88,7 @@ import {
 } from '@claire/chat-core';
 import { VoiceMessageBubble } from '../../features/chat/voice-message-bubble';
 import { StandaloneEmojiMessage } from '../../features/chat/standalone-emoji-message';
+import { MessageTextWithLinks } from '../../features/chat/message-link-card';
 
 function InjectedBubble({
   animate,
@@ -388,6 +390,7 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
   });
   const accessToken = useAuthStore((state) => state.token);
   const connectedSessions = usePlatformStore((state) => state.connectedSessions);
+  const sessionSyncStatus = usePlatformStore((state) => state.sessionSyncStatus);
   const availablePlatforms = usePlatformStore((state) => state.availablePlatforms);
   // Selectors, not a bare destructure: subscribing to the whole store re-rendered
   // this screen on every settings mutation for every conversation. Only this
@@ -490,6 +493,8 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
     (session) => session.platform === (resolvedPlatform as Platform) && session.status === 'connected'
   );
   const isConnected = !!activeSession;
+  const connectionIsAuthoritativelyDisconnected =
+    !isConnected && sessionSyncStatus === 'ready' && !connectionRefreshing;
   const contextCard = smartCards[0];
   const quickContext =
     contextCard?.subtitle ||
@@ -550,6 +555,9 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
       (candidate) =>
         candidate.platform === (resolvedPlatform as Platform) && candidate.status === 'connected'
     );
+    // Clear every visible/local representation before the network request. A
+    // quick back gesture must not be able to strand the old count in the inbox.
+    markInboxConversationRead(queryClient, user?.id, chatId, resolvedPlatform as Platform);
     try {
       await platformsApi.markChatRead(chatId, session?.id);
       // Realtime normally carries this chat-row update back to the inbox, but
@@ -738,31 +746,28 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
     return { listData: reversed, lastInbound: inbound, latestInjectedId: injected };
   }, [messages]);
 
-  // Mark read once per newest inbound message, whatever delivered it: the first
-  // fetch, the app-wide realtime channel, a local-cache seed, or a refetch after
-  // reconnecting. The old trigger fired only from this screen's own INSERT
-  // subscription, so anything already merged into the cache before the screen
-  // mounted left the conversation reading as unread. An empty token covers a
-  // conversation with no inbound messages, which still needs one call on open.
+  // Start the local/server read transition on mount. This used to wait for the
+  // push animation and its cleanup cancelled the work when the user went back
+  // quickly — exactly the path that left the inbox count stale.
   const markedInboundRef = useRef<string | null>(null);
   useEffect(() => {
-    markedInboundRef.current = null;
+    if (!chatId) return;
+    markedInboundRef.current = '__opening__';
+    void chatEffectRef.current.markConversationRead();
   }, [chatId]);
+  // A newly arriving inbound message while the conversation remains open needs
+  // a new read cursor. The first timeline payload is already covered by the
+  // mount call, so adopt that token without issuing a duplicate request.
   useEffect(() => {
     if (!chatId || timeline.isPending) return;
     const token = lastInbound?.id ?? '';
-    if (markedInboundRef.current === token) return;
-    let settled = false;
-    // Still deferred: this is a POST plus an inbox cache patch, and neither is
-    // worth contending with the push animation.
-    const handle = InteractionManager.runAfterInteractions(() => {
-      settled = true;
+    if (markedInboundRef.current === '__opening__') {
       markedInboundRef.current = token;
-      void chatEffectRef.current.markConversationRead();
-    });
-    return () => {
-      if (!settled) handle.cancel();
-    };
+      return;
+    }
+    if (markedInboundRef.current === token) return;
+    markedInboundRef.current = token;
+    void chatEffectRef.current.markConversationRead();
   }, [chatId, timeline.isPending, lastInbound?.id]);
   const messageById = useMemo(
     () => new Map(messages.map((message) => [message.id, message])),
@@ -786,6 +791,13 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
       setSendError(null);
     }
   }, [inputText, sendError]);
+
+  // A refreshed auth session makes an error from the prior token obsolete.
+  // Without this, a successful background refresh could leave the old banner
+  // pinned above a fully usable composer.
+  useEffect(() => {
+    setSendError(null);
+  }, [accessToken]);
 
   const handleSend = useCallback(async () => {
     if (textSendInFlightRef.current) return;
@@ -1270,19 +1282,13 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
     // hint so they do not read as body copy.
     const body = parseMediaCaption(item.content, { dropSelfLinks: false });
     if (!body.badge && !body.hint) {
-      return (
-        <Text style={{ ...mobileType.body, color: textColor, textAlign: 'left' }}>
-          {body.text ?? item.content}
-        </Text>
-      );
+      return <MessageTextWithLinks text={body.text ?? item.content} fromMe={item.from_me} />;
     }
     return (
       <View>
         {body.badge ? <MessageBadge label={body.badge} testID={`text-badge-${item.id}`} /> : null}
         {body.text ? (
-          <Text style={{ ...mobileType.body, color: textColor, textAlign: 'left' }}>
-            {body.text}
-          </Text>
+          <MessageTextWithLinks text={body.text} fromMe={item.from_me} />
         ) : null}
         {body.hint ? (
           <MessageHint
@@ -1698,12 +1704,12 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
             backgroundColor: colors.cream,
           }}
         >
-          {!isConnected && resolvedPlatform ? (
+          {connectionIsAuthoritativelyDisconnected && resolvedPlatform ? (
             <Pressable
               testID="chat-reconnect"
               accessibilityRole="button"
               onPress={() => router.push('/connections')}
-              style={({ pressed }) => ({
+              style={{
                 minHeight: 48,
                 flexDirection: 'row',
                 alignItems: 'center',
@@ -1712,16 +1718,47 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
                 borderRadius: 16,
                 borderWidth: 1,
                 borderColor: colors.warning,
-                backgroundColor: pressed ? colors.warningSurface : colors.paper,
-                opacity: connectionRefreshing ? 0.65 : 1,
-              })}
+                backgroundColor: colors.paper,
+              }}
             >
               <Link2 size={18} color={colors.warning} />
               <Text
                 maxFontSizeMultiplier={1}
                 style={{ ...mobileType.bodySmall, fontWeight: '700', color: colors.warning }}
               >
-                {connectionRefreshing ? 'Checking connection…' : `Reconnect ${resolvedPlatform}`}
+                {`Reconnect ${resolvedPlatform}`}
+              </Text>
+            </Pressable>
+          ) : !isConnected && resolvedPlatform ? (
+            <Pressable
+              testID="chat-check-connection"
+              accessibilityRole="button"
+              accessibilityLabel="Check connection again"
+              accessibilityState={{ disabled: connectionRefreshing || sessionSyncStatus === 'refreshing' }}
+              disabled={connectionRefreshing || sessionSyncStatus === 'refreshing'}
+              onPress={() => void refreshConnection()}
+              style={{
+                minHeight: 48,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: space[2],
+                borderRadius: 16,
+                borderWidth: 1,
+                borderColor: colors.neutral[300],
+                backgroundColor: colors.paper,
+                opacity: connectionRefreshing || sessionSyncStatus === 'refreshing' ? 0.65 : 1,
+              }}
+            >
+              {connectionRefreshing || sessionSyncStatus === 'refreshing' ? (
+                <ActivityIndicator size="small" color={colors.neutral[600]} />
+              ) : (
+                <Link2 size={18} color={colors.neutral[600]} />
+              )}
+              <Text maxFontSizeMultiplier={1} style={{ ...mobileType.bodySmall, fontWeight: '700', color: colors.neutral[600] }}>
+                {connectionRefreshing || sessionSyncStatus === 'refreshing'
+                  ? 'Checking connection…'
+                  : 'Could not verify connection · Try again'}
               </Text>
             </Pressable>
           ) : (

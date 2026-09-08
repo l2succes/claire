@@ -33,7 +33,7 @@ jest.mock('../services/supabase', () => {
   return { supabase: { from: jest.fn(() => builder) } };
 });
 
-import { patchInboxChat, patchInboxRealtimeMessage, useInboxMessages } from '../hooks/useInboxMessages';
+import { markInboxConversationRead, patchInboxChat, patchInboxRealtimeMessage, useInboxMessages } from '../hooks/useInboxMessages';
 
 const USER = 'user-1';
 
@@ -145,5 +145,34 @@ describe('inbox realtime write-through', () => {
     const patch = mockPatchCachedChat.mock.calls[0][2] as Record<string, unknown>;
     expect(patch).not.toHaveProperty('latest_message');
     expect(patch).not.toHaveProperty('contact');
+  });
+
+  it('clears every feed variant and removes the row from Unread immediately', () => {
+    const client = makeClient();
+    const message = {
+      id: 'm-c1',
+      conversation_key: `${Platform.WHATSAPP}:c1`,
+      chat_id: 'c1',
+      content: 'hello',
+      timestamp: '2026-09-07T10:00:00.000Z',
+      from_me: false,
+      platform: Platform.WHATSAPP,
+      unread_count: 3,
+      has_ai_response: false,
+      is_pinned: false,
+    };
+    const data = { pages: [{ messages: [message], hasMore: false, nextCursor: null }], pageParams: [null] };
+    const allKey = ['messages-feed', USER, '', 'all', 'all'];
+    const unreadKey = ['messages-feed', USER, '', 'unread', 'all'];
+    client.setQueryData(allKey, data);
+    client.setQueryData(unreadKey, data);
+
+    markInboxConversationRead(client, USER, 'c1', Platform.WHATSAPP);
+
+    const all = client.getQueryData<typeof data>(allKey);
+    const unread = client.getQueryData<typeof data>(unreadKey);
+    expect(all?.pages[0].messages[0].unread_count).toBe(0);
+    expect(unread?.pages[0].messages).toHaveLength(0);
+    expect(mockPatchCachedChat).toHaveBeenCalledWith(USER, 'c1', { unread_count: 0 });
   });
 });

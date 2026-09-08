@@ -35,7 +35,7 @@ export function fetchLoopDetail(id: string): Promise<LoopDetail> {
 }
 
 export function updateLoop(id: string, patch: Partial<Pick<LoopItem,
-  'status' | 'notes' | 'deadline' | 'priority' | 'content'>>): Promise<LoopItem> {
+  'status' | 'owner' | 'notes' | 'deadline' | 'priority' | 'content'>>): Promise<LoopItem> {
   return request<LoopItem>(`/loops/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
 }
 

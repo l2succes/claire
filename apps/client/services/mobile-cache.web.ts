@@ -90,6 +90,14 @@ export async function cachedLoops(userId: string): Promise<Array<Record<string, 
   return (await load(userId)).loops || [];
 }
 
+export async function replaceCachedLoops(
+  userId: string,
+  loops: Array<Record<string, unknown>>,
+): Promise<void> {
+  const snapshot = await load(userId);
+  await persist(userId, { ...snapshot, loops, lastSyncAt: new Date().toISOString() });
+}
+
 export async function cachedLoop(userId: string, loopId: string): Promise<Record<string, unknown> | null> {
   const loops = (await load(userId)).loops || [];
   return (loops as Array<Record<string, unknown>>).find((loop) => loop.id === loopId) ?? null;

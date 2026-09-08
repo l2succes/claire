@@ -26,6 +26,7 @@ interface PlatformState {
   activeAuthFlow: AuthFlowState | null;
   isLoading: boolean;
   isInitialized: boolean;
+  sessionSyncStatus: 'idle' | 'refreshing' | 'ready' | 'unavailable';
   error: string | null;
 
   // Polling control
@@ -134,6 +135,7 @@ export const usePlatformStore = create<PlatformState>()(persist((set, get) => ({
   activeAuthFlow: null,
   isLoading: false,
   isInitialized: false,
+  sessionSyncStatus: 'idle',
   error: null,
   _pollController: null,
 
@@ -237,17 +239,19 @@ export const usePlatformStore = create<PlatformState>()(persist((set, get) => ({
    * Fetch all connected sessions
    */
   fetchConnectedSessions: async () => {
+    set({ sessionSyncStatus: 'refreshing' });
     try {
       const sessions = await platformsApi.getAllSessions();
-      set({ connectedSessions: sessions });
+      set({ connectedSessions: sessions, sessionSyncStatus: 'ready' });
 
       return sessions;
     } catch (error) {
       console.error('Failed to fetch sessions:', error);
-      // Never present a cached connection as authoritative. A stale badge can
-      // reopen an invalid auth flow or hide a disconnected bridge.
-      set({ connectedSessions: [] });
-      return [];
+      // A failed check is not evidence that a bridge disconnected. Keep the
+      // last known connected session so a brief auth/network failure cannot
+      // replace the composer with a false reconnect prompt.
+      set({ sessionSyncStatus: 'unavailable' });
+      return get().connectedSessions;
     }
   },
 
@@ -540,6 +544,7 @@ export const usePlatformStore = create<PlatformState>()(persist((set, get) => ({
       activeAuthFlow: null,
       isLoading: false,
       isInitialized: false,
+      sessionSyncStatus: 'idle',
       error: null,
       _pollController: null,
     });
@@ -561,7 +566,7 @@ export const usePlatformStore = create<PlatformState>()(persist((set, get) => ({
    * codes -- transient auth secrets that must never reach disk. Only connected
    * sessions are stored, because a stale "awaiting_auth" chip on launch would
    * offer to resume an auth flow that died with the last process. And
-   * `isInitialized` is left out so the store still refetches on every launch:
+   * `isInitialized` and `sessionSyncStatus` are left out so the store still refetches on every launch:
    * what is persisted is a hint for the first frame, not an authority on what
    * is actually connected.
    */
@@ -570,7 +575,7 @@ export const usePlatformStore = create<PlatformState>()(persist((set, get) => ({
     activePlatformFilter: state.activePlatformFilter,
     connectedSessions: state.connectedSessions
       .filter((session) => session.status === PlatformStatus.CONNECTED)
-      .map(({ authData, error, ...session }) => session),
+      .map(({ authData: _authData, error: _error, ...session }) => session),
   }),
 }));
 
