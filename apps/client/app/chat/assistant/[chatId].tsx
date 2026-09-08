@@ -9,6 +9,7 @@ import { platformsApi } from '../../../services/platforms';
 import { supabase } from '../../../services/supabase';
 import { useAuthStore } from '../../../stores/authStore';
 import { MobileIconButton, MobileSearchField } from '../../../components/mobile/claire-mobile';
+import { AssistantAnswerActions } from '../../../components/claire/assistant-answer-actions';
 
 type QuickAction = {
   label: string;
@@ -151,6 +152,7 @@ export default function ConversationAssistantScreen() {
             ) : (
               <View style={{ gap: space[2] }}>
                 <View style={{ alignSelf: 'flex-start', maxWidth: '94%', padding: space[4], borderRadius: radius.card, borderBottomLeftRadius: 6, backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.neutral[300] }}><Text selectable style={{ ...mobileType.body, color: colors.ink }}>{item.content}</Text></View>
+                <AssistantAnswerActions actions={item.actions} />
                 {item.citations?.slice(0, 3).map(citation => <Pressable key={`${item.id}-${citation.messageId}`} onPress={() => openCitation(citation)} style={({ pressed }) => ({ padding: space[3], borderRadius: radius.control, borderWidth: 1, borderColor: colors.neutral[300], backgroundColor: pressed ? colors.paper : 'rgba(255,255,255,0.48)', gap: 3 })}><View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}><Text style={{ ...mobileType.label, color: colors.ink, flex: 1 }}>{citation.senderName} · {new Date(citation.timestamp).toLocaleDateString()}</Text><ExternalLink size={14} color={colors.neutral[600]} /></View><Text numberOfLines={2} style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{citation.excerpt}</Text></Pressable>)}
               </View>
             )}

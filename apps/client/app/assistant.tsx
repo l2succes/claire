@@ -7,8 +7,10 @@ import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CheckCircle2, Messag
 import { colors, mobileType, radius, space, useIsDesktopLayout } from '@claire/design-system';
 import { MobileIconButton, SectionLabel } from '../components/mobile/claire-mobile';
 import { AskComposer, AskToolGrid } from '../components/claire/composer';
+import { AssistantAnswerActions } from '../components/claire/assistant-answer-actions';
 import { ClaireMark } from '../components/claire/mark';
 import { AskClaireSkeleton, DesktopAskClaireSkeleton } from '../components/claire/skeleton';
+import { PlatformName } from '../components/PlatformIcon';
 import { useChromeStore } from '../stores/chromeStore';
 import { useAuthStore } from '../stores/authStore';
 import { readQuerySnapshot, writeQuerySnapshot } from '../services/mobile-cache';
@@ -32,6 +34,7 @@ function formatThreadTime(value: string) {
 function Sources({ citations, onExpand }: { citations: AssistantCitation[]; onExpand: () => void }) {
   const [expanded, setExpanded] = useState(false);
   if (!citations.length) return null;
+  const previewSources = citations.slice(0, 3);
   return (
     <View style={{ gap: space[2] }} testID="assistant-sources">
       <Pressable
@@ -45,13 +48,27 @@ function Sources({ citations, onExpand }: { citations: AssistantCitation[]; onEx
           return next;
         })}
       >
-        <View style={{ minHeight: 40, flexDirection: 'row', alignItems: 'center', gap: space[2], paddingHorizontal: space[3], borderRadius: radius.control, borderCurve: 'continuous', borderWidth: 1, borderColor: colors.neutral[300], backgroundColor: colors.neutral[100] }}>
-          <Text selectable maxFontSizeMultiplier={1} numberOfLines={1} style={{ ...mobileType.label, flex: 1, color: colors.ink }}>Sources · {citations.length}</Text>
-          {expanded ? <ChevronUp size={17} color={colors.ink} /> : <ChevronDown size={17} color={colors.ink} />}
+        <View style={{ minHeight: 32, flexDirection: 'row', alignItems: 'center', gap: space[2] }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingRight: space[1] }}>
+            {previewSources.map((citation, index) => {
+              const name = citation.fromMe ? 'You' : citation.senderName;
+              const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || '?';
+              return (
+                <View key={citation.messageId} style={{ width: 25, height: 25, marginLeft: index ? -7 : 0, borderRadius: 13, borderWidth: 2, borderColor: colors.sky, alignItems: 'center', justifyContent: 'center', backgroundColor: index % 2 ? colors.lime : colors.cream }}>
+                  <Text maxFontSizeMultiplier={1} style={{ fontSize: 9, lineHeight: 11, fontWeight: '800', color: colors.ink }}>{initials}</Text>
+                </View>
+              );
+            })}
+          </View>
+          <Text selectable maxFontSizeMultiplier={1} style={{ ...mobileType.label, color: colors.ink }}>Sources</Text>
+          <Text selectable maxFontSizeMultiplier={1} style={{ ...mobileType.label, color: colors.neutral[600] }}>{citations.length}</Text>
+          <View style={{ marginLeft: 'auto' }}>
+            {expanded ? <ChevronUp size={17} color={colors.neutral[600]} /> : <ChevronDown size={17} color={colors.neutral[600]} />}
+          </View>
         </View>
       </Pressable>
       {expanded ? (
-        <ScrollView horizontal style={{ height: 140 }} showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space[2], paddingRight: space[4], paddingBottom: space[1] }} testID="assistant-sources-carousel">
+        <ScrollView horizontal style={{ height: 148, marginHorizontal: -space[4] }} showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space[2], paddingLeft: space[4] }} testID="assistant-sources-carousel">
           {citations.map((citation) => (
             <Pressable
               key={citation.messageId}
@@ -70,13 +87,20 @@ function Sources({ citations, onExpand }: { citations: AssistantCitation[]; onEx
                 },
               })}
             >
-              <View style={{ width: 272, minHeight: 132, justifyContent: 'space-between', gap: space[2], padding: space[3], borderRadius: radius.control, borderCurve: 'continuous', borderWidth: 1, borderColor: colors.neutral[300], backgroundColor: colors.cream }}>
-                <View style={{ gap: 3 }}>
-                  <Text selectable maxFontSizeMultiplier={1} numberOfLines={1} style={{ ...mobileType.label, fontWeight: '800', color: colors.ink }}>{citation.fromMe ? 'You' : citation.senderName} · {new Date(citation.timestamp).toLocaleDateString()}</Text>
-                  <Text selectable maxFontSizeMultiplier={1} numberOfLines={1} style={{ ...mobileType.label, color: colors.neutral[600] }}>{citation.platform}{citation.isPreferredScope === false ? ' · also relevant' : ''}</Text>
+              <View style={{ width: 264, minHeight: 144, justifyContent: 'space-between', gap: space[2], padding: space[3], borderRadius: radius.card, borderCurve: 'continuous', borderWidth: 1, borderColor: colors.infoBorder, backgroundColor: colors.infoSurface }}>
+                <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: space[2] }}>
+                  <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+                    <Text selectable maxFontSizeMultiplier={1} numberOfLines={1} style={{ ...mobileType.bodySmall, fontWeight: '800', color: colors.ink }}>{citation.fromMe ? 'You' : citation.senderName}</Text>
+                    <PlatformName platform={citation.platform} size={14} />
+                  </View>
+                  <Text selectable maxFontSizeMultiplier={1} numberOfLines={1} style={{ ...mobileType.label, color: colors.neutral[600], fontVariant: ['tabular-nums'] }}>{new Date(citation.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</Text>
                 </View>
-                <Text selectable maxFontSizeMultiplier={1} numberOfLines={4} style={{ ...mobileType.bodySmall, color: colors.neutral[800] }}>{citation.excerpt}</Text>
-                <Text maxFontSizeMultiplier={1} style={{ ...mobileType.label, color: colors.neutral[600] }}>Open conversation →</Text>
+                <Text selectable maxFontSizeMultiplier={1} numberOfLines={3} style={{ ...mobileType.body, color: colors.neutral[800], lineHeight: 21 }}>{citation.excerpt}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                  <Text maxFontSizeMultiplier={1} style={{ ...mobileType.label, color: colors.ink }}>Open chat</Text>
+                  <ChevronRight size={15} color={colors.ink} />
+                  {citation.isPreferredScope === false ? <Text maxFontSizeMultiplier={1} numberOfLines={1} style={{ ...mobileType.label, color: colors.neutral[600], marginLeft: 2 }}>Also relevant</Text> : null}
+                </View>
               </View>
             </Pressable>
           ))}
@@ -311,6 +335,7 @@ export function AssistantScreen({ inTab = false }: { inTab?: boolean }) {
         role: 'assistant',
         content: result.answer,
         citations: result.citations,
+        actions: result.actions,
         scope_chat_ids: scopeChatIds,
         created_at: new Date().toISOString(),
       }]);
@@ -412,6 +437,7 @@ export function AssistantScreen({ inTab = false }: { inTab?: boolean }) {
                 <View style={{ padding: space[4], borderRadius: radius.card, borderCurve: 'continuous', borderWidth: turn.role === 'assistant' ? 1 : 0, borderColor: colors.ink, backgroundColor: turn.role === 'user' ? colors.ink : colors.paper }}>
                   <Text selectable style={{ ...mobileType.body, color: turn.role === 'user' ? colors.paper : colors.ink }}>{turn.content}</Text>
                 </View>
+                {turn.role === 'assistant' ? <AssistantAnswerActions actions={turn.actions} /> : null}
                 {turn.role === 'assistant' ? <Sources citations={turn.citations || []} onExpand={() => requestAnimationFrame(() => conversationScrollRef.current?.scrollToEnd({ animated: true }))} /> : null}
               </View>
             ))}

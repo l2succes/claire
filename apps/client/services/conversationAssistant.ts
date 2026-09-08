@@ -15,6 +15,17 @@ export interface AssistantCitation {
   isPreferredScope?: boolean;
 }
 
+export interface AssistantAction {
+  type: 'open_conversation' | 'open_calendar';
+  label: string;
+  chatId?: string;
+  chatName?: string | null;
+  platform?: string;
+  isGroup?: boolean;
+  title?: string;
+  startsAt?: string;
+}
+
 export interface AssistantThread {
   id: string;
   title: string;
@@ -28,6 +39,7 @@ export interface AssistantTurn {
   role: 'user' | 'assistant';
   content: string;
   citations: AssistantCitation[];
+  actions?: AssistantAction[];
   scope_chat_ids?: string[];
   created_at: string;
 }
@@ -69,7 +81,7 @@ export const conversationAssistantApi = {
   }),
   getThread: (threadId: string) => request<{ thread: AssistantThread; turns: AssistantTurn[] }>(`/ai/assistant/threads/${encodeURIComponent(threadId)}`),
   deleteThread: (threadId: string) => request<void>(`/ai/assistant/threads/${encodeURIComponent(threadId)}`, { method: 'DELETE' }),
-  ask: (threadId: string, question: string, chatIds: string[] = []) => request<{ answer: string; citations: AssistantCitation[]; indexing: AssistantIndexStatus }>(
+  ask: (threadId: string, question: string, chatIds: string[] = []) => request<{ answer: string; citations: AssistantCitation[]; actions: AssistantAction[]; indexing: AssistantIndexStatus }>(
     `/ai/assistant/threads/${encodeURIComponent(threadId)}/messages`,
     { method: 'POST', body: JSON.stringify({ question, chatIds }) },
   ),
@@ -84,7 +96,7 @@ export const conversationAssistantApi = {
       throw error;
     }
   },
-  askConversation: (chatId: string, question: string) => request<{ thread: AssistantThread; turns: AssistantTurn[]; answer: string; citations: AssistantCitation[]; indexing: AssistantIndexStatus }>(
+  askConversation: (chatId: string, question: string) => request<{ thread: AssistantThread; turns: AssistantTurn[]; answer: string; citations: AssistantCitation[]; actions: AssistantAction[]; indexing: AssistantIndexStatus }>(
     `/ai/assistant/conversations/${encodeURIComponent(chatId)}/messages`,
     { method: 'POST', body: JSON.stringify({ question }) },
   ),
