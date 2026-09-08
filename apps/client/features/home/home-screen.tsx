@@ -179,9 +179,7 @@ export function HomeScreen() {
       refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => void refresh()} tintColor={colors.ink} />}
     >
       <MobileHeader
-        eyebrow={new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
         title={`${greeting()},\n${firstName}.`}
-        subtitle={actionCount === 0 ? "You're clear right now." : `${actionCount} item${actionCount === 1 ? '' : 's'} need${actionCount === 1 ? 's' : ''} your attention.`}
         safeArea
         profile={
           <Pressable accessibilityRole="button" accessibilityLabel="Open settings" onPress={() => router.push('/settings')}>
@@ -256,4 +254,3 @@ export function HomeScreen() {
     </ScrollView>
   );
 }
-

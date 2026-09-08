@@ -282,14 +282,56 @@ export function patchInboxChat(
     let changed = false;
     const pages = old.pages.map((page) => ({
       ...page,
-      messages: page.messages.map((message) => {
+      messages: sortMessages(page.messages.map((message) => {
         if (message.conversation_key !== key || (message.unread_count === chat.unread_count && message.is_pinned === chat.is_pinned)) return message;
         changed = true;
         return { ...message, unread_count: chat.unread_count ?? message.unread_count ?? 0, is_pinned: chat.is_pinned ?? message.is_pinned };
-      }),
+      })),
     }));
     return changed ? { ...old, pages } : old;
   });
+}
+
+/**
+ * Apply the user-visible half of a read receipt immediately.
+ *
+ * Opening a conversation is enough intent to clear its badge. Waiting for the
+ * server round-trip made a quick push-and-pop keep the old count on screen, and
+ * a row in the Unread feed cannot merely be changed to zero — it no longer
+ * belongs in that result set at all.
+ */
+export function markInboxConversationRead(
+  queryClient: QueryClient,
+  userId: string | undefined,
+  chatId: string,
+  platform: Platform = Platform.WHATSAPP,
+) {
+  const key = conversationKey(chatId, platform);
+  if (usesNativeMobileCache() && userId) {
+    void patchCachedChat(userId, chatId, { unread_count: 0 }).catch(() => undefined);
+  }
+  const queries = queryClient.getQueryCache().findAll({ queryKey: inboxQueryPrefix(userId) });
+  for (const query of queries) {
+    const [, , , filter] = query.queryKey as ReturnType<typeof inboxQueryKey>;
+    queryClient.setQueryData<InboxQueryData>(query.queryKey, (old) => {
+      if (!old) return old;
+      let changed = false;
+      const pages = old.pages.map((page) => {
+        if (filter === 'unread') {
+          const messages = page.messages.filter((message) => message.conversation_key !== key);
+          if (messages.length !== page.messages.length) changed = true;
+          return messages === page.messages ? page : { ...page, messages };
+        }
+        const messages = page.messages.map((message) => {
+          if (message.conversation_key !== key || !message.unread_count) return message;
+          changed = true;
+          return { ...message, unread_count: 0 };
+        });
+        return messages === page.messages ? page : { ...page, messages };
+      });
+      return changed ? { ...old, pages } : old;
+    });
+  }
 }
 
 export function markInboxAiResponse(queryClient: QueryClient, userId: string | undefined, messageId: string) {

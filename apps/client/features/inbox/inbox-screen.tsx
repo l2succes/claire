@@ -1,23 +1,31 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Modal, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
-import { CheckCircle2, PenSquare, Pin, Search, Sparkles, X } from 'lucide-react-native';
+import { Check, CheckCircle2, Clock3, PenSquare, Pin, Search, Sparkles, X } from 'lucide-react-native';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { colors, mobileType, radius, space, useIsDesktopLayout } from '@claire/design-system';
 import { MobileChip, MobileHeader, MobileIconButton, MobileSearchField, MobileState, SectionLabel } from '../../components/mobile/claire-mobile';
-import { useInboxMessages, type InboxMessage } from '../../hooks/useInboxMessages';
+import {
+  inboxQueryPrefix,
+  markInboxConversationRead,
+  patchInboxChat,
+  useInboxMessages,
+  type InboxMessage,
+} from '../../hooks/useInboxMessages';
 import { chatTimelineOptions, warmChatTimelines } from '../../hooks/useChatTimeline';
 import { useAuthStore } from '../../stores/authStore';
 import { usePlatformStore } from '../../stores/platformStore';
 import { supabase, type DbRow } from '../../services/supabase';
-import { API_BASE_URL } from '../../services/platforms';
+import { API_BASE_URL, platformsApi } from '../../services/platforms';
 import { Platform } from '../../types/platform';
 import { PlatformBadge } from '../../components/PlatformIcon';
 import { formatInboxTimestamp } from '../../utils/messageTimestamp';
 import { InboxRowSkeleton, InboxSkeleton } from '../../components/claire/skeleton';
 import { signalFirstPaint } from '../../services/mobile-sync';
 import { useScreenLoadMark } from '../../hooks/useScreenLoadMark';
+import { syncNotificationBadge } from '../../services/notifications';
+import { SwipeActionRow } from '../../components/mobile/swipe-action-row';
 
 type InboxFilter = 'all' | 'unread' | 'needs_reply' | 'groups';
 type PlatformFilter = 'all' | Platform;
@@ -71,6 +79,9 @@ function InboxConversationRowInner({
   onPress,
   onPressIn,
   onLongPress,
+  onMarkRead,
+  onTogglePin,
+  onSnooze,
 }: {
   message: InboxMessage;
   pinned?: boolean;
@@ -80,6 +91,9 @@ function InboxConversationRowInner({
   /** Fires on touch-down, ahead of navigation — used to warm the transcript. */
   onPressIn?: () => void;
   onLongPress?: () => void;
+  onMarkRead?: () => void;
+  onTogglePin?: () => void;
+  onSnooze?: () => void;
 }) {
   const [imageFailed, setImageFailed] = useState(false);
   const [thumbFailed, setThumbFailed] = useState(false);
@@ -93,7 +107,7 @@ function InboxConversationRowInner({
   const avatarSize = desktop ? 36 : 44;
   const surface = active ? '#E6F57A' : pinned ? '#FFF8DC' : colors.paper;
 
-  return (
+  const row = (
     <Pressable
       testID={`message-card-${message.id}`}
       accessibilityRole="button"
@@ -101,6 +115,16 @@ function InboxConversationRowInner({
       onPress={onPress}
       onPressIn={onPressIn}
       onLongPress={onLongPress}
+      accessibilityActions={[
+        ...(onMarkRead ? [{ name: 'mark-read', label: 'Mark read' }] : []),
+        ...(onTogglePin ? [{ name: 'toggle-pin', label: message.is_pinned ? 'Unpin' : 'Pin' }] : []),
+        ...(onSnooze ? [{ name: 'snooze', label: 'Remind me later' }] : []),
+      ]}
+      onAccessibilityAction={(event) => {
+        if (event.nativeEvent.actionName === 'mark-read') onMarkRead?.();
+        if (event.nativeEvent.actionName === 'toggle-pin') onTogglePin?.();
+        if (event.nativeEvent.actionName === 'snooze') onSnooze?.();
+      }}
       style={{
         height: rowHeight,
         marginHorizontal: pinned && !desktop ? space[4] : desktop ? 6 : 0,
@@ -151,6 +175,38 @@ function InboxConversationRowInner({
         </View>
       </View>
     </Pressable>
+  );
+
+  return (
+    <SwipeActionRow
+      enabled={!desktop}
+      testID={`swipe-row-inbox-${message.id}`}
+      leftActions={onMarkRead ? [{
+        id: `read-${message.id}`,
+        label: 'Read',
+        icon: <Check size={21} color={colors.ink} />,
+        backgroundColor: colors.lime,
+        onPress: onMarkRead,
+      }] : []}
+      rightActions={[
+        ...(onTogglePin ? [{
+          id: `pin-${message.id}`,
+          label: message.is_pinned ? 'Unpin' : 'Pin',
+          icon: <Pin size={20} color={colors.ink} />,
+          backgroundColor: colors.sky,
+          onPress: onTogglePin,
+        }] : []),
+        ...(onSnooze ? [{
+          id: `later-${message.id}`,
+          label: 'Later',
+          icon: <Clock3 size={20} color={colors.ink} />,
+          backgroundColor: colors.blush,
+          onPress: onSnooze,
+        }] : []),
+      ]}
+    >
+      {row}
+    </SwipeActionRow>
   );
 }
 
@@ -248,10 +304,26 @@ export function InboxScreen() {
     return true;
   }), [inbox.messages, locallySnoozed]);
 
-  const openChat = useCallback((message: InboxMessage) => router.push({
-    pathname: '/chat/[chatId]',
-    params: { chatId: message.chat_id, contact_name: message.contact_name || '', chat_name: message.chat_name || '', platform: message.platform || '', is_group: message.is_group ? '1' : '0' },
-  }), []);
+  const openChat = useCallback((message: InboxMessage) => {
+    markInboxConversationRead(queryClient, user?.id, message.chat_id, message.platform);
+    router.push({
+      pathname: '/chat/[chatId]',
+      params: { chatId: message.chat_id, contact_name: message.contact_name || '', chat_name: message.chat_name || '', platform: message.platform || '', is_group: message.is_group ? '1' : '0' },
+    });
+  }, [queryClient, user?.id]);
+
+  const markRead = useCallback(async (message: InboxMessage) => {
+    markInboxConversationRead(queryClient, user?.id, message.chat_id, message.platform);
+    const session = connectedSessions.find(candidate =>
+      candidate.platform === message.platform && candidate.status === 'connected');
+    try {
+      await platformsApi.markChatRead(message.chat_id, session?.id);
+      void syncNotificationBadge().catch(() => undefined);
+    } catch (error) {
+      console.warn('[Inbox] mark read failed', error);
+      void queryClient.invalidateQueries({ queryKey: inboxQueryPrefix(user?.id) });
+    }
+  }, [connectedSessions, queryClient, user?.id]);
 
   // Touch-down to navigation commit is a couple of hundred milliseconds of
   // animation that were previously doing nothing. prefetchQuery honours
@@ -290,10 +362,15 @@ export function InboxScreen() {
     }
   };
 
-  const togglePin = async () => {
-    const target = snoozeTarget;
+  const togglePin = async (selected?: InboxMessage) => {
+    const target = selected ?? snoozeTarget;
     if (!target) return;
     setSnoozeTarget(null);
+    patchInboxChat(queryClient, user?.id, {
+      id: target.chat_id,
+      platform: target.platform,
+      is_pinned: !target.is_pinned,
+    });
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const response = await fetch(`${API_BASE_URL}/messages/chats/${target.chat_id}/pin`, {
@@ -302,9 +379,10 @@ export function InboxScreen() {
         body: JSON.stringify({ pinned: !target.is_pinned }),
       });
       if (!response.ok) throw new Error('Could not update pin');
-      await inbox.fetchMessages();
+      void queryClient.invalidateQueries({ queryKey: inboxQueryPrefix(user?.id), refetchType: 'none' });
     } catch (error) {
       console.warn('[Inbox] pin failed', error);
+      void queryClient.invalidateQueries({ queryKey: inboxQueryPrefix(user?.id) });
     }
   };
 
@@ -362,9 +440,12 @@ export function InboxScreen() {
         onPress={() => openChat(item)}
         onPressIn={() => warmChat(item)}
         onLongPress={() => setSnoozeTarget(item)}
+        onMarkRead={item.unread_count ? () => void markRead(item) : undefined}
+        onTogglePin={() => void togglePin(item)}
+        onSnooze={() => setSnoozeTarget(item)}
       />
     ),
-    [openChat, warmChat],
+    [markRead, openChat, warmChat],
   );
 
   const refresh = useCallback(async () => {

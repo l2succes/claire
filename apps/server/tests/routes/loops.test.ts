@@ -132,6 +132,20 @@ describe('PATCH /loops/:id', () => {
     expect(res.body.data.status).toBe('done');
   });
 
+  it('accepts an ownership transition for swipe actions', async () => {
+    const updated = { ...mockLoop, owner: 'them', status: 'waiting' };
+    mockQuery.single
+      .mockResolvedValueOnce({ data: mockLoop, error: null })
+      .mockResolvedValueOnce({ data: updated, error: null });
+
+    const res = await request(app)
+      .patch(`/loops/${VALID_UUID}`)
+      .send({ owner: 'them', status: 'waiting' });
+
+    expect(res.status).toBe(200);
+    expect(mockQuery.update.mock.calls.at(-1)?.[0]).toEqual({ owner: 'them', status: 'waiting' });
+  });
+
   it('blocks cross-user access — returns 404', async () => {
     mockQuery.single.mockResolvedValueOnce({ data: null, error: null }); // null = not owned
     const res = await request(app).patch(`/loops/${VALID_UUID}`).send({ status: 'done' });

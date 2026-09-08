@@ -16,6 +16,7 @@
     "dev:website": "cd apps/website && bun run dev",
     "dev:plugin": "bun test --watch examples/plugins",
     "plugin:create": "bun run scripts/plugin-create.ts",
+    "testflight:tickets": "bun run scripts/import-testflight-feedback.ts",
     "test:plugins": "bun test examples/plugins",
     "landing": "bunx serve landing",
     "catalog:generate": "bun run scripts/generate-platform-catalog.ts",

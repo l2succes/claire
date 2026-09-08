@@ -207,8 +207,8 @@ export default function RootLayout() {
                   contentStyle: { backgroundColor: '#FFFDF8' },
                 }}
               />
-              <Stack.Screen name="assistant" options={{ presentation: 'formSheet', sheetGrabberVisible: true, sheetAllowedDetents: [0.7, 1] }} />
-              <Stack.Screen name="chat/assistant/[chatId]" options={{ presentation: 'formSheet', sheetGrabberVisible: true, sheetAllowedDetents: [0.7, 1] }} />
+              <Stack.Screen name="assistant" options={{ presentation: 'formSheet', sheetGrabberVisible: true, sheetAllowedDetents: [1] }} />
+              <Stack.Screen name="chat/assistant/[chatId]" options={{ presentation: 'formSheet', sheetGrabberVisible: true, sheetAllowedDetents: [1] }} />
             </Stack>
             </DesktopChrome>
           </QueryClientProvider>

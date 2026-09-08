@@ -86,7 +86,7 @@ export const type = {
  */
 export const compactType = {
   display: { fontSize: 42, lineHeight: 44, letterSpacing: -1.4 },
-  screenTitle: { fontSize: 31, lineHeight: 34 },
+  screenTitle: { fontSize: 28, lineHeight: 32 },
   sectionTitle: { lineHeight: 24, letterSpacing: -0.25 },
   label: { fontSize: 11, lineHeight: 15 },
 } as const;

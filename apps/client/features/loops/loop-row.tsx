@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { Image } from 'expo-image';
-import { AlertCircle, Check, Clock3, UsersRound, UserRound } from 'lucide-react-native';
+import { AlertCircle, Check, Clock3, RotateCcw, UsersRound, UserRound } from 'lucide-react-native';
 import { colors, mobileType } from '@claire/design-system';
 import type { LoopItem } from '../../services/loop-types';
+import { SwipeActionRow } from '../../components/mobile/swipe-action-row';
 
 const LIVE_STATUSES: LoopItem['status'][] = ['open', 'waiting', 'snoozed'];
 
@@ -42,7 +43,19 @@ function dueLabel(item: LoopItem, overdue: boolean) {
   return { kicker: null, date: dateText, urgent: false };
 }
 
-export function LoopRow({ item, onOpen, onToggle }: { item: LoopItem; onOpen: () => void; onToggle: () => void }) {
+export function LoopRow({
+  item,
+  onOpen,
+  onToggle,
+  onWait,
+  onSnooze,
+}: {
+  item: LoopItem;
+  onOpen: () => void;
+  onToggle: () => void;
+  onWait?: () => void;
+  onSnooze?: () => void;
+}) {
   const [pressed, setPressed] = useState(false);
   const name = conversationName(item);
   const title = loopTitle(item);
@@ -54,7 +67,7 @@ export function LoopRow({ item, onOpen, onToggle }: { item: LoopItem; onOpen: ()
   const ownership = ownerLabel(item);
   const needsAttention = (item.priority_score ?? 0) >= 80;
 
-  return (
+  const row = (
     <Pressable
       testID={`loop-item-${item.id}`}
       accessibilityRole="button"
@@ -62,6 +75,16 @@ export function LoopRow({ item, onOpen, onToggle }: { item: LoopItem; onOpen: ()
       onPress={onOpen}
       onPressIn={() => setPressed(true)}
       onPressOut={() => setPressed(false)}
+      accessibilityActions={[
+        { name: 'toggle', label: item.status === 'done' ? 'Reopen' : 'Mark done' },
+        ...(onWait ? [{ name: 'wait', label: 'Move to waiting' }] : []),
+        ...(onSnooze ? [{ name: 'snooze', label: 'Postpone' }] : []),
+      ]}
+      onAccessibilityAction={(event) => {
+        if (event.nativeEvent.actionName === 'toggle') onToggle();
+        if (event.nativeEvent.actionName === 'wait') onWait?.();
+        if (event.nativeEvent.actionName === 'snooze') onSnooze?.();
+      }}
       style={{ flexDirection: 'row', gap: 11, minHeight: 104, paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: colors.neutral[200], opacity: pressed ? 0.66 : 1 }}
     >
       <Pressable
@@ -92,5 +115,38 @@ export function LoopRow({ item, onOpen, onToggle }: { item: LoopItem; onOpen: ()
         {due ? <><Clock3 size={15} color={due.urgent ? colors.danger : colors.neutral[400]} /><Text style={{ ...mobileType.monoLabel, color: due.urgent ? colors.danger : colors.neutral[600], textAlign: 'right' }}>{due.kicker ? `${due.kicker}\n${due.date}` : due.date}</Text></> : null}
       </View>
     </Pressable>
+  );
+
+  return (
+    <SwipeActionRow
+      testID={`swipe-row-loop-${item.id}`}
+      leftActions={[{
+        id: `toggle-loop-${item.id}`,
+        label: item.status === 'done' ? 'Reopen' : 'Done',
+        icon: item.status === 'done'
+          ? <RotateCcw size={20} color={colors.ink} />
+          : <Check size={21} color={colors.ink} />,
+        backgroundColor: colors.lime,
+        onPress: onToggle,
+      }]}
+      rightActions={item.status === 'done' ? [] : [
+        ...(onWait ? [{
+          id: `wait-loop-${item.id}`,
+          label: item.owner === 'them' ? 'For me' : 'Waiting',
+          icon: <UsersRound size={20} color={colors.ink} />,
+          backgroundColor: colors.sky,
+          onPress: onWait,
+        }] : []),
+        ...(onSnooze ? [{
+          id: `later-loop-${item.id}`,
+          label: 'Later',
+          icon: <Clock3 size={20} color={colors.ink} />,
+          backgroundColor: colors.blush,
+          onPress: onSnooze,
+        }] : []),
+      ]}
+    >
+      {row}
+    </SwipeActionRow>
   );
 }

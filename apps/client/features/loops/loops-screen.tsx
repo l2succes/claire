@@ -2,17 +2,20 @@ import { useMemo, useState } from 'react';
 import { FlatList, Modal, Pressable, RefreshControl, Text, TextInput, View } from 'react-native';
 import { Plus, X } from 'lucide-react-native';
 import { router } from 'expo-router';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { colors, mobileType, radius, space } from '@claire/design-system';
 import { MobileChip, MobileHeader, MobileIconButton, MobileState } from '../../components/mobile/claire-mobile';
 import type { LoopItem } from '../../services/loop-types';
-import { cachedLoops } from '../../services/mobile-cache';
+import { cachedLoops, replaceCachedLoops } from '../../services/mobile-cache';
 import { useLocalFirstQuery } from '../../hooks/useLocalFirstQuery';
 import { useScreenLoadMark } from '../../hooks/useScreenLoadMark';
 import { useAuthStore } from '../../stores/authStore';
 import { supabase } from '../../services/supabase';
 import { LoopsSkeleton } from '../../components/claire/skeleton';
 import { LoopRow } from './loop-row';
+import { snoozeLoop, updateLoop } from '../../services/loops';
+import { BottomSheet } from '../../components/mobile/bottom-sheet';
+import { isLoopDeferred } from '../../services/loop-display';
 
 type LoopFilter = 'for_you' | 'done' | 'waiting' | 'all';
 
@@ -48,6 +51,7 @@ export function LoopsScreen() {
   const [filter, setFilter] = useState<LoopFilter>('for_you');
   const [showCreate, setShowCreate] = useState(false);
   const [newLoop, setNewLoop] = useState('');
+  const [snoozeTarget, setSnoozeTarget] = useState<LoopItem | null>(null);
   const loopsQueryKey = useMemo(() => ['mobile-loops', user?.id] as const, [user?.id]);
   // The sync stream already keeps cache_loops current; reading it costs one
   // indexed table rather than the whole snapshot, which also parses every chat.
@@ -59,21 +63,40 @@ export function LoopsScreen() {
     local: {
       enabled: !!user?.id,
       read: async () => (user?.id ? (await cachedLoops(user.id)) as unknown as LoopItem[] : null),
+      write: async (items) => {
+        if (user?.id) await replaceCachedLoops(user.id, items as unknown as Array<Record<string, unknown>>);
+      },
     },
   });
   const patch = useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: LoopItem['status'] }) => {
-      const { data, error } = await supabase
-        .from('loops')
-        .update({ status })
-        .eq('id', id)
-        .eq('user_id', user!.id)
-        .select(LOOP_SELECT)
-        .single();
-      if (error) throw error;
-      return data as LoopItem;
+    mutationFn: ({ id, ...next }: { id: string; status: LoopItem['status']; owner?: LoopItem['owner'] }) =>
+      updateLoop(id, next),
+    onMutate: async ({ id, ...next }) => {
+      await queryClient.cancelQueries({ queryKey: loopsQueryKey });
+      const previous = queryClient.getQueryData<LoopItem[]>(loopsQueryKey);
+      queryClient.setQueryData<LoopItem[]>(loopsQueryKey, (items) =>
+        items?.map((item) => item.id === id ? { ...item, ...next } : item));
+      return { previous };
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['mobile-loops', user?.id] }),
+    onError: (_error, _variables, context) => {
+      if (context?.previous) queryClient.setQueryData(loopsQueryKey, context.previous);
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: loopsQueryKey }),
+  });
+  const snooze = useMutation({
+    mutationFn: ({ id, until }: { id: string; until: string }) => snoozeLoop(id, until),
+    onMutate: async ({ id, until }) => {
+      await queryClient.cancelQueries({ queryKey: loopsQueryKey });
+      const previous = queryClient.getQueryData<LoopItem[]>(loopsQueryKey);
+      queryClient.setQueryData<LoopItem[]>(loopsQueryKey, (items) =>
+        items?.map((item) => item.id === id ? { ...item, status: 'snoozed', snoozed_until: until } : item));
+      setSnoozeTarget(null);
+      return { previous };
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previous) queryClient.setQueryData(loopsQueryKey, context.previous);
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: loopsQueryKey }),
   });
   const create = useMutation({
     mutationFn: async (content: string) => {
@@ -111,6 +134,10 @@ export function LoopsScreen() {
     for (const item of items) {
       if (item.status === 'done') completedItems.push(item);
       if (!LIVE_STATUSES.includes(item.status)) continue;
+      // A postponed loop returns when its reminder is due; keeping it in the
+      // active list immediately after a swipe makes “Later” appear to do
+      // nothing and defeats the purpose of postponing it.
+      if (isLoopDeferred(item)) continue;
       openItems.push(item);
       // "I'm waiting" means someone else owes the next move — not merely that
       // the loop was detected from an inbound message.
@@ -140,8 +167,36 @@ export function LoopsScreen() {
         </View>
       </View>
       {query.isCold ? <LoopsSkeleton /> : (
-        <FlatList testID="loops-list" data={visible} renderItem={({ item }) => <LoopRow item={item} onOpen={() => router.push({ pathname: '/loops/[id]', params: { id: item.id } })} onToggle={() => patch.mutate({ id: item.id, status: item.status === 'done' ? 'open' : 'done' })} />} keyExtractor={item => item.id} contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ paddingHorizontal: space[4], paddingBottom: 112 }} refreshControl={<RefreshControl refreshing={query.isRefetching} onRefresh={() => void query.refetch()} tintColor={colors.ink} />} ListEmptyComponent={<MobileState title={filter === 'done' ? 'Nothing completed yet' : filter === 'waiting' ? "You're not waiting on anyone" : 'No open loops'} message="Claire will surface commitments from your conversations here." />} />
+        <FlatList testID="loops-list" data={visible} renderItem={({ item }) => <LoopRow item={item} onOpen={() => router.push({ pathname: '/loops/[id]', params: { id: item.id } })} onToggle={() => patch.mutate({ id: item.id, status: item.status === 'done' ? 'open' : 'done' })} onWait={item.status === 'done' ? undefined : () => patch.mutate({ id: item.id, owner: item.owner === 'them' ? 'me' : 'them', status: item.owner === 'them' ? 'open' : 'waiting' })} onSnooze={item.status === 'done' ? undefined : () => setSnoozeTarget(item)} />} keyExtractor={item => item.id} contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ paddingHorizontal: space[4], paddingBottom: 112 }} refreshControl={<RefreshControl refreshing={query.isRefetching} onRefresh={() => void query.refetch()} tintColor={colors.ink} />} ListEmptyComponent={<MobileState title={filter === 'done' ? 'Nothing completed yet' : filter === 'waiting' ? "You're not waiting on anyone" : 'No open loops'} message="Claire will surface commitments from your conversations here." />} />
       )}
+
+      <BottomSheet
+        visible={!!snoozeTarget}
+        title="Postpone loop"
+        onClose={() => setSnoozeTarget(null)}
+        testID="loop-snooze-sheet"
+        snapPoints={['46%']}
+      >
+        <View style={{ paddingHorizontal: space[4], gap: space[2] }}>
+          {[
+            { id: 'later-today', label: 'Later today', until: () => new Date(Date.now() + 3 * 60 * 60 * 1000) },
+            { id: 'tomorrow', label: 'Tomorrow morning', until: () => { const date = new Date(); date.setDate(date.getDate() + 1); date.setHours(9, 0, 0, 0); return date; } },
+            { id: 'next-week', label: 'Next week', until: () => { const date = new Date(); date.setDate(date.getDate() + 7); date.setHours(9, 0, 0, 0); return date; } },
+          ].map((option) => (
+            <Pressable
+              key={option.id}
+              testID={`loop-snooze-${option.id}`}
+              accessibilityRole="button"
+              onPress={() => {
+                if (snoozeTarget) snooze.mutate({ id: snoozeTarget.id, until: option.until().toISOString() });
+              }}
+              style={{ minHeight: 50, paddingHorizontal: space[4], justifyContent: 'center', borderRadius: radius.control, backgroundColor: colors.cream }}
+            >
+              <Text selectable style={{ ...mobileType.body, color: colors.ink }}>{option.label}</Text>
+            </Pressable>
+          ))}
+        </View>
+      </BottomSheet>
 
       <Modal visible={showCreate} transparent animationType="slide" onRequestClose={() => setShowCreate(false)}>
         <View style={{ flex: 1, backgroundColor: 'rgba(16,18,15,0.35)', justifyContent: 'flex-end' }}>

@@ -239,6 +239,32 @@ export async function cachedLoops(userId: string): Promise<Array<Record<string, 
   return rows.map(row => JSON.parse(row.payload) as Record<string, unknown>);
 }
 
+/**
+ * Replace the loop replica with one authoritative list response.
+ *
+ * Sync events keep this table current after bootstrap, but an upgraded install
+ * can already have chats and a cursor while still having no loop snapshot. A
+ * successful Loops-screen fetch must therefore warm its own next visit rather
+ * than waiting for a future full bootstrap that may never run.
+ */
+export async function replaceCachedLoops(
+  userId: string,
+  loops: Array<Record<string, unknown>>,
+): Promise<void> {
+  if (!isNativeMobile) return;
+  const db = await database(userId);
+  if (!db) return;
+  await db.withTransactionAsync(async () => {
+    await db.runAsync('DELETE FROM cache_loops');
+    for (const loop of loops) await upsert(userId, db, 'cache_loops', loop);
+    await db.runAsync(
+      'INSERT INTO cache_meta(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
+      'loops_snapshot_at', new Date().toISOString(),
+    );
+  });
+  invalidateSnapshot(userId);
+}
+
 export async function cachedLoop(userId: string, loopId: string): Promise<Record<string, unknown> | null> {
   if (!isNativeMobile) return null;
   const db = await database(userId);
