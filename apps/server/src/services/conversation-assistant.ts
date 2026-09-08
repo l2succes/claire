@@ -3,6 +3,8 @@ import OpenAI from 'openai';
 import { openaiConfig } from '../config';
 import { logger } from '../utils/logger';
 import { supabase, type DbRow } from './supabase';
+import { selectAssistantActions, type AssistantAction } from './conversation-assistant-actions';
+import { selectCitedSources, selectSourceIndices } from './conversation-assistant-citations';
 
 const RETRIEVAL_LIMIT = 12;
 const BACKFILL_BATCH_SIZE = 100;
@@ -37,7 +39,14 @@ export interface AssistantIndexStatus {
 export interface AssistantAnswer {
   answer: string;
   citations: AssistantCitation[];
+  actions: AssistantAction[];
   indexing: AssistantIndexStatus;
+}
+
+interface AssistantCompletion {
+  answer?: unknown;
+  sourceIndices?: unknown;
+  actions?: unknown;
 }
 
 export interface AssistantThread {
@@ -114,7 +123,7 @@ class ConversationAssistantService {
       threadQuery.maybeSingle(),
       supabase
         .from('conversation_assistant_turns')
-        .select('id, role, content, citations, scope_chat_ids, created_at')
+        .select('id, role, content, citations, actions, scope_chat_ids, created_at')
         .eq('thread_id', threadId)
         .eq('user_id', userId)
         .order('created_at', { ascending: true }),
@@ -241,7 +250,7 @@ class ConversationAssistantService {
       messages: [
         {
           role: 'system',
-          content: 'You are Claire, a private conversation research assistant. Answer only from the supplied sources. Never claim to have read a message that is not quoted. Be concise, state uncertainty when sources are insufficient, and do not suggest that you will send or edit messages. Interpret clear everyday and colloquial equivalents (for example, "link up", "see you", or "hang out" can mean meeting), but say so when the wording is an interpretation rather than an exact quote. For relationship or communication questions, give a warm practical read grounded in the excerpts, clearly distinguish observation from inference, and suggest a constructive next step. Return JSON only: {"answer":"..."}.',
+          content: 'You are Claire, a private conversation research assistant. Answer only from the supplied sources. Never claim to have read a message that is not quoted. Be concise, state uncertainty when sources are insufficient, and do not suggest that you will send or edit messages. Interpret clear everyday and colloquial equivalents (for example, "link up", "see you", or "hang out" can mean meeting), but say so when the wording is an interpretation rather than an exact quote. For relationship or communication questions, give a warm practical read grounded in the excerpts, clearly distinguish observation from inference, and suggest a constructive next step. Return JSON only: {"answer":"...","sourceIndices":[1,2],"actions":[{"type":"open_conversation","sourceIndex":1,"label":"Open conversation"}]}. sourceIndices must contain the one to four source numbers that materially support the answer—never include a source just because it is related. Use actions sparingly: open_conversation only for a cited chat that helps the user continue; open_calendar only when a cited message clearly concerns arranging a meeting, call, or event, with a title and optional ISO startsAt. Actions never send, book, or edit anything. Keep every action sourceIndex in sourceIndices; otherwise return an empty actions array.',
         },
         {
           role: 'user',
@@ -251,9 +260,14 @@ class ConversationAssistantService {
     });
     const raw = completion.choices[0]?.message.content || '{}';
     let answer = 'I could not find enough relevant messages to answer that confidently.';
+    let answerCitations = selectCitedSources(citations, []);
+    let actions: AssistantAction[] = [];
     try {
-      const parsed = JSON.parse(raw) as { answer?: unknown };
+      const parsed = JSON.parse(raw) as AssistantCompletion;
       if (typeof parsed.answer === 'string' && parsed.answer.trim()) answer = parsed.answer.trim();
+      const sourceIndices = selectSourceIndices(citations.length, parsed.sourceIndices);
+      answerCitations = selectCitedSources(citations, sourceIndices);
+      actions = selectAssistantActions(citations, parsed.actions, sourceIndices);
     } catch {
       logger.warn('Assistant returned invalid JSON');
     }
@@ -262,7 +276,7 @@ class ConversationAssistantService {
     const { error: turnsError } = await supabase.from('conversation_assistant_turns').insert([
       // The column is deliberately NOT NULL so every persisted turn has a stable shape.
       { thread_id: thread.id, user_id: userId, role: 'user', content: cleanQuestion, citations: [], scope_chat_ids: preferredChatIds },
-      { thread_id: thread.id, user_id: userId, role: 'assistant', content: answer, citations, scope_chat_ids: preferredChatIds },
+      { thread_id: thread.id, user_id: userId, role: 'assistant', content: answer, citations: answerCitations, actions, scope_chat_ids: preferredChatIds },
     ]);
     if (turnsError) throw turnsError;
 
@@ -274,7 +288,7 @@ class ConversationAssistantService {
       .eq('user_id', userId);
     if (threadError) throw threadError;
 
-    return { answer, citations, indexing };
+    return { answer, citations: answerCitations, actions, indexing };
   }
 
   /** One-shot cited search answer. Unlike Ask Claire, this does not create or mutate a thread. */
@@ -287,7 +301,7 @@ class ConversationAssistantService {
       this.getIndexStatus(userId),
     ]);
     if (!citations.length) {
-      return { answer: 'I could not find a message that answers that confidently.', citations: [], indexing };
+      return { answer: 'I could not find a message that answers that confidently.', citations: [], actions: [], indexing };
     }
     const sources = citations.map((citation, index) =>
       `[${index + 1}] ${citation.timestamp} · ${citation.platform} · ${citation.fromMe ? 'You' : citation.senderName}: ${citation.excerpt}`
@@ -298,18 +312,23 @@ class ConversationAssistantService {
       temperature: 0.1,
       max_tokens: 450,
       messages: [
-        { role: 'system', content: 'Answer the search question only from the supplied conversation excerpts. Be concise, distinguish inference from exact wording, state uncertainty, and return JSON only: {"answer":"..."}.' },
+        { role: 'system', content: 'Answer the search question only from the supplied conversation excerpts. Be concise, distinguish inference from exact wording, state uncertainty, and return JSON only: {"answer":"...","sourceIndices":[1,2],"actions":[{"type":"open_conversation","sourceIndex":1,"label":"Open conversation"}]}. sourceIndices must contain the one to four source numbers that materially support the answer. Use actions sparingly: open_conversation only for a cited chat that helps the user continue; open_calendar only when a cited message clearly concerns arranging a meeting, call, or event, with a title and optional ISO startsAt. Actions never send, book, or edit anything. Keep every action sourceIndex in sourceIndices; otherwise return an empty actions array.' },
         { role: 'user', content: `Question: ${cleanQuestion}\n\nSources:\n${sources}` },
       ],
     });
     let answer = 'I found related messages, but could not summarize them confidently.';
+    let answerCitations = selectCitedSources(citations, []);
+    let actions: AssistantAction[] = [];
     try {
-      const parsed = JSON.parse(completion.choices[0]?.message.content || '{}') as { answer?: unknown };
+      const parsed = JSON.parse(completion.choices[0]?.message.content || '{}') as AssistantCompletion;
       if (typeof parsed.answer === 'string' && parsed.answer.trim()) answer = parsed.answer.trim();
+      const sourceIndices = selectSourceIndices(citations.length, parsed.sourceIndices);
+      answerCitations = selectCitedSources(citations, sourceIndices);
+      actions = selectAssistantActions(citations, parsed.actions, sourceIndices);
     } catch {
       logger.warn('Search answer returned invalid JSON');
     }
-    return { answer, citations, indexing };
+    return { answer, citations: answerCitations, actions, indexing };
   }
 
   private async runBackfill(userId: string): Promise<void> {
