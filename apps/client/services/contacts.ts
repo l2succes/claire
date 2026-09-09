@@ -25,6 +25,30 @@ export interface PersonContact {
   } | null;
 }
 
+/**
+ * Merge a mid-walk page over the directory already on screen.
+ *
+ * The directory takes 22 round trips to walk, and each page used to be
+ * published as though it were the whole list. On a warm cache that meant the
+ * seeded 21,000 contacts painted, page one replaced them with 1,000, and the
+ * list re-grew a thousand at a time — re-sorting and re-sectioning at every
+ * step, with the A–Z index landing somewhere different each time.
+ *
+ * So a page never shrinks what is visible. The final page is the exception and
+ * is returned as-is: it is authoritative, and is what lets a contact deleted
+ * upstream actually disappear.
+ */
+export function mergeDirectoryPage(
+  soFar: PersonContact[],
+  existing: PersonContact[] | undefined,
+  isLast: boolean,
+): PersonContact[] {
+  if (isLast) return [...soFar];
+  if (!existing || existing.length <= soFar.length) return [...soFar];
+  const seen = new Set(soFar.map((contact) => contact.id));
+  return soFar.concat(existing.filter((contact) => !seen.has(contact.id)));
+}
+
 interface PeoplePage {
   contacts: PersonContact[];
   nextOffset: number | null;

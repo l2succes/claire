@@ -1,5 +1,26 @@
 export type ChatCategory = 'personal' | 'friend' | 'business' | 'trip' | 'romantic';
 
+/**
+ * What kind of group this is, inferred server-side. Distinct from ChatCategory,
+ * which is a relationship taxonomy that does not describe a room (a group is
+ * never 'romantic'). This never controls whether AI runs — it selects the copy
+ * that helps the user decide.
+ */
+export type GroupCategory =
+  | 'work'
+  | 'planning'
+  | 'family'
+  | 'friends'
+  | 'community'
+  | 'announcement'
+  | 'unknown';
+
+/** Below this we show no label rather than a guess. Mirrors the server. */
+export const CATEGORY_DISPLAY_THRESHOLD = 0.6;
+
+/** Categories where turning Claire on is worth actively suggesting. */
+export const RECOMMENDED_GROUP_CATEGORIES: readonly GroupCategory[] = ['work', 'planning'];
+
 export type SmartCardType = 'maps' | 'flight' | 'datetime' | 'reminder' | 'action';
 
 export interface SmartCard {

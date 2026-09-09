@@ -36,6 +36,20 @@ interface DeliveryJob {
   telemetry: { userId: string; platform: string; traceSource: string };
 }
 
+export interface LoopReminderNotificationEvent {
+  loopId: string;
+  revision: number;
+  userId: string;
+  title: string;
+  body: string;
+  reason: string;
+}
+
+export interface NotificationEnqueueResult {
+  queued: number;
+  outcome: 'queued' | 'disabled' | 'no_devices';
+}
+
 interface ReceiptJob {
   kind: 'receipt';
   deliveryId: string;
@@ -48,9 +62,14 @@ type NotificationJob = DeliveryJob | ReceiptJob;
 
 interface NotificationOptions {
   notify_messages?: boolean;
+  notify_loops?: boolean;
   quiet_hours_enabled?: boolean;
   quiet_hours_start?: string;
   quiet_hours_end?: string;
+}
+
+export function shouldNotifyLoops(notificationEnabled: boolean | null | undefined, options: NotificationOptions): boolean {
+  return notificationEnabled !== false && options.notify_loops !== false;
 }
 
 export function shouldNotifyConversation(notificationEnabled: boolean | null | undefined, options: NotificationOptions, isMuted: boolean | null | undefined): boolean {
@@ -81,6 +100,18 @@ export function isInQuietHours(options: NotificationOptions, timezone: string, n
   const current = minutesAtTimezone(now, timezone);
   if (start === end) return true;
   return start < end ? current >= start && current < end : current >= start || current < end;
+}
+
+/** Milliseconds until the current quiet window ends for this device. */
+export function quietHoursDelay(options: NotificationOptions, timezone: string, now = new Date()): number {
+  if (!isInQuietHours(options, timezone, now)) return 0;
+  // Quiet-hour windows are at most 24h. Advancing minute-by-minute keeps the
+  // calculation DST-safe and runs only when a notification is already due.
+  const minute = 60_000;
+  for (let elapsed = minute; elapsed <= 24 * 60 * minute; elapsed += minute) {
+    if (!isInQuietHours(options, timezone, new Date(now.getTime() + elapsed))) return elapsed;
+  }
+  return 24 * 60 * minute;
 }
 
 export class NotificationDeliveryService {
@@ -169,6 +200,76 @@ export class NotificationDeliveryService {
       queued += 1;
     }
     return queued;
+  }
+
+  /**
+   * Put one loop revision onto the same reliable per-device path as messages.
+   * A revision is the dedupe boundary: editing the deadline or ownership may
+   * legitimately produce a new reminder, while repeated scheduler polls may not.
+   */
+  async enqueueLoopReminder(event: LoopReminderNotificationEvent): Promise<NotificationEnqueueResult> {
+    this.start();
+    const [{ data: preferences, error: preferenceError }, { data: devices, error: deviceError }] = await Promise.all([
+      supabase.from('user_preferences').select('notification_enabled,preferences').eq('user_id', event.userId).maybeSingle(),
+      supabase.from('notification_devices').select('id,user_id,device_id,platform,provider,token,enabled,timezone').eq('user_id', event.userId).eq('enabled', true),
+    ]);
+    if (preferenceError) throw preferenceError;
+    if (deviceError) throw deviceError;
+    const options = (preferences?.preferences || {}) as NotificationOptions;
+    if (!shouldNotifyLoops(preferences?.notification_enabled, options)) return { queued: 0, outcome: 'disabled' };
+    if (!devices?.length) return { queued: 0, outcome: 'no_devices' };
+
+    let queued = 0;
+    const now = new Date();
+    for (const device of devices as NotificationDevice[]) {
+      const delay = quietHoursDelay(options, device.timezone, now);
+      const { data: delivery, error } = await supabase.from('notification_deliveries').upsert({
+        user_id: event.userId,
+        device_id: device.id,
+        loop_id: event.loopId,
+        notification_type: 'loop_reminder',
+        subject_revision: event.revision,
+        state: 'queued',
+        updated_at: now.toISOString(),
+      }, {
+        onConflict: 'loop_id,device_id,notification_type,subject_revision',
+        ignoreDuplicates: true,
+      }).select('id').maybeSingle();
+      if (error) throw error;
+      // An empty row with no error means this revision/device already has a
+      // durable delivery record. Count it as accepted; its original queue job
+      // owns retries and must not be duplicated here.
+      if (!delivery) {
+        queued += 1;
+        continue;
+      }
+
+      const payload: NotificationPayload = {
+        title: event.title,
+        body: event.body.trim().slice(0, 180),
+        collapseId: `loop:${event.loopId}:${event.revision}`,
+        channelId: 'loops',
+        data: {
+          version: 1,
+          type: 'loop_reminder',
+          loopId: event.loopId,
+          reason: event.reason,
+          url: `claire://loops/${event.loopId}`,
+        },
+      };
+      await this.queue!.add({
+        kind: 'delivery',
+        deliveryId: delivery.id,
+        device,
+        payload,
+        telemetry: { userId: event.userId, platform: 'claire', traceSource: event.loopId },
+      }, {
+        jobId: `loop:${event.loopId}:revision:${event.revision}:device:${device.id}`,
+        ...(delay ? { delay } : {}),
+      });
+      queued += 1;
+    }
+    return { queued, outcome: 'queued' };
   }
 
   private async process(job: Job<NotificationJob>): Promise<void> {

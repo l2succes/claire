@@ -119,6 +119,7 @@ export async function detectLoopsForChat(
     platform: context.platform,
     sensitivity: context.settings.sensitivity,
     detectionEnabled: context.detectionEnabled,
+    aiEnabled: context.aiEnabled,
     delta: context.delta,
     openLoopCount: context.openLoops.length,
     watchTerms: context.settings.watchTerms,

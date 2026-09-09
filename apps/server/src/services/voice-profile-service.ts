@@ -93,9 +93,22 @@ class VoiceProfileService {
 
   private async build(userId: string): Promise<void> {
     try {
-      const { data: messages, error } = await supabase.from('messages')
+      // Groups are opt-in, so how you write in one is not evidence unless you
+      // turned it on. Gating only the ingest-time counter would have been
+      // cosmetic: this bulk read is where the text actually reaches the model.
+      const { data: enabledGroups } = await supabase.from('chats')
+        .select('id').eq('user_id', userId).eq('is_group', true).eq('ai_enabled', true);
+      const enabledGroupIds = (enabledGroups || []).map((row: { id: string }) => row.id);
+
+      let sourceQuery = supabase.from('messages')
         .select('content, timestamp').eq('user_id', userId).eq('from_me', true).eq('is_deleted', false)
-        .not('content', 'is', null).neq('content', '').order('timestamp', { ascending: false }).limit(5000);
+        .not('content', 'is', null).neq('content', '');
+      sourceQuery = enabledGroupIds.length
+        ? sourceQuery.or(`is_group.eq.false,chat_id.in.(${enabledGroupIds.join(',')})`)
+        : sourceQuery.eq('is_group', false);
+
+      const { data: messages, error } = await sourceQuery
+        .order('timestamp', { ascending: false }).limit(5000);
       if (error) throw error;
       const grouped = new Map<string, string[]>();
       for (const row of messages || []) {

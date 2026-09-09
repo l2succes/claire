@@ -157,6 +157,8 @@ export default function RootLayout() {
     if (Platform.OS === 'web') return;
     const openNotification = (notification: Notifications.Notification) => {
       const data = notification.request.content.data as {
+        type?: unknown;
+        loopId?: unknown;
         chatId?: unknown;
         messageId?: unknown;
         contactName?: unknown;
@@ -164,6 +166,10 @@ export default function RootLayout() {
         platform?: unknown;
         isGroup?: unknown;
       };
+      if (data.type === 'loop_reminder' && typeof data.loopId === 'string') {
+        router.push({ pathname: '/loops/[id]', params: { id: data.loopId } });
+        return;
+      }
       if (typeof data.chatId !== 'string') return;
       router.push({ pathname: '/chat/[chatId]', params: {
         chatId: data.chatId,

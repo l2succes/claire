@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { isInQuietHours, shouldNotifyConversation } from './notification-delivery';
+import { isInQuietHours, quietHoursDelay, shouldNotifyConversation, shouldNotifyLoops } from './notification-delivery';
 import { ExpoNotificationProvider } from './notification-providers';
 
 describe('notification eligibility', () => {
@@ -7,6 +7,12 @@ describe('notification eligibility', () => {
     expect(shouldNotifyConversation(true, { notify_messages: true }, true)).toBe(false);
     expect(shouldNotifyConversation(true, { notify_messages: true }, false)).toBe(true);
     expect(shouldNotifyConversation(true, { notify_messages: true }, null)).toBe(true);
+  });
+
+  it('honors the master and loop-specific switches', () => {
+    expect(shouldNotifyLoops(true, { notify_loops: true })).toBe(true);
+    expect(shouldNotifyLoops(false, { notify_loops: true })).toBe(false);
+    expect(shouldNotifyLoops(true, { notify_loops: false })).toBe(false);
   });
 
   it('handles quiet hours that cross midnight in the device timezone', () => {
@@ -21,6 +27,12 @@ describe('notification eligibility', () => {
     const instant = new Date('2026-08-15T04:30:00Z');
     expect(isInQuietHours(options, 'America/Mexico_City', instant)).toBe(true);
     expect(isInQuietHours(options, 'Europe/London', instant)).toBe(true);
+  });
+
+  it('delays a due reminder until quiet hours end', () => {
+    const options = { quiet_hours_enabled: true, quiet_hours_start: '22:00', quiet_hours_end: '08:00' };
+    const delay = quietHoursDelay(options, 'UTC', new Date('2026-08-15T07:30:00Z'));
+    expect(delay).toBe(30 * 60_000);
   });
 });
 describe('ExpoNotificationProvider', () => {
@@ -40,6 +52,24 @@ describe('ExpoNotificationProvider', () => {
       expect(sent.collapseId).toBe('message-1');
       expect(sent.channelId).toBe('messages');
       expect((sent.data as Record<string, unknown>).url).toContain('claire://chat/chat-1');
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+
+  it('uses the loop notification channel when requested', async () => {
+    const originalFetch = global.fetch;
+    let sent: Record<string, unknown> = {};
+    global.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+      sent = JSON.parse(String(init?.body));
+      return { ok: true, json: async () => ({ data: { status: 'ok', id: 'receipt-loop' } }) } as Response;
+    }) as typeof fetch;
+    try {
+      await new ExpoNotificationProvider().send('ExpoPushToken[test]', {
+        title: 'Coming up', body: 'Send the deck', collapseId: 'loop:1', channelId: 'loops',
+        data: { version: 1, type: 'loop_reminder', loopId: 'loop-1', url: 'claire://loops/loop-1' },
+      });
+      expect(sent.channelId).toBe('loops');
     } finally {
       global.fetch = originalFetch;
     }

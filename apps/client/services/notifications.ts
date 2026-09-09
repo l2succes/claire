@@ -59,12 +59,19 @@ export async function setupNotifications() {
   }
 
   if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync('messages', {
-      name: 'Messages',
-      importance: Notifications.AndroidImportance.HIGH,
-      sound: 'default',
-      vibrationPattern: [0, 250, 250, 250],
-    });
+    await Promise.all([
+      Notifications.setNotificationChannelAsync('messages', {
+        name: 'Messages',
+        importance: Notifications.AndroidImportance.HIGH,
+        sound: 'default',
+        vibrationPattern: [0, 250, 250, 250],
+      }),
+      Notifications.setNotificationChannelAsync('loops', {
+        name: 'Loop reminders',
+        importance: Notifications.AndroidImportance.DEFAULT,
+        sound: 'default',
+      }),
+    ]);
   }
 
   const { status: existingStatus } = await Notifications.getPermissionsAsync();

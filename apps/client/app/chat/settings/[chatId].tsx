@@ -16,7 +16,8 @@ import { CategoryPicker } from '../../../components/CategoryPicker';
 import { MobileAvatar, MobileIconButton, SectionLabel } from '../../../components/mobile/claire-mobile';
 import { PlatformBadge } from '../../../components/PlatformIcon';
 import { Platform } from '../../../types/platform';
-import type { ChatCategory } from '../../../types/conversationSettings';
+import { CATEGORY_DISPLAY_THRESHOLD, type ChatCategory, type GroupCategory } from '../../../types/conversationSettings';
+import { groupCategoryTag } from '../../../features/chat/group-category';
 import { formatPhoneNumber, formatPhoneNumberInput, normalizePhoneNumber } from '../../../services/phone-numbers';
 import { displayContactName } from '../../../services/contact-display';
 import { API_BASE_URL } from '../../../services/platforms';
@@ -62,6 +63,12 @@ export default function ConversationSettingsScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [isSavingMute, setIsSavingMute] = useState(false);
+  // null means the user has not chosen, so the default applies: on for a 1:1,
+  // off for a group. Kept as null rather than resolved so the subcopy can say
+  // which it is inheriting.
+  const [aiEnabled, setAiEnabled] = useState<boolean | null>(null);
+  const [isSavingAi, setIsSavingAi] = useState(false);
+  const [inferredCategory, setInferredCategory] = useState<GroupCategory | null>(null);
   const displayName =
     is_group === '1'
       ? chat_name || contact_name || 'Group'
@@ -95,12 +102,25 @@ export default function ConversationSettingsScreen() {
       // for one column.
       const { data: chat } = await supabase
         .from('chats')
-        .select('contact_id,is_muted,contacts(phone_number)')
+        .select('contact_id,is_muted,ai_enabled,contacts(phone_number),chat_classifications(category,confidence)')
         .eq('id', chatId)
         .maybeSingle();
       if (!active) return;
       const muted = chat?.is_muted === true;
       setIsMuted(muted);
+      setAiEnabled(typeof chat?.ai_enabled === 'boolean' ? chat.ai_enabled : null);
+
+      const embeddedClass = chat?.chat_classifications as
+        | { category?: string | null; confidence?: number | null }
+        | Array<{ category?: string | null; confidence?: number | null }>
+        | null
+        | undefined;
+      const classification = Array.isArray(embeddedClass) ? embeddedClass[0] : embeddedClass;
+      setInferredCategory(
+        (classification?.confidence ?? 0) >= CATEGORY_DISPLAY_THRESHOLD
+          ? ((classification?.category as GroupCategory) ?? null)
+          : null
+      );
 
       const embedded = chat?.contacts as { phone_number?: string | null } | Array<{ phone_number?: string | null }> | null | undefined;
       const embeddedContact = Array.isArray(embedded) ? embedded[0] : embedded;
@@ -152,6 +172,27 @@ export default function ConversationSettingsScreen() {
       setIsSavingMute(false);
     }
   };
+  const isGroup = is_group === '1';
+  const effectiveAi = aiEnabled ?? !isGroup;
+  const updateAi = async (enabled: boolean) => {
+    if (!accessToken || isSavingAi) return;
+    const previous = aiEnabled;
+    setAiEnabled(enabled);
+    setIsSavingAi(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/messages/chats/${encodeURIComponent(chatId)}/ai`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled }),
+      });
+      if (!response.ok) throw new Error(`AI update failed (${response.status})`);
+    } catch {
+      setAiEnabled(previous);
+      Alert.alert('Could not update Claire', 'Please check your connection and try again.');
+    } finally {
+      setIsSavingAi(false);
+    }
+  };
   const selectTone = (nextTone: ToneKey) => {
     setTone(nextTone);
     if (!instruction.trim()) {
@@ -193,6 +234,30 @@ export default function ConversationSettingsScreen() {
 
           <View style={{ gap: space[2] }}>
             <SectionLabel title="Chat settings" />
+            {/* Claire's own switch sits above Mute: for a group it is the more
+                consequential of the two, and it is the one the banner in the
+                chat sends people here to find. */}
+            <View testID="conversation-ai-settings" style={{ minHeight: 76, flexDirection: 'row', alignItems: 'center', gap: space[3], paddingHorizontal: space[3], borderRadius: radius.card, backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.neutral[200] }}>
+              <View style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: radius.control, backgroundColor: effectiveAi ? colors.lime : colors.neutral[100] }}><Sparkles size={19} color={colors.ink} /></View>
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>Claire AI</Text>
+                <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>
+                  {effectiveAi
+                    ? 'Summaries, suggested replies and follow-ups for this chat.'
+                    : aiEnabled === null
+                      ? "Off by default for groups. Claire still stores and searches it, but won't suggest anything."
+                      : "Claire won't process new messages here."}
+                </Text>
+                {inferredCategory ? (
+                  <Text style={{ ...mobileType.bodySmall, fontSize: 11, lineHeight: 14, color: colors.neutral[400] }}>
+                    Claire reads this as a {groupCategoryTag(inferredCategory, 1)?.toLowerCase()} group.
+                  </Text>
+                ) : null}
+              </View>
+              <View style={{ height: 40, justifyContent: 'center' }}>
+                <Switch testID="conversation-ai-enabled" accessibilityLabel={`Claire AI for ${displayName}`} value={effectiveAi} disabled={isSavingAi || !accessToken} onValueChange={(value) => void updateAi(value)} trackColor={{ false: colors.neutral[200], true: colors.ink }} thumbColor={effectiveAi ? colors.lime : colors.paper} />
+              </View>
+            </View>
             <View testID="conversation-notification-settings" style={{ minHeight: 76, flexDirection: 'row', alignItems: 'center', gap: space[3], paddingHorizontal: space[3], borderRadius: radius.card, backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.neutral[200] }}>
               <View style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: radius.control, backgroundColor: isMuted ? colors.neutral[100] : colors.sky }}><BellOff size={19} color={colors.ink} /></View>
               <View style={{ flex: 1, gap: 2 }}><Text style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>Mute notifications</Text><Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{isMuted ? 'Notifications are muted for this chat.' : `Receive alerts for this ${is_group === '1' ? 'group' : 'conversation'}.`}</Text></View>

@@ -342,6 +342,7 @@ export default function NotificationsSettingsScreen() {
         )}
         <ToggleRow
           label="Loop reminders"
+          description="At a useful moment based on snooze, urgency, deadline, and who owes the next move"
           value={prefs.notify_loops}
           onValueChange={(v) => update({ notify_loops: v })}
           testID="notif-toggle-loops"

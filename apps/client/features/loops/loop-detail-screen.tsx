@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, ChevronLeft, Clock3, MessageCircle, RotateCcw, Trash2, UserRound } from 'lucide-react-native';
+import { Bell, Check, ChevronLeft, Clock3, MessageCircle, RotateCcw, Trash2, UserRound } from 'lucide-react-native';
 import { colors, mobileType, radius, space } from '@claire/design-system';
 
 import { MobileHeader, MobileIconButton, MobileState } from '../../components/mobile/claire-mobile';
@@ -49,6 +49,13 @@ const STATE_LABEL: Record<string, string> = {
   pending_confirmation: 'Waiting on confirmation',
   agreed: 'Agreed',
   resolved: 'Resolved',
+};
+
+const REMINDER_LABEL: Record<string, string> = {
+  snooze_ended: 'Returns after snooze',
+  act_now: 'Needs attention',
+  deadline_soon: 'Before the deadline',
+  follow_up: 'Follow-up window',
 };
 
 /** A tappable pill. Static style plus press state — see the Pressable gotcha in CLAUDE.md. */
@@ -235,6 +242,7 @@ export function LoopDetailScreen() {
   const group = !!loop.chat?.is_group;
   const due = formatDeadline(loop.deadline, loop.deadline_precision);
   const snoozedUntil = formatDeadline(loop.snoozed_until, 'exact');
+  const nextReminder = formatDeadline(loop.next_reminder_at, 'exact');
 
   const tomorrow = () => {
     const date = new Date();
@@ -310,6 +318,14 @@ export function LoopDetailScreen() {
             <Text testID="loop-detail-snoozed" style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>
               Snoozed until {snoozedUntil}
             </Text>
+          ) : null}
+          {loop.reminder_plan_state === 'scheduled' && nextReminder ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}>
+              <Bell size={15} color={colors.neutral[600]} />
+              <Text testID="loop-detail-next-reminder" style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>
+                {REMINDER_LABEL[loop.reminder_reason ?? ''] ?? 'Reminder'} · {nextReminder}
+              </Text>
+            </View>
           ) : null}
         </View>
 

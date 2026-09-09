@@ -28,12 +28,18 @@ export interface SchemaRequirement {
  */
 export const REQUIRED_SCHEMA: SchemaRequirement[] = [
   { table: 'messages', columns: ['snoozed_until', 'is_group', 'contact_name', 'contact_phone', 'media_mime_type'] },
-  { table: 'chats', columns: ['whatsapp_chat_id', 'last_message_at'] },
+  { table: 'chats', columns: ['whatsapp_chat_id', 'last_message_at', 'is_group', 'ai_enabled', 'member_count'] },
+  { table: 'chat_classifications', columns: ['category', 'confidence', 'method'] },
+  // A view, not a table, but it fails the same way: People reads it directly,
+  // so a server deployed ahead of its migration would 500 the whole screen
+  // rather than degrade. Better to fail the deploy gate.
+  { table: 'people_directory', columns: ['is_dead_end', 'outbound_message_count'] },
   { table: 'contacts', columns: ['inferred_relationship', 'inference_confidence'] },
   { table: 'ai_suggestions', columns: ['selected_index', 'feedback'] },
   { table: 'push_tokens', columns: ['token', 'device_id'] },
   { table: 'notification_devices', columns: ['device_id', 'provider', 'token', 'enabled', 'timezone', 'last_seen_at'] },
-  { table: 'notification_deliveries', columns: ['device_id', 'message_id', 'state', 'attempts', 'provider_receipt_id'] },
+  { table: 'notification_deliveries', columns: ['device_id', 'message_id', 'loop_id', 'notification_type', 'subject_revision', 'state', 'attempts', 'provider_receipt_id'] },
+  { table: 'loops', columns: ['next_reminder_at', 'reminder_plan_state', 'reminder_reason', 'reminder_revision', 'reminder_count'] },
   { table: 'auto_reply_rules', columns: ['trigger_type', 'reply_template'] },
   { table: 'contact_memory', columns: ['key', 'value', 'confidence'] },
   { table: 'chat_categories', columns: ['category'] },
