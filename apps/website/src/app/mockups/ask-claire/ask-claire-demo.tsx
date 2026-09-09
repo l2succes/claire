@@ -29,6 +29,7 @@ import styles from './ask-claire-demo.module.css';
 gsap.registerPlugin(useGSAP);
 
 type DemoFormat = 'landscape' | 'square' | 'mobile';
+type MobileDepth = 'contained' | 'popout';
 
 type DemoScene = {
   id: 'russian' | 'saturday' | 'birthday';
@@ -184,6 +185,16 @@ function words(value: string) {
   ));
 }
 
+function ComposerCopy({ scene }: { scene: DemoScene }) {
+  return (
+    <>
+      <span data-composer-placeholder>Ask about your conversations</span>
+      <span data-composer-entry="primary">{scene.question}</span>
+      <span data-composer-entry="follow-up">{scene.followUpQuestion}</span>
+    </>
+  );
+}
+
 function Mark({ compact = false }: { compact?: boolean }) {
   return (
     <svg
@@ -265,121 +276,131 @@ function MobileAskClaireScene({ scene }: { scene: DemoScene }) {
 
             <div className={styles.mobileConversationBody}>
               <div className={styles.mobileThreadTrack} data-thread-track>
-                <div
-                  className={styles.mobileQuestion}
-                  data-query-bubble
-                  aria-label={scene.question}
-                >
-                  {scene.question.split('').map((character, index) => (
-                    <span aria-hidden="true" data-query-character key={`${character}-${index}`}>
-                      {character === ' ' ? '\u00A0' : character}
-                    </span>
-                  ))}
-                </div>
-
-                <div className={styles.mobileThinkingCard} data-thinking-card>
-                  <div className={styles.mobileThinkingHeader}>
-                    <Mark compact />
-                    <span>Claire is connecting the dots</span>
-                    <span className={styles.thinkingDots}>
-                      <i data-thinking-dot />
-                      <i data-thinking-dot />
-                      <i data-thinking-dot />
-                    </span>
-                  </div>
-                  <div className={styles.mobileThinkingSteps}>
-                    <span data-thinking-row>
-                      <MagnifyingGlassIcon /> Reading relevant conversations
-                    </span>
-                    <span data-thinking-row>
-                      <UserGroupIcon /> Connecting people, places, and plans
-                    </span>
-                  </div>
-                </div>
-
-                <article className={styles.mobileAnswerCard} data-answer-card>
-                  <span className={styles.answerEyebrow}>{scene.eyebrow}</span>
-                  <h2>{words(scene.answer)}</h2>
-                  <p>{words(scene.detail)}</p>
-                  <div className={styles.mobileSourceStack} data-source-stack>
-                    <span className={styles.miniAvatars}>
-                      {scene.sources.map((source) => (
-                        <span className={SOURCE_TONE_CLASS[source.tone]} key={source.name}>
-                          {source.initials}
-                        </span>
-                      ))}
-                    </span>
-                    <span>{scene.sources.length} source conversations</span>
-                    <ChevronRightIcon />
-                  </div>
-                  <div className={styles.mobileAnswerActions}>
-                    {scene.actions.map((action, index) => (
-                      <button
-                        className={
-                          index === 0 ? styles.mobilePrimaryAction : styles.mobileSecondaryAction
-                        }
-                        data-action-button
-                        key={action}
-                        type="button"
-                      >
-                        {index === 0 && scene.id === 'saturday' ? <CalendarDaysIcon /> : null}
-                        {index === 0 && scene.id === 'birthday' ? <UserGroupIcon /> : null}
-                        {index === 0 && scene.id === 'russian' ? <ChatBubbleLeftRightIcon /> : null}
-                        {action}
-                      </button>
-                    ))}
-                  </div>
-                </article>
-
-                <div className={styles.mobileFollowUpExchange} data-follow-up-exchange>
+                <div className={styles.mobileQuestionPlane}>
                   <div
-                    aria-label={scene.followUpQuestion}
-                    className={styles.mobileFollowUpQuestion}
-                    data-follow-up-bubble
+                    className={styles.mobileQuestion}
+                    data-query-bubble
+                    aria-label={scene.question}
                   >
-                    {scene.followUpQuestion.split('').map((character, index) => (
-                      <span
-                        aria-hidden="true"
-                        data-follow-up-character
-                        key={`${character}-${index}`}
-                      >
-                        {character === ' ' ? '\u00A0' : character}
+                    {scene.question.split('').map((character, index) => (
+                      <span aria-hidden="true" data-query-character key={`${character}-${index}`}>
+                        {character}
                       </span>
                     ))}
                   </div>
-                  <div className={styles.mobileFollowUpThinking} data-follow-up-thinking>
-                    <Mark compact />
-                    <span>Checking the conversation</span>
-                    <span className={styles.thinkingDots}>
-                      <i data-follow-up-thinking-dot />
-                      <i data-follow-up-thinking-dot />
-                      <i data-follow-up-thinking-dot />
-                    </span>
-                  </div>
-                  <article className={styles.mobileFollowUpAnswer} data-follow-up-answer>
-                    <span className={styles.mobileAnswerMark}>
+                </div>
+
+                <div className={styles.mobileResponseSlot}>
+                  <div className={styles.mobileThinkingCard} data-thinking-card>
+                    <div className={styles.mobileThinkingHeader}>
                       <Mark compact />
-                    </span>
-                    <div>
-                      <span className={styles.answerEyebrow}>FOLLOW-UP</span>
-                      <p>
-                        {scene.followUpAnswer.split(' ').map((word, index) => (
-                          <span
-                            className={styles.revealWord}
-                            data-follow-up-word
-                            key={`${word}-${index}`}
-                          >
-                            {word}{' '}
+                      <span>Claire is connecting the dots</span>
+                      <span className={styles.thinkingDots}>
+                        <i data-thinking-dot />
+                        <i data-thinking-dot />
+                        <i data-thinking-dot />
+                      </span>
+                    </div>
+                    <div className={styles.mobileThinkingSteps}>
+                      <span data-thinking-row>
+                        <MagnifyingGlassIcon /> Reading relevant conversations
+                      </span>
+                      <span data-thinking-row>
+                        <UserGroupIcon /> Connecting people, places, and plans
+                      </span>
+                    </div>
+                  </div>
+
+                  <article className={styles.mobileAnswerCard} data-answer-card>
+                    <span className={styles.answerEyebrow}>{scene.eyebrow}</span>
+                    <h2>{words(scene.answer)}</h2>
+                    <p>{words(scene.detail)}</p>
+                    <div className={styles.mobileSourceStack} data-source-stack>
+                      <span className={styles.miniAvatars}>
+                        {scene.sources.map((source) => (
+                          <span className={SOURCE_TONE_CLASS[source.tone]} key={source.name}>
+                            {source.initials}
                           </span>
                         ))}
-                      </p>
-                      <button data-follow-up-action type="button">
-                        <ChatBubbleLeftRightIcon />
-                        {scene.followUpAction}
-                        <ChevronRightIcon />
-                      </button>
+                      </span>
+                      <span>{scene.sources.length} source conversations</span>
+                      <ChevronRightIcon />
+                    </div>
+                    <div className={styles.mobileAnswerActions}>
+                      {scene.actions.map((action, index) => (
+                        <button
+                          className={
+                            index === 0 ? styles.mobilePrimaryAction : styles.mobileSecondaryAction
+                          }
+                          data-action-button
+                          key={action}
+                          type="button"
+                        >
+                          {index === 0 && scene.id === 'saturday' ? <CalendarDaysIcon /> : null}
+                          {index === 0 && scene.id === 'birthday' ? <UserGroupIcon /> : null}
+                          {index === 0 && scene.id === 'russian' ? (
+                            <ChatBubbleLeftRightIcon />
+                          ) : null}
+                          {action}
+                        </button>
+                      ))}
                     </div>
                   </article>
+                </div>
+
+                <div className={styles.mobileFollowUpExchange} data-follow-up-exchange>
+                  <div className={styles.mobileFollowUpQuestionPlane}>
+                    <div
+                      aria-label={scene.followUpQuestion}
+                      className={styles.mobileFollowUpQuestion}
+                      data-follow-up-bubble
+                    >
+                      {scene.followUpQuestion.split('').map((character, index) => (
+                        <span
+                          aria-hidden="true"
+                          data-follow-up-character
+                          key={`${character}-${index}`}
+                        >
+                          {character}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <div className={styles.mobileFollowUpResponseSlot}>
+                    <div className={styles.mobileFollowUpThinking} data-follow-up-thinking>
+                      <Mark compact />
+                      <span>Checking the conversation</span>
+                      <span className={styles.thinkingDots}>
+                        <i data-follow-up-thinking-dot />
+                        <i data-follow-up-thinking-dot />
+                        <i data-follow-up-thinking-dot />
+                      </span>
+                    </div>
+                    <article className={styles.mobileFollowUpAnswer} data-follow-up-answer>
+                      <span className={styles.mobileAnswerMark}>
+                        <Mark compact />
+                      </span>
+                      <div>
+                        <span className={styles.answerEyebrow}>FOLLOW-UP</span>
+                        <p>
+                          {scene.followUpAnswer.split(' ').map((word, index) => (
+                            <span
+                              className={styles.revealWord}
+                              data-follow-up-word
+                              key={`${word}-${index}`}
+                            >
+                              {word}{' '}
+                            </span>
+                          ))}
+                        </p>
+                        <button data-follow-up-action type="button">
+                          <ChatBubbleLeftRightIcon />
+                          {scene.followUpAction}
+                          <ChevronRightIcon />
+                        </button>
+                      </div>
+                    </article>
+                  </div>
                 </div>
               </div>
             </div>
@@ -388,8 +409,8 @@ function MobileAskClaireScene({ scene }: { scene: DemoScene }) {
               <button aria-label="Add context" type="button">
                 <PlusIcon />
               </button>
-              <span>
-                Ask about your conversations
+              <span className={styles.mobileComposerCopy}>
+                <ComposerCopy scene={scene} />
                 <i className={styles.mobileComposerCaret} data-composer-caret />
               </span>
               <button
@@ -411,6 +432,7 @@ function MobileAskClaireScene({ scene }: { scene: DemoScene }) {
 type AskClaireDemoProps = {
   initialAutoplay: boolean;
   initialChrome: boolean;
+  initialDepth?: string;
   initialFormat?: string;
   initialLoop: boolean;
   initialScene?: string;
@@ -426,9 +448,14 @@ function initialDemoFormat(value?: string): DemoFormat {
   return value === 'square' ? value : 'landscape';
 }
 
+function initialMobileDepth(value?: string): MobileDepth {
+  return value === 'popout' ? 'popout' : 'contained';
+}
+
 export function AskClaireDemo({
   initialAutoplay,
   initialChrome,
+  initialDepth,
   initialFormat,
   initialLoop,
   initialScene,
@@ -441,6 +468,9 @@ export function AskClaireDemo({
   const [loop, setLoop] = useState(initialLoop);
   const showChrome = initialChrome;
   const [format, setFormat] = useState<DemoFormat>(() => initialDemoFormat(initialFormat));
+  const [mobileDepth, setMobileDepth] = useState<MobileDepth>(() =>
+    initialMobileDepth(initialDepth)
+  );
   const scene = DEMO_SCENES[sceneIndex];
 
   const goToScene = useCallback((index: number) => {
@@ -454,19 +484,45 @@ export function AskClaireDemo({
       const root = rootRef.current;
       if (!root) return;
 
-      const queryCharacters = root.querySelectorAll('[data-query-character]');
-      const thinkingRows = root.querySelectorAll('[data-thinking-row]');
-      const sourceCards = root.querySelectorAll('[data-source-card]');
-      const answerWords = root.querySelectorAll(`[data-answer-card] .${styles.revealWord}`);
-      const actionButtons = root.querySelectorAll('[data-action-button]');
-      const followUpCharacters = root.querySelectorAll('[data-follow-up-character]');
-      const followUpWords = root.querySelectorAll('[data-follow-up-word]');
+      const activeFrameSelector =
+        format === 'mobile' ? `.${styles.mobileDevice}` : `.${styles.appFrame}`;
+      const queryCharacters = root.querySelectorAll(
+        `${activeFrameSelector} [data-query-character]`
+      );
+      const thinkingRows = root.querySelectorAll(`${activeFrameSelector} [data-thinking-row]`);
+      const sourceCards = root.querySelectorAll(`${activeFrameSelector} [data-source-card]`);
+      const answerWords = root.querySelectorAll(
+        `${activeFrameSelector} [data-answer-card] .${styles.revealWord}`
+      );
+      const actionButtons = root.querySelectorAll(`${activeFrameSelector} [data-action-button]`);
+      const followUpCharacters = root.querySelectorAll(
+        `${activeFrameSelector} [data-follow-up-character]`
+      );
+      const followUpWords = root.querySelectorAll(`${activeFrameSelector} [data-follow-up-word]`);
+      const composerPlaceholder = root.querySelectorAll(
+        `${activeFrameSelector} [data-composer-placeholder]`
+      );
+      const primaryComposerEntry = root.querySelectorAll(
+        `${activeFrameSelector} [data-composer-entry='primary']`
+      );
+      const followUpComposerEntry = root.querySelectorAll(
+        `${activeFrameSelector} [data-composer-entry='follow-up']`
+      );
       const progressFill = root.querySelector('[data-progress-fill]');
       const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const primaryTypingDuration = Math.min(2.35, Math.max(1.25, scene.question.length * 0.026));
+      const followUpTypingDuration = Math.min(
+        2.05,
+        Math.max(1.05, scene.followUpQuestion.length * 0.026)
+      );
+      const composerScrollX = (_index: number, target: Element) => {
+        const parentWidth = target.parentElement?.clientWidth ?? 0;
+        return -Math.max(0, target.scrollWidth - parentWidth + 4);
+      };
 
       gsap.set('[data-app-frame]', { autoAlpha: 1 });
       gsap.set('[data-query-bubble]', { autoAlpha: 0, y: 18, scale: 0.985 });
-      gsap.set(queryCharacters, { autoAlpha: 0, y: 5 });
+      gsap.set(queryCharacters, { autoAlpha: 1, y: 0 });
       gsap.set('[data-thinking-card]', { autoAlpha: 0, y: 15 });
       gsap.set(thinkingRows, { autoAlpha: 0, x: -8 });
       gsap.set(sourceCards, { autoAlpha: 0, x: 22, rotate: 0.8 });
@@ -476,11 +532,22 @@ export function AskClaireDemo({
       gsap.set(actionButtons, { autoAlpha: 0, y: 10 });
       gsap.set('[data-source-stack]', { autoAlpha: 0, y: 8 });
       gsap.set('[data-follow-up-bubble]', { autoAlpha: 0, y: 16, scale: 0.985 });
-      gsap.set(followUpCharacters, { autoAlpha: 0, y: 4 });
+      gsap.set(followUpCharacters, { autoAlpha: 1, y: 0 });
       gsap.set('[data-follow-up-thinking]', { autoAlpha: 0, y: 10 });
       gsap.set('[data-follow-up-answer]', { autoAlpha: 0, y: 18 });
       gsap.set(followUpWords, { autoAlpha: 0, y: 7 });
       gsap.set('[data-follow-up-action]', { autoAlpha: 0, y: 8 });
+      gsap.set(composerPlaceholder, { autoAlpha: 1 });
+      gsap.set(primaryComposerEntry, {
+        autoAlpha: 0,
+        clipPath: 'inset(0 100% 0 0)',
+        x: 0,
+      });
+      gsap.set(followUpComposerEntry, {
+        autoAlpha: 0,
+        clipPath: 'inset(0 100% 0 0)',
+        x: 0,
+      });
       gsap.set(progressFill, { scaleX: 0, transformOrigin: 'left center' });
 
       if (reducedMotion) {
@@ -505,6 +572,8 @@ export function AskClaireDemo({
           ],
           { autoAlpha: 1, x: 0, y: 0, scale: 1, rotate: 0 }
         );
+        gsap.set([primaryComposerEntry, followUpComposerEntry], { autoAlpha: 0 });
+        gsap.set(composerPlaceholder, { autoAlpha: 1 });
         gsap.set(progressFill, { scaleX: 1 });
         return;
       }
@@ -525,15 +594,33 @@ export function AskClaireDemo({
       timelineRef.current = timeline;
       timeline
         .fromTo('[data-app-frame]', { y: 10, scale: 0.992 }, { y: 0, scale: 1, duration: 0.65 })
-        .to('[data-query-bubble]', { autoAlpha: 1, y: 0, scale: 1, duration: 0.42 }, 0.18)
+        .to(composerPlaceholder, { autoAlpha: 0, duration: 0.16 }, 0.28)
+        .fromTo(
+          primaryComposerEntry,
+          { autoAlpha: 1, clipPath: 'inset(0 100% 0 0)', x: 0 },
+          {
+            autoAlpha: 1,
+            clipPath: 'inset(0 0% 0 0)',
+            duration: primaryTypingDuration,
+            ease: 'none',
+          },
+          0.38
+        )
         .to(
-          queryCharacters,
-          { autoAlpha: 1, y: 0, duration: 0.025, stagger: 0.018, ease: 'none' },
-          0.48
+          primaryComposerEntry,
+          {
+            x: composerScrollX,
+            duration: primaryTypingDuration * 0.48,
+            ease: 'none',
+          },
+          0.38 + primaryTypingDuration * 0.52
         )
         .to('[data-send-button]', { scale: 0.88, duration: 0.1, ease: 'power2.in' }, '>-0.04')
         .to('[data-send-button]', { scale: 1, duration: 0.22, ease: 'back.out(2)' })
+        .to(primaryComposerEntry, { autoAlpha: 0, duration: 0.12 }, '<0.02')
         .to('[data-composer-caret]', { autoAlpha: 0, duration: 0.12 }, '<')
+        .to('[data-query-bubble]', { autoAlpha: 1, y: 0, scale: 1, duration: 0.42 }, '>0.02')
+        .to(composerPlaceholder, { autoAlpha: 1, duration: 0.2 }, '<0.16')
         .to('[data-thinking-card]', { autoAlpha: 1, y: 0, duration: 0.4 }, '>-0.02')
         .to(thinkingRows, { autoAlpha: 1, x: 0, duration: 0.3, stagger: 0.42 }, '<0.08')
         .to(
@@ -549,21 +636,49 @@ export function AskClaireDemo({
         .to('[data-source-stack]', { autoAlpha: 1, y: 0, duration: 0.36 }, '>-0.05')
         .to(actionButtons, { autoAlpha: 1, y: 0, duration: 0.35, stagger: 0.1 }, '<0.08')
         .to({}, { duration: 3.8 })
-        .to('[data-thread-track]', {
-          y: (_index, target) => {
-            const followUp = target.querySelector('[data-follow-up-exchange]');
-            return followUp instanceof HTMLElement ? -Math.max(0, followUp.offsetTop - 24) : -280;
+        .addLabel('followUpTyping')
+        .to(composerPlaceholder, { autoAlpha: 0, duration: 0.16 }, 'followUpTyping')
+        .set('[data-composer-caret]', { autoAlpha: 1 }, 'followUpTyping')
+        .fromTo(
+          followUpComposerEntry,
+          { autoAlpha: 1, clipPath: 'inset(0 100% 0 0)', x: 0 },
+          {
+            autoAlpha: 1,
+            clipPath: 'inset(0 0% 0 0)',
+            duration: followUpTypingDuration,
+            ease: 'none',
+            immediateRender: false,
           },
-          duration: 0.9,
-          ease: 'power3.inOut',
-        })
-        .to('[data-follow-up-bubble]', { autoAlpha: 1, y: 0, scale: 1, duration: 0.4 }, '<0.12')
-        .to(
-          followUpCharacters,
-          { autoAlpha: 1, y: 0, duration: 0.025, stagger: 0.018, ease: 'none' },
-          '<0.14'
+          'followUpTyping+=0.1'
         )
-        .to('[data-follow-up-thinking]', { autoAlpha: 1, y: 0, duration: 0.34 }, '>-0.02')
+        .to(
+          followUpComposerEntry,
+          {
+            x: composerScrollX,
+            duration: followUpTypingDuration * 0.48,
+            ease: 'none',
+          },
+          `followUpTyping+=${0.1 + followUpTypingDuration * 0.52}`
+        )
+        .to('[data-send-button]', { scale: 0.88, duration: 0.1, ease: 'power2.in' }, '>-0.02')
+        .to('[data-send-button]', { scale: 1, duration: 0.22, ease: 'back.out(2)' })
+        .to(followUpComposerEntry, { autoAlpha: 0, duration: 0.12 }, '<0.02')
+        .to('[data-composer-caret]', { autoAlpha: 0, duration: 0.12 }, '<')
+        .to(composerPlaceholder, { autoAlpha: 1, duration: 0.18 }, '>0.02')
+        .to(
+          '[data-thread-track]',
+          {
+            y: (_index, target) => {
+              const followUp = target.querySelector('[data-follow-up-exchange]');
+              return followUp instanceof HTMLElement ? -Math.max(0, followUp.offsetTop - 24) : -280;
+            },
+            duration: 0.9,
+            ease: 'power3.inOut',
+          },
+          '>-0.04'
+        )
+        .to('[data-follow-up-bubble]', { autoAlpha: 1, y: 0, scale: 1, duration: 0.4 }, '<0.12')
+        .to('[data-follow-up-thinking]', { autoAlpha: 1, y: 0, duration: 0.34 }, '>0.04')
         .to(
           '[data-follow-up-thinking-dot]',
           { scale: 1.35, duration: 0.28, stagger: 0.1, yoyo: true, repeat: 3 },
@@ -579,7 +694,7 @@ export function AskClaireDemo({
         timelineRef.current = null;
       };
     },
-    { scope: rootRef, dependencies: [sceneIndex, runId, loop, goToScene] }
+    { scope: rootRef, dependencies: [sceneIndex, runId, loop, goToScene, format] }
   );
 
   useEffect(() => {
@@ -618,6 +733,7 @@ export function AskClaireDemo({
     url.search = '';
     url.searchParams.set('scene', scene.id);
     url.searchParams.set('format', format);
+    if (format === 'mobile') url.searchParams.set('depth', mobileDepth);
     url.searchParams.set('chrome', '0');
     url.searchParams.set('loop', loop ? '1' : '0');
     await navigator.clipboard.writeText(url.toString());
@@ -628,6 +744,7 @@ export function AskClaireDemo({
       className={styles.demo}
       data-format={format}
       data-chrome={showChrome ? 'visible' : 'hidden'}
+      data-depth={mobileDepth}
       ref={rootRef}
     >
       <div className={styles.ambientWash} aria-hidden="true" />
@@ -663,6 +780,26 @@ export function AskClaireDemo({
                 </button>
               ))}
             </div>
+            {format === 'mobile' ? (
+              <div className={styles.depthSwitch} aria-label="Mobile card depth">
+                {(['contained', 'popout'] as const).map((item) => (
+                  <button
+                    aria-pressed={mobileDepth === item}
+                    className={mobileDepth === item ? styles.depthButtonActive : styles.depthButton}
+                    key={item}
+                    onClick={() => setMobileDepth(item)}
+                    type="button"
+                  >
+                    <span
+                      className={
+                        item === 'contained' ? styles.depthIconContained : styles.depthIconPopout
+                      }
+                    />
+                    {item === 'contained' ? 'Inside' : 'Pop-out'}
+                  </button>
+                ))}
+              </div>
+            ) : null}
             <button
               className={styles.cleanLinkButton}
               onClick={() => void copyCleanLink()}
@@ -851,9 +988,9 @@ export function AskClaireDemo({
 
               <footer className={styles.composer}>
                 <span className={styles.composerPrompt}>
-                  Ask anything about your conversations…
+                  <ComposerCopy scene={scene} />
+                  <span className={styles.composerCaret} data-composer-caret />
                 </span>
-                <span className={styles.composerCaret} data-composer-caret />
                 <div className={styles.composerTools}>
                   <span className={styles.contextPill}>All conversations</span>
                   <button aria-label="Send question" data-send-button type="button">
