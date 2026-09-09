@@ -11,7 +11,7 @@ import {
 import { logger } from '../utils/logger';
 import { supabase, type DbRow } from './supabase';
 import { selectAssistantActions, type AssistantAction } from './conversation-assistant-actions';
-import { selectCitedSources } from './conversation-assistant-citations';
+import { normalizeAssistantCitationLabels, selectCitedSources } from './conversation-assistant-citations';
 import { hasAnyProvider, resolveEmbeddingRole, resolveRole, type RoleResolution } from './ai/provider-registry';
 import { planAssistantQuery, type AssistantQueryPlan } from './conversation-assistant-query';
 
@@ -453,9 +453,10 @@ class ConversationAssistantService {
   private finalizeGenerated(
     prepared: PreparedRequest, rawAnswer: string, candidate: RoleResolution, finishReason: string, usage: LanguageModelUsage,
   ): GeneratedAnswer {
-    const answer = rawAnswer.trim() || 'I could not find enough relevant messages to answer that confidently.';
-    const indices = [...answer.matchAll(/\[S(\d{1,2})\]/gi)]
-      .map((match) => Number(match[1])).filter((index) => index >= 1 && index <= prepared.citations.length);
+    const raw = rawAnswer.trim() || 'I could not find enough relevant messages to answer that confidently.';
+    const normalized = normalizeAssistantCitationLabels(raw, prepared.citations.length);
+    const answer = normalized.answer;
+    const indices = normalized.sourceIndices;
     const citations = selectCitedSources(prepared.citations, indices);
     const sourceIndex = citations.length ? Math.max(1, prepared.citations.findIndex((item) => item.messageId === citations[0].messageId) + 1) : 0;
     const rawActions: Array<Record<string, unknown>> = sourceIndex

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { selectCitedSources, selectSourceIndices } from './conversation-assistant-citations';
+import { normalizeAssistantCitationLabels, selectCitedSources, selectSourceIndices } from './conversation-assistant-citations';
 
 const sources = Array.from({ length: 6 }, (_, index) => ({
   messageId: `message-${index + 1}`,
@@ -27,5 +27,12 @@ describe('conversation assistant sources', () => {
 
   it('keeps action evidence within the same four-source citation cap', () => {
     expect(selectSourceIndices(sources.length, [1, 2, 3, 4, 5])).toEqual([1, 2, 3, 4]);
+  });
+
+  it('remaps visible labels and removes unsupported relationship or overflow labels', () => {
+    expect(normalizeAssistantCitationLabels('Lead [S4], detail [S2], more [S1][S3], overflow [S5], metric [R1].', 6)).toEqual({
+      answer: 'Lead [S1], detail [S2], more [S3][S4], overflow, metric.',
+      sourceIndices: [4, 2, 1, 3],
+    });
   });
 });

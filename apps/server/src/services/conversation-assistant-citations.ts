@@ -16,3 +16,21 @@ export function selectCitedSources<T>(citations: T[], sourceIndices: unknown): T
 
   return selected.length ? selected : citations.slice(0, Math.min(MAX_CITED_SOURCES, citations.length));
 }
+
+/** Keep answer labels aligned with the capped source cards the client receives. */
+export function normalizeAssistantCitationLabels(answer: string, sourceCount: number): { answer: string; sourceIndices: number[] } {
+  const mentioned = [...answer.matchAll(/\[S(\d{1,3})\]/gi)].map((match) => Number(match[1]));
+  const sourceIndices = selectSourceIndices(sourceCount, mentioned);
+  const visibleLabels = new Map(sourceIndices.map((sourceIndex, index) => [sourceIndex, index + 1]));
+  const normalized = answer
+    .replace(/\[([SR])(\d{1,3})\]/gi, (_label, kind: string, rawIndex: string) => {
+      if (kind.toUpperCase() !== 'S') return '';
+      const visibleIndex = visibleLabels.get(Number(rawIndex));
+      return visibleIndex ? `[S${visibleIndex}]` : '';
+    })
+    .replace(/[ \t]+([,.;:!?])/g, '$1')
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  return { answer: normalized, sourceIndices };
+}
