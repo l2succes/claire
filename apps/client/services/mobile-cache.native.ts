@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import { buildPayloadInsertBatches } from './sqlite-batch';
 
 export type CachedChat = Record<string, unknown> & { id: string; latest_message?: Record<string, unknown> | null };
 export type CachedMessage = { id: string; chat_id: string; timestamp: string; [key: string]: unknown };
@@ -514,14 +515,19 @@ export async function replaceCachedContacts(userId: string, contacts: CachedCont
   if (!isNativeMobile) return;
   const db = await database(userId);
   if (!db) return;
+
+  // A 21,000-contact directory was 21,000 INSERT statements inside one
+  // transaction, which is most of the cost of a completed sync. Batched, it is
+  // seventy.
+  const batches = buildPayloadInsertBatches(contacts, new Date().toISOString());
+
   await db.withTransactionAsync(async () => {
     await db.runAsync('DELETE FROM cache_contacts');
-    const now = new Date().toISOString();
-    for (const contact of contacts) {
-      if (typeof contact.id !== 'string') continue;
+    for (const batch of batches) {
       await db.runAsync(
-        'INSERT INTO cache_contacts(id, payload, updated_at) VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET payload = excluded.payload, updated_at = excluded.updated_at',
-        contact.id, JSON.stringify(contact), now,
+        `INSERT INTO cache_contacts(id, payload, updated_at) VALUES ${batch.placeholders} ` +
+          'ON CONFLICT(id) DO UPDATE SET payload = excluded.payload, updated_at = excluded.updated_at',
+        ...batch.params,
       );
     }
   });

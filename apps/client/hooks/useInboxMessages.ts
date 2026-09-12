@@ -12,6 +12,7 @@ import {
   type CachedChat,
 } from '../services/mobile-cache';
 import { displayContactName } from '../services/contact-display';
+import type { GroupCategory } from '../types/conversationSettings';
 
 export interface InboxMessage {
   id: string;
@@ -35,6 +36,10 @@ export interface InboxMessage {
   content_type?: string;
   media_url?: string;
   sender_name?: string;
+  /** Effective AI scope from the view: groups are opt-in. */
+  ai_processing_enabled?: boolean;
+  ai_category?: GroupCategory | null;
+  ai_category_confidence?: number | null;
 }
 
 export interface InboxCursor {
@@ -67,7 +72,7 @@ interface RawMessage {
 
 type InboxQueryData = InfiniteData<MessagePage, InboxCursor | null>;
 
-export type InboxServerFilter = 'all' | 'unread' | 'needs_reply' | 'groups';
+export type InboxServerFilter = 'dms' | 'all' | 'groups' | 'unread' | 'needs_reply';
 
 export function inboxQueryKey(userId?: string, search = '', filter: InboxServerFilter = 'all', platform = 'all') {
   return ['messages-feed', userId, search, filter, platform] as const;
@@ -156,6 +161,10 @@ function conversationRowToInboxMessage(row: DbRow): InboxMessage {
     content_type: (row.last_message_content_type as string) || 'text',
     media_url: (row.last_message_media_url as string) || undefined,
     sender_name: (row.last_message_sender_name as string) || undefined,
+    ai_processing_enabled: row.ai_processing_enabled === true,
+    ai_category: (row.ai_category as GroupCategory) ?? null,
+    ai_category_confidence:
+      typeof row.ai_category_confidence === 'number' ? row.ai_category_confidence : null,
   };
 }
 
@@ -182,15 +191,28 @@ export type InboxRealtimeRow = Partial<RawMessage> & { id: string; content?: str
  * already present must not be spliced into a filtered result set, since we
  * cannot know from the row alone whether it satisfies that filter.
  */
+/**
+ * `rowIsGroup` lets a scope-filtered feed accept an insert: the row itself says
+ * whether it belongs there. Unread and needs-reply cannot do this — they depend
+ * on state the row does not carry — so they still only ever patch in place.
+ *
+ * This matters because the inbox now defaults to `dms`. Treating only `all` as
+ * insertable would leave the default feed frozen until it refetched.
+ */
 function updateInboxQueries(
   queryClient: QueryClient,
   userId: string | undefined,
   updater: (old: InboxQueryData | undefined, canInsert: boolean) => InboxQueryData | undefined,
+  rowIsGroup?: boolean,
 ) {
   const queries = queryClient.getQueryCache().findAll({ queryKey: inboxQueryPrefix(userId) });
   for (const query of queries) {
     const [, , search, filter, platform] = query.queryKey as ReturnType<typeof inboxQueryKey>;
-    const canInsert = !search && filter === 'all' && platform === 'all';
+    const scopeAccepts =
+      filter === 'all' ||
+      (filter === 'dms' && rowIsGroup === false) ||
+      (filter === 'groups' && rowIsGroup === true);
+    const canInsert = !search && platform === 'all' && scopeAccepts;
     queryClient.setQueryData<InboxQueryData>(query.queryKey, (old) => updater(old, canInsert));
   }
 }
@@ -261,7 +283,7 @@ export function patchInboxRealtimeMessage(
     const first = old.pages[0];
     if (!first) return { ...old, pages: [{ messages: [newMessage], hasMore: false, nextCursor: null }] };
     return { ...old, pages: [{ ...first, messages: sortMessages([newMessage, ...first.messages]) }, ...old.pages.slice(1)] };
-  });
+  }, row.is_group ?? false);
 }
 
 export function patchInboxChat(
@@ -394,10 +416,13 @@ export function useInboxMessages(
     () => inboxQueryKey(userId, search, filter, platformFilter),
     [userId, search, filter, platformFilter],
   );
-  // Only the unfiltered feed may be seeded. A cached snapshot is the whole
+  // Only a scope feed may be seeded. A cached snapshot is the whole
   // conversation list; painting it into the Unread tab would show every
-  // conversation as unread until the server disagreed.
-  const canSeed = !search && filter === 'all' && platformFilter === 'all';
+  // conversation as unread until the server disagreed. `dms` is included
+  // because it is the default view — excluding it would mean the inbox most
+  // people open never paints from cache, which reads as a cold-start regression
+  // rather than as a filter behaving correctly.
+  const canSeed = !search && platformFilter === 'all' && (filter === 'all' || filter === 'dms');
   const seedRef = useRef<InboxMessage[]>([]);
 
   const { localSettled } = useLocalSeed<InboxQueryData>(queryClient, queryKey, {
@@ -405,7 +430,11 @@ export function useInboxMessages(
     read: async () => {
       if (!userId) return null;
       const snapshot = await hydrateMobileCache(userId);
-      const messages = cachedInboxMessages(snapshot.chats);
+      // The snapshot is the whole conversation list, so it has to be narrowed
+      // to the scope being seeded or the DMs feed paints groups it will then
+      // drop the moment the network answers.
+      const messages = cachedInboxMessages(snapshot.chats)
+        .filter((message) => (filter === 'dms' ? !message.is_group : true));
       if (!messages.length) return null;
       seedRef.current = messages;
       // hasMore stays true so the list keeps its "load more" affordance while
@@ -454,9 +483,15 @@ export function useInboxMessages(
       // them to the loaded pages only would filter the ~20 conversations in
       // memory rather than every conversation the account has.
       if (platformFilter !== 'all') feed = feed.eq('platform', platformFilter);
-      if (filter === 'unread') feed = feed.gt('unread_count', 0);
+      if (filter === 'dms') feed = feed.eq('is_group', false);
       if (filter === 'groups') feed = feed.eq('is_group', true);
-      if (filter === 'needs_reply') feed = feed.eq('last_message_from_me', false);
+      if (filter === 'unread') feed = feed.gt('unread_count', 0);
+      // Needs-reply is an AI judgement, so it follows AI scope. Without this a
+      // group Claire is not reading still qualifies on "someone else spoke
+      // last" — which is true of nearly every group, nearly always.
+      if (filter === 'needs_reply') {
+        feed = feed.eq('last_message_from_me', false).eq('ai_processing_enabled', true);
+      }
 
       // Keyset, not offset: a new message reorders the feed between pages, so
       // offsets would make the list repeat and skip conversations.

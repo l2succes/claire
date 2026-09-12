@@ -96,7 +96,7 @@ async function ensureDemoProfile(userId: string, email: string, name: string): P
     if (error.message?.includes('is_demo')) {
       throw new Error(
         'The users.is_demo column is missing. Apply migration ' +
-          '20260912000001_add_demo_accounts.sql to this database first.'
+          '20260912120000_add_demo_accounts.sql to this database first.'
       );
     }
     throw error;

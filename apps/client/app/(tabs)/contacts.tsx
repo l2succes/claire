@@ -13,9 +13,9 @@ import { PeopleSkeleton } from '../../components/claire/skeleton';
 import { cachedContacts, replaceCachedContacts } from '../../services/mobile-cache';
 import { useLocalFirstQuery } from '../../hooks/useLocalFirstQuery';
 import { useScreenLoadMark } from '../../hooks/useScreenLoadMark';
-import { contactsApi, type PeopleFilter, type PersonContact } from '../../services/contacts';
+import { contactsApi, mergeDirectoryPage, type PeopleFilter, type PersonContact } from '../../services/contacts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
-import { displayPersonDetails, displayPersonName } from '../../services/contact-display';
+import { displayPersonDetails, displayPersonName, isDeadEndContact } from '../../services/contact-display';
 import { isPhoneNumberFallback } from '../../services/phone-numbers';
 
 type PlatformFilter = 'all' | Platform;
@@ -98,6 +98,9 @@ export default function ContactsScreen() {
   // retried once the rows around it have been measured.
   const pendingJumpRef = useRef<number | null>(null);
   const lastPublishRef = useRef(0);
+  // Whether the on-device directory was empty when this screen opened, which
+  // decides if a partial walk is worth persisting. See the early write below.
+  const cacheWasEmptyRef = useRef(true);
   const debouncedSearchQuery = useDebouncedValue(searchQuery);
 
   useEffect(() => {
@@ -116,6 +119,18 @@ export default function ContactsScreen() {
   // so read it from the local cache and let the network refresh happen behind
   // the already-rendered list rather than in front of an empty one.
   const isUnfilteredDirectory = !debouncedSearchQuery && platform === 'all' && filter === 'all';
+
+  // Never show fewer people than are already on screen while the walk fills in.
+  // See mergeDirectoryPage: this was the screen's instability.
+  const mergeOverExisting = useCallback(
+    (soFar: PersonContact[], isLast: boolean): PersonContact[] =>
+      mergeDirectoryPage(
+        soFar,
+        queryClient.getQueryData<{ contacts: PersonContact[] }>(peopleQueryKey)?.contacts,
+        isLast,
+      ),
+    [queryClient, peopleQueryKey],
+  );
   const peopleQuery = useLocalFirstQuery({
     queryKey: peopleQueryKey,
     enabled: !!user?.id,
@@ -127,6 +142,7 @@ export default function ContactsScreen() {
       read: async () => {
         if (!user?.id) return null;
         const rows = await cachedContacts(user.id);
+        cacheWasEmptyRef.current = rows.length === 0;
         return rows.length ? { contacts: rows as unknown as PersonContact[], nextOffset: null } : null;
       },
       isEmpty: (data) => !data.contacts.length,
@@ -152,9 +168,20 @@ export default function ContactsScreen() {
           lastPublishRef.current = now;
           queryClient.setQueryData(
             peopleQueryKey,
-            { contacts: [...soFar], nextOffset: null },
+            { contacts: mergeOverExisting(soFar, isLast), nextOffset: null },
             { updatedAt: 0 },
           );
+
+          // The full walk is the only thing that used to write the cache, and
+          // it takes 22 round trips. A first-ever session that ended before it
+          // finished cached nothing at all, so the next cold open was
+          // backend-first again — no matter how local-first this screen is.
+          // One early write means an interrupted first visit still leaves a
+          // directory to paint from. The complete walk still replaces it below.
+          if (!isLast && cacheWasEmptyRef.current && user?.id && isUnfilteredDirectory) {
+            cacheWasEmptyRef.current = false;
+            void replaceCachedContacts(user.id, soFar as never).catch(() => undefined);
+          }
         },
       );
       // Only the unfiltered directory is worth persisting: a search or filter
@@ -190,8 +217,14 @@ export default function ContactsScreen() {
   // computations per sort, and sorted again after every page the paginated
   // walk published. Now each contact's name and letter are computed once, and
   // the comparator only compares strings.
-  const { contacts, sections } = useMemo(() => {
-    const decorated = (peopleQuery.data?.contacts || []).map((contact) => {
+  const { contacts, sections, hiddenCount } = useMemo(() => {
+    const all = peopleQuery.data?.contacts || [];
+    // Dropped in the same pass that already walks the directory, so this costs
+    // nothing measurable. Filtering here rather than server-side also means the
+    // residue disappears from directories already cached on the device, without
+    // waiting for a re-sync.
+    const visible = all.filter((contact) => !isDeadEndContact(displayIdentity(contact)));
+    const decorated = visible.map((contact) => {
       const name = personName(contact);
       return {
         contact,
@@ -220,7 +253,7 @@ export default function ContactsScreen() {
         return left.localeCompare(right);
       })
       .map(([title, data]) => ({ title, data }));
-    return { contacts: ordered, sections: built };
+    return { contacts: ordered, sections: built, hiddenCount: all.length - visible.length };
   }, [peopleQuery.data]);
 
   useScreenLoadMark('people', {
@@ -389,6 +422,15 @@ export default function ContactsScreen() {
             );
           }}
           ListEmptyComponent={<MobileState error={!!peopleQuery.error} title={peopleQuery.error ? 'People are unavailable' : emptyTitle} message={peopleQuery.error ? 'Try again in a moment.' : emptyMessage} />}
+          // Says so rather than hiding silently. If the heuristic is ever wrong
+          // this is the only clue the user would get that someone is missing.
+          ListFooterComponent={hiddenCount ? (
+            <View style={{ paddingTop: space[4], paddingBottom: space[2] }}>
+              <Text style={{ ...mobileType.bodySmall, textAlign: 'center', color: colors.neutral[400] }}>
+                {hiddenCount === 1 ? '1 contact hidden' : `${hiddenCount} contacts hidden`} — no name, number, or conversation
+              </Text>
+            </View>
+          ) : null}
         />
         {sections.length ? <View pointerEvents="box-none" style={{ position: 'absolute', right: 2, top: space[2], bottom: 96, justifyContent: 'center' }} testID="people-alphabet-index">
           {sections.map((section, sectionIndex) => (

@@ -23,10 +23,17 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
     const filter = typeof req.query.filter === 'string' ? req.query.filter : 'all';
 
     const contactsQuery = () => {
+      // people_directory is contacts plus is_dead_end: rows that identify
+      // nobody and lead nowhere (no number, username, usable name, or
+      // conversation). Filtering in the query rather than after the fetch is
+      // what keeps offsets and the chunk-exhaustion check below meaningful --
+      // dropping rows in JavaScript would make a full chunk look short and end
+      // the walk early.
       let query = supabase
-        .from('contacts')
+        .from('people_directory')
         .select('id, name, phone_number, platform_contact_id, avatar_url, inferred_name, inferred_relationship, is_group, platform, username, notes')
         .eq('user_id', userId)
+        .eq('is_dead_end', false)
         .order('name', { ascending: true, nullsFirst: false })
         .order('id', { ascending: true });
 

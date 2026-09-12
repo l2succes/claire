@@ -32,6 +32,7 @@ export const meta: DocMeta = {
       'Move Ask Claire onto the shared AI SDK runtime, stream grounded answers, and reduce retrieval and inference cost.',
   },
   related: [
+    '/docs/product/on-device-intelligence',
     '/docs/product/ai-platform',
     '/docs/product/ai-model-costs',
     '/docs/extensibility/plugin-system',

@@ -33,6 +33,11 @@ router.put('/', requireAuth, validateRequest(deviceSchema), async (req: Request,
   if (!userId) return res.status(401).json({ error: 'User not authenticated' });
   const { deviceId, platform, provider, token, timezone, appVersion, enabled } = req.body;
   const now = new Date().toISOString();
+  const { data: existingDevice } = await supabase.from('notification_devices')
+    .select('id,timezone,enabled')
+    .eq('user_id', userId)
+    .eq('device_id', deviceId)
+    .maybeSingle();
   const { data, error } = await supabase.from('notification_devices').upsert({
     user_id: userId,
     device_id: deviceId,
@@ -49,6 +54,15 @@ router.put('/', requireAuth, validateRequest(deviceSchema), async (req: Request,
   if (error) {
     logger.error('Unable to register notification device', error);
     return res.status(500).json({ error: 'Failed to register notification device' });
+  }
+  if (!existingDevice || existingDevice.timezone !== timezone || existingDevice.enabled === false) {
+    // A new or newly moved device supplies a delivery target and the user's
+    // current timezone. Routine presence heartbeats must not churn every plan.
+    await supabase.from('loops')
+      .update({ reminder_plan_state: 'pending', next_reminder_at: null })
+      .eq('user_id', userId)
+      .in('status', ['open', 'waiting', 'snoozed'])
+      .neq('reminder_plan_state', 'sent');
   }
   return res.json({ success: true, data });
 });

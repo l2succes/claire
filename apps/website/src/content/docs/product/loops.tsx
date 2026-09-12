@@ -15,7 +15,11 @@ export const meta: DocMeta = {
     summary:
       'Relevance scoring, the thread-of-intent schema, and the evaluation harness are built. The windowed detector, details page, and plugin bridge are specified but not yet implemented.',
   },
-  related: ['/docs/build-claire/loops', '/docs/extensibility/plugin-system'],
+  related: [
+    '/docs/product/on-device-intelligence',
+    '/docs/build-claire/loops',
+    '/docs/extensibility/plugin-system',
+  ],
 };
 
 export default function Page() {

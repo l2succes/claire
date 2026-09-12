@@ -26,8 +26,9 @@ import { signalFirstPaint } from '../../services/mobile-sync';
 import { useScreenLoadMark } from '../../hooks/useScreenLoadMark';
 import { syncNotificationBadge } from '../../services/notifications';
 import { SwipeActionRow } from '../../components/mobile/swipe-action-row';
+import { groupCategoryTag } from '../chat/group-category';
 
-type InboxFilter = 'all' | 'unread' | 'needs_reply' | 'groups';
+type InboxFilter = 'dms' | 'all' | 'groups' | 'unread' | 'needs_reply';
 type PlatformFilter = 'all' | Platform;
 
 const avatarTones = [colors.sky, colors.mint, colors.lavender, colors.blush] as const;
@@ -99,6 +100,9 @@ function InboxConversationRowInner({
   const [thumbFailed, setThumbFailed] = useState(false);
   const preview = conversationPreview(message);
   const name = message.chat_name || message.contact_name || 'Unknown conversation';
+  const categoryTag = message.is_group
+    ? groupCategoryTag(message.ai_category, message.ai_category_confidence)
+    : null;
   const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase() || '?';
   const tone = avatarTones[[...name].reduce((total, character) => total + character.charCodeAt(0), 0) % avatarTones.length];
   const desktop = layout === 'desktop';
@@ -151,7 +155,16 @@ function InboxConversationRowInner({
 
       <View style={{ position: 'absolute', top: pinned ? 20 : desktop ? 13 : 14, left: inset + avatarSize + (desktop ? 9 : 14), right: inset, gap: desktop ? 1 : 3 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <Text maxFontSizeMultiplier={1} selectable numberOfLines={1} style={{ flex: 1, fontFamily: mobileType.body.fontFamily, fontSize: desktop ? 14 : 17, lineHeight: desktop ? 17 : 21, fontWeight: message.unread_count ? '700' : '600', color: colors.ink }}>{name}</Text>
+          <Text maxFontSizeMultiplier={1} selectable numberOfLines={1} style={{ flexShrink: 1, fontFamily: mobileType.body.fontFamily, fontSize: desktop ? 14 : 17, lineHeight: desktop ? 17 : 21, fontWeight: message.unread_count ? '700' : '600', color: colors.ink }}>{name}</Text>
+          {/* Groups only, and only when the classifier is confident. It reads as
+              structure when scanning the Groups list; a wrong tag would read as
+              Claire misunderstanding the user's life. */}
+          {categoryTag ? (
+            <View style={{ paddingHorizontal: 6, paddingVertical: 1, borderRadius: radius.pill, backgroundColor: colors.neutral[100] }}>
+              <Text maxFontSizeMultiplier={1} style={{ fontFamily: mobileType.monoLabel.fontFamily, fontSize: desktop ? 8 : 9, lineHeight: desktop ? 11 : 12, letterSpacing: 0.5, color: colors.neutral[600] }}>{categoryTag.toUpperCase()}</Text>
+            </View>
+          ) : null}
+          <View style={{ flex: 1 }} />
           <Text maxFontSizeMultiplier={1} selectable style={{ fontFamily: mobileType.monoLabel.fontFamily, fontSize: desktop ? 9 : 11, lineHeight: desktop ? 12 : 14, letterSpacing: 0.4, color: colors.neutral[400] }}>{formatInboxTimestamp(message.timestamp)}</Text>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -261,7 +274,10 @@ export function InboxScreen() {
     const timer = setTimeout(() => setDebouncedQuery(query.trim()), 250);
     return () => clearTimeout(timer);
   }, [query]);
-  const [filter, setFilter] = useState<InboxFilter>(params.filter === 'needs_reply' ? 'needs_reply' : 'all');
+  // Defaults to DMs, not All. Groups are not AI-processed unless the user turns
+  // one on, so leading with them puts the least useful conversations in front of
+  // the most useful ones. They stay one chip away.
+  const [filter, setFilter] = useState<InboxFilter>(params.filter === 'needs_reply' ? 'needs_reply' : 'dms');
   const [platform, setPlatform] = useState<PlatformFilter>('all');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [snoozeTarget, setSnoozeTarget] = useState<InboxMessage | null>(null);
@@ -389,7 +405,9 @@ export function InboxScreen() {
   // Both of these were rebuilt on every render, and the unread count walked the
   // entire loaded feed to do it.
   const filters: Array<{ value: InboxFilter; label: string; count?: number }> = useMemo(() => [
+    { value: 'dms', label: 'DMs' },
     { value: 'all', label: 'All' },
+    { value: 'groups', label: 'Groups' },
     { value: 'unread', label: 'Unread', count: inbox.messages.reduce((total, message) => total + (message.unread_count ? 1 : 0), 0) },
     { value: 'needs_reply', label: 'Needs reply' },
   ], [inbox.messages]);

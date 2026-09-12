@@ -87,6 +87,37 @@ describe('inbox local-first seeding', () => {
     expect(mockHydrateMobileCache).not.toHaveBeenCalled();
   });
 
+  it('seeds the DMs feed, which is the one the inbox actually opens on', async () => {
+    // Groups are opt-in, so the inbox defaults to `dms` rather than `all`. The
+    // seeding guard used to hardcode `all` as "the canonical feed"; leaving it
+    // that way would mean the default inbox never paints from cache — a
+    // cold-start regression that looks nothing like a filter bug.
+    const client = makeClient();
+    supabaseResult.pending = true;
+    const { result } = renderHook(() => useInboxMessages(USER, { filter: 'dms' }), { wrapper: wrapper(client) });
+
+    await waitFor(() => expect(result.current.messages).toHaveLength(1));
+    expect(mockHydrateMobileCache).toHaveBeenCalled();
+  });
+
+  it('does not paint cached groups into the DMs feed', async () => {
+    // The snapshot is the whole conversation list. Seeding it unfiltered would
+    // show groups for a beat and then drop them when the server answered.
+    mockHydrateMobileCache.mockResolvedValue({
+      chats: [
+        { ...cachedChat('dm', '2026-09-01T10:00:00.000Z'), is_group: false },
+        { ...cachedChat('grp', '2026-09-01T11:00:00.000Z'), is_group: true },
+      ],
+      loops: [], cursor: 0, preferences: null, lastSyncAt: null, fullHistoryEnabled: false,
+    });
+    supabaseResult.pending = true;
+    const client = makeClient();
+    const { result } = renderHook(() => useInboxMessages(USER, { filter: 'dms' }), { wrapper: wrapper(client) });
+
+    await waitFor(() => expect(result.current.messages).toHaveLength(1));
+    expect(result.current.messages[0]!.is_group).toBe(false);
+  });
+
   it('reports cold only when the cache is empty and the network has not answered', async () => {
     mockHydrateMobileCache.mockResolvedValue({ chats: [], loops: [], cursor: 0, preferences: null, lastSyncAt: null, fullHistoryEnabled: false });
     const client = makeClient();
@@ -145,6 +176,54 @@ describe('inbox realtime write-through', () => {
     const patch = mockPatchCachedChat.mock.calls[0][2] as Record<string, unknown>;
     expect(patch).not.toHaveProperty('latest_message');
     expect(patch).not.toHaveProperty('contact');
+  });
+
+  it('inserts an unknown DM into the DMs feed but never into Groups', () => {
+    // A scope feed can accept an insert because the row itself says whether it
+    // belongs — unlike Unread, which depends on state the row does not carry.
+    // Without this the default inbox would sit frozen until it refetched.
+    const client = makeClient();
+    for (const filter of ['dms', 'groups', 'unread'] as const) {
+      client.setQueryData(['messages-feed', USER, '', filter, 'all'], {
+        pages: [{ messages: [], hasMore: false, nextCursor: null }],
+        pageParams: [null],
+      });
+    }
+
+    patchInboxRealtimeMessage(client, USER, {
+      id: 'm-new', chat_id: 'c-new', platform: Platform.WHATSAPP,
+      content: 'hi', timestamp: '2026-09-02T10:00:00.000Z', from_me: false, is_group: false,
+    } as never);
+
+    const read = (filter: string) =>
+      (client.getQueryData(['messages-feed', USER, '', filter, 'all']) as
+        { pages: Array<{ messages: unknown[] }> }).pages[0]!.messages;
+
+    expect(read('dms')).toHaveLength(1);
+    expect(read('groups')).toHaveLength(0);
+    expect(read('unread')).toHaveLength(0);
+  });
+
+  it('inserts an unknown group into the Groups feed but never into DMs', () => {
+    const client = makeClient();
+    for (const filter of ['dms', 'groups'] as const) {
+      client.setQueryData(['messages-feed', USER, '', filter, 'all'], {
+        pages: [{ messages: [], hasMore: false, nextCursor: null }],
+        pageParams: [null],
+      });
+    }
+
+    patchInboxRealtimeMessage(client, USER, {
+      id: 'm-g', chat_id: 'c-g', platform: Platform.WHATSAPP,
+      content: 'hi all', timestamp: '2026-09-02T10:00:00.000Z', from_me: false, is_group: true,
+    } as never);
+
+    const read = (filter: string) =>
+      (client.getQueryData(['messages-feed', USER, '', filter, 'all']) as
+        { pages: Array<{ messages: unknown[] }> }).pages[0]!.messages;
+
+    expect(read('groups')).toHaveLength(1);
+    expect(read('dms')).toHaveLength(0);
   });
 
   it('clears every feed variant and removes the row from Unread immediately', () => {

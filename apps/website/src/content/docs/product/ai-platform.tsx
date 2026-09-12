@@ -14,7 +14,12 @@ export const meta: DocMeta = {
     summary: "Define verified self-hosted, local-model, and managed-AI product boundaries.",
   },
   hero: { kind: 'mockup', surface: 'mobile', screen: 'ai-and-privacy', caption: 'AI behaviour and privacy controls' },
-  related: ['/docs/product/payments', '/docs/product/security', '/docs/product/end-to-end-encryption'],
+  related: [
+    '/docs/product/on-device-intelligence',
+    '/docs/product/payments',
+    '/docs/product/security',
+    '/docs/product/end-to-end-encryption',
+  ],
 };
 
 export default function Page() {

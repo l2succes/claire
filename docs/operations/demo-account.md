@@ -27,7 +27,7 @@ not itself a demo account, so the surface is invisible to real users.
 
 ## Prerequisites
 
-1. Apply migration `20260912000001_add_demo_accounts.sql` to the target
+1. Apply migration `20260912120000_add_demo_accounts.sql` to the target
    database, then reload the PostgREST schema cache — otherwise the new column
    is invisible to the API and seeding fails on `is_demo`:
 

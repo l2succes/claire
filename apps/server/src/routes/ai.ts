@@ -576,13 +576,32 @@ router.get('/morning-brief',
 
       // Fetch most recent message per chat that we haven't replied to
       const since = new Date(Date.now() - 7 * 24 * 3600_000).toISOString(); // last 7 days
-      const { data: rows, error } = await supabase
+
+      // Groups are opt-in, so the brief only considers the ones turned on.
+      // Resolved as an explicit id list rather than a filter on the embedded
+      // chat: this list is tiny by construction, and it keeps the 200-row
+      // budget below from being spent on group traffic that is then discarded.
+      const { data: enabledGroups } = await supabase
+        .from('chats')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('is_group', true)
+        .eq('ai_enabled', true);
+      const enabledGroupIds = (enabledGroups || []).map((row: { id: string }) => row.id);
+
+      let briefQuery = supabase
         .from('messages')
         .select(`id, chat_id, content, timestamp, from_me, is_group, contact_name, platform,
                  chats!messages_chat_id_fkey(name, platform_chat_id)`)
         .eq('user_id', userId)
         .eq('from_me', false)
-        .gte('timestamp', since)
+        .gte('timestamp', since);
+
+      briefQuery = enabledGroupIds.length
+        ? briefQuery.or(`is_group.eq.false,chat_id.in.(${enabledGroupIds.join(',')})`)
+        : briefQuery.eq('is_group', false);
+
+      const { data: rows, error } = await briefQuery
         .order('timestamp', { ascending: false })
         .limit(200);
 

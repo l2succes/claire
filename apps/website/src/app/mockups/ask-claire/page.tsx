@@ -22,6 +22,7 @@ export default async function AskClaireMockupPage({ searchParams }: PageProps) {
     <AskClaireDemo
       initialAutoplay={first(params.autoplay) !== '0'}
       initialChrome={first(params.chrome) !== '0' && first(params.embed) !== '1'}
+      initialDepth={first(params.depth)}
       initialFormat={first(params.format)}
       initialLoop={first(params.loop) === '1'}
       initialScene={first(params.scene)}

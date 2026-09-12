@@ -21,6 +21,7 @@ export type LoopThreadState =
   | 'resolved';
 
 export type DeadlinePrecision = 'exact' | 'day' | 'week' | 'month' | 'none';
+export type LoopReminderReason = 'snooze_ended' | 'act_now' | 'deadline_soon' | 'follow_up';
 
 export interface LoopConversationRef {
   name?: string | null;
@@ -46,6 +47,11 @@ export interface LoopItem {
   priority_breakdown?: Record<string, number | boolean> | null;
   priority_override?: number | null;
   snoozed_until?: string | null;
+  next_reminder_at?: string | null;
+  reminder_plan_state?: 'pending' | 'scheduled' | 'quiet' | 'sent';
+  reminder_reason?: LoopReminderReason | null;
+  reminder_revision?: number | null;
+  reminder_count?: number | null;
   from_me: boolean;
   chat_id?: string | null;
   platform?: string | null;

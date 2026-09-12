@@ -246,8 +246,8 @@ AS $$
     AND m.is_deleted = false
     AND COALESCE(m.content, '') <> ''
     AND (
-      e.message_id IS NULL OR e.content_hash IS DISTINCT FROM encode(digest(
-        'Platform: ' || COALESCE(m.platform, 'unknown') || E'\nSender: ' ||
+      e.message_id IS NULL OR e.content_hash IS DISTINCT FROM encode(extensions.digest(
+        'Platform: ' || COALESCE(m.platform::text, 'unknown') || E'\nSender: ' ||
         CASE WHEN m.from_me THEN 'You' ELSE COALESCE(m.contact_name, 'Contact') END ||
         E'\nMessage: ' || COALESCE(m.content, ''),
         'sha256'
