@@ -91,9 +91,9 @@ describe('chooseResponder', () => {
   it('otherwise answers as whoever spoke last', () => {
     const history: HistoryLine[] = [
       { fromMe: false, senderName: 'Rahim Osei', content: 'bibs?' },
-      { fromMe: false, senderName: 'Marcus Bell', content: 'I can bring them.' },
+      { fromMe: false, senderName: 'Tunde Bakare', content: 'i can bring them' },
     ];
-    expect(chooseResponder(footballChat, 'thanks', history)?.key).toBe('marcus');
+    expect(chooseResponder(footballChat, 'thanks', history)?.key).toBe('tunde');
   });
 
   it('ignores the account owner when looking for the last speaker', () => {

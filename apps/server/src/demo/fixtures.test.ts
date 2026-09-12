@@ -113,6 +113,21 @@ describe('demo script integrity', () => {
     }
   });
 
+  it('never puts a persona in a room on another platform', () => {
+    // A persona's contact identity is minted from the *chat's* platform, so a
+    // participant from a different platform silently creates a second contact
+    // for the same person — a duplicate in the People screen with no avatar.
+    for (const chat of DEMO_CHATS) {
+      for (const key of chat.participants) {
+        const persona = DEMO_PERSONAS_BY_KEY[key];
+        expect(
+          persona.platform,
+          `${chat.key} is a ${chat.platform} chat but ${key} is on ${persona.platform}`
+        ).toBe(chat.platform);
+      }
+    }
+  });
+
   it('has a distinct platform identifier per persona', () => {
     const ids = DEMO_PERSONAS.map((persona) => `${persona.platform}:${persona.platformContactId}`);
     expect(new Set(ids).size).toBe(ids.length);

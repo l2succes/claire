@@ -324,6 +324,26 @@ export const DEMO_PERSONAS: DemoPersona[] = [
     },
   },
   {
+    key: 'tunde',
+    displayName: 'Tunde Bakare',
+    platform: Platform.WHATSAPP,
+    platformContactId: '15550194402',
+    phoneNumber: '+1 555 019 4402',
+    avatarUrl: avatar('tunde-bakare'),
+    sheet: {
+      relationship:
+        'Friend from the Saturday football group, and the one member who actually turns up every week.',
+      voice:
+        'Short and dry. Lowercase, no punctuation to speak of, one line at a time. Deadpan rather than jokey — he lands a comment and leaves it there. No emoji.',
+      topics: ['football', 'who is dropping out this week', 'the pitch'],
+      openThreads: [
+        'He has confirmed for Saturday 9am at Red Hook.',
+        'He finds the missing-bibs saga funnier than he lets on.',
+      ],
+      replyStyle: { words: [2, 12], emoji: 'none', splitChance: 0.2, replyChance: 0.85 },
+    },
+  },
+  {
     key: 'sofia',
     displayName: 'Sofia Almeida',
     platform: Platform.TELEGRAM,
@@ -584,19 +604,19 @@ export const DEMO_CHATS: DemoChat[] = [
     platformChatId: 'demo-group-redhook@g.us',
     name: 'Red Hook Saturday ⚽️',
     isGroup: true,
-    participants: ['rahim', 'amara', 'marcus'],
+    participants: ['rahim', 'amara', 'tunde'],
     groupContext:
-      'A Saturday 5-a-side group. Rahim books the pitch and chases people. Chaotic, affectionate, lots of dropouts. Amara is in the group from when she lived in New York and still comments occasionally.',
+      'A Saturday 5-a-side group. Rahim books the pitch and chases people. Chaotic, affectionate, lots of dropouts. Amara is in the group from when she lived in New York and still comments occasionally. Tunde is the reliable one.',
     script: [
       { from: 'rahim', text: 'pitch is booked. saturday 9am red hook, same as always', daysAgo: 5, at: '18:30' },
       { from: 'rahim', text: 'need a firm yes from everyone by thursday or i give the slot back', daysAgo: 5, at: '18:30' },
       { from: 'me', text: 'In', daysAgo: 5, at: '18:44' },
-      { from: 'marcus', text: 'I am in as well.', daysAgo: 5, at: '19:20' },
+      { from: 'tunde', text: 'in', daysAgo: 5, at: '19:20' },
       { from: 'rahim', text: 'that is 4. we need one more', daysAgo: 4, at: '11:02' },
       { from: 'amara', text: 'i will be in new york actually but i am not playing football at 9am, i will watch and judge', daysAgo: 4, at: '11:40' },
       { from: 'rahim', text: 'unhelpful but accepted 😂', daysAgo: 4, at: '11:44' },
       { from: 'rahim', text: 'also somebody needs to bring the bibs. mine are in the boot of a car i no longer own', daysAgo: 4, at: '11:45' },
-      { from: 'marcus', text: 'How does that happen', daysAgo: 4, at: '12:10' },
+      { from: 'tunde', text: 'how does that even happen', daysAgo: 4, at: '12:10' },
       { from: 'rahim', text: 'long story', daysAgo: 4, at: '12:11' },
       { from: 'rahim', text: 'BIBS. someone. anyone', daysAgo: 2, at: '20:15' },
       { from: 'me', text: 'I can grab bibs', daysAgo: 2, at: '21:30' },
@@ -699,6 +719,7 @@ export const DEMO_FALLBACK_REPLIES: Record<string, string[]> = {
   nina: ['omg one sec!! 💛', 'ahh ok let me check my calendar', 'yesss hold on'],
   marcus: ['Let me check and come back to you.', 'Understood, thanks.'],
   rahim: ['one sec', 'ok say no more', 'lol hold on'],
+  tunde: ['in', 'yeah alright', 'say less'],
   sofia: [
     'Thanks — let me try that and I will report back 🙂',
     'Noted, I will test it properly and follow up.',
