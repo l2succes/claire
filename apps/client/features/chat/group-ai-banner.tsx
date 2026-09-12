@@ -12,7 +12,7 @@
  * decision worth syncing.
  */
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, Text, View } from 'react-native';
 import { Users } from 'lucide-react-native';
 import { colors, mobileType, radius, space } from '@claire/design-system';
 
@@ -45,6 +45,13 @@ export function GroupAiBanner({
     setBusy(true);
     try {
       await onEnable();
+    } catch {
+      // try/finally with no catch turned any failure into an unhandled promise
+      // rejection, which shows the user a raw "Uncaught (in promise) Error"
+      // instead of anything actionable. The mute switch in chat settings
+      // handles the same class of failure this way; match it. The banner stays
+      // up, so the offer is still there to retry.
+      Alert.alert('Could not turn on Claire', 'Please check your connection and try again.');
     } finally {
       setBusy(false);
     }
