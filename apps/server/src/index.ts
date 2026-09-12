@@ -51,7 +51,8 @@ import { operationsMonitor } from './services/operations-monitor';
 import { operationsTelemetry } from './services/operations-telemetry';
 import { autoReplyEngine } from './services/auto-reply-engine';
 import { notificationDeliveryService } from './services/notification-delivery';
-import { isAiProcessingEnabled } from './services/ai-policy';
+import { chatAiProcessingEnabled, isAiProcessingEnabled } from './services/ai-policy';
+import { scheduleGroupClassification } from './services/group-classifier';
 import { MessageContentType, Platform, PlatformStatus } from './adapters/types';
 import { whatsappAdapter } from './adapters/whatsapp';
 import { telegramAdapter } from './adapters/telegram';
@@ -505,17 +506,29 @@ async function initializePlatforms() {
             platform: message.platform,
             ...(chatDisplayName ? { name: chatDisplayName } : {}),
             is_group: message.chatType === 'group',
+            // Audience size, not distinct-people count. The bridge already
+            // computes it; persisting it lets group relevance scoring and the
+            // classifier stop guessing from the roster. Omitted when unknown so
+            // a bridge that does not report it cannot null out a good value.
+            ...(message.memberCount ? { member_count: message.memberCount } : {}),
             last_message_at: message.timestamp,
           },
           { onConflict: 'user_id,platform,platform_chat_id' }
         )
-        .select('id, name, is_group')
+        .select('id, name, is_group, ai_enabled, member_count')
         .single();
 
       if (chatError || !chat) {
         logger.error('Failed to upsert chat:', chatError);
         return;
       }
+
+      // Two tiers, and they are not the same question. `aiProcessingEnabled` is
+      // the account switch and still governs storage-adjacent work like the Ask
+      // Claire index — retrieval stays complete or search silently goes blind.
+      // `proactiveAi` governs everything that *produces* something unprompted,
+      // which is what makes an un-opted-in group expensive and noisy.
+      const proactiveAi = aiProcessingEnabled && chatAiProcessingEnabled(chat);
 
       // History replays and own-device messages must never create unread
       // badges. Only a newly inserted live incoming message increments the
@@ -771,7 +784,7 @@ async function initializePlatforms() {
           !message.isFromMe &&
           savedMsg?.id &&
           message.content?.trim() &&
-          aiProcessingEnabled &&
+          proactiveAi &&
           aiProcessor.isConfigured
         ) {
           const chatType = message.chatType === 'group' ? 'group' : 'individual';
@@ -811,7 +824,7 @@ async function initializePlatforms() {
           savedMsg?.id &&
           message.isFromMe &&
           message.content?.trim() &&
-          aiProcessingEnabled &&
+          proactiveAi &&
           voiceProfileService.isConfigured
         ) {
           void voiceProfileService
@@ -821,10 +834,25 @@ async function initializePlatforms() {
 
         // Detection is debounced per conversation and excludes backfill, so a
         // burst is reconciled as one thread of intent rather than one row per
-        // message. The loop detector applies its own per-user enablement gate.
-        if (savedMsg?.id && !isBackfill && message.content?.trim() && chat?.id) {
+        // message.
+        //
+        // The detector's own gate is `user_preferences.loop_detection_enabled`,
+        // which never consulted the AI switch at all — so this ran for every
+        // chat of every user, including accounts with AI turned off. buildLoopContext
+        // now refuses too; this check just avoids queueing work that will be dropped.
+        if (savedMsg?.id && !isBackfill && message.content?.trim() && chat?.id && proactiveAi) {
           void scheduleChat(message.userId, chat.id).catch((err) =>
             logger.debug('Loop detection skipped:', (err as Error).message)
+          );
+        }
+
+        // Classifying a group is how the user decides whether to enable it, so
+        // it cannot require the group to already be enabled — it is gated by the
+        // account switch only. Cheap by construction: heuristics resolve most
+        // groups for free and a classified group is never looked at again.
+        if (chat?.is_group && !isBackfill && aiProcessingEnabled) {
+          void scheduleGroupClassification(message.userId, chat.id).catch((err) =>
+            logger.debug('Group classification skipped:', (err as Error).message)
           );
         }
 

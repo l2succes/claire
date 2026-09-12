@@ -42,6 +42,8 @@ import type { VoiceNoteDraft } from '../../components/claire/voice-note-control'
 import { ChatSkeleton } from '../../components/claire/skeleton';
 import { useConversationSettingsStore } from '../../stores/conversationSettingsStore';
 import { GroupChatSummary } from '../../components/GroupChatSummary';
+import { GroupAiBanner } from '../../features/chat/group-ai-banner';
+import type { GroupCategory } from '../../types/conversationSettings';
 import { Platform } from '../../types/platform';
 import { PlatformName } from '../../components/PlatformIcon';
 import { displayContactName } from '../../services/contact-display';
@@ -437,10 +439,15 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
   const [suggestionRefreshKey, setSuggestionRefreshKey] = useState(0);
   const [showReplyOptions, setShowReplyOptions] = useState(false);
   const [connectionRefreshing, setConnectionRefreshing] = useState(false);
+  const [groupBannerDismissed, setGroupBannerDismissed] = useState(false);
   const [chatMetadata, setChatMetadata] = useState<{
     name: string | null;
     platform: Platform | null;
     isGroup: boolean;
+    aiEnabled: boolean | null;
+    memberCount: number | null;
+    category: GroupCategory | null;
+    categoryConfidence: number | null;
   } | null>(null);
   const platformChatIdRef = useRef<string | null>(null);
   const listRef = useRef<FlatList>(null);
@@ -515,12 +522,39 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
     !chatLoop.isLoading &&
     !chatLoop.data;
 
+  // Effective scope, mirroring the server rule: NULL inherits the default,
+  // which is off for a group and on for a 1:1.
+  const groupAiEnabled = chatMetadata?.aiEnabled ?? !isGroup;
+  // Wait for metadata before deciding. Rendering the banner off a null
+  // chatMetadata would flash "Claire isn't reading this" into every group the
+  // user has already turned on.
+  const showGroupAiBanner =
+    isGroup &&
+    !!chatMetadata &&
+    !groupAiEnabled &&
+    !groupBannerDismissed &&
+    !showQuickContext &&
+    !showReplyOptions;
+
+  const enableGroupAi = useCallback(async () => {
+    if (!chatId || !accessToken) return;
+    const response = await fetch(`${API_BASE_URL}/messages/chats/${encodeURIComponent(chatId)}/ai`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: true }),
+    });
+    if (!response.ok) throw new Error(`Could not turn on Claire (${response.status})`);
+    setChatMetadata((current) => (current ? { ...current, aiEnabled: true } : current));
+    // The inbox filters on this column, so its cached feeds are now stale.
+    void queryClient.invalidateQueries({ queryKey: inboxQueryPrefix(user?.id) });
+  }, [accessToken, chatId, queryClient, user?.id]);
+
 
   const fetchChatInfo = useCallback(async () => {
     if (!chatId) return false;
     const { data, error } = await supabase
       .from('chats')
-      .select('platform_chat_id, name, platform, is_group')
+      .select('platform_chat_id, name, platform, is_group, ai_enabled, member_count, chat_classifications(category, confidence)')
       .eq('id', chatId)
       .single();
     if (error) {
@@ -529,10 +563,23 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
     }
     if (data?.platform_chat_id) {
       platformChatIdRef.current = data.platform_chat_id;
+      // PostgREST returns an embedded one-to-one as either an object or a
+      // single-element array depending on how it infers the relationship.
+      const embedded = data.chat_classifications as
+        | { category?: string | null; confidence?: number | null }
+        | Array<{ category?: string | null; confidence?: number | null }>
+        | null
+        | undefined;
+      const classification = Array.isArray(embedded) ? embedded[0] : embedded;
       setChatMetadata({
         name: typeof data.name === 'string' && data.name.trim() ? data.name : null,
         platform: typeof data.platform === 'string' ? data.platform as Platform : null,
         isGroup: data.is_group === true,
+        aiEnabled: typeof data.ai_enabled === 'boolean' ? data.ai_enabled : null,
+        memberCount: typeof data.member_count === 'number' ? data.member_count : null,
+        category: (classification?.category as GroupCategory) ?? null,
+        categoryConfidence:
+          typeof classification?.confidence === 'number' ? classification.confidence : null,
       });
       return true;
     }
@@ -1607,6 +1654,14 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
             </Text>
           </Pressable>
         </View>
+      ) : showGroupAiBanner ? (
+        <GroupAiBanner
+          category={chatMetadata?.category ?? null}
+          categoryConfidence={chatMetadata?.categoryConfidence ?? null}
+          memberCount={chatMetadata?.memberCount ?? null}
+          onEnable={enableGroupAi}
+          onDismiss={() => setGroupBannerDismissed(true)}
+        />
       ) : (
         <View style={{ height: space[2] }} />
       )}
@@ -1616,8 +1671,10 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
         behavior={RNPlatform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={0}
       >
-        {/* Group Summary Banner — only shown for group chats */}
-        {is_group === '1' && chatId && <GroupChatSummary chatId={chatId} />}
+        {/* Group summary. Uses the resolved isGroup rather than the raw route
+            param, which is absent whenever the chat is opened from anywhere
+            that does not pass it (search, a notification, a deep link). */}
+        {isGroup && chatId && groupAiEnabled ? <GroupChatSummary chatId={chatId} /> : null}
         {chatLoop.data ? <Pressable testID="chat-open-loop-card" onPress={() => router.push({ pathname: '/loops/[id]', params: { id: chatLoop.data!.id } })} style={{ marginHorizontal: space[3], marginTop: space[2], padding: space[3], gap: space[2], borderRadius: radius.control, borderWidth: 1, borderColor: colors.neutral[200], backgroundColor: colors.paper, flexDirection: 'row', alignItems: 'center' }}><View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: (chatLoop.data.priority_score ?? 0) >= 80 ? colors.blush : colors.sky, alignItems: 'center', justifyContent: 'center' }}><CheckCircle2 size={17} color={colors.ink} /></View><View style={{ flex: 1, minWidth: 0 }}><Text style={{ ...mobileType.monoLabel, color: colors.neutral[600] }}>{chatLoop.data.owner === 'them' ? 'WAITING ON THEM' : 'OPEN LOOP'}</Text><Text numberOfLines={1} style={{ ...mobileType.bodySmall, fontWeight: '700', color: colors.ink }}>{chatLoop.data.title || chatLoop.data.content}</Text></View><Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>View</Text></Pressable> : null}
 
         {loading ? (

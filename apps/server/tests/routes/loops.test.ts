@@ -82,6 +82,28 @@ describe('GET /loops', () => {
 });
 
 // ---------------------------------------------------------------------------
+describe('POST /loops', () => {
+  beforeEach(resetMocks);
+
+  it('creates a human-authored actionable loop', async () => {
+    const created = { id: VALID_UUID, user_id: 'user-123', title: 'Send the revised deck', status: 'open' };
+    mockQuery.single.mockResolvedValueOnce({ data: created, error: null });
+
+    const res = await request(app).post('/loops').send({ content: 'Send the revised deck' });
+
+    expect(res.status).toBe(201);
+    expect(mockQuery.insert.mock.calls.at(-1)?.[0]).toMatchObject({
+      title: 'Send the revised deck',
+      owner: 'me',
+      requester: 'me',
+      thread_state: 'agreed',
+      source: 'user',
+      user_edited: true,
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
 describe('GET /loops/:id', () => {
   beforeEach(resetMocks);
 
@@ -143,7 +165,35 @@ describe('PATCH /loops/:id', () => {
       .send({ owner: 'them', status: 'waiting' });
 
     expect(res.status).toBe(200);
-    expect(mockQuery.update.mock.calls.at(-1)?.[0]).toEqual({ owner: 'them', status: 'waiting' });
+    expect(mockQuery.update.mock.calls.at(-1)?.[0]).toEqual({
+      owner: 'them',
+      status: 'waiting',
+      user_edited: true,
+      completed_at: null,
+      resolved_at: null,
+      resolution: null,
+    });
+  });
+
+  it('allows a human to replace outdated timing and protects the correction', async () => {
+    const updated = { ...mockLoop, title: 'Send revised deck', deadline: null, deadline_precision: 'none' };
+    mockQuery.single
+      .mockResolvedValueOnce({ data: mockLoop, error: null })
+      .mockResolvedValueOnce({ data: updated, error: null });
+
+    const res = await request(app).patch(`/loops/${VALID_UUID}`).send({
+      title: 'Send revised deck',
+      deadline: null,
+      deadline_precision: 'none',
+    });
+
+    expect(res.status).toBe(200);
+    expect(mockQuery.update.mock.calls.at(-1)?.[0]).toMatchObject({
+      title: 'Send revised deck',
+      deadline: null,
+      deadline_precision: 'none',
+      user_edited: true,
+    });
   });
 
   it('blocks cross-user access — returns 404', async () => {

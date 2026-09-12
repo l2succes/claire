@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
-import { ArrowUpRight, ExternalLink, List, Search, SendHorizontal, Smile, Sparkles, X } from 'lucide-react-native';
+import { ArrowUpRight, ExternalLink, List, Search, SendHorizontal, Smile, Sparkles, Square, X } from 'lucide-react-native';
 import { router, useLocalSearchParams } from 'expo-router';
+import * as Crypto from 'expo-crypto';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, mobileType, radius, space } from '@claire/design-system';
 import { conversationAssistantApi, type AssistantCitation, type AssistantTurn } from '../../../services/conversationAssistant';
@@ -10,6 +11,8 @@ import { supabase } from '../../../services/supabase';
 import { useAuthStore } from '../../../stores/authStore';
 import { MobileIconButton, MobileSearchField } from '../../../components/mobile/claire-mobile';
 import { AssistantAnswerActions } from '../../../components/claire/assistant-answer-actions';
+import { AssistantRichText } from '../../../components/claire/assistant-rich-text';
+import { useAssistantStream } from '../../../hooks/useAssistantStream';
 
 type QuickAction = {
   label: string;
@@ -33,7 +36,7 @@ export default function ConversationAssistantScreen() {
   const [turns, setTurns] = useState<AssistantTurn[]>([]);
   const [question, setQuestion] = useState('');
   const [loading, setLoading] = useState(true);
-  const [asking, setAsking] = useState(false);
+  const { start: startStream, stop: stopStream, isStreaming: asking, phase: streamPhase } = useAssistantStream();
   const [error, setError] = useState<string | null>(null);
   const [suggestion, setSuggestion] = useState<string | null>(null);
   const [suggestionLoading, setSuggestionLoading] = useState(false);
@@ -78,20 +81,24 @@ export default function ConversationAssistantScreen() {
     const clean = value.trim();
     if (!clean || !chatId || asking) return;
     setQuestion('');
-    setAsking(true);
     setError(null);
-    const optimistic: AssistantTurn = { id: `question-${Date.now()}`, role: 'user', content: clean, citations: [], created_at: new Date().toISOString() };
-    setTurns(current => [...current, optimistic]);
+    const requestId = Crypto.randomUUID();
+    const optimistic: AssistantTurn = { id: `question-${requestId}`, role: 'user', content: clean, citations: [], status: 'completed', request_id: requestId, created_at: new Date().toISOString() };
+    const streamingTurn: AssistantTurn = { id: `assistant-${requestId}`, role: 'assistant', content: '', citations: [], actions: [], status: 'streaming', request_id: requestId, created_at: new Date().toISOString() };
+    setTurns(current => [...current, optimistic, streamingTurn]);
     try {
-      const result = await conversationAssistantApi.askConversation(chatId, clean);
-      setTurns(result.turns);
+      const result = await startStream(
+        { kind: 'conversation', chatId, question: clean, requestId },
+        { onDelta: (delta) => setTurns((current) => current.map((turn) => turn.id === streamingTurn.id ? { ...turn, content: turn.content + delta } : turn)) },
+      );
+      setTurns((current) => current.map((turn) => turn.id === streamingTurn.id
+        ? result.assistantTurn || { ...turn, content: result.answer, citations: result.citations, actions: result.actions, status: 'completed' }
+        : turn));
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 40);
     } catch (cause) {
-      setTurns(current => current.filter(turn => turn.id !== optimistic.id));
-      setQuestion(clean);
-      setError(cause instanceof Error ? cause.message : 'Claire could not answer right now.');
-    } finally {
-      setAsking(false);
+      const message = cause instanceof Error ? cause.message : 'Claire could not answer right now.';
+      setTurns(current => current.map(turn => turn.id === streamingTurn.id ? { ...turn, status: message === 'Answer stopped.' ? 'cancelled' : 'failed' } : turn));
+      setError(message);
     }
   };
 
@@ -151,12 +158,12 @@ export default function ConversationAssistantScreen() {
               <View style={{ alignSelf: 'flex-end', maxWidth: '86%', paddingHorizontal: space[4], paddingVertical: space[3], borderRadius: radius.card, borderBottomRightRadius: 6, backgroundColor: colors.ink }}><Text selectable style={{ ...mobileType.body, color: colors.paper }}>{item.content}</Text></View>
             ) : (
               <View style={{ gap: space[2] }}>
-                <View style={{ alignSelf: 'flex-start', maxWidth: '94%', padding: space[4], borderRadius: radius.card, borderBottomLeftRadius: 6, backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.neutral[300] }}><Text selectable style={{ ...mobileType.body, color: colors.ink }}>{item.content}</Text></View>
+                <View style={{ alignSelf: 'flex-start', maxWidth: '94%', padding: space[4], borderRadius: radius.card, borderBottomLeftRadius: 6, backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.neutral[300] }}><AssistantRichText content={item.content} style={{ ...mobileType.body, color: colors.ink }} /></View>
                 <AssistantAnswerActions actions={item.actions} />
                 {item.citations?.slice(0, 3).map(citation => <Pressable key={`${item.id}-${citation.messageId}`} onPress={() => openCitation(citation)} style={({ pressed }) => ({ padding: space[3], borderRadius: radius.control, borderWidth: 1, borderColor: colors.neutral[300], backgroundColor: pressed ? colors.paper : 'rgba(255,255,255,0.48)', gap: 3 })}><View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}><Text style={{ ...mobileType.label, color: colors.ink, flex: 1 }}>{citation.senderName} · {new Date(citation.timestamp).toLocaleDateString()}</Text><ExternalLink size={14} color={colors.neutral[600]} /></View><Text numberOfLines={2} style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{citation.excerpt}</Text></Pressable>)}
               </View>
             )}
-            ListFooterComponent={asking ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2], padding: space[3] }}><Sparkles size={16} color={colors.focus} /><Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>Claire is reading this conversation…</Text></View> : null}
+            ListFooterComponent={asking ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2], padding: space[3] }}><Sparkles size={16} color={colors.focus} /><Text style={{ ...mobileType.bodySmall, color: colors.neutral[600], flex: 1 }}>{streamPhase === 'planning' ? 'Understanding your question…' : streamPhase === 'saving' ? 'Saving the answer…' : 'Reading this conversation…'}</Text><Pressable accessibilityRole="button" accessibilityLabel="Stop Claire" onPress={stopStream} style={{ minWidth: 44, minHeight: 36, alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill, borderWidth: 1, borderColor: colors.neutral[400] }}><Square size={13} color={colors.ink} /></Pressable></View> : null}
           />
         )}
         {error && turns.length > 0 ? <Text style={{ ...mobileType.bodySmall, color: colors.danger, paddingHorizontal: space[4], paddingBottom: space[2] }}>{error}</Text> : null}

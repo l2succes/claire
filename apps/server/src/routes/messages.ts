@@ -498,6 +498,34 @@ router.patch('/chats/:chatId/pin', requireAuth, async (req: Request, res: Respon
 });
 
 /** Muting is Claire-local notification state and applies to every device. */
+/**
+ * Per-chat AI opt-in. `enabled: null` clears the override and returns the chat
+ * to the default (on for 1:1, off for groups) rather than pinning it to
+ * whatever the default happens to be today.
+ */
+router.patch('/chats/:chatId/ai', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.id as string;
+    const enabled = req.body?.enabled;
+    if (typeof enabled !== 'boolean' && enabled !== null) {
+      return res.status(400).json({ error: 'enabled must be a boolean or null' });
+    }
+    const { data, error } = await supabase.from('chats')
+      .update({ ai_enabled: enabled })
+      .eq('id', req.params.chatId).eq('user_id', userId)
+      .select('id,ai_enabled,is_group').maybeSingle();
+    if (error) throw error;
+    if (!data) return res.status(404).json({ error: 'Chat not found' });
+    return res.json({
+      success: true,
+      chat: { ...data, ai_processing_enabled: data.ai_enabled ?? !data.is_group },
+    });
+  } catch (error) {
+    logger.error('Failed to update chat AI setting:', error);
+    return res.status(500).json({ error: 'Failed to update chat AI setting' });
+  }
+});
+
 router.patch('/chats/:chatId/mute', requireAuth, async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id as string;

@@ -115,7 +115,9 @@
   background: var(--surface-raised);
   color: var(--text-secondary);
   cursor: pointer;
-  transition: color var(--transition), border-color var(--transition);
+  transition:
+    color var(--transition),
+    border-color var(--transition);
 }
 
 .docs-theme-toggle:hover {
@@ -301,7 +303,9 @@
   font-size: 0.875rem;
   line-height: 1.4;
   text-decoration: none;
-  transition: color var(--transition), background var(--transition);
+  transition:
+    color var(--transition),
+    background var(--transition);
 }
 
 .docs-sidebar__group li a:hover {
@@ -745,7 +749,9 @@ body.docs-drawer-open {
   font-size: 0.8125rem;
   line-height: 1.45;
   text-decoration: none;
-  transition: color var(--transition), border-color var(--transition);
+  transition:
+    color var(--transition),
+    border-color var(--transition);
 }
 
 .docs-toc a:hover {
@@ -1022,7 +1028,9 @@ h4.doc-heading {
   font-family: inherit;
   font-size: 0.75rem;
   cursor: pointer;
-  transition: color var(--transition), border-color var(--transition);
+  transition:
+    color var(--transition),
+    border-color var(--transition);
 }
 
 .doc-copy:hover {
@@ -1215,7 +1223,10 @@ h4.doc-heading {
   background: var(--surface-raised);
   color: inherit;
   text-decoration: none !important;
-  transition: border-color var(--transition), transform var(--transition), box-shadow var(--transition);
+  transition:
+    border-color var(--transition),
+    transform var(--transition),
+    box-shadow var(--transition);
 }
 
 .doc-card:hover {
@@ -1253,6 +1264,384 @@ h4.doc-heading {
 .doc-card__description {
   color: var(--text-secondary);
   font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+/* ---------------------------------------------------------- visual blocks - */
+
+.doc-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  margin: 28px 0;
+  padding: 1px;
+  border-radius: var(--docs-radius-panel);
+  background: var(--border-subtle);
+  overflow: hidden;
+}
+
+.doc-metric-grid > div {
+  min-width: 0;
+  padding: 18px;
+  background: var(--surface-raised);
+}
+
+.doc-metric-grid dd {
+  margin: 0 0 6px;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: clamp(1.5rem, 4vw, 2.25rem);
+  font-weight: 600;
+  letter-spacing: -0.05em;
+  line-height: 1;
+}
+
+.doc-metric-grid > div[data-tone='accent'] dd {
+  color: color-mix(in srgb, var(--accent) 78%, var(--text-primary));
+}
+
+.doc-metric-grid > div[data-tone='good'] dd {
+  color: var(--status-current);
+}
+
+.doc-metric-grid > div[data-tone='warning'] dd {
+  color: var(--warning);
+}
+
+.doc-metric-grid dt {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.doc-metric-grid p {
+  margin: 7px 0 0;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+@media (min-width: 720px) {
+  .doc-metric-grid[data-columns='3'] {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .doc-metric-grid[data-columns='4'] {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.doc-capability-grid {
+  display: grid;
+  gap: 14px;
+  margin: 28px 0;
+}
+
+@media (min-width: 720px) {
+  .doc-capability-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.doc-capability-grid article {
+  --capability-color: var(--text-muted);
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  padding: 18px;
+  border: 1px solid var(--border-subtle);
+  border-top: 3px solid var(--capability-color);
+  border-radius: var(--docs-radius-card);
+  background: var(--surface-raised);
+}
+
+.doc-capability-grid article[data-status='available'] {
+  --capability-color: var(--status-current);
+}
+
+.doc-capability-grid article[data-status='partial'] {
+  --capability-color: var(--warning);
+}
+
+.doc-capability-grid article[data-status='missing'] {
+  --capability-color: var(--danger);
+}
+
+.doc-capability-grid header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.doc-capability-grid__status {
+  align-self: flex-start;
+  padding: 3px 8px;
+  border: 1px solid color-mix(in srgb, var(--capability-color) 45%, transparent);
+  border-radius: var(--docs-radius-pill);
+  color: var(--capability-color);
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.075em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.doc-capability-grid h3,
+.doc-panel h4,
+.doc-bar-chart h3,
+.doc-timeline h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: 1.35;
+}
+
+.doc-capability-grid blockquote {
+  margin: 16px 0;
+  padding-left: 12px;
+  border-left: 2px solid var(--capability-color);
+  color: var(--text-primary);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  line-height: 1.55;
+}
+
+.doc-capability-grid article > p {
+  margin: auto 0 0;
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.55;
+}
+
+.doc-panel-grid {
+  display: grid;
+  gap: 14px;
+  margin: 28px 0;
+}
+
+@media (min-width: 720px) {
+  .doc-panel-grid[data-columns='2'] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .doc-panel-grid[data-columns='3'] {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.doc-panel {
+  --panel-color: var(--border-strong);
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--docs-radius-card);
+  background:
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--panel-color) 7%, transparent),
+      transparent 55%
+    ),
+    var(--surface-raised);
+}
+
+.doc-panel[data-tone='accent'] {
+  --panel-color: var(--accent);
+}
+
+.doc-panel[data-tone='good'] {
+  --panel-color: var(--status-current);
+}
+
+.doc-panel[data-tone='warning'] {
+  --panel-color: var(--warning);
+}
+
+.doc-panel[data-tone='danger'] {
+  --panel-color: var(--danger);
+}
+
+.doc-panel[data-tone='info'] {
+  --panel-color: var(--focus);
+}
+
+.doc-panel__eyebrow {
+  margin: 0 0 7px;
+  color: color-mix(in srgb, var(--panel-color) 72%, var(--text-primary));
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.075em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.doc-panel__body {
+  margin-top: 10px;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  line-height: 1.55;
+}
+
+.doc-panel__body > :last-child {
+  margin-bottom: 0;
+}
+
+.doc-bar-chart {
+  margin: 28px 0;
+  padding: 20px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--docs-radius-panel);
+  background: var(--surface-raised);
+}
+
+.doc-bar-chart > header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px 20px;
+  margin-bottom: 20px;
+}
+
+.doc-bar-chart > header p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.doc-bar-chart ul {
+  display: grid;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.doc-bar-chart li {
+  --bar-color: var(--accent);
+  margin: 0;
+}
+
+.doc-bar-chart li[data-tone='good'] {
+  --bar-color: var(--status-current);
+}
+
+.doc-bar-chart li[data-tone='warning'] {
+  --bar-color: var(--warning);
+}
+
+.doc-bar-chart li[data-tone='danger'] {
+  --bar-color: var(--danger);
+}
+
+.doc-bar-chart li[data-tone='info'] {
+  --bar-color: var(--focus);
+}
+
+.doc-bar-chart__label {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+  font-size: 0.8125rem;
+}
+
+.doc-bar-chart__label b {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.doc-bar-chart__track {
+  height: 8px;
+  border-radius: var(--docs-radius-pill);
+  background: var(--surface-sunken);
+  overflow: hidden;
+}
+
+.doc-bar-chart__track > span {
+  display: block;
+  width: var(--doc-bar-size);
+  height: 100%;
+  border-radius: inherit;
+  background: var(--bar-color);
+}
+
+.doc-bar-chart li > p {
+  margin: 5px 0 0;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+.doc-timeline {
+  position: relative;
+  display: grid;
+  gap: 0;
+  margin: 28px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.doc-timeline::before {
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 9px;
+  width: 1px;
+  background: var(--border-strong);
+  content: '';
+}
+
+.doc-timeline li {
+  --timeline-color: var(--text-muted);
+  position: relative;
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 16px;
+  margin: 0;
+  padding: 0 0 24px;
+}
+
+.doc-timeline li:last-child {
+  padding-bottom: 0;
+}
+
+.doc-timeline li[data-status='now'] {
+  --timeline-color: var(--accent);
+}
+
+.doc-timeline li[data-status='next'] {
+  --timeline-color: var(--focus);
+}
+
+.doc-timeline__marker {
+  position: relative;
+  z-index: 1;
+  width: 19px;
+  height: 19px;
+  border: 4px solid var(--surface-page);
+  border-radius: 50%;
+  background: var(--timeline-color);
+  box-shadow: 0 0 0 1px var(--border-strong);
+}
+
+.doc-timeline__phase {
+  margin: 0 0 4px;
+  color: color-mix(in srgb, var(--timeline-color) 75%, var(--text-primary));
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.doc-timeline li > div > p:last-child {
+  margin: 7px 0 0;
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
   line-height: 1.5;
 }
 
@@ -2098,7 +2487,9 @@ h4.doc-heading {
   background: var(--surface-raised);
   color: inherit;
   text-decoration: none;
-  transition: border-color var(--transition), transform var(--transition);
+  transition:
+    border-color var(--transition),
+    transform var(--transition);
 }
 
 .docs-home__section-card:hover {
@@ -2234,7 +2625,9 @@ h4.doc-heading {
   font-family: inherit;
   font-size: 0.8125rem;
   cursor: pointer;
-  transition: border-color var(--transition), color var(--transition);
+  transition:
+    border-color var(--transition),
+    color var(--transition);
 }
 
 .docs-catalog__chips button:hover {
@@ -2314,7 +2707,9 @@ h4.doc-heading {
   background: var(--surface-raised);
   color: inherit;
   text-decoration: none;
-  transition: border-color var(--transition), transform var(--transition);
+  transition:
+    border-color var(--transition),
+    transform var(--transition);
 }
 
 .docs-catalog__card:hover {

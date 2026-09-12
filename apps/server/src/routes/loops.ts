@@ -75,8 +75,12 @@ const updateLoopSchema = z.object({
   body: z.object({
     status: z.enum(['open', 'waiting', 'snoozed', 'done', 'dropped']).optional(),
     owner: z.enum(['me', 'them', 'shared', 'unknown']).optional(),
+    title: z.string().trim().min(1).max(200).optional(),
+    content: z.string().trim().min(1).max(1_000).optional(),
     notes: z.string().optional(),
-    deadline: z.string().datetime().optional(),
+    deadline: z.string().datetime().nullable().optional(),
+    deadline_precision: z.enum(['exact', 'day', 'week', 'month', 'none']).optional(),
+    thread_state: z.enum(['proposed', 'negotiating', 'pending_confirmation', 'agreed', 'resolved']).optional(),
     priority: z.enum(['low', 'medium', 'high']).optional(),
   }).refine(data => Object.keys(data).length > 0, {
     message: 'At least one field must be provided',
@@ -145,12 +149,21 @@ router.post(
         .insert({
           user_id: userId,
           content: req.body.content,
+          title: req.body.content.slice(0, 200),
           deadline: req.body.deadline || null,
+          deadline_precision: req.body.deadline ? 'exact' : 'none',
           priority: req.body.priority,
           chat_id: req.body.chat_id || null,
           type: 'task',
+          kind: 'task',
           from_me: true,
+          owner: 'me',
+          requester: 'me',
+          thread_state: 'agreed',
           status: 'open',
+          visibility: 'surfaced',
+          source: 'user',
+          user_edited: true,
           confidence: 1,
         })
         .select()
@@ -394,11 +407,19 @@ router.patch(
         return res.status(404).json({ success: false, error: 'Loop not found' });
       }
 
-      const updates: Record<string, any> = { ...req.body };
+      const updates: Record<string, any> = { ...req.body, user_edited: true };
 
       // If marking complete, record the timestamp
       if (updates.status === 'done' && !existing.completed_at) {
         updates.completed_at = new Date().toISOString();
+        updates.resolved_at = updates.completed_at;
+        updates.resolution = 'fulfilled';
+        updates.thread_state = 'resolved';
+      } else if (updates.status === 'open' || updates.status === 'waiting') {
+        updates.completed_at = null;
+        updates.resolved_at = null;
+        updates.resolution = null;
+        if (existing.thread_state === 'resolved' && updates.thread_state === undefined) updates.thread_state = 'agreed';
       }
 
       const { data, error } = await supabase

@@ -36,3 +36,15 @@ export async function authenticatedFetch(input: string, init: RequestInit = {}):
   response = await fetch(input, withBearerToken(init, refreshedToken));
   return response;
 }
+
+/** Expo's native fetch implementation exposes a real streaming response body. */
+export async function authenticatedExpoFetch(input: string, init: RequestInit = {}): Promise<Response> {
+  const { fetch: expoFetch } = await import('expo/fetch');
+  const { data: { session } } = await supabase.auth.getSession();
+  let response = await expoFetch(input, withBearerToken(init, session?.access_token || null)) as unknown as Response;
+  if (response.status !== 401) return response;
+  const refreshedToken = await refreshAccessToken();
+  if (!refreshedToken) return response;
+  response = await expoFetch(input, withBearerToken(init, refreshedToken)) as unknown as Response;
+  return response;
+}

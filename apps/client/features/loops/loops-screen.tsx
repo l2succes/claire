@@ -13,7 +13,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { supabase } from '../../services/supabase';
 import { LoopsSkeleton } from '../../components/claire/skeleton';
 import { LoopRow } from './loop-row';
-import { snoozeLoop, updateLoop } from '../../services/loops';
+import { createLoop, snoozeLoop, updateLoop } from '../../services/loops';
 import { BottomSheet } from '../../components/mobile/bottom-sheet';
 import { isLoopDeferred } from '../../services/loop-display';
 
@@ -99,23 +99,7 @@ export function LoopsScreen() {
     onSettled: () => queryClient.invalidateQueries({ queryKey: loopsQueryKey }),
   });
   const create = useMutation({
-    mutationFn: async (content: string) => {
-      const { data, error } = await supabase
-        .from('loops')
-        .insert({
-          user_id: user!.id,
-          content,
-          priority: 'medium',
-          type: 'task',
-          from_me: true,
-          status: 'open',
-          confidence: 1,
-        })
-        .select(LOOP_SELECT)
-        .single();
-      if (error) throw error;
-      return data as LoopItem;
-    },
+    mutationFn: createLoop,
     onSuccess: () => { setNewLoop(''); setShowCreate(false); queryClient.invalidateQueries({ queryKey: ['mobile-loops', user?.id] }); },
   });
 

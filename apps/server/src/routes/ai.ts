@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { pipeUIMessageStreamToResponse } from 'ai';
 import { z } from 'zod';
 import { aiProcessor } from '../services/ai-processor';
 import { conversationAssistant } from '../services/conversation-assistant';
@@ -57,8 +58,21 @@ const assistantQuestionSchema = z.object({
   body: z.object({
     question: z.string().trim().min(1, 'Question is required').max(2_000),
     chatIds: z.array(z.string().uuid()).max(5).optional().default([]),
+    requestId: z.string().uuid().optional(),
+    stream: z.boolean().optional(),
   }),
 });
+
+function wantsAssistantStream(req: Request): boolean {
+  return req.body.stream === true || String(req.get('accept') || '').includes('text/event-stream');
+}
+
+function requestAbortSignal(req: Request, res: Response): AbortSignal {
+  const controller = new AbortController();
+  req.once('aborted', () => controller.abort());
+  res.once('close', () => { if (!res.writableEnded) controller.abort(); });
+  return controller.signal;
+}
 
 const aiSearchSchema = z.object({
   body: z.object({ query: z.string().trim().min(1).max(2_000) }),
@@ -200,6 +214,29 @@ router.delete('/assistant/threads/:threadId', requireAuth, async (req: Request, 
   }
 });
 
+/** Create a thread and answer its first question in one round trip. */
+router.post('/assistant/messages', requireAuth, requireAiProcessing, validateRequest(assistantQuestionSchema), async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: 'User not authenticated' });
+    if (!conversationAssistant.isConfigured) return res.status(503).json({ success: false, error: 'AI is not configured' });
+    const thread = await conversationAssistant.findThreadByRequestId(userId, req.body.requestId)
+      || await conversationAssistant.createThread(userId);
+    if (wantsAssistantStream(req)) {
+      const stream = conversationAssistant.createAnswerStream(
+        userId, thread.id, req.body.question, req.body.chatIds, false, req.body.requestId, requestAbortSignal(req, res),
+      );
+      await pipeUIMessageStreamToResponse({ response: res, stream });
+      return;
+    }
+    const answer = await conversationAssistant.ask(userId, thread.id, req.body.question, req.body.chatIds, false, req.body.requestId);
+    return res.status(201).json({ success: true, data: { ...answer, thread } });
+  } catch (error) {
+    logger.error('Error creating assistant question:', error);
+    return res.status(500).json({ success: false, error: 'Failed to answer assistant question' });
+  }
+});
+
 /** One persisted, strict-scope assistant thread for each conversation. */
 router.get('/assistant/conversations/:chatId', requireAuth, async (req: Request, res: Response) => {
   try {
@@ -219,7 +256,16 @@ router.post('/assistant/conversations/:chatId/messages', requireAuth, requireAiP
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ error: 'User not authenticated' });
     if (!conversationAssistant.isConfigured) return res.status(503).json({ success: false, error: 'AI is not configured' });
-    return res.json({ success: true, data: await conversationAssistant.askConversation(userId, req.params.chatId, req.body.question) });
+    if (wantsAssistantStream(req)) {
+      const stream = await conversationAssistant.createConversationAnswerStream(
+        userId, req.params.chatId, req.body.question, req.body.requestId, requestAbortSignal(req, res),
+      );
+      await pipeUIMessageStreamToResponse({ response: res, stream });
+      return;
+    }
+    return res.json({ success: true, data: await conversationAssistant.askConversation(
+      userId, req.params.chatId, req.body.question, req.body.requestId,
+    ) });
   } catch (error) {
     if ((error as Error).message === 'CHAT_NOT_FOUND') return res.status(404).json({ success: false, error: 'Conversation not found' });
     logger.error('Error answering conversation assistant:', error);
@@ -245,7 +291,17 @@ router.post('/assistant/threads/:threadId/messages', requireAuth, requireAiProce
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ error: 'User not authenticated' });
     if (!conversationAssistant.isConfigured) return res.status(503).json({ success: false, error: 'AI is not configured' });
-    return res.json({ success: true, data: await conversationAssistant.ask(userId, req.params.threadId, req.body.question, req.body.chatIds) });
+    if (wantsAssistantStream(req)) {
+      const stream = conversationAssistant.createAnswerStream(
+        userId, req.params.threadId, req.body.question, req.body.chatIds, false,
+        req.body.requestId, requestAbortSignal(req, res),
+      );
+      await pipeUIMessageStreamToResponse({ response: res, stream });
+      return;
+    }
+    return res.json({ success: true, data: await conversationAssistant.ask(
+      userId, req.params.threadId, req.body.question, req.body.chatIds, false, req.body.requestId,
+    ) });
   } catch (error) {
     if ((error as Error).message === 'ASSISTANT_THREAD_NOT_FOUND') return res.status(404).json({ success: false, error: 'Assistant thread not found' });
     logger.error('Error answering assistant question:', error);
@@ -520,13 +576,32 @@ router.get('/morning-brief',
 
       // Fetch most recent message per chat that we haven't replied to
       const since = new Date(Date.now() - 7 * 24 * 3600_000).toISOString(); // last 7 days
-      const { data: rows, error } = await supabase
+
+      // Groups are opt-in, so the brief only considers the ones turned on.
+      // Resolved as an explicit id list rather than a filter on the embedded
+      // chat: this list is tiny by construction, and it keeps the 200-row
+      // budget below from being spent on group traffic that is then discarded.
+      const { data: enabledGroups } = await supabase
+        .from('chats')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('is_group', true)
+        .eq('ai_enabled', true);
+      const enabledGroupIds = (enabledGroups || []).map((row: { id: string }) => row.id);
+
+      let briefQuery = supabase
         .from('messages')
         .select(`id, chat_id, content, timestamp, from_me, is_group, contact_name, platform,
                  chats!messages_chat_id_fkey(name, platform_chat_id)`)
         .eq('user_id', userId)
         .eq('from_me', false)
-        .gte('timestamp', since)
+        .gte('timestamp', since);
+
+      briefQuery = enabledGroupIds.length
+        ? briefQuery.or(`is_group.eq.false,chat_id.in.(${enabledGroupIds.join(',')})`)
+        : briefQuery.eq('is_group', false);
+
+      const { data: rows, error } = await briefQuery
         .order('timestamp', { ascending: false })
         .limit(200);
 
