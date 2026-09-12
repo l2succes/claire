@@ -29,21 +29,53 @@ not itself a demo account, so the surface is invisible to real users.
 
 1. Apply migration `20260912120000_add_demo_accounts.sql` to the target
    database, then reload the PostgREST schema cache — otherwise the new column
-   is invisible to the API and seeding fails on `is_demo`:
+   is invisible to the API and seeding fails on `is_demo`.
+
+   Against the local Docker stack:
 
    ```bash
    docker exec supabase-db psql -U postgres -d postgres -c "NOTIFY pgrst, 'reload schema';"
    ```
 
-   On a hosted Supabase, run the `NOTIFY` from the SQL editor instead.
-2. Set `DEMO_MODE_ENABLED=true` on the API service.
+   Against a Railway Supabase, go through the Postgres service's TCP proxy so
+   the password stays in the injected environment and never reaches a shell
+   history or a terminal:
+
+   ```bash
+   railway run --project <project-id> --environment production --service Postgres -- bash -c 'psql -h "$RAILWAY_TCP_PROXY_DOMAIN" -p "$RAILWAY_TCP_PROXY_PORT" -U "$PGUSER" -d "$PGDATABASE" -f supabase/migrations/20260912120000_add_demo_accounts.sql'
+   ```
+
+   Do **not** reach for `supabase db push`. Claire's Railway databases have no
+   `supabase_migrations.schema_migrations` table, so the CLI sees zero applied
+   migrations and tries to replay the entire history against a database that
+   already has the schema.
+2. Set `DEMO_MODE_ENABLED=true` on the API service. Add `--skip-deploys` if you
+   would rather it take effect on the next deploy than restart the API now.
 3. Configure an AI provider on that service (`OPENAI_API_KEY`, or the Azure
    set). Without one the account still seeds and the personas still answer, but
    from a small set of fixed fallback lines — no suggestions, no Ask Claire, and
    no genuinely responsive replies.
 
-Staging is already provisioned with `MOCK_BRIDGE=true`, which makes it the
-natural home for a demo account: no bridge topology is involved either way.
+## Choosing an environment
+
+Either environment works, and the trade is not obvious:
+
+- **Staging** (`claire-staging`) is isolated and runs `MOCK_BRIDGE=true`, so no
+  bridge topology is involved. It has no AI provider configured, and as of
+  writing its Envoy→PostgREST route returns 503 for every `/rest/v1/*` request,
+  which takes the whole data layer down.
+- **Production** (`claire`) has a working data layer and `OPENAI_API_KEY`
+  already set, which is why a demo account may end up there.
+
+Two things to understand before enabling demo mode in production:
+
+- The demo adapter **wraps the live Matrix adapter**, so it sits in the path of
+  real WhatsApp/Telegram/Instagram traffic. Every call for a non-demo account
+  passes straight through — that is what `apps/server/src/adapters/demo/index.test.ts`
+  exists to hold — but it is one more layer in a hot path.
+- `users.is_demo` is a **destructive flag to set by mistake**. `POST /demo/reset`
+  deletes all conversation data for the calling account. Flip the column only
+  via the seed script, and only for an address created for demos.
 
 ## Seed an account
 
