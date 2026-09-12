@@ -42,6 +42,7 @@ import { voiceProfileService } from './services/voice-profile-service';
 import {
   displayNameFromBridge,
   incomingContactId,
+  messageContactId,
   phoneNumberFromBridgeIdentifiers,
   phoneNumberFromPlatformContactId,
   resolveMentions,
@@ -515,7 +516,7 @@ async function initializePlatforms() {
           },
           { onConflict: 'user_id,platform,platform_chat_id' }
         )
-        .select('id, name, is_group, ai_enabled, member_count')
+        .select('id, name, is_group, ai_enabled, member_count, contact_id')
         .single();
 
       if (chatError || !chat) {
@@ -581,6 +582,24 @@ async function initializePlatforms() {
       if (contactId && message.chatType === 'individual') {
         await supabase.from('chats').update({ contact_id: contactId }).eq('id', chat.id);
       }
+
+      // An outbound message has no remote sender, so incomingContactId returns
+      // null for it and `contact_id` was left empty on every row the account
+      // owner sent. That silently broke the People "Contacted" filter, which
+      // counts exactly those rows: contacts.outbound_message_count is
+      // maintained from `from_me = TRUE AND contact_id IS NOT NULL`, so the
+      // counter never left zero and the filter could never return anyone.
+      //
+      // In a 1:1 the counterpart is unambiguous -- it is the chat's own linked
+      // contact. A group has no single counterpart, and "contacted" is defined
+      // as direct messages only (routes/contacts.ts filters is_group = false),
+      // so groups stay null on purpose.
+      const linkedContactId = messageContactId({
+        senderContactId: contactId,
+        isFromMe: message.isFromMe,
+        isGroup: message.chatType === 'group',
+        chatContactId: (chat as { contact_id?: string | null }).contact_id,
+      });
       if (message.chatType === 'individual' && !chatDisplayName) {
         // Outgoing messages do not have a remote sender to upsert above, and
         // some bridges only learn the profile name during contact sync. Reuse
@@ -643,7 +662,7 @@ async function initializePlatforms() {
             content_type: message.contentType,
             timestamp: message.timestamp,
             is_group: message.chatType === 'group',
-            contact_id: contactId,
+            contact_id: linkedContactId,
             contact_name: message.isFromMe
               ? null
               : displayNameFromBridge(message.senderName, message.platform, senderContactId),
