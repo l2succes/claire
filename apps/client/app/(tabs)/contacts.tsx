@@ -545,7 +545,12 @@ function DesktopPeopleWorkspace({ contacts, selected, searchQuery, loading, onSe
           const contactName = personName(contact);
           const detail = personDetails(contact);
           const active = selected?.id === contact.id;
-          return <Pressable key={contact.id} onPress={() => onSelect(contact.id)} accessibilityRole="button" style={{ opacity: 1 }}><View style={{ minHeight: 62, flexDirection: 'row', alignItems: 'center', gap: space[2], padding: 8, borderRadius: 12, backgroundColor: active ? colors.lime : 'transparent' }}><MobileAvatar name={contactName} uri={contact.avatar_url} size={38} isGroup={contact.is_group} /><View style={{ flex: 1, minWidth: 0 }}><Text numberOfLines={1} style={{ ...mobileType.bodySmall, fontWeight: '700', color: colors.ink }}>{contactName}</Text><Text numberOfLines={1} style={{ ...mobileType.label, color: colors.neutral[600] }}>{detail || contact.inferred_relationship || `${platformLabel(contactPlatform(contact))}`}</Text></View></View></Pressable>;
+          // testID sits on the inner View, not the Pressable: on this row the
+          // Pressable renders without a data-testid attribute at all (verified
+          // in the DOM), while View testIDs land reliably. Keeping the hook on
+          // the element that actually carries it is what makes the desktop
+          // People e2e selectors resolve.
+          return <Pressable key={contact.id} onPress={() => onSelect(contact.id)} accessibilityRole="button" style={{ opacity: 1 }}><View testID={`people-row-${contact.id}`} style={{ minHeight: 62, flexDirection: 'row', alignItems: 'center', gap: space[2], padding: 8, borderRadius: 12, backgroundColor: active ? colors.lime : 'transparent' }}><MobileAvatar name={contactName} uri={contact.avatar_url} size={38} isGroup={contact.is_group} /><View style={{ flex: 1, minWidth: 0 }}><Text numberOfLines={1} style={{ ...mobileType.bodySmall, fontWeight: '700', color: colors.ink }}>{contactName}</Text><Text numberOfLines={1} style={{ ...mobileType.label, color: colors.neutral[600] }}>{detail || contact.inferred_relationship || `${platformLabel(contactPlatform(contact))}`}</Text></View></View></Pressable>;
         })}
         {!loading && !contacts.length ? <MobileState title="No people yet" message="Contacts appear here as conversations sync." /> : null}
       </ScrollView>
