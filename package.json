@@ -38,6 +38,7 @@
     "mobile:staging": "cd apps/client && bun run start:staging",
     "mobile:prod:local": "cd apps/client && bun run start:prod:local",
     "mobile:ios:staging": "cd apps/client && bun run ios:staging",
+    "demo:seed": "cd apps/server && bun run demo:seed",
     "mobile:ios:prod": "cd apps/client && bun run ios:prod",
     "mobile:ios:prod:local": "cd apps/client && bun run ios:prod:local",
     "mobile:ios:prod:device": "cd apps/client && bun run ios:prod:device",

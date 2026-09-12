@@ -3,7 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import * as Sentry from '@sentry/node';
-import { config, platformConfig, matrixConfig, mockBridgeConfig, serverConfig } from './config';
+import { config, platformConfig, matrixConfig, mockBridgeConfig, demoConfig, serverConfig } from './config';
 import { initSentry } from './utils/sentry';
 import { logger, stream } from './utils/logger';
 
@@ -24,6 +24,7 @@ import preferencesRoutes from './routes/preferences';
 import autoReplyRoutes from './routes/auto-reply';
 import { aiRateLimit, authRateLimit } from './middleware/rate-limit';
 import seedRoutes from './routes/seed';
+import demoRoutes from './routes/demo';
 import loopRoutes from './routes/loops';
 import pushTokenRoutes from './routes/push-tokens';
 import notificationDeviceRoutes from './routes/notification-devices';
@@ -51,10 +52,13 @@ import { scheduleChat } from './services/loops/loop-queue';
 import { operationsMonitor } from './services/operations-monitor';
 import { operationsTelemetry } from './services/operations-telemetry';
 import { autoReplyEngine } from './services/auto-reply-engine';
+import { DemoBridgeAdapter } from './adapters/demo';
+import { demoResponder } from './services/demo-responder';
+import { isDemoUser } from './demo/demo-accounts';
 import { notificationDeliveryService } from './services/notification-delivery';
 import { chatAiProcessingEnabled, isAiProcessingEnabled } from './services/ai-policy';
 import { scheduleGroupClassification } from './services/group-classifier';
-import { MessageContentType, Platform, PlatformStatus } from './adapters/types';
+import { IPlatformAdapter, MessageContentType, Platform, PlatformStatus } from './adapters/types';
 import { whatsappAdapter } from './adapters/whatsapp';
 import { telegramAdapter } from './adapters/telegram';
 import { imessageAdapter } from './adapters/imessage';
@@ -137,6 +141,8 @@ app.use('/conversations', conversationRoutes);
 app.use('/preferences', preferencesRoutes);
 // Seed/reset route — only functional when MOCK_BRIDGE=true (guarded inside route)
 app.use('/seed', seedRoutes);
+// Demo account seeding — every route 404s unless the caller is a demo account
+app.use('/demo', demoRoutes);
 app.use('/loops', loopRoutes);
 app.use('/push-tokens', pushTokenRoutes);
 app.use('/notification-devices', notificationDeviceRoutes);
@@ -336,12 +342,31 @@ app.use((_req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
+/**
+ * Wrap an adapter so demo accounts get synthetic sessions and in-character
+ * replies. Inert unless DEMO_MODE_ENABLED is set, and even then every call for
+ * a non-demo account passes straight through to the real adapter.
+ */
+function withDemoSupport(adapter: IPlatformAdapter): IPlatformAdapter {
+  if (!demoConfig.enabled) return adapter;
+  return new DemoBridgeAdapter(adapter, {
+    ingest: (message) => platformManager.ingestMessage(message),
+    isDemoUser,
+    onOutgoing: (outgoing) => demoResponder.respondTo(outgoing),
+  });
+}
+
 // Initialize platform adapters
 async function initializePlatforms() {
+  if (demoConfig.enabled) {
+    logger.info('DEMO_MODE_ENABLED=true — demo accounts will receive synthetic sessions and in-character replies');
+    demoResponder.configure((message) => platformManager.ingestMessage(message));
+  }
+
   if (mockBridgeConfig.enabled) {
     // Mock mode: replace all real adapters with a scripted fake adapter
     logger.info('MOCK_BRIDGE=true — using mock bridge adapter (no Docker/Matrix required)');
-    platformManager.setMatrixMode(mockBridgeAdapter);
+    platformManager.setMatrixMode(withDemoSupport(mockBridgeAdapter));
   } else {
     const mode = matrixConfig.enabled ? 'matrix' : 'direct';
     logger.info(`Initializing platform adapters in ${mode} mode...`);
@@ -414,22 +439,22 @@ async function initializePlatforms() {
         },
       });
 
-      platformManager.setMatrixMode(matrixAdapter);
+      platformManager.setMatrixMode(withDemoSupport(matrixAdapter));
     } else {
       // Direct mode: Use native platform adapters
       logger.info('Using direct platform adapters');
 
       if (platformConfig.whatsapp.enabled) {
-        platformManager.registerAdapter(whatsappAdapter);
+        platformManager.registerAdapter(withDemoSupport(whatsappAdapter));
       }
       if (platformConfig.telegram.enabled) {
-        platformManager.registerAdapter(telegramAdapter);
+        platformManager.registerAdapter(withDemoSupport(telegramAdapter));
       }
       if (platformConfig.imessage.enabled) {
-        platformManager.registerAdapter(imessageAdapter);
+        platformManager.registerAdapter(withDemoSupport(imessageAdapter));
       }
       if (platformConfig.instagram.enabled) {
-        platformManager.registerAdapter(instagramAdapter);
+        platformManager.registerAdapter(withDemoSupport(instagramAdapter));
       }
     }
   }

@@ -80,6 +80,11 @@ const envSchema = z.object({
   // Mock bridge mode — replaces all adapters with scripted fixtures (no Docker required)
   MOCK_BRIDGE: z.string().default('false').transform((val) => val === 'true'),
 
+  // Demo accounts — synthetic conversations and in-character replies for
+  // recorded product demos. Half the gate only: an account must ALSO carry
+  // users.is_demo, so enabling this cannot affect a real account.
+  DEMO_MODE_ENABLED: z.string().default('false').transform((val) => val === 'true'),
+
   // Matrix Configuration (required when PLATFORM_MODE=matrix)
   MATRIX_HOMESERVER_URL: z.string().url().optional(),
   MATRIX_SERVER_NAME: z.string().optional(),
@@ -220,4 +225,8 @@ export const matrixConfig = {
 
 export const mockBridgeConfig = {
   enabled: config.MOCK_BRIDGE,
+};
+
+export const demoConfig = {
+  enabled: config.DEMO_MODE_ENABLED,
 };
