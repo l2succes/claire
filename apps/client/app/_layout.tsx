@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AppState, Platform, View } from 'react-native';
+import { AppState, Linking, Platform, View } from 'react-native';
 import { Stack, router } from 'expo-router';
 import * as Notifications from 'expo-notifications';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -156,6 +156,8 @@ export default function RootLayout() {
     if (Platform.OS === 'web') return;
     const openNotification = (notification: Notifications.Notification) => {
       const data = notification.request.content.data as {
+        type?: unknown;
+        url?: unknown;
         chatId?: unknown;
         messageId?: unknown;
         contactName?: unknown;
@@ -163,6 +165,16 @@ export default function RootLayout() {
         platform?: unknown;
         isGroup?: unknown;
       };
+      if (data.type === 'operations_incident') {
+        const dashboardUrl =
+          typeof data.url === 'string' && data.url.startsWith('https://')
+            ? data.url
+            : 'https://useclaire.co/ops';
+        void Linking.openURL(dashboardUrl).catch((error) => {
+          console.warn('Could not open the operations dashboard:', error);
+        });
+        return;
+      }
       if (typeof data.chatId !== 'string') return;
       router.push({ pathname: '/chat/[chatId]', params: {
         chatId: data.chatId,
