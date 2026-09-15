@@ -695,6 +695,17 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
       )
       .on(
         'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'chats', filter: `id=eq.${chatId}` },
+        (payload) => {
+          // Message insertion and unread increment are separate writes. If the
+          // increment lands after this open chat marked itself read, advance
+          // the cursor again so the inbox cannot regain a stale unread badge.
+          const updated = payload.new as { unread_count?: number };
+          if ((updated.unread_count || 0) > 0) void chatEffectRef.current.markConversationRead();
+        }
+      )
+      .on(
+        'postgres_changes',
         {
           event: 'INSERT',
           schema: 'public',
