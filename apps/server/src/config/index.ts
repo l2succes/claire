@@ -59,6 +59,7 @@ const envSchema = z.object({
   // Monitoring
   SENTRY_DSN: z.string().url().optional(),
   OPS_ALERT_USER_IDS: z.string().optional(),
+  OPS_DASHBOARD_URL: z.string().url().default('https://useclaire.co/ops'),
   OPS_MONITOR_INTERVAL_SECONDS: z.string().default('60').transform(Number),
   OPS_MESSAGE_FRESHNESS_MINUTES: z.string().default('120').transform(Number),
 
@@ -159,6 +160,7 @@ export const serverConfig = {
     alertUserIds: config.OPS_ALERT_USER_IDS
       ? config.OPS_ALERT_USER_IDS.split(',').map((id) => id.trim()).filter(Boolean)
       : [],
+    dashboardUrl: config.OPS_DASHBOARD_URL,
     monitorIntervalSeconds: Math.max(30, config.OPS_MONITOR_INTERVAL_SECONDS),
     messageFreshnessMinutes: Math.max(15, config.OPS_MESSAGE_FRESHNESS_MINUTES),
   },

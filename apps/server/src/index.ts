@@ -66,6 +66,7 @@ import { instagramAdapter } from './adapters/instagram';
 import { MatrixBridgeAdapter } from './adapters/matrix';
 import { mockBridgeAdapter } from './adapters/mock';
 import { transcodeVoiceToM4aOnce } from './services/audio-transcoder';
+import { isWhatsAppStatusUpdate } from './services/whatsapp-status';
 
 // Initialise Sentry as early as possible (no-op when SENTRY_DSN is unset)
 initSentry();
@@ -463,8 +464,10 @@ async function initializePlatforms() {
   platformManager.onMessage(async (message) => {
     logger.debug('Platform message received', { platform: message.platform });
 
-    // Skip WhatsApp status broadcasts
-    if (message.chatId === 'status@broadcast' || message.platformMetadata?.isStatus) {
+    // WhatsApp Status is a pseudo-conversation, not an inbox message. Matrix
+    // rooms do not always retain the direct adapter's JID/metadata, so include
+    // the canonical room names in the shared check as well.
+    if (isWhatsAppStatusUpdate(message)) {
       return;
     }
 
