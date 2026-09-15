@@ -10,7 +10,7 @@ const queryCalls: Array<{ table: string; method: string; args: any[] }> = [];
 
 function chainFor(table: string): any {
   const chain: any = {};
-  for (const method of ['select', 'eq', 'in', 'order', 'limit', 'lte', 'single', 'update', 'insert']) {
+  for (const method of ['select', 'eq', 'in', 'order', 'limit', 'lte', 'single', 'maybeSingle', 'update', 'insert']) {
     chain[method] = (...args: any[]) => {
       queryCalls.push({ table, method, args });
       return chain;
@@ -139,6 +139,7 @@ describe('ReminderScheduler', () => {
   it('delivers a manual trigger through the reliable device service', async () => {
     responses.push(
       { data: liveLoop(), error: null },
+      { data: liveLoop(), error: null },
       { data: null, error: null },
     );
     const result = await scheduler.triggerReminderForLoop('loop-1');
@@ -157,11 +158,42 @@ describe('ReminderScheduler', () => {
     deliveryResult = { queued: 0, outcome: 'no_devices' } as never;
     responses.push(
       { data: liveLoop(), error: null },
+      { data: liveLoop(), error: null },
       { data: null, error: null },
     );
     expect(await scheduler.triggerReminderForLoop('loop-1')).toEqual({ sent: false });
     const update = queryCalls.find((call) => call.method === 'update');
     expect(update?.args[0].next_reminder_at).toBeString();
     expect(update?.args[0].reminder_plan_state).toBeUndefined();
+  });
+
+  it('drops a queued reminder after its loop revision changes', async () => {
+    responses.push({ data: liveLoop({ reminder_revision: 4 }), error: null });
+    const result = await (scheduler as any).processReminderJob({ data: {
+      loopId: 'loop-1',
+      revision: 3,
+      reminderCount: 0,
+      userId: 'user-1',
+      title: 'Send the deck',
+      content: 'Send the deck',
+      reason: 'deadline_soon',
+    } });
+    expect(result).toEqual({ sent: false });
+    expect(deliveryCalls).toHaveLength(0);
+  });
+
+  it('drops a queued reminder after the loop is completed', async () => {
+    responses.push({ data: liveLoop({ status: 'done' }), error: null });
+    const result = await (scheduler as any).processReminderJob({ data: {
+      loopId: 'loop-1',
+      revision: 3,
+      reminderCount: 0,
+      userId: 'user-1',
+      title: 'Send the deck',
+      content: 'Send the deck',
+      reason: 'deadline_soon',
+    } });
+    expect(result).toEqual({ sent: false });
+    expect(deliveryCalls).toHaveLength(0);
   });
 });
