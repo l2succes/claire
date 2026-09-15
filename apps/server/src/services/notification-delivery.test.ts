@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { isInQuietHours, shouldNotifyConversation } from './notification-delivery';
+import { NotificationDeliveryService, isInQuietHours, shouldNotifyConversation } from './notification-delivery';
 import { ExpoNotificationProvider } from './notification-providers';
 
 describe('notification eligibility', () => {
@@ -9,6 +9,17 @@ describe('notification eligibility', () => {
     expect(shouldNotifyConversation(true, { notify_messages: true }, null)).toBe(true);
   });
 
+  it('drops a WhatsApp Status room before starting delivery work', async () => {
+    const queued = await new NotificationDeliveryService().enqueueIncomingMessage({
+      userId: 'user-1',
+      chatId: '!status-room:claire.local',
+      platform: 'whatsapp',
+      chatName: 'WhatsApp Status Broadcast',
+      content: 'A new status post',
+      messageId: 'message-1',
+    });
+    expect(queued).toBe(0);
+  });
   it('handles quiet hours that cross midnight in the device timezone', () => {
     const options = { quiet_hours_enabled: true, quiet_hours_start: '22:00', quiet_hours_end: '08:00' };
     expect(isInQuietHours(options, 'UTC', new Date('2026-08-15T23:00:00Z'))).toBe(true);

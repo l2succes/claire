@@ -5,6 +5,7 @@ import { notificationPresence } from './notification-presence';
 import { apnsNotificationProvider, expoNotificationProvider, type NotificationPayload, type ProviderResult } from './notification-providers';
 import { logger } from '../utils/logger';
 import { operationsTelemetry } from './operations-telemetry';
+import { isWhatsAppStatusUpdate } from './whatsapp-status';
 
 interface NotificationDevice {
   id: string;
@@ -100,6 +101,14 @@ export class NotificationDeliveryService {
   }
 
   async enqueueIncomingMessage(event: IncomingNotificationEvent): Promise<number> {
+    // Keep the delivery boundary defensive: status posts must remain silent
+    // even if a future ingestion path bypasses the primary message filter.
+    if (isWhatsAppStatusUpdate({
+      platform: event.platform,
+      chatId: event.chatId,
+      chatName: event.chatName,
+    })) return 0;
+
     this.start();
     const [{ data: preferences, error: preferenceError }, { data: devices, error: deviceError }, { data: chat, error: chatError }] = await Promise.all([
       supabase.from('user_preferences').select('notification_enabled,preferences').eq('user_id', event.userId).maybeSingle(),
