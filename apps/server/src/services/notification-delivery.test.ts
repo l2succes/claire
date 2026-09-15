@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { NotificationDeliveryService, isInQuietHours, quietHoursDelay, shouldNotifyConversation, shouldNotifyLoops } from './notification-delivery';
+import { NotificationDeliveryService, isInQuietHours, quietHoursDelay, shouldDeliverLoopRevision, shouldNotifyConversation, shouldNotifyLoops } from './notification-delivery';
 import { ExpoNotificationProvider } from './notification-providers';
 
 describe('notification eligibility', () => {
@@ -13,6 +13,13 @@ describe('notification eligibility', () => {
     expect(shouldNotifyLoops(true, { notify_loops: true })).toBe(true);
     expect(shouldNotifyLoops(false, { notify_loops: true })).toBe(false);
     expect(shouldNotifyLoops(true, { notify_loops: false })).toBe(false);
+  });
+
+  it('drops loop deliveries after completion or a semantic edit', () => {
+    const expected = { revision: 3, userId: 'user-1' };
+    expect(shouldDeliverLoopRevision(expected, { reminder_revision: 3, user_id: 'user-1', status: 'open' })).toBe(true);
+    expect(shouldDeliverLoopRevision(expected, { reminder_revision: 4, user_id: 'user-1', status: 'open' })).toBe(false);
+    expect(shouldDeliverLoopRevision(expected, { reminder_revision: 3, user_id: 'user-1', status: 'done' })).toBe(false);
   });
 
   it('drops a WhatsApp Status room before starting delivery work', async () => {

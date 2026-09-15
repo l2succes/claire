@@ -35,6 +35,7 @@ interface DeliveryJob {
   device: NotificationDevice;
   payload: NotificationPayload;
   telemetry: { userId: string; platform: string; traceSource: string };
+  loop?: { loopId: string; revision: number; userId: string };
 }
 
 export interface LoopReminderNotificationEvent {
@@ -75,6 +76,18 @@ export function shouldNotifyLoops(notificationEnabled: boolean | null | undefine
 
 export function shouldNotifyConversation(notificationEnabled: boolean | null | undefined, options: NotificationOptions, isMuted: boolean | null | undefined): boolean {
   return notificationEnabled !== false && options.notify_messages !== false && isMuted !== true;
+}
+
+export function shouldDeliverLoopRevision(
+  expected: { revision: number; userId: string },
+  current: { reminder_revision: number; user_id: string; status: string } | null | undefined,
+): boolean {
+  return Boolean(
+    current
+    && current.reminder_revision === expected.revision
+    && current.user_id === expected.userId
+    && ['open', 'waiting', 'snoozed'].includes(current.status),
+  );
 }
 
 function minutesAtTimezone(date: Date, timezone: string): number {
@@ -272,6 +285,7 @@ export class NotificationDeliveryService {
         device,
         payload,
         telemetry: { userId: event.userId, platform: 'claire', traceSource: event.loopId },
+        loop: { loopId: event.loopId, revision: event.revision, userId: event.userId },
       }, {
         jobId: `loop:${event.loopId}:revision:${event.revision}:device:${device.id}`,
         ...(delay ? { delay } : {}),
@@ -283,7 +297,23 @@ export class NotificationDeliveryService {
 
   private async process(job: Job<NotificationJob>): Promise<void> {
     if (job.data.kind === 'receipt') return this.processReceipt(job.data);
-    const { deliveryId, device, payload, telemetry } = job.data;
+    const { deliveryId, device, payload, telemetry, loop } = job.data;
+    if (loop) {
+      const { data: currentLoop, error } = await supabase
+        .from('loops')
+        .select('user_id,status,reminder_revision')
+        .eq('id', loop.loopId)
+        .maybeSingle();
+      if (error) throw error;
+      if (!shouldDeliverLoopRevision(loop, currentLoop)) {
+        await supabase.from('notification_deliveries').update({
+          state: 'suppressed',
+          error_code: 'stale_loop_revision',
+          updated_at: new Date().toISOString(),
+        }).eq('id', deliveryId);
+        return;
+      }
+    }
     const provider = device.provider === 'expo' ? expoNotificationProvider : device.provider === 'apns' ? apnsNotificationProvider : null;
     if (!provider) {
       await this.recordResult(deliveryId, device.id, { state: 'failed', errorCode: 'unsupported_provider' }, job.attemptsMade + 1, telemetry);

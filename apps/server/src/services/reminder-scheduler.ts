@@ -14,6 +14,7 @@ interface ReminderJob {
   title: string;
   content: string;
   reason: LoopReminderReason;
+  manual?: boolean;
 }
 
 interface ReminderLoopRow {
@@ -65,19 +66,22 @@ export class ReminderScheduler {
     if (this.started) return;
     this.started = true;
     if (!this.queue) {
-      const bull = new Bull<ReminderJob>('loop-reminders', {
-        redis: {
-          host: redisConfig.host,
-          port: redisConfig.port,
-          password: redisConfig.password,
-        },
-        defaultJobOptions: {
-          removeOnComplete: 100,
-          removeOnFail: 50,
-          attempts: 3,
-          backoff: { type: 'exponential', delay: 5000 },
-        },
-      }) as unknown as ReminderQueue;
+      const defaultJobOptions = {
+        removeOnComplete: 100,
+        removeOnFail: 50,
+        attempts: 3,
+        backoff: { type: 'exponential' as const, delay: 5000 },
+      };
+      const bull = ('url' in redisConfig
+        ? new Bull<ReminderJob>('loop-reminders', redisConfig.url!, { defaultJobOptions })
+        : new Bull<ReminderJob>('loop-reminders', {
+            redis: {
+              host: redisConfig.host,
+              port: redisConfig.port,
+              password: redisConfig.password,
+            },
+            defaultJobOptions,
+          })) as unknown as ReminderQueue;
       bull.on('completed', (job: any) => logger.info(`[reminder] job ${job.id} completed for loop ${job.data?.loopId}`));
       bull.on('failed', (job: any, err: Error) => logger.error(`[reminder] job ${job.id} failed for loop ${job.data?.loopId}:`, err.message));
       bull.process(this.processReminderJob.bind(this));
@@ -196,6 +200,22 @@ export class ReminderScheduler {
 
   private async processReminderJob(job: { data: ReminderJob }): Promise<{ sent: boolean }> {
     const data = job.data;
+    const { data: currentLoop, error: currentLoopError } = await supabase
+      .from('loops')
+      .select('user_id,status,reminder_revision,reminder_plan_state,next_reminder_at')
+      .eq('id', data.loopId)
+      .maybeSingle();
+    if (currentLoopError) throw new Error(currentLoopError.message);
+    const stillActive = currentLoop
+      && currentLoop.user_id === data.userId
+      && currentLoop.reminder_revision === data.revision
+      && ['open', 'waiting', 'snoozed'].includes(currentLoop.status);
+    const stillDue = data.manual === true
+      || (currentLoop?.reminder_plan_state === 'scheduled'
+        && typeof currentLoop.next_reminder_at === 'string'
+        && new Date(currentLoop.next_reminder_at).getTime() <= Date.now());
+    if (!stillActive || !stillDue) return { sent: false };
+
     const copy = notificationCopy(data.reason, data.title);
     const result = await notificationDeliveryService.enqueueLoopReminder({
       loopId: data.loopId,
@@ -249,6 +269,7 @@ export class ReminderScheduler {
       title: loop.title || loop.content,
       content: loop.content,
       reason: 'act_now',
+      manual: true,
     } });
   }
 
