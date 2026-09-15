@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AppState, InteractionManager, Platform, View } from 'react-native';
+import { AppState, InteractionManager, Linking, Platform, View } from 'react-native';
 import { Stack, router } from 'expo-router';
 import * as Notifications from 'expo-notifications';
 import { QueryClientProvider } from '@tanstack/react-query';
@@ -158,6 +158,7 @@ export default function RootLayout() {
     const openNotification = (notification: Notifications.Notification) => {
       const data = notification.request.content.data as {
         type?: unknown;
+        url?: unknown;
         loopId?: unknown;
         chatId?: unknown;
         messageId?: unknown;
@@ -166,6 +167,16 @@ export default function RootLayout() {
         platform?: unknown;
         isGroup?: unknown;
       };
+      if (data.type === 'operations_incident') {
+        const dashboardUrl =
+          typeof data.url === 'string' && data.url.startsWith('https://')
+            ? data.url
+            : 'https://useclaire.co/ops';
+        void Linking.openURL(dashboardUrl).catch((error) => {
+          console.warn('Could not open the operations dashboard:', error);
+        });
+        return;
+      }
       if (data.type === 'loop_reminder' && typeof data.loopId === 'string') {
         router.push({ pathname: '/loops/[id]', params: { id: data.loopId } });
         return;

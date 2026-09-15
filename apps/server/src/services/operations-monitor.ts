@@ -181,7 +181,11 @@ class OperationsMonitor {
       await pushNotificationService.sendToTokens((data || []).map((row: DbRow) => row.token), {
         title: severity === 'critical' ? 'Claire needs attention' : 'Claire health warning',
         body: summary,
-        data: { type: 'operations_incident', version: 1 },
+        data: {
+          type: 'operations_incident',
+          version: 1,
+          url: serverConfig.operations.dashboardUrl,
+        },
         sound: 'default',
       });
     }
