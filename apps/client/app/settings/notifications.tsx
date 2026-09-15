@@ -6,7 +6,7 @@
  */
 
 import { View, Text, ScrollView, ActivityIndicator, Alert, Linking, Platform, Pressable } from 'react-native';
-import { useState, useEffect, type ReactNode } from 'react';
+import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { router } from 'expo-router';
 import { BellRing, ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { colors, mobileType, radius, space } from '@claire/design-system';
@@ -16,6 +16,7 @@ import { API_BASE_URL } from '../../services/platforms';
 import { useAuthStore } from '../../stores/authStore';
 import { readQuerySnapshot, writeQuerySnapshot } from '../../services/mobile-cache';
 import { getNativeNotificationPermission, registerNotificationDevice, requestWebNotificationPermission, supportsWebNotifications } from '../../services/notifications';
+import { createSerialSaveQueue } from '../../features/settings/serial-save-queue';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -233,8 +234,22 @@ function TimeSelector({
 export default function NotificationsSettingsScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [saveFailed, setSaveFailed] = useState(false);
   const [prefs, setPrefs] = useState<NotificationPrefs>(DEFAULTS);
   const [systemPermission, setSystemPermission] = useState('unknown');
+  const prefsRef = useRef(DEFAULTS);
+  const editRevisionRef = useRef(0);
+  const latestSaveRef = useRef<Promise<void> | null>(null);
+  const mountedRef = useRef(true);
+  const saveQueueRef = useRef(createSerialSaveQueue<NotificationPrefs>(async (next) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) throw new Error('Not authenticated');
+    await saveNotificationPrefs(session.access_token, next);
+    const userId = useAuthStore.getState().user?.id;
+    if (userId) await writeQuerySnapshot(userId, 'preferences:notifications', next);
+  }));
+
+  useEffect(() => () => { mountedRef.current = false; }, []);
 
   useEffect(() => {
     // Preferences change only when the user edits them, so the last known set
@@ -245,7 +260,8 @@ export default function NotificationsSettingsScreen() {
     let active = true;
     void readQuerySnapshot<NotificationPrefs>(userId, 'preferences:notifications')
       .then((snapshot) => {
-        if (!active || !snapshot?.data) return;
+        if (!active || !snapshot?.data || editRevisionRef.current > 0) return;
+        prefsRef.current = snapshot.data;
         setPrefs(snapshot.data);
         setLoading(false);
       })
@@ -254,15 +270,19 @@ export default function NotificationsSettingsScreen() {
   }, []);
 
   useEffect(() => {
+    const revisionAtStart = editRevisionRef.current;
     (async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token;
         if (!token) return;
         const loaded = await fetchNotificationPrefs(token);
-        setPrefs(loaded);
-        const userId = useAuthStore.getState().user?.id;
-        if (userId) void writeQuerySnapshot(userId, 'preferences:notifications', loaded).catch(() => undefined);
+        if (editRevisionRef.current === revisionAtStart) {
+          prefsRef.current = loaded;
+          setPrefs(loaded);
+          const userId = useAuthStore.getState().user?.id;
+          if (userId) void writeQuerySnapshot(userId, 'preferences:notifications', loaded).catch(() => undefined);
+        }
         setSystemPermission(await getNativeNotificationPermission());
       } catch {
         // silently use defaults
@@ -272,21 +292,31 @@ export default function NotificationsSettingsScreen() {
     })();
   }, []);
 
-  const update = (patch: Partial<NotificationPrefs>) => setPrefs((p) => ({ ...p, ...patch }));
-
-  const handleSave = async () => {
+  const enqueueSave = (next: NotificationPrefs): void => {
     setSaving(true);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
-      if (!token) throw new Error('Not authenticated');
-      await saveNotificationPrefs(token, prefs);
-      router.back();
-    } catch {
-      Alert.alert('Error', 'Failed to save notification preferences. Please try again.');
-    } finally {
+    setSaveFailed(false);
+    const task = saveQueueRef.current(next);
+    latestSaveRef.current = task;
+    void task.then(() => {
+      if (!mountedRef.current || latestSaveRef.current !== task) return;
       setSaving(false);
-    }
+    }).catch(() => {
+      if (!mountedRef.current || latestSaveRef.current !== task) return;
+      setSaving(false);
+      setSaveFailed(true);
+      Alert.alert('Changes not saved', 'Check your connection and try again.', [
+        { text: 'Not now', style: 'cancel' },
+        { text: 'Try again', onPress: () => enqueueSave(prefsRef.current) },
+      ]);
+    });
+  };
+
+  const update = (patch: Partial<NotificationPrefs>) => {
+    const next = { ...prefsRef.current, ...patch };
+    editRevisionRef.current += 1;
+    prefsRef.current = next;
+    setPrefs(next);
+    enqueueSave(next);
   };
 
   const handleEnableBrowserNotifications = async () => {
@@ -331,11 +361,6 @@ export default function NotificationsSettingsScreen() {
         title="Notifications"
         subtitle="Alerts, reminders, and quiet hours."
         leading={<MobileIconButton label="Back to Settings" testID="notifications-settings-back" onPress={() => router.back()}><ChevronLeft size={20} color={colors.ink} /></MobileIconButton>}
-        actions={
-          <Pressable testID="notifications-settings-save" onPress={() => void handleSave()} disabled={saving} style={{ minHeight: 36, paddingHorizontal: 14, borderRadius: radius.pill, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center', opacity: saving ? 0.6 : 1 }}>
-            {saving ? <ActivityIndicator size="small" color={colors.lime} /> : <Text style={{ ...mobileType.label, color: colors.paper }}>Save</Text>}
-          </Pressable>
-        }
       />
       <View style={{ paddingHorizontal: space[4], gap: space[5] }}>
         <SettingsSection title="Delivery">
@@ -432,8 +457,8 @@ export default function NotificationsSettingsScreen() {
           />
         </SettingsSection>
 
-        <Text style={{ ...mobileType.bodySmall, color: colors.neutral[400], textAlign: 'center', paddingHorizontal: space[4] }}>
-          These settings control when and how Claire sends you push notifications.
+        <Text testID="notifications-autosave-status" style={{ ...mobileType.bodySmall, color: saveFailed ? colors.danger : colors.neutral[400], textAlign: 'center', paddingHorizontal: space[4] }}>
+          {saveFailed ? 'Changes could not be saved.' : saving ? 'Saving changes…' : 'Changes save automatically.'}
         </Text>
       </View>
     </ScrollView>

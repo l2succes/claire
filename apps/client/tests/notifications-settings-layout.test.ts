@@ -21,4 +21,11 @@ describe('notification settings layout', () => {
     expect(source).toContain('<SettingsSection title="What you receive">');
     expect(source).toContain('<SettingsSection title="Quiet hours"');
   });
+
+  it('saves changes automatically without a header save button', () => {
+    expect(source).not.toContain('notifications-settings-save');
+    expect(source).not.toContain('>Save</Text>');
+    expect(source).toContain('Changes save automatically.');
+    expect(source).toContain('enqueueSave(next)');
+  });
 });
