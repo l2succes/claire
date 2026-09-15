@@ -23,13 +23,13 @@ export const meta: DocMeta = {
   description:
     'A staged implementation specification for a faster, cheaper, provider-portable Ask Claire with grounded streaming answers and a safe path to plugin actions.',
   section: 'product',
-  status: 'draft',
-  lastReviewed: '2026-09-08',
+  status: 'current',
+  lastReviewed: '2026-09-15',
   order: 6,
   roadmap: {
-    status: 'planned',
+    status: 'in_progress',
     summary:
-      'Move Ask Claire onto the shared AI SDK runtime, stream grounded answers, and reduce retrieval and inference cost.',
+      'The v2 runtime has shipped; sustained dogfooding, launch evaluation, accessibility, and staged rollout remain.',
   },
   related: [
     '/docs/product/on-device-intelligence',
@@ -43,6 +43,14 @@ export const meta: DocMeta = {
 export default function Page() {
   return (
     <Doc>
+      <Callout kind="note">
+        <b>Implementation update (September 15, 2026):</b> PR #219 shipped the shared AI
+        runtime, grounded streaming, retry-safe persistence, retrieval improvements, and mobile
+        presentation described by the first implementation stages below. The remaining launch work
+        is tracked in <C>docs/ASK_CLAIRE_V2_LAUNCH_READINESS.md</C>. Treat that dated handoff as the
+        current execution checklist and this page as the complete product and architecture spec.
+      </Callout>
+
       <Callout kind="note">
         <b>Decision:</b> adopt Vercel AI SDK Core for Ask Claire&apos;s server-side model,
         embedding, streaming, and future tool boundaries. Use direct provider packages through
@@ -145,14 +153,16 @@ export default function Page() {
         </P>
       </Section>
 
-      <Section id="current-state" title="Current state and work already completed">
+      <Section id="current-state" title="Baseline audited before the v2 implementation">
         <P>
-          The current service is a persisted RAG chat. New messages are embedded with
+          The September 8 baseline was a persisted RAG chat. New messages were embedded with
           <C>text-embedding-3-small</C> and stored in <C>conversation_message_embeddings</C>. A
           question launches lexical and vector retrieval in parallel, merges up to 12 individual
           message hits, adds the last six assistant turns and selected conversation instructions,
           calls OpenAI Chat Completions for JSON, validates cited indices and two navigation
-          actions, then stores the user and assistant turns.
+          actions, then stores the user and assistant turns. The table records the gaps that drove
+          v2; the shipped state and remaining launch work are summarized in
+          <C>docs/ASK_CLAIRE_V2_LAUNCH_READINESS.md</C>.
         </P>
         <Table
           head={[<>Area</>, <>Already present</>, <>Gap</>]}
@@ -226,11 +236,10 @@ export default function Page() {
             ],
           ]}
         />
-        <Callout kind="warning">
-          Fix before migration: <C>askConversation()</C> obtains a chat-scoped thread and calls
-          <C>ask()</C>, but <C>ask()</C> reloads it through <C>getThread()</C> with the default
-          <C>chat_id IS NULL</C> restriction. Add an integration test that proves global threads
-          cannot read chat-scoped threads while the conversation endpoint can read its own thread.
+        <Callout kind="note">
+          <b>Resolved in v2:</b> conversation-scoped requests retain their strict chat boundary,
+          while global threads cannot read a chat-scoped thread. Keep this boundary in the launch
+          evaluation corpus because a regression would be a release blocker.
         </Callout>
       </Section>
 
@@ -272,11 +281,12 @@ export default function Page() {
               title: 'People planning and outreach',
               question:
                 '“Who are my closest people in Mexico City or Brooklyn, and can we reach out?”',
-              status: 'missing',
+              status: 'partial',
               description: (
                 <>
-                  Ask Claire does not yet join temporal location facts with relationship metrics or
-                  create approved, per-recipient outreach proposals.
+                  Ask Claire can use current contact profile facts and communication context, but
+                  coverage and freshness remain uneven. Approved, per-recipient outreach proposals
+                  remain future plugin work.
                 </>
               ),
             },
