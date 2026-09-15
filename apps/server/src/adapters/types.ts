@@ -248,6 +248,8 @@ export interface OutgoingMedia {
   data: Buffer | string;
   mimeType?: string;
   fileName?: string;
+  durationMs?: number;
+  waveform?: number[];
 }
 
 /**

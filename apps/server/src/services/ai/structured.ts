@@ -55,7 +55,9 @@ interface GenerateOneOptions {
   system: string;
   prompt: string;
   maxOutputTokens: number;
-  temperature: number;
+  temperature?: number;
+  providerOptions?: Record<string, unknown>;
+  abortSignal?: AbortSignal;
 }
 
 interface GenerateOneResult {
@@ -84,6 +86,15 @@ export class NoProviderError extends Error {
   }
 }
 
+function isReasoningModel(modelId: string): boolean {
+  return modelId.startsWith('gpt-5') || /^(o1|o3|o4)(?:-|$)/.test(modelId);
+}
+
+function structuredProviderOptions(candidate: { provider: string; modelId: string }): Record<string, unknown> | undefined {
+  if (candidate.provider !== 'openai' || !isReasoningModel(candidate.modelId)) return undefined;
+  return { openai: { reasoningEffort: 'low', strictJsonSchema: true } };
+}
+
 /**
  * Call a model and get a schema-valid object back.
  *
@@ -109,9 +120,13 @@ export async function callStructured<T>(request: StructuredRequest): Promise<Str
         system: request.system,
         prompt: request.prompt,
         maxOutputTokens: request.maxOutputTokens ?? 1500,
-        // Detection must be reproducible: the same window should not yield a
-        // different set of loops on a retry.
-        temperature: request.temperature ?? 0,
+        // OpenAI reasoning models do not accept temperature. Their output is
+        // constrained by strict JSON Schema, so omit it for those models.
+        temperature: isReasoningModel(candidate.modelId) ? undefined : request.temperature ?? 0,
+        providerOptions: structuredProviderOptions(candidate),
+        // A stalled call should try the fallback instead of holding a whole
+        // backfill indefinitely.
+        abortSignal: AbortSignal.timeout(60_000),
       });
 
       return {
@@ -125,11 +140,15 @@ export async function callStructured<T>(request: StructuredRequest): Promise<Str
       const detail = error instanceof Error ? error.message : String(error);
       failures.push(`${candidate.provider}(${candidate.modelId}): ${detail}`);
 
+      const noObject = NoObjectGeneratedError.isInstance(error) ? error : null;
       logger.warn('[ai] structured call failed, trying next provider', {
         label: request.label,
         provider: candidate.provider,
         modelId: candidate.modelId,
-        noObjectGenerated: NoObjectGeneratedError.isInstance(error),
+        noObjectGenerated: !!noObject,
+        finishReason: noObject?.finishReason,
+        responseId: noObject?.response?.id,
+        outputChars: noObject?.text?.length ?? 0,
         error: detail,
       });
     }

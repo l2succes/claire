@@ -5,13 +5,19 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { BellOff, Check, ChevronLeft, Mail, MapPin, Phone, RefreshCw, Sparkles } from 'lucide-react-native';
 import { colors, mobileType, radius, space } from '@claire/design-system';
 import { useAuthStore } from '../../../stores/authStore';
+import {
+  cacheConversationSettings,
+  cachedConversationSettings,
+  usesNativeMobileCache,
+} from '../../../services/mobile-cache';
 import { useConversationSettingsStore } from '../../../stores/conversationSettingsStore';
 import { supabase } from '../../../services/supabase';
 import { CategoryPicker } from '../../../components/CategoryPicker';
 import { MobileAvatar, MobileIconButton, SectionLabel } from '../../../components/mobile/claire-mobile';
 import { PlatformBadge } from '../../../components/PlatformIcon';
 import { Platform } from '../../../types/platform';
-import type { ChatCategory } from '../../../types/conversationSettings';
+import { CATEGORY_DISPLAY_THRESHOLD, type ChatCategory, type GroupCategory } from '../../../types/conversationSettings';
+import { groupCategoryTag } from '../../../features/chat/group-category';
 import { formatPhoneNumber, formatPhoneNumberInput, normalizePhoneNumber } from '../../../services/phone-numbers';
 import { displayContactName } from '../../../services/contact-display';
 import { API_BASE_URL } from '../../../services/platforms';
@@ -57,6 +63,12 @@ export default function ConversationSettingsScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [isSavingMute, setIsSavingMute] = useState(false);
+  // null means the user has not chosen, so the default applies: on for a 1:1,
+  // off for a group. Kept as null rather than resolved so the subcopy can say
+  // which it is inheriting.
+  const [aiEnabled, setAiEnabled] = useState<boolean | null>(null);
+  const [isSavingAi, setIsSavingAi] = useState(false);
+  const [inferredCategory, setInferredCategory] = useState<GroupCategory | null>(null);
   const displayName =
     is_group === '1'
       ? chat_name || contact_name || 'Group'
@@ -67,25 +79,65 @@ export default function ConversationSettingsScreen() {
   useEffect(() => {
     let active = true;
     if (!chatId) return undefined;
+
+    // Paint the last known header while the queries below run. Neither the
+    // number nor the mute state changes without the user doing something, so
+    // the cached copy is almost always what the network is about to confirm.
+    const userId = user?.id;
+    if (userId && usesNativeMobileCache()) {
+      void cachedConversationSettings(userId, chatId).then((cached) => {
+        if (!active || !cached) return;
+        if (typeof cached.sourcePhone === 'string') setSourcePhone(cached.sourcePhone);
+        if (typeof cached.isMuted === 'boolean') setIsMuted(cached.isMuted);
+      }).catch(() => undefined);
+    }
+
     void (async () => {
       // Contacts own the canonical phone number. A Matrix sender identifier can
       // instead be a WhatsApp LID, so only fall back to message metadata when
       // the contact record has not been populated yet.
-      const { data: chat } = await supabase.from('chats').select('contact_id,is_muted').eq('id', chatId).maybeSingle();
-      if (active) setIsMuted(chat?.is_muted === true);
-      let phone = '';
-      if (chat?.contact_id) {
-        const { data: contact } = await supabase.from('contacts').select('phone_number').eq('id', chat.contact_id).maybeSingle();
-        phone = contact?.phone_number || '';
-      }
+      //
+      // The contact is embedded rather than fetched separately: it used to be a
+      // second round trip that could not start until the first had returned,
+      // for one column.
+      const { data: chat } = await supabase
+        .from('chats')
+        .select('contact_id,is_muted,ai_enabled,contacts(phone_number),chat_classifications(category,confidence)')
+        .eq('id', chatId)
+        .maybeSingle();
+      if (!active) return;
+      const muted = chat?.is_muted === true;
+      setIsMuted(muted);
+      setAiEnabled(typeof chat?.ai_enabled === 'boolean' ? chat.ai_enabled : null);
+
+      const embeddedClass = chat?.chat_classifications as
+        | { category?: string | null; confidence?: number | null }
+        | Array<{ category?: string | null; confidence?: number | null }>
+        | null
+        | undefined;
+      const classification = Array.isArray(embeddedClass) ? embeddedClass[0] : embeddedClass;
+      setInferredCategory(
+        (classification?.confidence ?? 0) >= CATEGORY_DISPLAY_THRESHOLD
+          ? ((classification?.category as GroupCategory) ?? null)
+          : null
+      );
+
+      const embedded = chat?.contacts as { phone_number?: string | null } | Array<{ phone_number?: string | null }> | null | undefined;
+      const embeddedContact = Array.isArray(embedded) ? embedded[0] : embedded;
+      let phone = embeddedContact?.phone_number || '';
       if (!phone) {
         const { data: latestMessage } = await supabase.from('messages').select('contact_phone').eq('chat_id', chatId).not('contact_phone', 'is', null).order('timestamp', { ascending: false }).limit(1).maybeSingle();
+        if (!active) return;
         phone = latestMessage?.contact_phone || '';
       }
-      if (active) setSourcePhone(formatPhoneNumber(phone));
+      const formatted = formatPhoneNumber(phone);
+      setSourcePhone(formatted);
+      if (userId) {
+        void cacheConversationSettings(userId, chatId, { sourcePhone: formatted, isMuted: muted }).catch(() => undefined);
+      }
     })();
     return () => { active = false; };
-  }, [chatId]);
+  }, [chatId, user?.id]);
 
   useEffect(() => {
     const profile = chatSettings?.profile;
@@ -120,6 +172,27 @@ export default function ConversationSettingsScreen() {
       setIsSavingMute(false);
     }
   };
+  const isGroup = is_group === '1';
+  const effectiveAi = aiEnabled ?? !isGroup;
+  const updateAi = async (enabled: boolean) => {
+    if (!accessToken || isSavingAi) return;
+    const previous = aiEnabled;
+    setAiEnabled(enabled);
+    setIsSavingAi(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/messages/chats/${encodeURIComponent(chatId)}/ai`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled }),
+      });
+      if (!response.ok) throw new Error(`AI update failed (${response.status})`);
+    } catch {
+      setAiEnabled(previous);
+      Alert.alert('Could not update Claire', 'Please check your connection and try again.');
+    } finally {
+      setIsSavingAi(false);
+    }
+  };
   const selectTone = (nextTone: ToneKey) => {
     setTone(nextTone);
     if (!instruction.trim()) {
@@ -146,13 +219,9 @@ export default function ConversationSettingsScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.cream }} edges={['top']}>
-      <View style={{ minHeight: 64, paddingHorizontal: space[4], flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: colors.neutral[200] }}>
-        <MobileIconButton label="Back to chat" onPress={() => router.back()}><ChevronLeft size={21} color={colors.ink} /></MobileIconButton>
-        <View style={{ flex: 1 }} />
-      </View>
       {isLoading && !chatSettings ? <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator size="large" color={colors.ink} /></View> : (
         <ScrollView contentContainerStyle={{ padding: space[4], paddingBottom: 132 + insets.bottom, gap: space[5] }} keyboardShouldPersistTaps="handled">
-          <View style={{ alignItems: 'center', gap: space[2], paddingVertical: space[2] }}>
+          <View style={{ alignItems: 'center', gap: space[2], paddingTop: space[5], paddingBottom: space[2] }}>
             <MobileAvatar name={displayName} size={72} isGroup={is_group === '1'} />
             <Text maxFontSizeMultiplier={1} style={{ ...mobileType.sectionTitle, color: colors.ink }}>{displayName}</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -164,12 +233,40 @@ export default function ConversationSettingsScreen() {
           <View testID="conversation-notification-settings" style={{ minHeight: 76, flexDirection: 'row', alignItems: 'center', gap: space[3], paddingHorizontal: space[3], paddingVertical: space[3], borderRadius: radius.card, backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.neutral[200] }}>
             <View style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: radius.control, backgroundColor: isMuted ? colors.neutral[100] : colors.sky }}><BellOff size={19} color={colors.ink} /></View>
             <View style={{ flex: 1, gap: 2 }}><Text style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>Mute notifications</Text><Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{isMuted ? 'Notifications are muted for this chat.' : `Receive alerts for this ${is_group === '1' ? 'group' : 'conversation'}.`}</Text></View>
-            <View style={{ alignSelf: 'stretch', justifyContent: 'center', alignItems: 'center' }}>
+            <View style={{ height: 40, justifyContent: 'center' }}>
               <Switch testID="conversation-mute-notifications" accessibilityLabel={`Mute notifications for ${displayName}`} value={isMuted} disabled={isSavingMute || !accessToken} onValueChange={(value) => void updateMute(value)} trackColor={{ false: colors.neutral[200], true: colors.ink }} thumbColor={isMuted ? colors.lime : colors.paper} />
             </View>
           </View>
 
           <CategoryPicker selected={chatSettings?.category ?? null} onSelect={handleCategorySelect} />
+
+          <View style={{ gap: space[2] }}>
+            <SectionLabel title="Chat settings" />
+            {/* Claire's own switch sits above Mute: for a group it is the more
+                consequential of the two, and it is the one the banner in the
+                chat sends people here to find. */}
+            <View testID="conversation-ai-settings" style={{ minHeight: 76, flexDirection: 'row', alignItems: 'center', gap: space[3], paddingHorizontal: space[3], borderRadius: radius.card, backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.neutral[200] }}>
+              <View style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: radius.control, backgroundColor: effectiveAi ? colors.lime : colors.neutral[100] }}><Sparkles size={19} color={colors.ink} /></View>
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>Claire AI</Text>
+                <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>
+                  {effectiveAi
+                    ? 'Summaries, suggested replies and follow-ups for this chat.'
+                    : aiEnabled === null
+                      ? "Off by default for groups. Claire still stores and searches it, but won't suggest anything."
+                      : "Claire won't process new messages here."}
+                </Text>
+                {inferredCategory ? (
+                  <Text style={{ ...mobileType.bodySmall, fontSize: 11, lineHeight: 14, color: colors.neutral[400] }}>
+                    Claire reads this as a {groupCategoryTag(inferredCategory, 1)?.toLowerCase()} group.
+                  </Text>
+                ) : null}
+              </View>
+              <View style={{ height: 40, justifyContent: 'center' }}>
+                <Switch testID="conversation-ai-enabled" accessibilityLabel={`Claire AI for ${displayName}`} value={effectiveAi} disabled={isSavingAi || !accessToken} onValueChange={(value) => void updateAi(value)} trackColor={{ false: colors.neutral[200], true: colors.ink }} thumbColor={effectiveAi ? colors.lime : colors.paper} />
+              </View>
+            </View>
+          </View>
 
           <View style={{ gap: space[2] }}>
             <SectionLabel title="What should Claire remember?" />
@@ -206,7 +303,14 @@ export default function ConversationSettingsScreen() {
           </View>
         </ScrollView>
       )}
-      {!isLoading || chatSettings ? <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: space[4], paddingTop: space[3], paddingBottom: Math.max(insets.bottom, space[3]), backgroundColor: colors.cream, borderTopWidth: 1, borderTopColor: colors.neutral[200] }}><Pressable disabled={isSaving} accessibilityRole="button" onPress={() => void save()}><View style={{ minHeight: 50, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space[2], borderRadius: radius.control, backgroundColor: colors.ink, opacity: isSaving ? 0.6 : 1 }}><Check size={18} color={colors.paper} /><Text style={{ ...mobileType.label, color: colors.paper }}>{isSaving ? 'Saving…' : 'Save relationship memory'}</Text></View></Pressable></View> : null}
+      {/* The back control lives over the identity header rather than in a bar of
+          its own: a full-width chrome row with a separator existed only to hold
+          this one button. Kept outside the ScrollView so it stays put while the
+          settings scroll, and outside the loading branch so it is always a way out. */}
+      <View style={{ position: 'absolute', top: insets.top + space[2], left: space[4] }}>
+        <MobileIconButton label="Back to chat" onPress={() => router.back()}><ChevronLeft size={21} color={colors.ink} /></MobileIconButton>
+      </View>
+      {!isLoading || chatSettings ? <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: space[4], paddingTop: space[3], paddingBottom: Math.max(insets.bottom, space[3]), backgroundColor: colors.cream, borderTopWidth: 1, borderTopColor: colors.neutral[200] }}><Pressable disabled={isSaving} accessibilityRole="button" onPress={() => void save()}><View style={{ minHeight: 50, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space[2], borderRadius: radius.control, backgroundColor: colors.ink, opacity: isSaving ? 0.6 : 1 }}><Check size={18} color={colors.paper} /><Text maxFontSizeMultiplier={1.4} style={{ ...mobileType.body, fontWeight: '700', color: colors.paper }}>{isSaving ? 'Saving…' : 'Save'}</Text></View></Pressable></View> : null}
     </SafeAreaView>
   );
 }

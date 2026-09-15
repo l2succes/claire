@@ -6,7 +6,6 @@
 
 - [ ] `bun run check` or the relevant package checks
 - [ ] No secrets, production hostnames, or operator credentials added
-- [ ] Commits are DCO signed (`git commit -s`)
 
 ## License path
 

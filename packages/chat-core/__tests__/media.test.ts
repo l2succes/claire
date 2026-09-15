@@ -1,4 +1,9 @@
-import { isPlayableAudio, normalizeMediaUrl, parseMediaCaption } from '../src/media';
+import {
+  isPlayableAudio,
+  normalizeAudioPlaybackUrl,
+  normalizeMediaUrl,
+  parseMediaCaption,
+} from '../src/media';
 
 const API = 'https://api.example.com';
 
@@ -42,13 +47,32 @@ describe('isPlayableAudio', () => {
   it.each([
     ['audio/mp4', true],
     ['audio/aac', true],
-    ['audio/ogg', false],
-    ['audio/ogg; codecs=opus', false],
-    ['audio/OPUS', false],
+    ['audio/ogg', true],
+    ['audio/ogg; codecs=opus', true],
+    ['audio/OPUS', true],
     [undefined, false],
     [null, false],
   ])('%s -> %s', (mime, expected) => {
     expect(isPlayableAudio(mime as string | null | undefined)).toBe(expected);
+  });
+});
+
+describe('normalizeAudioPlaybackUrl', () => {
+  it('requests an M4A derivative for proxied Ogg/Opus', () => {
+    expect(normalizeAudioPlaybackUrl('/media/server/id', 'audio/ogg; codecs=opus', API)).toBe(
+      `${API}/media/server/id?format=m4a`,
+    );
+  });
+
+  it('keeps already-compatible audio unchanged', () => {
+    expect(normalizeAudioPlaybackUrl('/media/server/id', 'audio/mp4', API)).toBe(
+      `${API}/media/server/id`,
+    );
+  });
+
+  it('does not send an external URL through Claire\'s Matrix derivative route', () => {
+    const url = 'https://cdn.example/voice.ogg';
+    expect(normalizeAudioPlaybackUrl(url, 'audio/ogg', API)).toBe(url);
   });
 });
 

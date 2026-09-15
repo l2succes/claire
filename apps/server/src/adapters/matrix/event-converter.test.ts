@@ -58,6 +58,25 @@ function makeEncryptedMediaEvent(senderId: string) {
   } as unknown as import('matrix-js-sdk').MatrixEvent;
 }
 
+function makeVoiceEvent(senderId: string) {
+  return {
+    getContent: () => ({
+      msgtype: 'm.audio',
+      body: 'Voice message.ogg',
+      url: 'mxc://claire.local/voice-id',
+      info: { mimetype: 'audio/ogg; codecs=opus', duration: 12_000 },
+      'org.matrix.msc1767.audio': {
+        duration: 12_000,
+        waveform: [-4, 20, 280, Number.NaN],
+      },
+      'org.matrix.msc3245.voice': {},
+    }),
+    getSender: () => senderId,
+    getId: () => 'evt-voice',
+    getDate: () => new Date('2025-01-01T00:00:00Z'),
+  } as unknown as import('matrix-js-sdk').MatrixEvent;
+}
+
 // ---------------------------------------------------------------------------
 // WhatsApp — DM
 // ---------------------------------------------------------------------------
@@ -156,6 +175,19 @@ describe('WhatsApp DM (1:1)', () => {
     );
     expect(msg.contentType).toBe('video');
     expect(msg.platformMetadata?.mediaUrl).toBe('mxc://claire.local/encrypted-video-id');
+  });
+
+  it('preserves WhatsApp voice metadata and classifies it as a voice note', async () => {
+    const msg = await converter.toUnifiedMessage(
+      makeVoiceEvent(otherGhost), room, 'sess1', 'user1', Platform.WHATSAPP, selfGhost,
+    );
+    expect(msg.contentType).toBe('voice');
+    expect(msg.platformMetadata?.mediaUrl).toBe('mxc://claire.local/voice-id');
+    expect(msg.platformMetadata?.audio).toEqual({
+      durationMs: 12_000,
+      waveform: [0, 20, 255],
+      isVoice: true,
+    });
   });
 });
 

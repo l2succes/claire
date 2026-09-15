@@ -13,6 +13,14 @@ export interface ChatMessage {
   content_type?: string;
   media_url?: string;
   media_mime_type?: string;
+  metadata?: {
+    audio?: {
+      durationMs?: number;
+      waveform?: number[];
+      isVoice?: boolean;
+    };
+    [key: string]: unknown;
+  } | null;
   platform_message_id?: string;
   /** The local source row when the quoted message is already synced. */
   reply_to_message_id?: string | null;

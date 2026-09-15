@@ -42,8 +42,18 @@ describe('auth session refresh', () => {
       error: null,
     });
 
-    await useAuthStore.getState().initialize();
+    const pending = useAuthStore.getState().initialize();
 
+    // The stored identity is exposed without waiting on the network. Blocking
+    // here is what made a cold start wait on a token refresh before the first
+    // screen could mount.
+    await pending;
+    expect(useAuthStore.getState().isLoading).toBe(false);
+    expect(useAuthStore.getState().user).toMatchObject({ id: expect.any(String) });
+
+    // And the refresh still happens, updating the token behind the paint.
+    await Promise.resolve();
+    await Promise.resolve();
     expect(auth.refreshSession).toHaveBeenCalledTimes(1);
     expect(useAuthStore.getState()).toMatchObject({
       isAuthenticated: true,

@@ -1,0 +1,11 @@
+#!/bin/sh
+set -eu
+
+# Git invokes post-checkout for both branch switches and new worktrees. The
+# copy script is idempotent and skips the primary checkout automatically.
+repository_root=$(git rev-parse --show-toplevel)
+copy_script="$repository_root/scripts/copy-worktree-env.sh"
+
+if [ -x "$copy_script" ]; then
+  "$copy_script"
+fi

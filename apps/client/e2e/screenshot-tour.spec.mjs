@@ -262,13 +262,13 @@ test.describe('Visual tour', () => {
     await page.screenshot({ path: `${SCREENSHOTS_DIR}/09-platform-login.png` });
   });
 
-  test('10 — telegram auth modal', async ({ page }) => {
+  test('10 — telegram connection guide', async ({ page }) => {
     await page.route('**/telegram/connect**', r => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, session: { id: 'tg-1', status: 'awaiting_auth' }, authData: { sessionId: 'tg-1', instructions: 'Enter the code sent to your phone' } }) }));
     await page.goto('/login');
     await expect(page.getByTestId('platform-login-screen')).toBeVisible();
     await page.getByTestId('platform-selector-telegram').click();
-    await expect(page.getByTestId('platform-auth-modal')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId('connection-flow-telegram')).toBeVisible({ timeout: 5_000 });
     await page.waitForTimeout(600);
-    await page.screenshot({ path: `${SCREENSHOTS_DIR}/10-telegram-modal.png` });
+    await page.screenshot({ path: `${SCREENSHOTS_DIR}/10-telegram-connection.png` });
   });
 });

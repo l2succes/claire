@@ -16,13 +16,6 @@
 }
 .security-hero h1 {
   margin: 18px 0 0;
-  font-size: clamp(4rem, 8vw, 8.4rem);
-  line-height: 0.89;
-  letter-spacing: -0.085em;
-}
-.security-hero h1 span {
-  color: var(--claire-lime);
-  -webkit-text-stroke: 1.5px var(--claire-ink);
 }
 .security-hero-networks {
   margin-top: 36px;
@@ -299,9 +292,6 @@
   .security-hero {
     padding-top: 65px;
     padding-bottom: 70px;
-  }
-  .security-hero h1 {
-    font-size: clamp(3.8rem, 17vw, 5.6rem);
   }
   .security-statement {
     grid-template-columns: 1fr;

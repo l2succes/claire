@@ -89,11 +89,6 @@
   background-position: 0 26px;
 }
 
-.pr-hero h1 {
-  font-size: clamp(2.6rem, 5.6vw, 5.2rem);
-  line-height: 0.92;
-}
-
 .pr-hero .hero-actions {
   margin-bottom: 44px;
 }

@@ -10,7 +10,7 @@ import {
   UnifiedMessage,
   MessageContentType,
 } from '../types';
-import { MatrixMessageContent, MatrixMessageType } from './types';
+import { MatrixMessageContent } from './types';
 import { MatrixUserMapper } from './user-mapper';
 
 export class MatrixEventConverter {
@@ -60,7 +60,7 @@ export class MatrixEventConverter {
     const chatId = this.extractChatId(room, platform, selfGhostIds);
 
     // Convert content type
-    const contentType = this.matrixMsgTypeToContentType(content.msgtype);
+    const contentType = this.matrixMsgTypeToContentType(content);
 
     // Extract reply info
     const replyToMessageId = content['m.relates_to']?.['m.in_reply_to']?.event_id;
@@ -125,6 +125,16 @@ export class MatrixEventConverter {
         // Plain media uses `url`; encrypted media uses `file.url`.
         mediaUrl: content.url || content.file?.url,
         mediaInfo: content.info,
+        ...(content.msgtype === 'm.audio'
+          ? {
+              audio: {
+                durationMs:
+                  content['org.matrix.msc1767.audio']?.duration || content.info?.duration || undefined,
+                waveform: this.sanitizeWaveform(content['org.matrix.msc1767.audio']?.waveform),
+                isVoice: content['org.matrix.msc3245.voice'] !== undefined,
+              },
+            }
+          : {}),
       },
     };
   }
@@ -132,8 +142,8 @@ export class MatrixEventConverter {
   /**
    * Convert Matrix message type to UnifiedMessage content type
    */
-  private matrixMsgTypeToContentType(msgtype: MatrixMessageType): MessageContentType {
-    switch (msgtype) {
+  private matrixMsgTypeToContentType(content: MatrixMessageContent): MessageContentType {
+    switch (content.msgtype) {
       case 'm.text':
       case 'm.notice':
       case 'm.emote':
@@ -143,7 +153,9 @@ export class MatrixEventConverter {
       case 'm.video':
         return MessageContentType.VIDEO;
       case 'm.audio':
-        return MessageContentType.AUDIO;
+        return content['org.matrix.msc3245.voice'] !== undefined
+          ? MessageContentType.VOICE
+          : MessageContentType.AUDIO;
       case 'm.file':
         return MessageContentType.DOCUMENT;
       case 'm.location':
@@ -151,6 +163,14 @@ export class MatrixEventConverter {
       default:
         return MessageContentType.TEXT;
     }
+  }
+
+  private sanitizeWaveform(value?: number[]): number[] {
+    if (!Array.isArray(value)) return [];
+    return value
+      .slice(0, 128)
+      .filter((sample) => Number.isFinite(sample))
+      .map((sample) => Math.round(Math.min(255, Math.max(0, sample))));
   }
 
   /**

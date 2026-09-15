@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { AppState, Platform, View } from 'react-native';
+import { AppState, InteractionManager, Linking, Platform, View } from 'react-native';
 import { Stack, router } from 'expo-router';
 import * as Notifications from 'expo-notifications';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import * as SplashScreen from 'expo-splash-screen';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -25,6 +25,8 @@ import { useUnreadBadge } from '../hooks/useUnreadBadge';
 import { useWorkspaceHandoff } from '../hooks/useWorkspaceHandoff';
 import { host } from '@claire/host';
 import { API_BASE_URL } from '../services/platforms';
+import { queryClient } from '../services/query-client';
+import { appMark } from '../services/perf-marks';
 import '../global.css';
 
 const SENTRY_DSN = process.env.EXPO_PUBLIC_SENTRY_DSN;
@@ -36,15 +38,6 @@ if (SENTRY_DSN) {
 }
 
 SplashScreen.preventAutoHideAsync();
-
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 60 * 1000,
-      retry: 2,
-    },
-  },
-});
 
 function UnreadBadgeBridge() {
   useUnreadBadge();
@@ -94,10 +87,12 @@ export default function RootLayout() {
       } catch (e) {
         console.error('Init error:', e);
       } finally {
+        appMark('auth-resolved');
         setInitialized(true);
         // Let React commit the lime handoff surface before the native splash leaves.
         await new Promise<void>((resolve) => setTimeout(resolve, 16));
         await SplashScreen.hideAsync();
+        appMark('splash-hidden');
       }
     }
     init();
@@ -116,7 +111,13 @@ export default function RootLayout() {
       if (state === 'active') {
         void fetchConnectedSessions();
         const currentUserId = useAuthStore.getState().user?.id;
-        if (currentUserId) void reconcileMobileCache(currentUserId, token).catch(() => undefined);
+        // Bounded on purpose: a foreground pass should catch the app up, not
+        // walk ten thousand events while the user is looking at the inbox.
+        if (currentUserId) {
+          InteractionManager.runAfterInteractions(() => {
+            void reconcileMobileCache(currentUserId, token, { maxPages: 5 }).catch(() => undefined);
+          });
+        }
       }
     });
     return () => subscription.remove();
@@ -155,11 +156,39 @@ export default function RootLayout() {
   useEffect(() => {
     if (Platform.OS === 'web') return;
     const openNotification = (notification: Notifications.Notification) => {
-      const data = notification.request.content.data as { chatId?: unknown; messageId?: unknown };
+      const data = notification.request.content.data as {
+        type?: unknown;
+        url?: unknown;
+        loopId?: unknown;
+        chatId?: unknown;
+        messageId?: unknown;
+        contactName?: unknown;
+        chatName?: unknown;
+        platform?: unknown;
+        isGroup?: unknown;
+      };
+      if (data.type === 'operations_incident') {
+        const dashboardUrl =
+          typeof data.url === 'string' && data.url.startsWith('https://')
+            ? data.url
+            : 'https://useclaire.co/ops';
+        void Linking.openURL(dashboardUrl).catch((error) => {
+          console.warn('Could not open the operations dashboard:', error);
+        });
+        return;
+      }
+      if (data.type === 'loop_reminder' && typeof data.loopId === 'string') {
+        router.push({ pathname: '/loops/[id]', params: { id: data.loopId } });
+        return;
+      }
       if (typeof data.chatId !== 'string') return;
       router.push({ pathname: '/chat/[chatId]', params: {
         chatId: data.chatId,
         ...(typeof data.messageId === 'string' ? { highlightMessageId: data.messageId } : {}),
+        ...(typeof data.contactName === 'string' ? { contact_name: data.contactName } : {}),
+        ...(typeof data.chatName === 'string' ? { chat_name: data.chatName } : {}),
+        ...(typeof data.platform === 'string' ? { platform: data.platform } : {}),
+        ...(typeof data.isGroup === 'boolean' ? { is_group: data.isGroup ? '1' : '0' } : {}),
       } });
     };
     const last = Notifications.getLastNotificationResponse();
@@ -195,15 +224,15 @@ export default function RootLayout() {
                   contentStyle: { backgroundColor: '#FFFDF8' },
                 }}
               />
-              <Stack.Screen name="assistant" options={{ presentation: 'formSheet', sheetGrabberVisible: true, sheetAllowedDetents: [0.7, 1] }} />
-              <Stack.Screen name="chat/assistant/[chatId]" options={{ presentation: 'formSheet', sheetGrabberVisible: true, sheetAllowedDetents: [0.7, 1] }} />
+              <Stack.Screen name="assistant" options={{ presentation: 'formSheet', sheetGrabberVisible: true, sheetAllowedDetents: [1] }} />
+              <Stack.Screen name="chat/assistant/[chatId]" options={{ presentation: 'formSheet', sheetGrabberVisible: true, sheetAllowedDetents: [1] }} />
             </Stack>
             </DesktopChrome>
           </QueryClientProvider>
           </ClaireThemeProvider>
         </SafeAreaProvider>
       </GestureHandlerRootView>
-      {showLaunchReveal ? <LaunchReveal ready={appReady} onFinish={() => setShowLaunchReveal(false)} /> : null}
+      {showLaunchReveal ? <LaunchReveal ready={appReady} onFinish={() => { appMark('reveal-finished'); setShowLaunchReveal(false); }} /> : null}
     </View>
   );
 }

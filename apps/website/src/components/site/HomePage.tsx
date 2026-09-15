@@ -4,6 +4,7 @@ import { HeroIcon } from '@/components/site/HeroIcon';
 import { PlatformCatalog, PlatformRail } from '@/components/site/PlatformCatalog';
 import { SiteFooter } from '@/components/site/SiteFooter';
 import { SiteHeader } from '@/components/site/SiteHeader';
+import { WaitlistForm } from '@/components/site/WaitlistForm';
 
 export function HomePage() {
   return (
@@ -13,21 +14,19 @@ export function HomePage() {
         <section className="hero shell">
           <div className="eyebrow">
             <span className="status-dot" />
-            The AI-native multi-chat client
+            Building Claire in public
           </div>
-          <h1>
+          <h1 className="marketing-title">
             All your chats.
             <br />
-            <span>One AI.</span>
+            <span className="claire-underline">One AI.</span>
           </h1>
           <p className="hero-copy">
-            Bring WhatsApp, Telegram, Instagram, and more into one intelligent client. Search every
-            conversation, get relationship-aware help, and never lose track of what you promised.
+            Bring WhatsApp, Telegram, Instagram, and more into one client. Search your conversations,
+            get help that understands the relationship, and keep track of what you promised.
           </p>
-          <div className="hero-actions">
-            <Link className="button button-dark" href="#start">
-              Download
-            </Link>
+          <div className="hero-actions" id="waitlist">
+            <WaitlistForm source="homepage_hero" />
           </div>
           <div className="hero-art" aria-label="Claire application preview">
             <div className="orbit orbit-one" />
@@ -197,7 +196,7 @@ export function HomePage() {
               <div className="kicker">EVERYONE IS SOMEWHERE DIFFERENT</div>
               <h2>
                 Your people aren’t all in one app.
-                <br />
+                {' '}
                 <span>Claire can be.</span>
               </h2>
             </div>
@@ -514,8 +513,8 @@ export function HomePage() {
               </h2>
             </div>
             <p>
-              Claire connects your chat networks, then gives its AI the context to help you find,
-              understand, reply, and follow through—without losing the human thread.
+              Claire brings your chat networks together and gives its AI the context to help you find,
+              understand, reply, and follow through.
             </p>
           </div>
           <div className="feature-grid">
@@ -559,7 +558,7 @@ export function HomePage() {
                 </div>
               </div>
               <div>
-                <h3>Conversation becomes follow-through.</h3>
+                <h3>Keep promises moving.</h3>
                 <p>
                   Claire notices commitments in your chats and turns them into gentle follow-through.
                 </p>
@@ -678,7 +677,7 @@ export function HomePage() {
         <section className="stories" id="stories">
           <div className="shell">
             <div className="kicker">PEOPLE HAVE ENOUGH TO JUGGLE</div>
-            <h2>Claire keeps the human things close.</h2>
+            <h2>Keep the people who matter in view.</h2>
             <div className="quotes">
               <blockquote>
                 <p>
@@ -820,7 +819,7 @@ export function HomePage() {
           <div className="pricing-teaser-foot">
             <p>
               AI use is metered separately from the subscription, with a visible balance and a hard
-              cap. Model costs never become a surprise.
+              cap, so model costs stay predictable.
             </p>
             <Link className="button button-dark" href="/pricing">
               Compare all plans <HeroIcon name="arrow-right" />
@@ -880,20 +879,21 @@ export function HomePage() {
           </div>
         </section>
 
-        <section className="final-cta shell">
+        <section className="final-cta shell" aria-labelledby="final-cta-title">
           <div>
             <span className="asterisk">
               <HeroIcon name="sparkles" />
             </span>
-            <h2>
-              Give every chat
+            <h2 id="final-cta-title">
+              Follow the build
               <br />
-              one intelligent home.
+              from here.
             </h2>
-            <p>A multi-chat client with an AI that helps you remember, reply, and follow through.</p>
-            <Link className="button button-dark" href="/pricing">
-              See the plans <HeroIcon name="arrow-right" />
-            </Link>
+            <p>
+              I’m documenting the road to launch—the decisions, rough edges, releases, and lessons.
+              Join early and help shape Claire as it becomes real.
+            </p>
+            <WaitlistForm source="homepage_footer" tone="transparent" />
           </div>
         </section>
       </main>

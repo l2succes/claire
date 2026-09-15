@@ -10,9 +10,6 @@
 
 .lab-home__hero h1 {
   margin: 14px 0 22px;
-  font-size: clamp(3.5rem, 8vw, 7.5rem);
-  line-height: 0.86;
-  letter-spacing: -0.075em;
 }
 
 .lab-home__hero > p:last-child {

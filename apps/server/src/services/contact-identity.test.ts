@@ -8,6 +8,7 @@ import {
   isRedactedPhoneFallback,
   phoneNumberFromBridgeIdentifiers,
   phoneNumberFromPlatformContactId,
+  messageContactId,
 } from './contact-identity';
 import { directoryInsertPayload, whatsappContactKeys } from './whatsapp-contact-backfill';
 
@@ -100,5 +101,34 @@ describe('WhatsApp directory identity matching', () => {
 
   test('does not persist a directory entry that has only an opaque LID', () => {
     expect(directoryInsertPayload('user-1', { id: 'lid-192204836479059' })).toBeNull();
+  });
+});
+
+describe('messageContactId', () => {
+  const base = { senderContactId: null, isFromMe: false, isGroup: false, chatContactId: 'chat-contact' };
+
+  test('links an outbound direct message to the chat contact', () => {
+    // The regression this guards: outbound rows used to store null, which kept
+    // contacts.outbound_message_count at zero and made the People "Contacted"
+    // filter permanently empty.
+    expect(messageContactId({ ...base, isFromMe: true })).toBe('chat-contact');
+  });
+
+  test('prefers the resolved sender for an incoming message', () => {
+    expect(messageContactId({ ...base, senderContactId: 'sender' })).toBe('sender');
+  });
+
+  test('leaves an outbound group message unlinked', () => {
+    // A group has no single counterpart, and "contacted" means direct only.
+    expect(messageContactId({ ...base, isFromMe: true, isGroup: true })).toBeNull();
+  });
+
+  test('leaves an incoming message with no resolvable sender unlinked', () => {
+    expect(messageContactId({ ...base, chatContactId: 'chat-contact' })).toBeNull();
+  });
+
+  test('handles a chat that has no contact linked yet', () => {
+    expect(messageContactId({ ...base, isFromMe: true, chatContactId: null })).toBeNull();
+    expect(messageContactId({ ...base, isFromMe: true, chatContactId: undefined })).toBeNull();
   });
 });

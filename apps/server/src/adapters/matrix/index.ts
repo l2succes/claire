@@ -1279,7 +1279,20 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
       });
       outboundMediaMetadata = {
         mediaUrl: uploaded.content_uri,
-        mediaInfo: { mimetype: media.mimeType },
+        mediaInfo: {
+          mimetype: media.mimeType,
+          size: typeof media.data === 'string' ? undefined : media.data.length,
+          duration: media.durationMs,
+        },
+        ...(media.type === MessageContentType.VOICE
+          ? {
+              audio: {
+                durationMs: media.durationMs,
+                waveform: media.waveform || [],
+                isVoice: true,
+              },
+            }
+          : {}),
       };
 
       const msgtype = this.contentTypeToMatrixMsgtype(media.type);
@@ -1289,6 +1302,20 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
         msgtype: msgtype as any,
         body: message.content || media.fileName || 'media',
         url: uploaded.content_uri,
+        info: {
+          mimetype: media.mimeType,
+          size: typeof media.data === 'string' ? undefined : media.data.length,
+          duration: media.durationMs,
+        },
+        ...(media.type === MessageContentType.VOICE
+          ? {
+              'org.matrix.msc1767.audio': {
+                duration: media.durationMs || 0,
+                waveform: media.waveform || [],
+              },
+              'org.matrix.msc3245.voice': {},
+            }
+          : {}),
         ...relation,
       });
       eventId = response.event_id;

@@ -6,7 +6,7 @@
  * render an invented time of day.
  */
 
-import { formatDeadline, isOverdue, loopTitle, conversationName, LIVE_STATUSES } from '../services/loop-display';
+import { formatDeadline, isLoopDeferred, isOverdue, loopTitle, conversationName, LIVE_STATUSES } from '../services/loop-display';
 
 describe('isOverdue', () => {
   const past = new Date(Date.now() - 86_400_000).toISOString();
@@ -27,6 +27,13 @@ describe('isOverdue', () => {
   it('uses snoozed_until in preference to the deadline', () => {
     // Snoozing moves when the loop next needs attention...
     expect(isOverdue({ deadline: past, snoozed_until: future, status: 'snoozed' })).toBe(false);
+  });
+
+  it('hides a snoozed loop only until its reminder is due', () => {
+    const now = new Date('2026-09-07T12:00:00.000Z');
+    expect(isLoopDeferred({ status: 'snoozed', snoozed_until: '2026-09-07T15:00:00.000Z' }, now)).toBe(true);
+    expect(isLoopDeferred({ status: 'snoozed', snoozed_until: '2026-09-07T11:00:00.000Z' }, now)).toBe(false);
+    expect(isLoopDeferred({ status: 'open', snoozed_until: '2026-09-07T15:00:00.000Z' }, now)).toBe(false);
   });
 
   it('goes overdue again once the snooze itself lapses', () => {

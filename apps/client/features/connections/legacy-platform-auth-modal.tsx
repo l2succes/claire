@@ -1,4 +1,9 @@
 /**
+ * Legacy constrained authentication modal, retained for desktop and rollback.
+ *
+ * Rollback: render this component from the mobile connection selectors instead
+ * of navigating to app/(auth)/connections/[platform].tsx.
+ *
  * PlatformAuthModal Component
  *
  * Dynamic authentication modal that handles different auth flows:
@@ -21,16 +26,16 @@ import {
   Platform as RNPlatform,
 } from 'react-native';
 import { X, Check, AlertCircle, Wifi, Monitor } from 'lucide-react-native';
-import { PlatformIconButton } from './PlatformIcon';
-import { Button } from './ui/Button';
+import { PlatformIconButton } from '../../components/PlatformIcon';
+import { Button } from '../../components/ui/Button';
 import {
   Platform,
   AuthMethod,
   PLATFORM_DISPLAY,
   PlatformSession,
   getPlatformAuthMethod,
-} from '../types/platform';
-import { usePlatformStore } from '../stores/platformStore';
+} from '../../types/platform';
+import { usePlatformStore } from '../../stores/platformStore';
 
 interface PlatformAuthModalProps {
   platform: Platform | null;

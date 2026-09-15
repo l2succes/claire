@@ -58,10 +58,31 @@ export function PlatformRail() {
 export function PlatformCatalog() {
   const [filter, setFilter] = useState<Filter>('all');
   const [openId, setOpenId] = useState<string | null>(null);
+  const [votedIds, setVotedIds] = useState<Set<string>>(() => new Set());
+  const [votingId, setVotingId] = useState<string | null>(null);
+  const [voteErrorId, setVoteErrorId] = useState<string | null>(null);
   const visible = useMemo(
     () => platformCatalog.filter((platform) => matchesFilter(platform, filter)),
     [filter],
   );
+
+  async function voteFor(platformId: string) {
+    setVotingId(platformId);
+    setVoteErrorId(null);
+    try {
+      const response = await fetch('/api/platform-votes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ platformId }),
+      });
+      if (!response.ok) throw new Error('vote_failed');
+      setVotedIds((current) => new Set(current).add(platformId));
+    } catch {
+      setVoteErrorId(platformId);
+    } finally {
+      setVotingId(null);
+    }
+  }
 
   return (
     <>
@@ -114,19 +135,35 @@ export function PlatformCatalog() {
                 {platform.setupLabel}
               </p>
               <div className="platform-card-footer">
-                <span className="platform-runtime">
-                  <span>●</span>
-                  {platform.runtimeLabel}
-                </span>
                 <button
                   className="platform-detail-toggle"
                   type="button"
                   aria-expanded={expanded}
+                  aria-label={`${expanded ? 'Hide' : 'Show'} ${platform.name} details`}
                   onClick={() => setOpenId(expanded ? null : platform.id)}
                 >
-                  {expanded ? 'Hide −' : 'Details +'}
+                  <span aria-hidden="true">{expanded ? '−' : '+'}</span>
                 </button>
+                {platform.supportStatus === 'planned' ? (
+                  <button
+                    className={`platform-vote-button${votedIds.has(platform.id) ? ' is-voted' : ''}`}
+                    type="button"
+                    disabled={votedIds.has(platform.id) || votingId === platform.id}
+                    onClick={() => voteFor(platform.id)}
+                  >
+                    {votedIds.has(platform.id)
+                      ? 'Voted'
+                      : votingId === platform.id
+                        ? 'Voting…'
+                        : 'Vote'}
+                  </button>
+                ) : null}
               </div>
+              {voteErrorId === platform.id ? (
+                <p className="platform-vote-error" role="alert">
+                  Couldn’t save your vote. Try again.
+                </p>
+              ) : null}
               {expanded ? (
                 <div className="platform-details">
                   <p>{platform.detail}</p>

@@ -49,6 +49,7 @@ export type GateReason =
   | 'self_commissive';
 
 export type GateSkipReason =
+  | 'ai_disabled'
   | 'sensitivity_off'
   | 'detection_disabled'
   | 'window_empty'
@@ -61,6 +62,11 @@ export interface GateInput {
   platform: string;
   sensitivity: LoopSensitivity;
   detectionEnabled: boolean;
+  /**
+   * Effective per-chat AI scope. Groups are opt-in, so this is false for any
+   * group the user has not turned on — the master switch above sensitivity.
+   */
+  aiEnabled: boolean;
   /** Messages new since the cursor, excluding the overlap tail. */
   delta: WindowMessage[];
   /** Live loops already open in this chat. State may have changed even with no new intent signal. */
@@ -119,6 +125,10 @@ export function evaluateGate(input: GateInput): GateDecision {
     consideredChars: 0,
   });
 
+  // Before sensitivity: an un-opted-in group also carries a default
+  // sensitivity, so checking that first would record a misleading reason for
+  // every group the user simply never turned on.
+  if (!input.aiEnabled) return empty('ai_disabled');
   if (input.sensitivity === 'off') return empty('sensitivity_off');
   if (!input.detectionEnabled) return empty('detection_disabled');
   if (!input.delta.length && input.openLoopCount === 0) return empty('window_empty');

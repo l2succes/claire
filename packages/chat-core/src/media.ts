@@ -26,7 +26,20 @@ export function normalizeMediaUrl(value: string | null | undefined, apiBaseUrl: 
  */
 export function isPlayableAudio(mime?: string | null): boolean {
   if (!mime) return false;
-  return !/ogg|opus/i.test(mime);
+  return /^audio\//i.test(mime);
+}
+
+/** Resolve an audio source and request the iOS-compatible derivative for Ogg/Opus Matrix media. */
+export function normalizeAudioPlaybackUrl(
+  value: string | null | undefined,
+  mime: string | null | undefined,
+  apiBaseUrl: string,
+): string | null {
+  const normalized = normalizeMediaUrl(value, apiBaseUrl);
+  if (!normalized || !/ogg|opus/i.test(mime || '')) return normalized;
+  const mediaBase = `${apiBaseUrl.replace(/\/$/, '')}/media/`;
+  if (!normalized.startsWith(mediaBase)) return normalized;
+  return `${normalized}${normalized.includes('?') ? '&' : '?'}format=m4a`;
 }
 
 const MARKDOWN_LINK = /\[([^\]]*)\]\(([^)]*)\)/g;

@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import Link from 'next/link';
-import { downloadOptions, moreLinks, primaryNavigation } from '@/content/site';
+import { moreLinks, primaryNavigation } from '@/content/site';
 import { HeroIcon } from '@/components/site/HeroIcon';
-import { OsIcon } from '@/components/site/OsIcon';
 
 export function SiteHeader({ active }: { active?: string }) {
   return (
@@ -48,38 +47,12 @@ export function SiteHeader({ active }: { active?: string }) {
               {item.title}
             </Link>
           ))}
-          {downloadOptions.map((option) =>
-            option.available && option.href ? (
-              <Link href={option.href} key={`mobile-${option.id}`}>
-                {option.name}
-              </Link>
-            ) : (
-              <span key={`mobile-${option.id}`}>
-                {option.name} · Coming soon
-              </span>
-            ),
-          )}
+          <Link href="/#waitlist">Join the waitlist</Link>
         </nav>
       </details>
-      <details className="download-menu">
-        <summary>Download</summary>
-        <div className="download-popover">
-          {downloadOptions.map((option) =>
-            option.available && option.href ? (
-              <Link href={option.href} key={option.id}>
-                <OsIcon id={option.id} />
-                <b>{option.name}</b>
-              </Link>
-            ) : (
-              <span className="is-soon" key={option.id}>
-                <OsIcon id={option.id} />
-                <b>{option.name}</b>
-                <em>Coming soon</em>
-              </span>
-            ),
-          )}
-        </div>
-      </details>
+      <Link className="button button-dark button-small" href="/#waitlist">
+        Join the waitlist
+      </Link>
     </header>
   );
 }

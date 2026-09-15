@@ -1,249 +1,167 @@
-import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
-
-// ---------------------------------------------------------------------------
-// Mock supabase and logger BEFORE importing reminder-scheduler
-// ---------------------------------------------------------------------------
+import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 
 mock.module('../../src/utils/logger', () => ({
   logger: { info: () => {}, debug: () => {}, warn: () => {}, error: () => {} },
 }));
 
-// Supabase: we swap out `supabaseFromImpl` per test
-let supabaseFromImpl: (table: string) => any = () => ({});
+type QueryResult = { data?: any; error?: any };
+const responses: QueryResult[] = [];
+const queryCalls: Array<{ table: string; method: string; args: any[] }> = [];
+
+function chainFor(table: string): any {
+  const chain: any = {};
+  for (const method of ['select', 'eq', 'in', 'order', 'limit', 'lte', 'single', 'update', 'insert']) {
+    chain[method] = (...args: any[]) => {
+      queryCalls.push({ table, method, args });
+      return chain;
+    };
+  }
+  chain.then = (resolve: (value: QueryResult) => void) => resolve(responses.shift() || { data: [], error: null });
+  return chain;
+}
+
 mock.module('../../src/services/supabase', () => ({
-  supabase: { from: (table: string) => supabaseFromImpl(table) },
+  supabase: { from: (table: string) => chainFor(table) },
 }));
 
-const pushCalls: Array<{ userId: string; payload: Record<string, unknown> }> = [];
-mock.module('../../src/services/push-notification', () => ({
-  pushNotificationService: {
-    sendToUser: async (userId: string, payload: Record<string, unknown>) => {
-      pushCalls.push({ userId, payload });
+const deliveryCalls: any[] = [];
+let deliveryResult = { queued: 1, outcome: 'queued' as const };
+mock.module('../../src/services/notification-delivery', () => ({
+  notificationDeliveryService: {
+    enqueueLoopReminder: async (event: any) => {
+      deliveryCalls.push(event);
+      return deliveryResult;
     },
   },
 }));
 
-import { reminderScheduler, ReminderQueue } from '../../src/services/reminder-scheduler';
+import { ReminderScheduler, type ReminderQueue } from '../../src/services/reminder-scheduler';
 
-// ---------------------------------------------------------------------------
-// Stub queue — injected via _setQueue; avoids any real Redis / Bull.
-// ---------------------------------------------------------------------------
-
-const addCalls: { data: any; opts: any }[] = [];
+const addCalls: Array<{ data: any; opts: any }> = [];
 let closeCalled = false;
 
-function makeStubQueue(): ReminderQueue {
-  addCalls.length = 0;
-  closeCalled = false;
+function queue(): ReminderQueue {
   return {
-    add: async (data, opts) => { addCalls.push({ data, opts }); return { id: 'stub-job' }; },
+    add: async (data, opts) => { addCalls.push({ data, opts }); return { id: 'job' }; },
     process: () => {},
     on: () => {},
     close: async () => { closeCalled = true; },
   };
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/** Supabase-like chain that resolves on the specified terminal method. */
-function makeChain(resolveOn: string, value: any): Record<string, any> {
-  const chain: Record<string, any> = {};
-  for (const m of ['select', 'lte', 'gte', 'eq', 'in', 'is', 'or', 'single', 'update']) {
-    chain[m] = () => chain;
-  }
-  chain[resolveOn] = () => Promise.resolve(value);
-  return chain;
+function liveLoop(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'loop-1',
+    user_id: 'user-1',
+    title: 'Send the deck',
+    content: 'Send the deck',
+    status: 'open',
+    visibility: 'surfaced',
+    owner: 'me',
+    thread_state: 'agreed',
+    deadline: '2026-09-10T20:00:00.000Z',
+    deadline_precision: 'exact',
+    snoozed_until: null,
+    priority_score: 60,
+    reminder_revision: 3,
+    reminder_count: 0,
+    reminder_reason: 'deadline_soon',
+    ...overrides,
+  };
 }
 
-function resetScheduler() {
-  pushCalls.length = 0;
-  if ((reminderScheduler as any).pollTimer) {
-    clearInterval((reminderScheduler as any).pollTimer);
-    (reminderScheduler as any).pollTimer = null;
-  }
-  (reminderScheduler as any).started = false;
-  (reminderScheduler as any).queue = null;
-}
+describe('ReminderScheduler', () => {
+  let scheduler: ReminderScheduler;
 
-// ---------------------------------------------------------------------------
-describe('ReminderScheduler start / stop', () => {
-  beforeEach(() => resetScheduler());
+  beforeEach(() => {
+    responses.length = 0;
+    queryCalls.length = 0;
+    addCalls.length = 0;
+    deliveryCalls.length = 0;
+    closeCalled = false;
+    deliveryResult = { queued: 1, outcome: 'queued' };
+    scheduler = new ReminderScheduler();
+    scheduler._setQueue(queue());
+  });
+
   afterEach(async () => {
-    if ((reminderScheduler as any).started) await reminderScheduler.stop();
-    resetScheduler();
+    if (scheduler.isStarted) await scheduler.stop();
   });
 
-  it('starts correctly with injected queue', () => {
-    reminderScheduler._setQueue(makeStubQueue());
-    reminderScheduler.start();
-    expect((reminderScheduler as any).started).toBe(true);
-  });
-
-  it('is idempotent — second start() is a no-op', () => {
-    const q = makeStubQueue();
-    reminderScheduler._setQueue(q);
-    reminderScheduler.start();
-    reminderScheduler.start(); // no-op
-    // queue reference unchanged
-    expect((reminderScheduler as any).queue).toBe(q);
-  });
-
-  it('stops cleanly', async () => {
-    reminderScheduler._setQueue(makeStubQueue());
-    reminderScheduler.start();
-    await reminderScheduler.stop();
-    expect((reminderScheduler as any).started).toBe(false);
+  it('starts once and closes its queue', async () => {
+    // Initial refresh and due-query.
+    responses.push({ data: [], error: null }, { data: [], error: null });
+    scheduler.start();
+    scheduler.start();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await scheduler.stop();
     expect(closeCalled).toBe(true);
-  });
-});
-
-// ---------------------------------------------------------------------------
-describe('ReminderScheduler enqueueDeadlineReminders', () => {
-  beforeEach(() => resetScheduler());
-  afterEach(async () => {
-    if ((reminderScheduler as any).started) await reminderScheduler.stop();
-    resetScheduler();
+    expect(scheduler.isStarted).toBe(false);
   });
 
-  it('enqueues a job for each due loop', async () => {
-    const deadline = new Date(Date.now() + 60 * 60 * 1000).toISOString();
-    supabaseFromImpl = () =>
-      makeChain('or', {
-        data: [{ id: 'p-1', user_id: 'u-1', content: 'Send report', deadline, priority: 'high' }],
-        error: null,
-      });
-
-    reminderScheduler._setQueue(makeStubQueue());
-    reminderScheduler.start();
-    // Clear the auto-run triggered by start()
-    await new Promise((r) => setTimeout(r, 0));
-    addCalls.length = 0;
-
-    await reminderScheduler.enqueueDeadlineReminders();
-
-    expect(addCalls.length).toBe(1);
-    expect(addCalls[0].data.loopId).toBe('p-1');
-    expect(addCalls[0].data.userId).toBe('u-1');
-    expect(addCalls[0].opts.jobId).toBe('reminder-p-1');
-  });
-
-  it('does nothing when no due promises', async () => {
-    supabaseFromImpl = () => makeChain('or', { data: [], error: null });
-
-    reminderScheduler._setQueue(makeStubQueue());
-    reminderScheduler.start();
-    await new Promise((r) => setTimeout(r, 0));
-    addCalls.length = 0;
-
-    await reminderScheduler.enqueueDeadlineReminders();
-    expect(addCalls.length).toBe(0);
-  });
-
-  it('does not throw on DB error', async () => {
-    supabaseFromImpl = () => makeChain('or', { data: null, error: { message: 'DB exploded' } });
-
-    reminderScheduler._setQueue(makeStubQueue());
-    reminderScheduler.start();
-    await expect(reminderScheduler.enqueueDeadlineReminders()).resolves.toBeUndefined();
-  });
-
-  it('enqueues multiple loops with correct dedup jobIds', async () => {
-    const deadline = new Date(Date.now() + 60 * 60 * 1000).toISOString();
-    supabaseFromImpl = () =>
-      makeChain('or', {
-        data: [
-          { id: 'p-a', user_id: 'u-1', content: 'Thing A', deadline, priority: 'medium' },
-          { id: 'p-b', user_id: 'u-1', content: 'Thing B', deadline, priority: 'low' },
-        ],
-        error: null,
-      });
-
-    reminderScheduler._setQueue(makeStubQueue());
-    reminderScheduler.start();
-    await new Promise((r) => setTimeout(r, 0));
-    addCalls.length = 0;
-
-    await reminderScheduler.enqueueDeadlineReminders();
-
-    expect(addCalls.length).toBe(2);
-    const jobIds = addCalls.map((c) => c.opts.jobId);
-    expect(jobIds).toContain('reminder-p-a');
-    expect(jobIds).toContain('reminder-p-b');
-  });
-});
-
-// ---------------------------------------------------------------------------
-describe('ReminderScheduler triggerReminderForLoop', () => {
-  beforeEach(() => resetScheduler());
-  afterEach(async () => {
-    if ((reminderScheduler as any).started) await reminderScheduler.stop();
-    resetScheduler();
-  });
-
-  it('sends an Expo push and updates reminder_sent_at', async () => {
-    const deadline = new Date(Date.now() + 3600_000).toISOString();
-
-    // Let the auto-enqueue from start() resolve first with a no-op empty response
-    let triggerCalled = false;
-    supabaseFromImpl = () => {
-      if (!triggerCalled) {
-        // queries from enqueueDeadlineReminders — return empty, no-op
-        return makeChain('or', { data: [], error: null });
-      }
-      // queries from triggerReminderForLoop
-      if (triggerCalled) {
-        const firstCallChain = makeChain('single', {
-          data: { id: 'p-99', user_id: 'u-2', content: 'Call client', deadline, priority: 'high' },
-          error: null,
-        });
-        triggerCalled = false; // next call is the update
-        return firstCallChain;
-      }
-      return makeChain('eq', { error: null });
-    };
-
-    reminderScheduler._setQueue(makeStubQueue());
-    reminderScheduler.start();
-    // Wait for the auto-enqueue to drain
-    await new Promise((r) => setTimeout(r, 0));
-
-    // Now switch to triggerReminderForLoop mode
-    let updateCallCount = 0;
-    supabaseFromImpl = () => {
-      updateCallCount++;
-      if (updateCallCount === 1) {
-        return makeChain('single', {
-          data: { id: 'p-99', user_id: 'u-2', content: 'Call client', deadline, priority: 'high' },
-          error: null,
-        });
-      }
-      return makeChain('eq', { error: null });
-    };
-
-    const result = await reminderScheduler.triggerReminderForLoop('p-99');
-    expect(result.sent).toBe(true);
-    expect(pushCalls).toEqual([
-      {
-        userId: 'u-2',
-        payload: {
-          title: 'Loop reminder',
-          body: 'Call client',
-          sound: 'default',
-          data: { type: 'loop-reminder', loopId: 'p-99' },
-        },
-      },
-    ]);
-  });
-
-  it('throws when loop not found', async () => {
-    supabaseFromImpl = () => makeChain('single', { data: null, error: { message: 'not found' } });
-
-    reminderScheduler._setQueue(makeStubQueue());
-    reminderScheduler.start();
-    await expect(reminderScheduler.triggerReminderForLoop('no-such')).rejects.toThrow(
-      'Loop not found: no-such'
+  it('plans a pending loop in the user device timezone', async () => {
+    responses.push(
+      { data: [liveLoop()], error: null },
+      { data: [{ user_id: 'user-1', timezone: 'America/Mexico_City' }], error: null },
+      { data: null, error: null },
     );
+    await scheduler.refreshPendingPlans(new Date('2026-09-08T15:00:00.000Z'));
+    const update = queryCalls.find((call) => call.method === 'update');
+    expect(update?.args[0]).toEqual({
+      reminder_plan_state: 'scheduled',
+      next_reminder_at: '2026-09-10T18:00:00.000Z',
+      reminder_reason: 'deadline_soon',
+    });
+  });
+
+  it('marks an undated low-priority loop quiet', async () => {
+    responses.push(
+      { data: [liveLoop({ deadline: null })], error: null },
+      { data: [], error: null },
+      { data: null, error: null },
+    );
+    await scheduler.refreshPendingPlans(new Date('2026-09-08T15:00:00.000Z'));
+    const update = queryCalls.find((call) => call.method === 'update');
+    expect(update?.args[0]).toEqual({
+      reminder_plan_state: 'quiet',
+      next_reminder_at: null,
+      reminder_reason: null,
+    });
+  });
+
+  it('deduplicates due jobs by loop revision', async () => {
+    responses.push({ data: [liveLoop()], error: null });
+    await scheduler.enqueueDeadlineReminders(new Date('2026-09-10T18:00:00.000Z'));
+    expect(addCalls).toHaveLength(1);
+    expect(addCalls[0].opts.jobId).toBe('reminder-loop-1-r3');
+  });
+
+  it('delivers a manual trigger through the reliable device service', async () => {
+    responses.push(
+      { data: liveLoop(), error: null },
+      { data: null, error: null },
+    );
+    const result = await scheduler.triggerReminderForLoop('loop-1');
+    expect(result).toEqual({ sent: true });
+    expect(deliveryCalls[0]).toMatchObject({
+      loopId: 'loop-1',
+      revision: 3,
+      userId: 'user-1',
+      reason: 'act_now',
+    });
+    const update = queryCalls.find((call) => call.method === 'update');
+    expect(update?.args[0]).toMatchObject({ reminder_plan_state: 'sent', reminder_count: 1, next_reminder_at: null });
+  });
+
+  it('keeps a due plan retryable when the user has no registered device', async () => {
+    deliveryResult = { queued: 0, outcome: 'no_devices' } as never;
+    responses.push(
+      { data: liveLoop(), error: null },
+      { data: null, error: null },
+    );
+    expect(await scheduler.triggerReminderForLoop('loop-1')).toEqual({ sent: false });
+    const update = queryCalls.find((call) => call.method === 'update');
+    expect(update?.args[0].next_reminder_at).toBeString();
+    expect(update?.args[0].reminder_plan_state).toBeUndefined();
   });
 });
