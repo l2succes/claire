@@ -83,6 +83,7 @@ async function notifyIncomingMessage(message: {
   userId: string;
   chatId: string;
   platform: string;
+  senderContactId?: string;
   senderName?: string;
   chatName?: string;
   isGroup?: boolean;
@@ -816,6 +817,7 @@ async function initializePlatforms() {
             userId: message.userId,
             chatId: chat.id,
             platform: message.platform,
+            senderContactId: contactId || undefined,
             senderName: message.senderName,
             chatName: chat.name || chatDisplayName,
             isGroup: chat.is_group,

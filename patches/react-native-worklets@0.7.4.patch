@@ -1,0 +1,31 @@
+diff --git a/android/build.gradle b/android/build.gradle
+index 428242d..a24d266 100644
+--- a/android/build.gradle
++++ b/android/build.gradle
+@@ -320,3 +320,26 @@ task prepareWorkletsHeadersForPrefabs(type: Copy) {
+     include("worklets/**/*.h")
+     into(workletsPrefabHeadersDir)
+ }
++
++// Expo SDK 55 and Reanimated 4.2 still link Worklets from the legacy
++// intermediates/cmake path. AGP 9 writes CMake outputs under intermediates/cxx,
++// so publish a stable compatibility copy after each native build completes.
++afterEvaluate {
++    [
++        [variant: "Debug", cmakeBuildType: "Debug", legacyBuildType: "debug"],
++        [variant: "Release", cmakeBuildType: "RelWithDebInfo", legacyBuildType: "release"],
++    ].each { config ->
++        tasks.named("externalNativeBuild${config.variant}").configure {
++            doLast {
++                fileTree("$buildDir/intermediates/cxx/${config.cmakeBuildType}") {
++                    include "**/obj/*/libworklets.so"
++                }.files.each { library ->
++                    copy {
++                        from library
++                        into "$buildDir/intermediates/cmake/${config.legacyBuildType}/obj/${library.parentFile.name}"
++                    }
++                }
++            }
++        }
++    }
++}

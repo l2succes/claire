@@ -368,7 +368,7 @@ export default function ChatRoute() {
 
 export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
   const queryClient = useQueryClient();
-  const { chatId, contact_name, chat_name, platform, is_group, highlightMessageId, draft } =
+  const { chatId, contact_name, chat_name, platform, is_group, highlightMessageId, draft, notificationAction } =
     useLocalSearchParams<{
       chatId: string;
       contact_name: string;
@@ -377,6 +377,7 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
       is_group: string;
       highlightMessageId?: string;
       draft?: string;
+      notificationAction?: string;
     }>();
 
   const user = useAuthStore((state) => state.user);
@@ -459,8 +460,12 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
   const reactionInFlightRef = useRef(new Set<string>());
 
   useEffect(() => {
-    if (draft) setInputText(draft);
-  }, [draft]);
+    if (!draft) return;
+    setInputText(draft);
+    if (notificationAction === 'reply') {
+      requestAnimationFrame(() => composerRef.current?.focus());
+    }
+  }, [draft, notificationAction]);
 
   const resolvedPlatform = platform || chatMetadata?.platform || undefined;
 

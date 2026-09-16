@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { NotificationDeliveryService, isInQuietHours, quietHoursDelay, shouldDeliverLoopRevision, shouldNotifyConversation, shouldNotifyLoops } from './notification-delivery';
+import { NotificationDeliveryService, isInQuietHours, notificationImageUrl, quietHoursDelay, shouldDeliverLoopRevision, shouldNotifyConversation, shouldNotifyLoops } from './notification-delivery';
 import { ExpoNotificationProvider } from './notification-providers';
 
 describe('notification eligibility', () => {
@@ -13,6 +13,13 @@ describe('notification eligibility', () => {
     expect(shouldNotifyLoops(true, { notify_loops: true })).toBe(true);
     expect(shouldNotifyLoops(false, { notify_loops: true })).toBe(false);
     expect(shouldNotifyLoops(true, { notify_loops: false })).toBe(false);
+  });
+
+  it('only allows public HTTPS avatar URLs in rich notifications', () => {
+    expect(notificationImageUrl('https://cdn.example.com/avatar.jpg')).toBe('https://cdn.example.com/avatar.jpg');
+    expect(notificationImageUrl('http://cdn.example.com/avatar.jpg')).toBeUndefined();
+    expect(notificationImageUrl('file:///tmp/avatar.jpg')).toBeUndefined();
+    expect(notificationImageUrl('not a url')).toBeUndefined();
   });
 
   it('drops loop deliveries after completion or a semantic edit', () => {
@@ -71,6 +78,30 @@ describe('ExpoNotificationProvider', () => {
       expect(sent.collapseId).toBe('message-1');
       expect(sent.channelId).toBe('messages');
       expect((sent.data as Record<string, unknown>).url).toContain('claire://chat/chat-1');
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+
+  it('forwards rich media, grouping, and action-category metadata', async () => {
+    const originalFetch = global.fetch;
+    let sent: Record<string, unknown> = {};
+    global.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+      sent = JSON.parse(String(init?.body));
+      return { ok: true, json: async () => ({ data: { status: 'ok', id: 'receipt-rich' } }) } as Response;
+    }) as typeof fetch;
+    try {
+      await new ExpoNotificationProvider().send('ExpoPushToken[test]', {
+        title: 'Ada', body: 'Hello', collapseId: 'message-1',
+        categoryId: 'claire_message', mutableContent: true, threadId: 'chat:chat-1', tag: 'chat:chat-1',
+        richContent: { image: 'https://cdn.example.com/ada.jpg' },
+        data: { type: 'new_message', chatId: 'chat-1', avatarUrl: 'https://cdn.example.com/ada.jpg' },
+      });
+      expect(sent.categoryId).toBe('claire_message');
+      expect(sent.mutableContent).toBe(true);
+      expect(sent.threadId).toBe('chat:chat-1');
+      expect(sent.tag).toBe('chat:chat-1');
+      expect(sent.richContent).toEqual({ image: 'https://cdn.example.com/ada.jpg' });
     } finally {
       global.fetch = originalFetch;
     }
