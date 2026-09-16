@@ -42,3 +42,14 @@ export function clientSafeMessage(error: FailedRequest): string {
 
   return body || GENERIC_REQUEST_ERROR;
 }
+
+/** Retain machine-readable retry information without displaying server internals. */
+export class PlatformRequestError extends Error {
+  readonly retryable: boolean;
+  constructor(message: string, readonly status?: number, serverMessage?: string) {
+    super(message);
+    this.retryable = status === undefined || status >= 500 || [401, 408, 429].includes(status)
+      || serverMessage === 'Session not connected' || serverMessage === 'Session not found'
+      || serverMessage === 'Message not found' || serverMessage === 'Reply target is unavailable in this conversation';
+  }
+}

@@ -4,6 +4,7 @@ import {
   chatTimelineKey,
   chatTimelineOptions,
   patchChatTimelineMessage,
+  removeChatTimelineMessage,
   updateChatTimeline,
 } from '../hooks/useChatTimeline';
 
@@ -139,6 +140,32 @@ describe('patchChatTimelineMessage', () => {
     patchChatTimelineMessage(qc, USER, { id: 'b' });
     patchChatTimelineMessage(qc, USER, { chat_id: CHAT });
     expect(qc.getQueryData<ChatTimeline>(chatTimelineKey(USER, CHAT))!.messages).toHaveLength(0);
+  });
+});
+
+describe('removeChatTimelineMessage', () => {
+  it('removes a repaired duplicate and its reactions from every warm timeline', () => {
+    const qc = new QueryClient();
+    qc.setQueryData(chatTimelineKey(USER, CHAT), {
+      messages: [message({ id: 'original' }), message({ id: 'old-edit-duplicate' })],
+      reactions: {
+        'old-edit-duplicate': [{
+          id: 'reaction-1',
+          message_id: 'old-edit-duplicate',
+          emoji: '❤️',
+          from_me: false,
+        }],
+      },
+    });
+
+    removeChatTimelineMessage(qc, USER, {
+      id: 'old-edit-duplicate',
+      chat_id: CHAT,
+    });
+
+    const timeline = qc.getQueryData<ChatTimeline>(chatTimelineKey(USER, CHAT))!;
+    expect(timeline.messages.map((row) => row.id)).toEqual(['original']);
+    expect(timeline.reactions['old-edit-duplicate']).toBeUndefined();
   });
 });
 

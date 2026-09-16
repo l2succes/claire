@@ -45,21 +45,21 @@ const loopSteps = [
 
 const tiers = [
   {
-    id: 'free',
-    name: 'FREE',
-    title: 'Get your chats in one place.',
+    id: 'preview',
+    name: 'PREVIEW',
+    title: 'Try Claire with your real inbox.',
     price: '$0',
-    unit: 'forever',
-    body: 'Every network in one inbox, with a weekly Loop to help important threads stay in view.',
-    loop: '1 Loop run per week',
+    unit: 'for 7 days',
+    body: 'Connect your conversations, run your first Loop, and see whether Claire gives you meaningful time back.',
+    loop: 'First Loop + 50 AI credits',
     features: [
-      'Up to 5 connected networks',
-      'One account per network',
+      '50 AI credits included',
+      'Seven days to try the full workflow',
       'Unified inbox and cross-network search',
       'Promises and deadline reminders',
     ],
     cta: { href: '/#start', label: 'Get the app' },
-    note: 'No card required · Loop runs reset every Monday',
+    note: 'No card required · one preview per account',
     featured: false,
     flag: null,
   },
@@ -106,9 +106,9 @@ const tiers = [
 ] as const;
 
 const cadenceFacts = [
-  ['LOOP RUNS / WEEK', 'Free 1 · Plus 21 · Pro 30+'],
-  ['NETWORKS', 'Free 5 · Plus all · Pro all'],
-  ['ACCOUNTS PER NETWORK', 'Free 1 · Plus 3 · Pro unlimited'],
+  ['AI STARTER CREDITS', 'Preview 50 · Plus 500/month · Pro 2,000/month'],
+  ['NETWORKS', 'Preview all · Plus all · Pro all'],
+  ['PREVIEW WINDOW', '7 days · no card required'],
   ['SPEND CAP', 'Hard cap on every plan'],
 ] as const;
 
@@ -213,13 +213,13 @@ const riskLadder = [
   { level: 'destructive', approval: 'Always asks', body: 'Cannot be undone. Needs an explicit yes.' },
 ] as const;
 
-const planColumns = ['Free', 'Plus', 'Pro', 'Ultimate'] as const;
+const planColumns = ['Preview', 'Plus', 'Pro', 'Ultimate'] as const;
 
 const matrixGroups = [
   {
     group: 'The Loop',
     rows: [
-      ['Loop runs', '1 / week', '3 / day', 'Daily, automatic', 'Continuous, per workspace'],
+      ['Loop runs', 'First Loop', '3 / day', 'Daily, automatic', 'Continuous, per workspace'],
       ['Open loops surfaced across every chat', 'yes', 'yes', 'yes', 'yes'],
       ['Proposed next action on each loop', 'yes', 'yes', 'yes', 'yes'],
       ['Scheduled delivery', '—', '—', 'yes', 'yes'],
@@ -229,8 +229,8 @@ const matrixGroups = [
   {
     group: 'Networks & accounts',
     rows: [
-      ['Connected networks', 'Up to 5', 'All supported', 'All supported', 'All supported'],
-      ['Accounts per network', '1', '3', 'Unlimited', 'Unlimited'],
+      ['Connected networks', 'All supported', 'All supported', 'All supported', 'All supported'],
+      ['Accounts per network', 'During preview', '3', 'Unlimited', 'Unlimited'],
       ['Unified inbox and cross-network search', 'yes', 'yes', 'yes', 'yes'],
       ['Mobile, desktop, and web', 'yes', 'yes', 'yes', 'yes'],
     ],
@@ -238,10 +238,10 @@ const matrixGroups = [
   {
     group: 'AI',
     rows: [
-      ['Ask Claire across the inbox', '—', 'yes', 'yes', 'yes'],
-      ['Drafts, summaries, and smart cards', '—', 'yes', 'yes', 'yes'],
-      ['Claire AI credits', 'Loop runs only', 'Monthly allowance', 'Larger allowance', 'Pooled workspace allowance'],
-      ['Model tier', 'Fast', 'Balanced', 'Best available', 'Best available + policy'],
+      ['Ask Claire across the inbox', 'During preview', 'yes', 'yes', 'yes'],
+      ['Drafts, summaries, and smart cards', 'During preview', 'yes', 'yes', 'yes'],
+      ['Claire AI credits', '50 once', '500 / month', '2,000 / month', 'Pooled workspace allowance'],
+      ['Model tier', 'Balanced', 'Balanced', 'Best available', 'Best available + policy'],
       ['Bring your own provider key', '—', 'yes', 'yes', 'yes'],
       ['Hard cap, no surprise overage', 'yes', 'yes', 'yes', 'yes'],
     ],
@@ -293,7 +293,7 @@ const questions = [
   ],
   [
     'Is Pro priced per person?',
-    'Free, Plus, and Pro are personal plans—one price for one Claire account. Ultimate is the workspace plan and is priced on seats plus usage.',
+    'Preview, Plus, and Pro are personal plans—one price for one Claire account. Ultimate is the workspace plan and is priced on seats plus usage.',
   ],
   [
     'Can I self-host and skip billing entirely?',
@@ -304,7 +304,7 @@ const questions = [
 export const metadata: Metadata = {
   title: 'Pricing',
   description:
-    'Claire pricing: Free, Plus at $10/month, and Pro at $20/month for personal accounts, plus Ultimate for businesses that want agents and plugins acting on their conversations.',
+    'Claire pricing: a seven-day preview with 50 AI credits, Plus at $10/month, and Pro at $20/month, plus Ultimate for businesses.',
 };
 
 export default function PricingPage() {
@@ -338,8 +338,8 @@ export default function PricingPage() {
             <span className="claire-underline">Priced by how often Claire looks.</span>
           </h1>
           <p className="hero-copy">
-            Claire’s Loop reads every connected conversation and tells you what is still open. Free
-            gets a Loop each week. Plus runs it on demand. Pro runs it for you every morning.
+            Claire’s Loop reads every connected conversation and tells you what is still open. The
+            preview includes your first Loop. Plus runs it on demand. Pro runs it every morning.
           </p>
           <div className="hero-actions">
             <a className="button button-dark" href="#plans">
@@ -406,7 +406,7 @@ export default function PricingPage() {
             <HeroIcon name="info" />
             <p>
               Running out of Loop runs never breaks the messenger. Sending, reading, search,
-              connections, promises, and reminders keep working on every plan—including Free.
+              connections, promises, and reminders keep working while AI waits for more credits.
             </p>
           </div>
         </section>
@@ -676,7 +676,7 @@ export default function PricingPage() {
               </h2>
             </div>
             <p>
-              Free, Plus, and Pro are personal accounts. Ultimate is the workspace plan for teams
+              Preview, Plus, and Pro are personal accounts. Ultimate is the workspace plan for teams
               running customer conversations.
             </p>
           </header>

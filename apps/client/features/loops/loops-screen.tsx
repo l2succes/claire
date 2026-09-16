@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { FlatList, Modal, Pressable, RefreshControl, Text, TextInput, View } from 'react-native';
-import { Plus, X } from 'lucide-react-native';
+import { Check, Plus, RotateCcw, Sparkles, X, XCircle } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { colors, mobileType, radius, space } from '@claire/design-system';
@@ -13,9 +13,10 @@ import { useAuthStore } from '../../stores/authStore';
 import { supabase } from '../../services/supabase';
 import { LoopsSkeleton } from '../../components/claire/skeleton';
 import { LoopRow } from './loop-row';
-import { createLoop, snoozeLoop, updateLoop } from '../../services/loops';
+import { createLoop, reviewLoop, snoozeLoop, updateLoop } from '../../services/loops';
 import { BottomSheet } from '../../components/mobile/bottom-sheet';
 import { isLoopDeferred } from '../../services/loop-display';
+import { loopNeedsReview } from '../../services/loop-review';
 
 type LoopFilter = 'for_you' | 'done' | 'waiting' | 'all';
 
@@ -42,6 +43,53 @@ async function fetchLoops(userId: string): Promise<LoopItem[]> {
 
 const LIVE_STATUSES: LoopItem['status'][] = ['open', 'waiting', 'snoozed'];
 
+function ReviewButton({
+  label,
+  icon: Icon,
+  onPress,
+  tone = 'neutral',
+  testID,
+  disabled,
+}: {
+  label: string;
+  icon: typeof Check;
+  onPress: () => void;
+  tone?: 'neutral' | 'primary' | 'danger';
+  testID: string;
+  disabled?: boolean;
+}) {
+  const [pressed, setPressed] = useState(false);
+  const background = tone === 'primary' ? colors.ink : tone === 'danger' ? colors.blush : colors.cream;
+  const foreground = tone === 'primary' ? colors.paper : tone === 'danger' ? colors.danger : colors.ink;
+  return (
+    <Pressable
+      testID={testID}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      disabled={disabled}
+      onPress={onPress}
+      onPressIn={() => setPressed(true)}
+      onPressOut={() => setPressed(false)}
+      style={{
+        minHeight: 48,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: space[2],
+        paddingHorizontal: space[3],
+        borderRadius: radius.control,
+        borderWidth: tone === 'neutral' ? 1 : 0,
+        borderColor: colors.neutral[200],
+        backgroundColor: background,
+        opacity: disabled ? 0.45 : pressed ? 0.75 : 1,
+      }}
+    >
+      <Icon size={17} color={foreground} />
+      <Text style={{ ...mobileType.bodySmall, fontWeight: '700', color: foreground }}>{label}</Text>
+    </Pressable>
+  );
+}
+
 // Overdue is derived, never stored: a loop is overdue when the date it next
 // needs attention has passed. Snoozing moves that date without touching the
 // deadline the user actually committed to.
@@ -52,6 +100,7 @@ export function LoopsScreen() {
   const [showCreate, setShowCreate] = useState(false);
   const [newLoop, setNewLoop] = useState('');
   const [snoozeTarget, setSnoozeTarget] = useState<LoopItem | null>(null);
+  const [reviewOpen, setReviewOpen] = useState(false);
   const loopsQueryKey = useMemo(() => ['mobile-loops', user?.id] as const, [user?.id]);
   // The sync stream already keeps cache_loops current; reading it costs one
   // indexed table rather than the whole snapshot, which also parses every chat.
@@ -103,6 +152,26 @@ export function LoopsScreen() {
     onSuccess: () => { setNewLoop(''); setShowCreate(false); queryClient.invalidateQueries({ queryKey: ['mobile-loops', user?.id] }); },
   });
 
+  const review = useMutation({
+    mutationFn: ({ id, ...input }: { id: string } & Parameters<typeof reviewLoop>[1]) => reviewLoop(id, input),
+    onMutate: async ({ id, action }) => {
+      await queryClient.cancelQueries({ queryKey: loopsQueryKey });
+      const previous = queryClient.getQueryData<LoopItem[]>(loopsQueryKey);
+      const reviewedAt = new Date().toISOString();
+      queryClient.setQueryData<LoopItem[]>(loopsQueryKey, (items) => items?.map((item) => {
+        if (item.id !== id) return item;
+        if (action === 'done') return { ...item, status: 'done', thread_state: 'resolved', reviewed_at: reviewedAt };
+        if (action === 'dismiss') return { ...item, status: 'dropped', thread_state: 'resolved', reviewed_at: reviewedAt };
+        return { ...item, reviewed_at: reviewedAt };
+      }));
+      return { previous };
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previous) queryClient.setQueryData(loopsQueryKey, context.previous);
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: loopsQueryKey }),
+  });
+
   // One pass, memoised. These were six chained filters recomputed on every
   // render -- including every chip tap and every optimistic status toggle --
   // over as many as two hundred loops.
@@ -133,6 +202,16 @@ export function LoopsScreen() {
     return { open: openItems, completed: completedItems, waiting: waitingItems, today: dueToday, forYou: forYouItems, needsAttention: attention };
   }, [query.data]);
   const visible = filter === 'done' ? completed : filter === 'waiting' ? waiting : filter === 'for_you' ? forYou : open;
+  const reviewCandidates = useMemo(
+    () => (query.data ?? []).filter((item) => loopNeedsReview(item)),
+    [query.data],
+  );
+  const reviewTarget = reviewCandidates[0] ?? null;
+
+  useEffect(() => {
+    if (reviewOpen && !reviewTarget) setReviewOpen(false);
+  }, [reviewOpen, reviewTarget]);
+
   useScreenLoadMark('loops', { hasData: !query.isCold, isFetching: query.isFetching, source: query.isFetching ? 'cache' : 'network' });
 
   return (
@@ -149,6 +228,36 @@ export function LoopsScreen() {
           <MobileChip label="I'm waiting" active={filter === 'waiting'} count={waiting.length} onPress={() => setFilter('waiting')} testID="loops-tab-waiting" />
           <MobileChip label="All" active={filter === 'all'} count={open.length} onPress={() => setFilter('all')} testID="loops-tab-all" />
         </View>
+        {reviewCandidates.length ? (
+          <Pressable
+            testID="loops-review-old"
+            accessibilityRole="button"
+            accessibilityLabel={`Review ${reviewCandidates.length} old ${reviewCandidates.length === 1 ? 'loop' : 'loops'}`}
+            onPress={() => setReviewOpen(true)}
+            style={{
+              minHeight: 52,
+              paddingHorizontal: space[3],
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: space[2],
+              borderRadius: radius.control,
+              borderWidth: 1,
+              borderColor: colors.ink,
+              backgroundColor: colors.sky,
+            }}
+          >
+            <Sparkles size={17} color={colors.ink} />
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={{ ...mobileType.bodySmall, fontWeight: '700', color: colors.ink }}>
+                Review old loops
+              </Text>
+              <Text numberOfLines={1} style={{ ...mobileType.label, color: colors.neutral[600] }}>
+                {reviewCandidates.length} {reviewCandidates.length === 1 ? 'item may' : 'items may'} no longer need attention
+              </Text>
+            </View>
+            <Text style={{ ...mobileType.label, fontWeight: '700', color: colors.ink }}>Review</Text>
+          </Pressable>
+        ) : null}
       </View>
       {query.isCold ? <LoopsSkeleton /> : (
         <FlatList testID="loops-list" data={visible} renderItem={({ item }) => <LoopRow item={item} onOpen={() => router.push({ pathname: '/loops/[id]', params: { id: item.id } })} onToggle={() => patch.mutate({ id: item.id, status: item.status === 'done' ? 'open' : 'done' })} onWait={item.status === 'done' ? undefined : () => patch.mutate({ id: item.id, owner: item.owner === 'them' ? 'me' : 'them', status: item.owner === 'them' ? 'open' : 'waiting' })} onSnooze={item.status === 'done' ? undefined : () => setSnoozeTarget(item)} />} keyExtractor={item => item.id} contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ paddingHorizontal: space[4], paddingBottom: 112 }} refreshControl={<RefreshControl refreshing={query.isRefetching} onRefresh={() => void query.refetch()} tintColor={colors.ink} />} ListEmptyComponent={<MobileState title={filter === 'done' ? 'Nothing completed yet' : filter === 'waiting' ? "You're not waiting on anyone" : 'No open loops'} message="Claire will surface commitments from your conversations here." />} />
@@ -180,6 +289,69 @@ export function LoopsScreen() {
             </Pressable>
           ))}
         </View>
+      </BottomSheet>
+
+      <BottomSheet
+        visible={reviewOpen && !!reviewTarget}
+        title="Review old loops"
+        onClose={() => setReviewOpen(false)}
+        testID="loop-review-sheet"
+        snapPoints={['62%']}
+      >
+        {reviewTarget ? (
+          <View style={{ paddingHorizontal: space[4], gap: space[4] }}>
+            <Text style={{ ...mobileType.monoLabel, color: colors.neutral[600] }}>
+              {reviewCandidates.length} {reviewCandidates.length === 1 ? 'LOOP LEFT' : 'LOOPS LEFT'}
+            </Text>
+            <View style={{ padding: space[4], borderRadius: radius.card, borderWidth: 1, borderColor: colors.neutral[200], backgroundColor: colors.cream, gap: space[2] }}>
+              <Text selectable style={{ ...mobileType.sectionTitle, color: colors.ink }}>
+                {reviewTarget.title?.trim() || reviewTarget.content}
+              </Text>
+              {reviewTarget.state_summary ? (
+                <Text selectable style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>
+                  {reviewTarget.state_summary}
+                </Text>
+              ) : null}
+              <Text style={{ ...mobileType.label, color: colors.neutral[600] }}>
+                Claire will keep this open unless you choose Done or Dismiss.
+              </Text>
+            </View>
+            <ReviewButton
+              testID="loop-review-done"
+              label="Done"
+              icon={Check}
+              tone="primary"
+              disabled={review.isPending}
+              onPress={() => review.mutate({ id: reviewTarget.id, action: 'done' })}
+            />
+            <View style={{ flexDirection: 'row', gap: space[2] }}>
+              <View style={{ flex: 1 }}>
+                <ReviewButton
+                  testID="loop-review-keep"
+                  label="Keep open"
+                  icon={RotateCcw}
+                  disabled={review.isPending}
+                  onPress={() => review.mutate({ id: reviewTarget.id, action: 'keep_open' })}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <ReviewButton
+                  testID="loop-review-dismiss"
+                  label="Dismiss"
+                  icon={XCircle}
+                  tone="danger"
+                  disabled={review.isPending}
+                  onPress={() => review.mutate({ id: reviewTarget.id, action: 'dismiss' })}
+                />
+              </View>
+            </View>
+            {review.error ? (
+              <Text selectable style={{ ...mobileType.bodySmall, color: colors.danger }}>
+                {review.error.message}
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
       </BottomSheet>
 
       <Modal visible={showCreate} transparent animationType="slide" onRequestClose={() => setShowCreate(false)}>

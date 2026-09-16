@@ -34,6 +34,7 @@ import deviceRoutes from './routes/devices';
 import searchRoutes from './routes/search';
 import desktopSyncRoutes from './routes/desktop-sync';
 import handoffRoutes from './routes/handoffs';
+import billingRoutes from './routes/billing';
 import { ensureCompanionSchema } from './services/companion-schema';
 import { platformManager } from './adapters';
 import { aiProcessor } from './services/ai-processor';
@@ -53,7 +54,7 @@ import { autoReplyEngine } from './services/auto-reply-engine';
 import { notificationDeliveryService } from './services/notification-delivery';
 import { chatAiProcessingEnabled, isAiProcessingEnabled } from './services/ai-policy';
 import { scheduleGroupClassification } from './services/group-classifier';
-import { MessageContentType, Platform, PlatformStatus } from './adapters/types';
+import { MessageContentType, Platform, PlatformStatus, type UnifiedMessage } from './adapters/types';
 import { whatsappAdapter } from './adapters/whatsapp';
 import { telegramAdapter } from './adapters/telegram';
 import { imessageAdapter } from './adapters/imessage';
@@ -61,6 +62,7 @@ import { instagramAdapter } from './adapters/instagram';
 import { MatrixBridgeAdapter } from './adapters/matrix';
 import { mockBridgeAdapter } from './adapters/mock';
 import { transcodeVoiceToM4aOnce } from './services/audio-transcoder';
+import { applyIncomingMessageEdit } from './services/message-edits';
 
 // Initialise Sentry as early as possible (no-op when SENTRY_DSN is unset)
 initSentry();
@@ -86,6 +88,58 @@ async function notifyIncomingMessage(message: {
   await notificationDeliveryService.enqueueIncomingMessage(message);
 }
 
+async function reconcilePlatformMessageEdit(
+  message: UnifiedMessage,
+  receivedAt: number,
+  direction: 'inbound' | 'outbound'
+): Promise<void> {
+  const edit = await applyIncomingMessageEdit(message);
+  if (!edit) {
+    logger.warn('Message edit target was not found or did not match its conversation', {
+      platform: message.platform,
+    });
+    return;
+  }
+
+  logger.info('Platform message edit reconciled', {
+    platform: message.platform,
+    applied: edit.applied,
+    repairedDuplicate: edit.duplicateRemoved,
+  });
+  void operationsTelemetry.record({
+    traceSource: message.platformMessageId,
+    userId: message.userId,
+    platform: message.platform,
+    direction,
+    stage: 'database',
+    outcome: 'persisted',
+    durationMs: Date.now() - receivedAt,
+  });
+
+  // The embedding is keyed by the original UUID. Re-indexing that same row
+  // replaces stale Ask Claire search content without a duplicate.
+  if (
+    edit.applied &&
+    message.content.trim() &&
+    (await isAiProcessingEnabled(message.userId)) &&
+    conversationAssistant.isConfigured
+  ) {
+    void conversationAssistant
+      .indexMessage({
+        id: edit.messageId,
+        user_id: message.userId,
+        content: message.content,
+        contact_name: edit.contactName,
+        from_me: edit.fromMe,
+        timestamp: edit.timestamp,
+        platform: edit.platform,
+      })
+      .catch((err) =>
+        logger.debug('Conversation assistant edit re-index skipped:', (err as Error).message)
+      );
+  }
+}
+
 // Sentry request handler — must come first in the middleware chain
 if (config.SENTRY_DSN) {
   Sentry.setupExpressErrorHandler(app);
@@ -109,7 +163,14 @@ app.use(
     credentials: true,
   })
 );
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({
+  limit: '10mb',
+  verify: (req, _res, body) => {
+    if ('originalUrl' in req && typeof req.originalUrl === 'string' && req.originalUrl.startsWith('/billing/revenuecat/webhook')) {
+      (req as express.Request).rawBody = Buffer.from(body);
+    }
+  },
+}));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Keep HTTP diagnostics useful without recording search terms, OAuth values,
 // or other query parameters that can contain private data.
@@ -147,6 +208,7 @@ app.use('/search', searchRoutes);
 app.use('/desktop', desktopSyncRoutes);
 app.use('/handoffs', handoffRoutes);
 app.use('/auto-reply', autoReplyRoutes);
+app.use('/billing', billingRoutes);
 
 // GoTrue sends an OAuth authorization code to its configured site URL when a
 // custom mobile/desktop redirect is not allow-listed. The production site URL
@@ -454,6 +516,11 @@ async function initializePlatforms() {
     });
 
     try {
+      if (message.editOfPlatformMessageId) {
+        await reconcilePlatformMessageEdit(message, receivedAt, direction);
+        return;
+      }
+
       // Fast-path: skip duplicate messages (backfill replay) without touching the DB further
       const { data: existing } = await supabase
         .from('messages')
@@ -462,6 +529,20 @@ async function initializePlatforms() {
         .maybeSingle();
 
       if (existing) {
+        // Initial Matrix sync can attach the latest replacement to the original
+        // event instead of replaying the edit as a separate timeline item.
+        if (message.latestEditPlatformMessageId && message.editedAt) {
+          await reconcilePlatformMessageEdit(
+            {
+              ...message,
+              platformMessageId: message.latestEditPlatformMessageId,
+              editOfPlatformMessageId: message.platformMessageId,
+              timestamp: message.editedAt,
+            },
+            receivedAt,
+            direction
+          );
+        }
         // Replaying a Mac history sync is also our repair path when a newer
         // local Messages decoder can recover text that an older build could
         // not read. Keep the operation idempotent and never overwrite content
@@ -657,6 +738,8 @@ async function initializePlatforms() {
             mentions: resolveMentions(message.mentions),
             mentions_room: message.mentionsRoom === true,
             formatted_body: message.formattedBody || null,
+            edited_at: message.editedAt || null,
+            latest_edit_platform_message_id: message.latestEditPlatformMessageId || null,
             metadata: message.platformMetadata || null,
             media_url: (() => {
               const mediaUrl = message.platformMetadata?.mediaUrl;

@@ -25,6 +25,9 @@ export function OnboardingConnectionsScreen() {
   const initialize = usePlatformStore((state) => state.initialize);
   const fetchSessions = usePlatformStore((state) => state.fetchConnectedSessions);
   const hasConnection = useHasAnyConnection();
+  const continueDestination = process.env.EXPO_PUBLIC_BILLING_ENFORCED === '1'
+    ? '/paywall?source=onboarding'
+    : '/(tabs)/dashboard';
 
   useEffect(() => {
     if (checkedEntryState.current) return;
@@ -34,9 +37,9 @@ export function OnboardingConnectionsScreen() {
       if (!isInitialized) await initialize();
       const serverSessions = await fetchSessions();
       const alreadyConnected = serverSessions.some((session) => session.status === PlatformStatus.CONNECTED);
-      if (isAuthenticated && alreadyConnected) router.replace('/(tabs)/dashboard');
+      if (isAuthenticated && alreadyConnected) router.replace(continueDestination as never);
     })();
-  }, [fetchSessions, initialize, isAuthenticated, isInitialized]);
+  }, [continueDestination, fetchSessions, initialize, isAuthenticated, isInitialized]);
 
   useFocusEffect(useCallback(() => {
     void fetchSessions();
@@ -132,7 +135,7 @@ export function OnboardingConnectionsScreen() {
           accessibilityRole="button"
           accessibilityState={{ disabled: !hasConnection }}
           disabled={!hasConnection}
-          onPress={() => router.replace('/(tabs)/dashboard')}
+          onPress={() => router.replace(continueDestination as never)}
           style={{ minHeight: 52, borderRadius: 16, borderCurve: 'continuous', backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center', opacity: hasConnection ? 1 : 0.34 }}
         >
           <Text style={{ ...mobileType.body, fontWeight: '700', color: colors.paper }}>Continue to Claire</Text>

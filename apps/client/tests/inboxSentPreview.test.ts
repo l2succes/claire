@@ -119,4 +119,39 @@ describe('inbox preview after sending', () => {
     });
     expect(feed(qc)[0].chat_id).toBe(CHAT);
   });
+
+  it('updates the preview in place when the latest message is edited', () => {
+    const qc = new QueryClient();
+    seed(qc, [row({ id: 'latest', unread_count: 2 })]);
+
+    patchInboxRealtimeMessage(qc, USER, {
+      id: 'latest',
+      chat_id: CHAT,
+      content: 'corrected text',
+      timestamp: '2026-08-26T10:00:00.000Z',
+      from_me: false,
+      platform: Platform.WHATSAPP,
+    }, { event: 'update' });
+
+    expect(feed(qc)[0].content).toBe('corrected text');
+    expect(feed(qc)[0].unread_count).toBe(2);
+  });
+
+  it('does not replace the preview when an older timeline message is edited', () => {
+    const qc = new QueryClient();
+    seed(qc, [row({ id: 'latest', content: 'actual latest', unread_count: 2 })]);
+
+    patchInboxRealtimeMessage(qc, USER, {
+      id: 'older-message',
+      chat_id: CHAT,
+      content: 'edited older text',
+      timestamp: '2026-08-26T09:55:00.000Z',
+      from_me: false,
+      platform: Platform.WHATSAPP,
+    }, { event: 'update' });
+
+    expect(feed(qc)[0].id).toBe('latest');
+    expect(feed(qc)[0].content).toBe('actual latest');
+    expect(feed(qc)[0].unread_count).toBe(2);
+  });
 });

@@ -506,6 +506,10 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
   private setupMatrixEventHandlers(): void {
     if (!this.matrixClient) return;
 
+    this.matrixClient.on(ClientEvent.Sync, (state, previous) => {
+      if (state === 'ERROR' && previous !== 'ERROR') this.matrixClient?.retryImmediately();
+    });
+
     // Auto-accept room invites from bridge bots
     this.matrixClient.on(RoomMemberEvent.Membership, async (_event, member) => {
       if (member.userId !== this.matrixClient!.getUserId()) return;
@@ -563,6 +567,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
 
       // Skip bridge notices in chat rooms (system messages, errors)
       if (event.getContent()?.msgtype === 'm.notice') return;
+      if (!this.eventConverter.isSupportedMessageEvent(event)) return;
 
       // Check if this is a bridged chat message
       let chatInfo = this.roomMapper.getRoomChatInfo(room.roomId);
@@ -1122,8 +1127,18 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     this.sessionSelfGhostIds.delete(sessionId);
     this.sessionMatrixUserIds.delete(sessionId);
 
+    const disconnected = await this.getSession(sessionId);
+    if (disconnected) {
+      disconnected.lastConnectedAt = undefined;
+      await this.saveSessionToRedis(disconnected);
+    }
     await this.updateSessionStatus(sessionId, PlatformStatus.DISCONNECTED);
     this.emitPlatformEvent('session_disconnected', sessionId, { reason: 'manual' });
+  }
+
+  /** Wake the existing sync transport without initiating authentication. */
+  recoverTransport(): void {
+    this.matrixClient?.retryImmediately();
   }
 
   /**
@@ -1317,7 +1332,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
             }
           : {}),
         ...relation,
-      });
+      }, message.transactionId);
       eventId = response.event_id;
     } else {
       // Send text message
@@ -1325,7 +1340,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
         msgtype: MsgType.Text,
         body: message.content,
         ...relation,
-      });
+      }, message.transactionId);
       eventId = response.event_id;
     }
 
@@ -1350,7 +1365,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
       isRead: true,
       replyToMessageId: message.replyToMessageId,
       hasMedia: !!message.media?.length,
-      platformMetadata: outboundMediaMetadata,
+      platformMetadata: { ...outboundMediaMetadata, ...(message.clientRequestId ? { clientRequestId: message.clientRequestId } : {}) },
     };
 
     void operationsTelemetry.record({
@@ -1374,7 +1389,8 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     sessionId: string,
     chatId: string,
     messageId: string,
-    emoji: string
+    emoji: string,
+    transactionId?: string
   ): Promise<{ platformEventId: string }> {
     if (!this.matrixClient) throw new Error('Matrix client not initialized');
     if (!this.sessions.has(sessionId)) throw new Error('Session not found');
@@ -1394,7 +1410,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
         event_id: messageId,
         key: emoji,
       },
-    });
+    }, transactionId);
     this.rememberSentEvent(response.event_id);
     return { platformEventId: response.event_id };
   }
@@ -1610,6 +1626,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     const messages: UnifiedMessage[] = [];
     for (const event of events) {
       if (event.getType() === 'm.room.message' && event.getContent()?.msgtype !== 'm.notice') {
+        if (!this.eventConverter.isSupportedMessageEvent(event)) continue;
         messages.push(
           await this.eventConverter.toUnifiedMessage(
             event,
@@ -1866,6 +1883,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
       for (const event of events) {
         if (event.getType() !== 'm.room.message') continue;
         if (event.getContent()?.msgtype === 'm.notice') continue;
+        if (!this.eventConverter.isSupportedMessageEvent(event)) continue;
 
         const unifiedMessage = await this.eventConverter.toUnifiedMessage(
           event,

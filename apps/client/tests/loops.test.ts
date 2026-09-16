@@ -7,6 +7,7 @@
  */
 
 import { formatDeadline, isLoopDeferred, isOverdue, loopTitle, conversationName, LIVE_STATUSES } from '../services/loop-display';
+import { loopNeedsReview, pendingCloseSuggestion } from '../services/loop-review';
 
 describe('isOverdue', () => {
   const past = new Date(Date.now() - 86_400_000).toISOString();
@@ -87,5 +88,54 @@ describe('titles and conversation names', () => {
     expect(conversationName({ chat: { name: 'Family' }, contact: null, contact_name: null })).toBe('Family');
     expect(conversationName({ chat: null, contact: { name: 'Maya' }, contact_name: null })).toBe('Maya');
     expect(conversationName({ chat: null, contact: null, contact_name: null })).toBe('Personal reminder');
+  });
+});
+
+describe('loop cleanup review', () => {
+  it('finds an unhandled close suggestion', () => {
+    expect(pendingCloseSuggestion([{
+      id: 'suggestion-1',
+      kind: 'agent_note',
+      actor: 'agent',
+      summary: 'Claire thinks this is done: Maya confirmed receipt',
+      payload: { suggestedResolution: 'fulfilled' },
+      occurred_at: '2026-09-01T12:00:00.000Z',
+    }])).toEqual({
+      eventId: 'suggestion-1',
+      resolution: 'fulfilled',
+      summary: 'Maya confirmed receipt',
+    });
+  });
+
+  it('does not repeat a suggestion the user kept open', () => {
+    expect(pendingCloseSuggestion([
+      {
+        id: 'suggestion-1', kind: 'agent_note', actor: 'agent',
+        payload: { suggestedResolution: 'cancelled' }, occurred_at: '2026-09-01T12:00:00.000Z',
+      },
+      {
+        id: 'review-1', kind: 'user_edit', actor: 'user',
+        payload: { reviewedSuggestionEventId: 'suggestion-1' }, occurred_at: '2026-09-01T12:01:00.000Z',
+      },
+    ])).toBeNull();
+  });
+
+  it('reviews an agreed loop after 30 quiet days but never treats age as completion', () => {
+    const loop = {
+      id: 'loop-1', content: 'Send the deck', priority: 'medium' as const,
+      status: 'open' as const, from_me: true, thread_state: 'agreed' as const,
+      last_evidence_at: '2026-07-01T12:00:00.000Z', visibility: 'surfaced' as const,
+    };
+    expect(loopNeedsReview(loop, new Date('2026-08-01T12:00:01.000Z'))).toBe(true);
+    expect(loop.status).toBe('open');
+  });
+
+  it('does not requeue a loop reviewed after its latest evidence', () => {
+    expect(loopNeedsReview({
+      id: 'loop-1', content: 'Send the deck', priority: 'medium', status: 'open',
+      from_me: true, thread_state: 'agreed', visibility: 'surfaced',
+      last_evidence_at: '2026-07-01T12:00:00.000Z',
+      reviewed_at: '2026-07-31T12:00:00.000Z',
+    }, new Date('2026-08-15T12:00:00.000Z'))).toBe(false);
   });
 });

@@ -32,6 +32,8 @@ export interface LoopConversationRef {
 
 export interface LoopItem {
   id: string;
+  created_at?: string | null;
+  updated_at?: string | null;
   content: string;
   title?: string | null;
   state_summary?: string | null;
@@ -61,6 +63,10 @@ export interface LoopItem {
   relevance_signals?: RelevanceSignals | null;
   suppressed_reason?: string | null;
   evidence_count?: number | null;
+  last_evidence_at?: string | null;
+  reviewed_at?: string | null;
+  visibility?: 'surfaced' | 'suppressed' | 'shadow' | null;
+  resolution?: 'fulfilled' | 'cancelled' | 'expired' | 'superseded' | 'merged' | 'user_dismissed' | 'false_positive' | null;
   source?: string | null;
   chat?: LoopConversationRef | null;
   contact?: { name?: string | null; inferred_name?: string | null; avatar_url?: string | null } | null;
@@ -130,6 +136,14 @@ export interface LoopAgentResult {
   toolsUsed: string[];
   proposal: LoopProposal | null;
   stoppedBecause: 'completed' | 'step_limit' | 'no_provider' | 'error';
+}
+
+export type LoopReviewAction = 'done' | 'dismiss' | 'keep_open';
+
+export interface LoopReviewInput {
+  action: LoopReviewAction;
+  resolution?: 'fulfilled' | 'cancelled' | 'expired' | 'superseded';
+  suggestionEventId?: string;
 }
 
 /**

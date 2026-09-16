@@ -120,3 +120,23 @@ describe('BridgeHttpClient contacts', () => {
     }
   });
 });
+
+describe('BridgeHttpClient connection recovery', () => {
+  it('reads only the exact existing login and never starts authentication', async () => {
+    const originalFetch = globalThis.fetch;
+    const requests: Request[] = [];
+    globalThis.fetch = async (input, init) => {
+      requests.push(new Request(input, init));
+      return Response.json({ logins: [
+        { id: 'other-account', state: { state_event: 'CONNECTED' } },
+        { id: 'linked-account', state: { state_event: 'TRANSIENT_DISCONNECT' } },
+      ] });
+    };
+    try {
+      const client = new BridgeHttpClient('https://bridge.example', 'test-secret', '@test:example');
+      expect(await client.getConnectionState('linked-account')).toBe('TRANSIENT_DISCONNECT');
+      expect(await client.getConnectionState('missing-account')).toBeUndefined();
+      expect(requests.every((request) => request.method === 'GET' && new URL(request.url).pathname === '/_matrix/provision/v3/whoami')).toBe(true);
+    } finally { globalThis.fetch = originalFetch; }
+  });
+});

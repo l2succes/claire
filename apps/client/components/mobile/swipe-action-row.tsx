@@ -65,12 +65,14 @@ export function SwipeActionRow({
   rightActions = [],
   enabled = true,
   testID,
+  contentBackgroundColor = colors.paper,
 }: {
   children: ReactNode;
   leftActions?: SwipeRowAction[];
   rightActions?: SwipeRowAction[];
   enabled?: boolean;
   testID?: string;
+  contentBackgroundColor?: string;
 }) {
   const ref = useRef<SwipeableMethods | null>(null);
   const hasLeft = leftActions.length > 0;
@@ -91,7 +93,7 @@ export function SwipeActionRow({
       overshootRight={false}
       enableTrackpadTwoFingerGesture
       containerStyle={{ overflow: 'hidden' }}
-      childrenContainerStyle={{ backgroundColor: colors.paper }}
+      childrenContainerStyle={{ backgroundColor: contentBackgroundColor }}
       renderLeftActions={hasLeft ? (_progress, _translation, methods) => (
         <ActionStrip actions={leftActions} methods={methods} />
       ) : undefined}

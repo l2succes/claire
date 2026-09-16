@@ -85,7 +85,7 @@ export function LoopRow({
         if (event.nativeEvent.actionName === 'wait') onWait?.();
         if (event.nativeEvent.actionName === 'snooze') onSnooze?.();
       }}
-      style={{ flexDirection: 'row', gap: 11, minHeight: 104, paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: colors.neutral[200], opacity: pressed ? 0.66 : 1 }}
+      style={{ flexDirection: 'row', gap: 11, minHeight: 104, paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: colors.neutral[200], backgroundColor: colors.cream, opacity: pressed ? 0.66 : 1 }}
     >
       <Pressable
         testID={`loop-toggle-${item.id}`}
@@ -120,6 +120,7 @@ export function LoopRow({
   return (
     <SwipeActionRow
       testID={`swipe-row-loop-${item.id}`}
+      contentBackgroundColor={colors.cream}
       leftActions={[{
         id: `toggle-loop-${item.id}`,
         label: item.status === 'done' ? 'Reopen' : 'Done',

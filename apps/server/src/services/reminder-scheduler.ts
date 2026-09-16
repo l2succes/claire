@@ -3,6 +3,7 @@ import { redisConfig } from '../config';
 import { logger } from '../utils/logger';
 import { notificationDeliveryService } from './notification-delivery';
 import { planLoopReminder, type LoopReminderReason } from './loops/loop-reminder-policy';
+import { expireStaleProposals } from './loops/loop-hygiene';
 import { recordEvent } from './loops/loop-store';
 import { supabase } from './supabase';
 
@@ -102,6 +103,7 @@ export class ReminderScheduler {
   }
 
   async runOnce(now = new Date()): Promise<void> {
+    await expireStaleProposals(now);
     await this.refreshPendingPlans(now);
     await this.enqueueDeadlineReminders(now);
   }
