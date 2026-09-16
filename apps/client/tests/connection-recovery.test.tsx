@@ -12,11 +12,11 @@ jest.mock('../services/platforms', () => ({ platformsApi: {
   getAllSessions: jest.fn(), recoverPlatform: jest.fn(),
 } }));
 jest.mock('../stores/authStore', () => {
-  const { create } = require('zustand');
+  const { create } = jest.requireActual<typeof import('zustand')>('zustand');
   return { useAuthStore: create(() => ({ user: { id: 'test-user' }, token: 'test-token' })) };
 });
 jest.mock('../services/chat-outbox', () => {
-  const { create } = require('zustand');
+  const { create } = jest.requireActual<typeof import('zustand')>('zustand');
   const queue = { entries: [], hydrate: jest.fn(async () => undefined), flush: jest.fn(async () => undefined) };
   return { getChatOutbox: () => queue, showOutboxEvent: jest.fn(), resetChatOutbox: jest.fn(),
     useChatOutbox: create(() => ({ entries: [], attentionPlatforms: [] })) };

@@ -1,7 +1,7 @@
 import { describe, expect, it, mock } from 'bun:test';
 
 mock.module('../../utils/logger', () => ({
-  logger: { debug: () => {} },
+  logger: { info: () => {}, debug: () => {}, warn: () => {}, error: () => {} },
 }));
 
 const { BridgeHttpClient } = await import('./bridge-http-client');
