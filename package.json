@@ -83,5 +83,9 @@
     "concurrently": "^8.2.2",
     "nx": "23.1.1",
     "prettier": "^3.1.1"
+  },
+  "patchedDependencies": {
+    "@react-native-cookies/cookies@6.2.1": "patches/@react-native-cookies%2Fcookies@6.2.1.patch",
+    "react-native-worklets@0.7.4": "patches/react-native-worklets@0.7.4.patch"
   }
 }
