@@ -3,7 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import * as Sentry from '@sentry/node';
-import { config, platformConfig, matrixConfig, mockBridgeConfig, serverConfig } from './config';
+import { config, platformConfig, matrixConfig, mockBridgeConfig, demoConfig, serverConfig } from './config';
 import { initSentry } from './utils/sentry';
 import { logger, stream } from './utils/logger';
 
@@ -24,6 +24,7 @@ import preferencesRoutes from './routes/preferences';
 import autoReplyRoutes from './routes/auto-reply';
 import { aiRateLimit, authRateLimit } from './middleware/rate-limit';
 import seedRoutes from './routes/seed';
+import demoRoutes from './routes/demo';
 import loopRoutes from './routes/loops';
 import pushTokenRoutes from './routes/push-tokens';
 import notificationDeviceRoutes from './routes/notification-devices';
@@ -43,6 +44,7 @@ import { voiceProfileService } from './services/voice-profile-service';
 import {
   displayNameFromBridge,
   incomingContactId,
+  messageContactId,
   phoneNumberFromBridgeIdentifiers,
   phoneNumberFromPlatformContactId,
   resolveMentions,
@@ -51,10 +53,19 @@ import { scheduleChat } from './services/loops/loop-queue';
 import { operationsMonitor } from './services/operations-monitor';
 import { operationsTelemetry } from './services/operations-telemetry';
 import { autoReplyEngine } from './services/auto-reply-engine';
+import { DemoBridgeAdapter } from './adapters/demo';
+import { demoResponder } from './services/demo-responder';
+import { isDemoUser } from './demo/demo-accounts';
 import { notificationDeliveryService } from './services/notification-delivery';
 import { chatAiProcessingEnabled, isAiProcessingEnabled } from './services/ai-policy';
 import { scheduleGroupClassification } from './services/group-classifier';
-import { MessageContentType, Platform, PlatformStatus, type UnifiedMessage } from './adapters/types';
+import {
+  IPlatformAdapter,
+  MessageContentType,
+  Platform,
+  PlatformStatus,
+  type UnifiedMessage,
+} from './adapters/types';
 import { whatsappAdapter } from './adapters/whatsapp';
 import { telegramAdapter } from './adapters/telegram';
 import { imessageAdapter } from './adapters/imessage';
@@ -63,6 +74,7 @@ import { MatrixBridgeAdapter } from './adapters/matrix';
 import { mockBridgeAdapter } from './adapters/mock';
 import { transcodeVoiceToM4aOnce } from './services/audio-transcoder';
 import { applyIncomingMessageEdit } from './services/message-edits';
+import { isWhatsAppStatusUpdate } from './services/whatsapp-status';
 
 // Initialise Sentry as early as possible (no-op when SENTRY_DSN is unset)
 initSentry();
@@ -79,6 +91,7 @@ async function notifyIncomingMessage(message: {
   userId: string;
   chatId: string;
   platform: string;
+  senderContactId?: string;
   senderName?: string;
   chatName?: string;
   isGroup?: boolean;
@@ -197,6 +210,8 @@ app.use('/conversations', conversationRoutes);
 app.use('/preferences', preferencesRoutes);
 // Seed/reset route — only functional when MOCK_BRIDGE=true (guarded inside route)
 app.use('/seed', seedRoutes);
+// Demo account seeding — every route 404s unless the caller is a demo account
+app.use('/demo', demoRoutes);
 app.use('/loops', loopRoutes);
 app.use('/push-tokens', pushTokenRoutes);
 app.use('/notification-devices', notificationDeviceRoutes);
@@ -397,12 +412,31 @@ app.use((_req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
+/**
+ * Wrap an adapter so demo accounts get synthetic sessions and in-character
+ * replies. Inert unless DEMO_MODE_ENABLED is set, and even then every call for
+ * a non-demo account passes straight through to the real adapter.
+ */
+function withDemoSupport(adapter: IPlatformAdapter): IPlatformAdapter {
+  if (!demoConfig.enabled) return adapter;
+  return new DemoBridgeAdapter(adapter, {
+    ingest: (message) => platformManager.ingestMessage(message),
+    isDemoUser,
+    onOutgoing: (outgoing) => demoResponder.respondTo(outgoing),
+  });
+}
+
 // Initialize platform adapters
 async function initializePlatforms() {
+  if (demoConfig.enabled) {
+    logger.info('DEMO_MODE_ENABLED=true — demo accounts will receive synthetic sessions and in-character replies');
+    demoResponder.configure((message) => platformManager.ingestMessage(message));
+  }
+
   if (mockBridgeConfig.enabled) {
     // Mock mode: replace all real adapters with a scripted fake adapter
     logger.info('MOCK_BRIDGE=true — using mock bridge adapter (no Docker/Matrix required)');
-    platformManager.setMatrixMode(mockBridgeAdapter);
+    platformManager.setMatrixMode(withDemoSupport(mockBridgeAdapter));
   } else {
     const mode = matrixConfig.enabled ? 'matrix' : 'direct';
     logger.info(`Initializing platform adapters in ${mode} mode...`);
@@ -475,22 +509,22 @@ async function initializePlatforms() {
         },
       });
 
-      platformManager.setMatrixMode(matrixAdapter);
+      platformManager.setMatrixMode(withDemoSupport(matrixAdapter));
     } else {
       // Direct mode: Use native platform adapters
       logger.info('Using direct platform adapters');
 
       if (platformConfig.whatsapp.enabled) {
-        platformManager.registerAdapter(whatsappAdapter);
+        platformManager.registerAdapter(withDemoSupport(whatsappAdapter));
       }
       if (platformConfig.telegram.enabled) {
-        platformManager.registerAdapter(telegramAdapter);
+        platformManager.registerAdapter(withDemoSupport(telegramAdapter));
       }
       if (platformConfig.imessage.enabled) {
-        platformManager.registerAdapter(imessageAdapter);
+        platformManager.registerAdapter(withDemoSupport(imessageAdapter));
       }
       if (platformConfig.instagram.enabled) {
-        platformManager.registerAdapter(instagramAdapter);
+        platformManager.registerAdapter(withDemoSupport(instagramAdapter));
       }
     }
   }
@@ -499,8 +533,10 @@ async function initializePlatforms() {
   platformManager.onMessage(async (message) => {
     logger.debug('Platform message received', { platform: message.platform });
 
-    // Skip WhatsApp status broadcasts
-    if (message.chatId === 'status@broadcast' || message.platformMetadata?.isStatus) {
+    // WhatsApp Status is a pseudo-conversation, not an inbox message. Matrix
+    // rooms do not always retain the direct adapter's JID/metadata, so include
+    // the canonical room names in the shared check as well.
+    if (isWhatsAppStatusUpdate(message)) {
       return;
     }
 
@@ -596,7 +632,7 @@ async function initializePlatforms() {
           },
           { onConflict: 'user_id,platform,platform_chat_id' }
         )
-        .select('id, name, is_group, ai_enabled, member_count')
+        .select('id, name, is_group, ai_enabled, member_count, contact_id')
         .single();
 
       if (chatError || !chat) {
@@ -662,6 +698,24 @@ async function initializePlatforms() {
       if (contactId && message.chatType === 'individual') {
         await supabase.from('chats').update({ contact_id: contactId }).eq('id', chat.id);
       }
+
+      // An outbound message has no remote sender, so incomingContactId returns
+      // null for it and `contact_id` was left empty on every row the account
+      // owner sent. That silently broke the People "Contacted" filter, which
+      // counts exactly those rows: contacts.outbound_message_count is
+      // maintained from `from_me = TRUE AND contact_id IS NOT NULL`, so the
+      // counter never left zero and the filter could never return anyone.
+      //
+      // In a 1:1 the counterpart is unambiguous -- it is the chat's own linked
+      // contact. A group has no single counterpart, and "contacted" is defined
+      // as direct messages only (routes/contacts.ts filters is_group = false),
+      // so groups stay null on purpose.
+      const linkedContactId = messageContactId({
+        senderContactId: contactId,
+        isFromMe: message.isFromMe,
+        isGroup: message.chatType === 'group',
+        chatContactId: (chat as { contact_id?: string | null }).contact_id,
+      });
       if (message.chatType === 'individual' && !chatDisplayName) {
         // Outgoing messages do not have a remote sender to upsert above, and
         // some bridges only learn the profile name during contact sync. Reuse
@@ -724,7 +778,7 @@ async function initializePlatforms() {
             content_type: message.contentType,
             timestamp: message.timestamp,
             is_group: message.chatType === 'group',
-            contact_id: contactId,
+            contact_id: linkedContactId,
             contact_name: message.isFromMe
               ? null
               : displayNameFromBridge(message.senderName, message.platform, senderContactId),
@@ -852,6 +906,7 @@ async function initializePlatforms() {
             userId: message.userId,
             chatId: chat.id,
             platform: message.platform,
+            senderContactId: contactId || undefined,
             senderName: message.senderName,
             chatName: chat.name || chatDisplayName,
             isGroup: chat.is_group,

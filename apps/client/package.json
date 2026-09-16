@@ -39,6 +39,7 @@
     "e2e:web": "bunx playwright test"
   },
   "dependencies": {
+    "@bacons/apple-targets": "5.0.0",
     "@claire/chat-core": "workspace:*",
     "@claire/design-system": "workspace:*",
     "@claire/host": "workspace:*",

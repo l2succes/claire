@@ -230,6 +230,14 @@ export default function ConversationSettingsScreen() {
             </View>
           </View>
 
+          <View testID="conversation-notification-settings" style={{ minHeight: 76, flexDirection: 'row', alignItems: 'center', gap: space[3], paddingHorizontal: space[3], paddingVertical: space[3], borderRadius: radius.card, backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.neutral[200] }}>
+            <View style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: radius.control, backgroundColor: isMuted ? colors.neutral[100] : colors.sky }}><BellOff size={19} color={colors.ink} /></View>
+            <View style={{ flex: 1, gap: 2 }}><Text style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>Mute notifications</Text><Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{isMuted ? 'Notifications are muted for this chat.' : `Receive alerts for this ${is_group === '1' ? 'group' : 'conversation'}.`}</Text></View>
+            <View style={{ height: 40, justifyContent: 'center' }}>
+              <Switch testID="conversation-mute-notifications" accessibilityLabel={`Mute notifications for ${displayName}`} value={isMuted} disabled={isSavingMute || !accessToken} onValueChange={(value) => void updateMute(value)} trackColor={{ false: colors.neutral[200], true: colors.ink }} thumbColor={isMuted ? colors.lime : colors.paper} />
+            </View>
+          </View>
+
           <CategoryPicker selected={chatSettings?.category ?? null} onSelect={handleCategorySelect} />
 
           <View style={{ gap: space[2] }}>
@@ -256,17 +264,6 @@ export default function ConversationSettingsScreen() {
               </View>
               <View style={{ height: 40, justifyContent: 'center' }}>
                 <Switch testID="conversation-ai-enabled" accessibilityLabel={`Claire AI for ${displayName}`} value={effectiveAi} disabled={isSavingAi || !accessToken} onValueChange={(value) => void updateAi(value)} trackColor={{ false: colors.neutral[200], true: colors.ink }} thumbColor={effectiveAi ? colors.lime : colors.paper} />
-              </View>
-            </View>
-            <View testID="conversation-notification-settings" style={{ minHeight: 76, flexDirection: 'row', alignItems: 'center', gap: space[3], paddingHorizontal: space[3], borderRadius: radius.card, backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.neutral[200] }}>
-              <View style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: radius.control, backgroundColor: isMuted ? colors.neutral[100] : colors.sky }}><BellOff size={19} color={colors.ink} /></View>
-              <View style={{ flex: 1, gap: 2 }}><Text style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>Mute notifications</Text><Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{isMuted ? 'Notifications are muted for this chat.' : `Receive alerts for this ${is_group === '1' ? 'group' : 'conversation'}.`}</Text></View>
-              {/* Switch does not report a usable intrinsic height here, so the row's
-                  alignItems: 'center' had nothing to centre: it laid out as a
-                  full-height box and drew the control at the top, clipping the
-                  card's border. A fixed box it cannot outgrow centres it for real. */}
-              <View style={{ height: 40, justifyContent: 'center' }}>
-                <Switch testID="conversation-mute-notifications" accessibilityLabel={`Mute notifications for ${displayName}`} value={isMuted} disabled={isSavingMute || !accessToken} onValueChange={(value) => void updateMute(value)} trackColor={{ false: colors.neutral[200], true: colors.ink }} thumbColor={isMuted ? colors.lime : colors.paper} />
               </View>
             </View>
           </View>

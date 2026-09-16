@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AppState, InteractionManager, Platform, View } from 'react-native';
+import { AppState, InteractionManager, Linking, Platform, View } from 'react-native';
 import { Stack, router } from 'expo-router';
 import * as Notifications from 'expo-notifications';
 import { QueryClientProvider } from '@tanstack/react-query';
@@ -14,8 +14,10 @@ import {
   addPushTokenRotationListener,
   getActiveNotificationChat,
   registerNotificationDevice,
+  setupNotificationCategories,
   updateNotificationPresence,
 } from '../services/notifications';
+import { handleNotificationResponse, type ClaireNotificationData } from '../services/notification-responses';
 import { bootstrapMobileCache, reconcileMobileCache } from '../services/mobile-sync';
 import { LaunchReveal } from '../components/LaunchReveal';
 import { useInboxRealtime } from '../hooks/useInboxRealtime';
@@ -158,21 +160,10 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (Platform.OS === 'web') return;
-    const openNotification = (notification: Notifications.Notification) => {
-      const data = notification.request.content.data as {
-        type?: unknown;
-        loopId?: unknown;
-        chatId?: unknown;
-        messageId?: unknown;
-        contactName?: unknown;
-        chatName?: unknown;
-        platform?: unknown;
-        isGroup?: unknown;
-      };
-      if (data.type === 'loop_reminder' && typeof data.loopId === 'string') {
-        router.push({ pathname: '/loops/[id]', params: { id: data.loopId } });
-        return;
-      }
+    void setupNotificationCategories().catch((error) => {
+      console.warn('Could not register notification actions:', error);
+    });
+    const openChat = (data: ClaireNotificationData, draft?: string) => {
       if (typeof data.chatId !== 'string') return;
       router.push({ pathname: '/chat/[chatId]', params: {
         chatId: data.chatId,
@@ -181,11 +172,23 @@ export default function RootLayout() {
         ...(typeof data.chatName === 'string' ? { chat_name: data.chatName } : {}),
         ...(typeof data.platform === 'string' ? { platform: data.platform } : {}),
         ...(typeof data.isGroup === 'boolean' ? { is_group: data.isGroup ? '1' : '0' } : {}),
+        ...(draft ? { draft, notificationAction: 'reply' } : {}),
       } });
     };
+    const openResponse = (response: Notifications.NotificationResponse) => {
+      void handleNotificationResponse(response, {
+        openChat,
+        openLoop: (loopId) => router.push({ pathname: '/loops/[id]', params: { id: loopId } }),
+        openOperations: (url) => {
+          void Linking.openURL(url).catch((error) => {
+            console.warn('Could not open the operations dashboard:', error);
+          });
+        },
+      });
+    };
     const last = Notifications.getLastNotificationResponse();
-    if (last?.notification) openNotification(last.notification);
-    const response = Notifications.addNotificationResponseReceivedListener((event) => openNotification(event.notification));
+    if (last?.notification) openResponse(last);
+    const response = Notifications.addNotificationResponseReceivedListener(openResponse);
     return () => response.remove();
   }, []);
 

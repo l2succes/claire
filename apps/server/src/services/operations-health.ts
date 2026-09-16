@@ -23,16 +23,19 @@ export function classifyBridgeSessions(
   disconnected: number,
 ): { status: OperationsStatus; summary: string } {
   if (connected === 0 && disconnected > 0) {
-    return { status: 'critical', summary: 'No durable bridge sessions are connected' };
+    return {
+      status: 'critical',
+      summary: `No active bridge is connected; ${disconnected} connection${disconnected === 1 ? '' : 's'} need${disconnected === 1 ? 's' : ''} a decision`,
+    };
   }
   if (disconnected > 0) {
     return {
       status: 'warning',
-      summary: `${connected} durable bridge session(s) connected; ${disconnected} require attention`,
+      summary: `${connected} active bridge${connected === 1 ? '' : 's'} connected; ${disconnected} connection${disconnected === 1 ? '' : 's'} need${disconnected === 1 ? 's' : ''} a decision`,
     };
   }
   if (connected > 0) {
-    return { status: 'healthy', summary: `${connected} durable bridge session(s) connected` };
+    return { status: 'healthy', summary: `${connected} active bridge${connected === 1 ? '' : 's'} connected` };
   }
   return { status: 'unknown', summary: 'No messaging accounts are connected' };
 }

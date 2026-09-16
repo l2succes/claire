@@ -42,6 +42,7 @@
     "mobile:staging": "cd apps/client && bun run start:staging",
     "mobile:prod:local": "cd apps/client && bun run start:prod:local",
     "mobile:ios:staging": "cd apps/client && bun run ios:staging",
+    "demo:seed": "cd apps/server && bun run demo:seed",
     "mobile:ios:prod": "cd apps/client && bun run ios:prod",
     "mobile:ios:prod:local": "cd apps/client && bun run ios:prod:local",
     "mobile:ios:prod:device": "cd apps/client && bun run ios:prod:device",
@@ -86,5 +87,9 @@
     "concurrently": "^8.2.2",
     "nx": "23.1.1",
     "prettier": "^3.1.1"
+  },
+  "patchedDependencies": {
+    "@react-native-cookies/cookies@6.2.1": "patches/@react-native-cookies%2Fcookies@6.2.1.patch",
+    "react-native-worklets@0.7.4": "patches/react-native-worklets@0.7.4.patch"
   }
 }

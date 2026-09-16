@@ -5,6 +5,7 @@ import { notificationPresence } from './notification-presence';
 import { apnsNotificationProvider, expoNotificationProvider, type NotificationPayload, type ProviderResult } from './notification-providers';
 import { logger } from '../utils/logger';
 import { operationsTelemetry } from './operations-telemetry';
+import { isWhatsAppStatusUpdate } from './whatsapp-status';
 
 interface NotificationDevice {
   id: string;
@@ -21,6 +22,7 @@ export interface IncomingNotificationEvent {
   userId: string;
   chatId: string;
   platform: string;
+  senderContactId?: string;
   senderName?: string;
   chatName?: string;
   isGroup?: boolean;
@@ -34,6 +36,7 @@ interface DeliveryJob {
   device: NotificationDevice;
   payload: NotificationPayload;
   telemetry: { userId: string; platform: string; traceSource: string };
+  loop?: { loopId: string; revision: number; userId: string };
 }
 
 export interface LoopReminderNotificationEvent {
@@ -68,12 +71,38 @@ interface NotificationOptions {
   quiet_hours_end?: string;
 }
 
+export const MESSAGE_NOTIFICATION_CATEGORY = 'claire_message';
+export const LOOP_NOTIFICATION_CATEGORY = 'claire_loop';
+
+/** Remote notification media must be directly downloadable by APNs/FCM. */
+export function notificationImageUrl(value: unknown): string | undefined {
+  if (typeof value !== 'string' || value.length > 2_048) return undefined;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' ? url.toString() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function shouldNotifyLoops(notificationEnabled: boolean | null | undefined, options: NotificationOptions): boolean {
   return notificationEnabled !== false && options.notify_loops !== false;
 }
 
 export function shouldNotifyConversation(notificationEnabled: boolean | null | undefined, options: NotificationOptions, isMuted: boolean | null | undefined): boolean {
   return notificationEnabled !== false && options.notify_messages !== false && isMuted !== true;
+}
+
+export function shouldDeliverLoopRevision(
+  expected: { revision: number; userId: string },
+  current: { reminder_revision: number; user_id: string; status: string } | null | undefined,
+): boolean {
+  return Boolean(
+    current
+    && current.reminder_revision === expected.revision
+    && current.user_id === expected.userId
+    && ['open', 'waiting', 'snoozed'].includes(current.status),
+  );
 }
 
 function minutesAtTimezone(date: Date, timezone: string): number {
@@ -131,20 +160,35 @@ export class NotificationDeliveryService {
   }
 
   async enqueueIncomingMessage(event: IncomingNotificationEvent): Promise<number> {
+    // Keep the delivery boundary defensive: status posts must remain silent
+    // even if a future ingestion path bypasses the primary message filter.
+    if (isWhatsAppStatusUpdate({
+      platform: event.platform,
+      chatId: event.chatId,
+      chatName: event.chatName,
+    })) return 0;
+
     this.start();
-    const [{ data: preferences, error: preferenceError }, { data: devices, error: deviceError }, { data: chat, error: chatError }] = await Promise.all([
+    const senderContact = event.senderContactId
+      ? supabase.from('contacts').select('avatar_url').eq('id', event.senderContactId).eq('user_id', event.userId).maybeSingle()
+      : Promise.resolve({ data: null, error: null });
+    const [{ data: preferences, error: preferenceError }, { data: devices, error: deviceError }, { data: chat, error: chatError }, { data: contactRow, error: contactError }] = await Promise.all([
       supabase.from('user_preferences').select('notification_enabled,preferences').eq('user_id', event.userId).maybeSingle(),
       supabase.from('notification_devices').select('id,user_id,device_id,platform,provider,token,enabled,timezone').eq('user_id', event.userId).eq('enabled', true),
-      supabase.from('chats').select('is_muted').eq('id', event.chatId).eq('user_id', event.userId).maybeSingle(),
+      supabase.from('chats').select('is_muted,contact:contacts!chats_contact_id_fkey(avatar_url)').eq('id', event.chatId).eq('user_id', event.userId).maybeSingle(),
+      senderContact,
     ]);
     if (preferenceError) throw preferenceError;
     if (deviceError) throw deviceError;
     if (chatError) throw chatError;
+    if (contactError) throw contactError;
     const options = (preferences?.preferences || {}) as NotificationOptions;
     if (!shouldNotifyConversation(preferences?.notification_enabled, options, chat?.is_muted)) return 0;
 
     const { data: chats } = await supabase.from('chats').select('unread_count').eq('user_id', event.userId);
     const badge = (chats || []).reduce((sum: number, chat: { unread_count?: number }) => sum + Math.max(0, chat.unread_count || 0), 0);
+    const contact = Array.isArray(chat?.contact) ? chat.contact[0] : chat?.contact;
+    const avatarUrl = notificationImageUrl(contactRow?.avatar_url || contact?.avatar_url);
     let queued = 0;
     for (const device of (devices || []) as NotificationDevice[]) {
       let suppression: string | null = null;
@@ -168,17 +212,24 @@ export class NotificationDeliveryService {
         body: event.content.trim().slice(0, 160) || 'Sent you an update',
         badge,
         collapseId: event.messageId,
+        categoryId: MESSAGE_NOTIFICATION_CATEGORY,
+        mutableContent: Boolean(avatarUrl),
+        threadId: `chat:${event.chatId}`,
+        tag: `chat:${event.chatId}`,
+        ...(avatarUrl ? { richContent: { image: avatarUrl } } : {}),
         data: {
           version: 1,
           type: 'new_message',
           messageId: event.messageId,
           chatId: event.chatId,
           platform: event.platform,
+          senderId: event.senderContactId || `${event.platform}:${event.senderName || event.chatId}`,
           ...(event.chatName ? { chatName: event.chatName } : {}),
           ...(!event.isGroup && (event.chatName || event.senderName)
             ? { contactName: event.chatName || event.senderName! }
             : {}),
           isGroup: event.isGroup === true,
+          ...(avatarUrl ? { avatarUrl } : {}),
           url: `claire://chat/${event.chatId}?messageId=${event.messageId}`,
         },
       };
@@ -249,6 +300,9 @@ export class NotificationDeliveryService {
         body: event.body.trim().slice(0, 180),
         collapseId: `loop:${event.loopId}:${event.revision}`,
         channelId: 'loops',
+        categoryId: LOOP_NOTIFICATION_CATEGORY,
+        threadId: 'loops',
+        tag: `loop:${event.loopId}`,
         data: {
           version: 1,
           type: 'loop_reminder',
@@ -263,6 +317,7 @@ export class NotificationDeliveryService {
         device,
         payload,
         telemetry: { userId: event.userId, platform: 'claire', traceSource: event.loopId },
+        loop: { loopId: event.loopId, revision: event.revision, userId: event.userId },
       }, {
         jobId: `loop:${event.loopId}:revision:${event.revision}:device:${device.id}`,
         ...(delay ? { delay } : {}),
@@ -274,7 +329,23 @@ export class NotificationDeliveryService {
 
   private async process(job: Job<NotificationJob>): Promise<void> {
     if (job.data.kind === 'receipt') return this.processReceipt(job.data);
-    const { deliveryId, device, payload, telemetry } = job.data;
+    const { deliveryId, device, payload, telemetry, loop } = job.data;
+    if (loop) {
+      const { data: currentLoop, error } = await supabase
+        .from('loops')
+        .select('user_id,status,reminder_revision')
+        .eq('id', loop.loopId)
+        .maybeSingle();
+      if (error) throw error;
+      if (!shouldDeliverLoopRevision(loop, currentLoop)) {
+        await supabase.from('notification_deliveries').update({
+          state: 'suppressed',
+          error_code: 'stale_loop_revision',
+          updated_at: new Date().toISOString(),
+        }).eq('id', deliveryId);
+        return;
+      }
+    }
     const provider = device.provider === 'expo' ? expoNotificationProvider : device.provider === 'apns' ? apnsNotificationProvider : null;
     if (!provider) {
       await this.recordResult(deliveryId, device.id, { state: 'failed', errorCode: 'unsupported_provider' }, job.attemptsMade + 1, telemetry);

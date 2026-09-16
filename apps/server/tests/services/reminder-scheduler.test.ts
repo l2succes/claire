@@ -140,6 +140,7 @@ describe('ReminderScheduler', () => {
   it('delivers a manual trigger through the reliable device service', async () => {
     responses.push(
       { data: liveLoop(), error: null },
+      { data: liveLoop(), error: null },
       { data: null, error: null },
     );
     const result = await scheduler.triggerReminderForLoop('loop-1');
@@ -157,6 +158,7 @@ describe('ReminderScheduler', () => {
   it('keeps a due plan retryable when the user has no registered device', async () => {
     deliveryResult = { queued: 0, outcome: 'no_devices' } as never;
     responses.push(
+      { data: liveLoop(), error: null },
       { data: liveLoop(), error: null },
       { data: null, error: null },
     );
@@ -194,5 +196,35 @@ describe('ReminderScheduler', () => {
       kind: 'resolved',
       payload: { resolution: 'expired', lastEvidenceAt: '2026-09-01T12:00:00.000Z' },
     });
+  });
+
+  it('drops a queued reminder after its loop revision changes', async () => {
+    responses.push({ data: liveLoop({ reminder_revision: 4 }), error: null });
+    const result = await (scheduler as any).processReminderJob({ data: {
+      loopId: 'loop-1',
+      revision: 3,
+      reminderCount: 0,
+      userId: 'user-1',
+      title: 'Send the deck',
+      content: 'Send the deck',
+      reason: 'deadline_soon',
+    } });
+    expect(result).toEqual({ sent: false });
+    expect(deliveryCalls).toHaveLength(0);
+  });
+
+  it('drops a queued reminder after the loop is completed', async () => {
+    responses.push({ data: liveLoop({ status: 'done' }), error: null });
+    const result = await (scheduler as any).processReminderJob({ data: {
+      loopId: 'loop-1',
+      revision: 3,
+      reminderCount: 0,
+      userId: 'user-1',
+      title: 'Send the deck',
+      content: 'Send the deck',
+      reason: 'deadline_soon',
+    } });
+    expect(result).toEqual({ sent: false });
+    expect(deliveryCalls).toHaveLength(0);
   });
 });

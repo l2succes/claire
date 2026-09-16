@@ -66,6 +66,7 @@ const envSchema = z.object({
   // Monitoring
   SENTRY_DSN: z.string().url().optional(),
   OPS_ALERT_USER_IDS: z.string().optional(),
+  OPS_DASHBOARD_URL: z.string().url().default('https://useclaire.co/ops'),
   OPS_MONITOR_INTERVAL_SECONDS: z.string().default('60').transform(Number),
   OPS_MESSAGE_FRESHNESS_MINUTES: z.string().default('120').transform(Number),
 
@@ -86,6 +87,11 @@ const envSchema = z.object({
 
   // Mock bridge mode — replaces all adapters with scripted fixtures (no Docker required)
   MOCK_BRIDGE: z.string().default('false').transform((val) => val === 'true'),
+
+  // Demo accounts — synthetic conversations and in-character replies for
+  // recorded product demos. Half the gate only: an account must ALSO carry
+  // users.is_demo, so enabling this cannot affect a real account.
+  DEMO_MODE_ENABLED: z.string().default('false').transform((val) => val === 'true'),
 
   // Matrix Configuration (required when PLATFORM_MODE=matrix)
   MATRIX_HOMESERVER_URL: z.string().url().optional(),
@@ -161,6 +167,7 @@ export const serverConfig = {
     alertUserIds: config.OPS_ALERT_USER_IDS
       ? config.OPS_ALERT_USER_IDS.split(',').map((id) => id.trim()).filter(Boolean)
       : [],
+    dashboardUrl: config.OPS_DASHBOARD_URL,
     monitorIntervalSeconds: Math.max(30, config.OPS_MONITOR_INTERVAL_SECONDS),
     messageFreshnessMinutes: Math.max(15, config.OPS_MESSAGE_FRESHNESS_MINUTES),
   },
@@ -227,4 +234,8 @@ export const matrixConfig = {
 
 export const mockBridgeConfig = {
   enabled: config.MOCK_BRIDGE,
+};
+
+export const demoConfig = {
+  enabled: config.DEMO_MODE_ENABLED,
 };
