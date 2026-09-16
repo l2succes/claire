@@ -19,11 +19,14 @@ describe('classifyBridgeSessions', () => {
   it('warns when a platform session needs attention even if another is connected', () => {
     expect(classifyBridgeSessions(1, 2)).toEqual({
       status: 'warning',
-      summary: '1 durable bridge session(s) connected; 2 require attention',
+      summary: '1 active bridge connected; 2 connections need a decision',
     });
   });
 
   it('is critical when no sessions are connected', () => {
-    expect(classifyBridgeSessions(0, 1).status).toBe('critical');
+    expect(classifyBridgeSessions(0, 1)).toEqual({
+      status: 'critical',
+      summary: 'No active bridge is connected; 1 connection needs a decision',
+    });
   });
 });

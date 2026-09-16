@@ -2,7 +2,15 @@ import { supabase } from './supabase';
 import { logger } from '../utils/logger';
 import { pseudonymousOperationsRef } from './operations-privacy';
 
-type OperationsAuditAction = 'snapshot_viewed' | 'incidents_viewed' | 'admins_viewed' | 'admin_granted' | 'admin_revoked' | 'telemetry_viewed' | 'bridges_viewed';
+type OperationsAuditAction =
+  | 'snapshot_viewed'
+  | 'incidents_viewed'
+  | 'admins_viewed'
+  | 'admin_granted'
+  | 'admin_revoked'
+  | 'telemetry_viewed'
+  | 'bridges_viewed'
+  | 'bridge_session_retired';
 
 export async function recordOperationsAudit(input: {
   actorUserId: string;

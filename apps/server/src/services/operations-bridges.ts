@@ -1,8 +1,11 @@
 import { platformCatalog, type PlatformDefinition } from '../platform-catalog';
 import { pseudonymousOperationsRef } from './operations-privacy';
 import { type DbRow, supabase } from './supabase';
-
-type BridgeSessionState = 'connected' | 'setup' | 'attention';
+import {
+  classifyOperationsBridgeSessions,
+  type OperationsBridgeLifecycleState,
+  type OperationsBridgeSessionRow,
+} from './operations-bridge-sessions';
 
 export type OperationsBridgeActivityEvent = {
   id: string;
@@ -27,9 +30,13 @@ type OperationsBridgeActivity = {
 export type OperationsBridgeSession = {
   accountRef: string;
   platform: string;
-  state: BridgeSessionState;
+  state: OperationsBridgeLifecycleState;
+  reason: string;
   recovery: string;
-  lastActivityAt: string | null;
+  lastConnectedAt: string | null;
+  statusChangedAt: string | null;
+  isCurrent: boolean;
+  canRetire: boolean;
 };
 
 export type OperationsBridgePlatform = Pick<
@@ -40,18 +47,25 @@ export type OperationsBridgePlatform = Pick<
   connected: number;
   setup: number;
   attention: number;
-  lastActivityAt: string | null;
+  ignored: number;
+  latestSessionUpdateAt: string | null;
   activity: OperationsBridgeActivity;
 };
 
-function stateFor(status: string): BridgeSessionState {
-  return status === 'connected' ? 'connected' : status === 'disconnected' || status === 'failed' ? 'attention' : 'setup';
+function recoveryFor(state: OperationsBridgeLifecycleState): string {
+  if (state === 'connected') return 'Bridge is connected and eligible to receive events.';
+  if (state === 'attention') return 'Reconnect in Claire → Settings → Connections, or retire it here if this account is no longer expected.';
+  if (state === 'superseded') return 'No action needed. A newer connection for this platform replaced this historical session.';
+  if (state === 'retired') return 'No action needed. An Operations owner retired this historical session from monitoring.';
+  return 'Connection setup is still in progress; complete the platform authorization flow.';
 }
 
-function recoveryFor(state: BridgeSessionState): string {
-  if (state === 'connected') return 'Bridge is connected and eligible to receive events.';
-  if (state === 'attention') return 'Reconnect or re-authorize this account from its owner’s Claire connection settings.';
-  return 'Connection setup is still in progress; complete the platform authorization flow.';
+function reasonFor(state: OperationsBridgeLifecycleState): string {
+  if (state === 'connected') return 'This is the current connection for the platform.';
+  if (state === 'attention') return 'This is the current expected connection, but it is disconnected or failed.';
+  if (state === 'superseded') return 'A newer connection exists, so this row does not affect service health.';
+  if (state === 'retired') return 'This row was intentionally removed from service-health monitoring.';
+  return 'This is the current connection attempt and setup has not completed.';
 }
 
 function latest(values: Array<string | null>): string | null {
@@ -80,7 +94,7 @@ export async function getOperationsBridgeSnapshot(): Promise<{
 }> {
   const activityFrom = new Date(Date.now() - 24 * 60 * 60_000).toISOString();
   const [{ data, error }, { data: activityData, error: activityError }] = await Promise.all([
-    supabase.from('platform_sessions').select('session_id,user_id,platform,status,last_connected_at,updated_at').limit(1000),
+    supabase.from('platform_sessions').select('session_id,user_id,platform,status,created_at,last_connected_at,updated_at,operations_retired_at').limit(1000),
     supabase.from('operations_telemetry_events')
       .select('id,platform,direction,stage,outcome,duration_ms,retry_count,error_class,occurred_at')
       .in('stage', ['bridge', 'matrix'])
@@ -90,16 +104,29 @@ export async function getOperationsBridgeSnapshot(): Promise<{
   ]);
   if (error || activityError) throw error || activityError;
 
-  const sessions: OperationsBridgeSession[] = (data || []).map((row: DbRow): OperationsBridgeSession => {
-    const state = stateFor(String(row.status || 'initializing'));
+  const sessionRows: OperationsBridgeSessionRow[] = (data || []).map((row: DbRow) => ({
+    session_id: String(row.session_id),
+    user_id: String(row.user_id),
+    platform: String(row.platform),
+    status: typeof row.status === 'string' ? row.status : null,
+    created_at: typeof row.created_at === 'string' ? row.created_at : null,
+    updated_at: typeof row.updated_at === 'string' ? row.updated_at : null,
+    last_connected_at: typeof row.last_connected_at === 'string' ? row.last_connected_at : null,
+    operations_retired_at: typeof row.operations_retired_at === 'string' ? row.operations_retired_at : null,
+  }));
+
+  const sessions: OperationsBridgeSession[] = classifyOperationsBridgeSessions(sessionRows).map((row): OperationsBridgeSession => {
+    const state = row.lifecycleState;
     return {
-      accountRef: pseudonymousOperationsRef(`${String(row.user_id)}:${String(row.session_id)}`),
-      platform: String(row.platform),
+      accountRef: pseudonymousOperationsRef(`${row.user_id}:${row.session_id}`),
+      platform: row.platform,
       state,
+      reason: reasonFor(state),
       recovery: recoveryFor(state),
-      lastActivityAt: typeof row.last_connected_at === 'string'
-        ? row.last_connected_at
-        : typeof row.updated_at === 'string' ? row.updated_at : null,
+      lastConnectedAt: row.last_connected_at,
+      statusChangedAt: row.updated_at,
+      isCurrent: row.isCurrent,
+      canRetire: state === 'attention',
     };
   });
 
@@ -147,7 +174,8 @@ export async function getOperationsBridgeSnapshot(): Promise<{
       connected: platformSessions.filter((session) => session.state === 'connected').length,
       setup: platformSessions.filter((session) => session.state === 'setup').length,
       attention: platformSessions.filter((session) => session.state === 'attention').length,
-      lastActivityAt: latest(platformSessions.map((session) => session.lastActivityAt)),
+      ignored: platformSessions.filter((session) => session.state === 'superseded' || session.state === 'retired').length,
+      latestSessionUpdateAt: latest(platformSessions.map((session) => session.statusChangedAt)),
       activity,
     };
   });
