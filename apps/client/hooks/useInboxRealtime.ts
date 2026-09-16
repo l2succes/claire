@@ -1,3 +1,4 @@
+import { requestConnectionRecovery } from '../services/connection-recovery-signal';
 import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../services/supabase';
@@ -9,7 +10,7 @@ import {
   patchInboxRealtimeMessage,
   type InboxRealtimeRow,
 } from './useInboxMessages';
-import { patchChatTimelineMessage } from './useChatTimeline';
+import { patchChatTimelineMessage, removeChatTimelineMessage } from './useChatTimeline';
 import { Platform } from '../types/platform';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001';
@@ -80,8 +81,14 @@ export function useInboxRealtime(userId?: string) {
       patchChatTimelineMessage(queryClient, userId, row as Record<string, unknown>);
     });
     channel.on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages', filter: `user_id=eq.${userId}` }, ({ new: row }) => {
-      patchInboxRealtimeMessage(queryClient, userId, row as InboxRealtimeRow);
+      patchInboxRealtimeMessage(queryClient, userId, row as InboxRealtimeRow, { event: 'update' });
       patchChatTimelineMessage(queryClient, userId, row as Record<string, unknown>);
+    });
+    channel.on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'messages', filter: `user_id=eq.${userId}` }, ({ old: row }) => {
+      removeChatTimelineMessage(queryClient, userId, row as Record<string, unknown>);
+      // If the deleted row was the latest preview, the preceding message has
+      // to be selected from the server; the delete payload cannot supply it.
+      void queryClient.invalidateQueries({ queryKey: inboxQueryPrefix(userId) });
     });
     channel.on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'chats', filter: `user_id=eq.${userId}` }, ({ new: row }) => {
       const chat = row as { id: string; platform?: Platform; unread_count?: number; is_pinned?: boolean; is_muted?: boolean };
@@ -94,6 +101,7 @@ export function useInboxRealtime(userId?: string) {
     channel.subscribe((status, error) => {
       if (cancelled) return;
       console.info('[Inbox] realtime:status', { status, hasError: !!error });
+      requestConnectionRecovery();
       if (status === 'SUBSCRIBED') {
         void reportClientState('connected');
         startFallback(60_000);

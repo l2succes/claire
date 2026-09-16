@@ -10,7 +10,7 @@ const queryCalls: Array<{ table: string; method: string; args: any[] }> = [];
 
 function chainFor(table: string): any {
   const chain: any = {};
-  for (const method of ['select', 'eq', 'in', 'order', 'limit', 'lte', 'single', 'maybeSingle', 'update', 'insert']) {
+  for (const method of ['select', 'eq', 'in', 'not', 'order', 'limit', 'lte', 'single', 'maybeSingle', 'update', 'insert']) {
     chain[method] = (...args: any[]) => {
       queryCalls.push({ table, method, args });
       return chain;
@@ -36,6 +36,7 @@ mock.module('../../src/services/notification-delivery', () => ({
 }));
 
 import { ReminderScheduler, type ReminderQueue } from '../../src/services/reminder-scheduler';
+import { expireStaleProposals, staleProposalCutoff } from '../../src/services/loops/loop-hygiene';
 
 const addCalls: Array<{ data: any; opts: any }> = [];
 let closeCalled = false;
@@ -89,8 +90,8 @@ describe('ReminderScheduler', () => {
   });
 
   it('starts once and closes its queue', async () => {
-    // Initial refresh and due-query.
-    responses.push({ data: [], error: null }, { data: [], error: null });
+    // Initial stale-proposal, refresh, and due queries.
+    responses.push({ data: [], error: null }, { data: [], error: null }, { data: [], error: null });
     scheduler.start();
     scheduler.start();
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -165,6 +166,36 @@ describe('ReminderScheduler', () => {
     const update = queryCalls.find((call) => call.method === 'update');
     expect(update?.args[0].next_reminder_at).toBeString();
     expect(update?.args[0].reminder_plan_state).toBeUndefined();
+  });
+
+  it('expires only detector proposals after seven quiet days', async () => {
+    const now = new Date('2026-09-15T12:00:00.000Z');
+    responses.push(
+      { data: [{
+        id: 'loop-stale', user_id: 'user-1', title: 'Maybe get coffee', content: 'Maybe get coffee',
+        last_evidence_at: '2026-09-01T12:00:00.000Z',
+      }], error: null },
+      { data: { id: 'loop-stale' }, error: null },
+      { data: null, error: null },
+    );
+
+    expect(staleProposalCutoff(now)).toBe('2026-09-08T12:00:00.000Z');
+    expect(await expireStaleProposals(now)).toBe(1);
+
+    const update = queryCalls.find((call) => call.table === 'loops' && call.method === 'update');
+    expect(update?.args[0]).toMatchObject({
+      status: 'dropped',
+      thread_state: 'resolved',
+      resolution: 'expired',
+      resolved_at: now.toISOString(),
+    });
+    const event = queryCalls.find((call) => call.table === 'loop_events' && call.method === 'insert');
+    expect(event?.args[0]).toMatchObject({
+      loop_id: 'loop-stale',
+      actor: 'system',
+      kind: 'resolved',
+      payload: { resolution: 'expired', lastEvidenceAt: '2026-09-01T12:00:00.000Z' },
+    });
   });
 
   it('drops a queued reminder after its loop revision changes', async () => {

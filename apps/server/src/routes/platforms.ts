@@ -23,6 +23,7 @@ import { supabase, type DbRow } from '../services/supabase';
 import { operationsTelemetry } from '../services/operations-telemetry';
 import { ClientFacingError, respondWithError } from '../utils/api-error';
 import { queueWhatsAppContactIdentitySync } from '../services/whatsapp-contact-backfill';
+import { outgoingTransactionId } from '../services/outgoing-request-id';
 import { transcodeVoiceToOggOpus } from '../services/audio-transcoder';
 
 // Railway services cannot reach each other through localhost. Railway does not
@@ -894,6 +895,45 @@ router.get('/:platform/auth/:sessionId', async (req: Request, res: Response) => 
   }
 });
 
+/** Resume an existing transport only. Unlike /reconnect this never starts login. */
+router.post('/:platform/recover', async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    const { platform } = req.params;
+    const { sessionId } = req.body;
+    if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });
+    if (typeof sessionId !== 'string') return res.status(400).json({ success: false, error: 'Session ID required' });
+    const adapter = platformManager.getAdapter(platform as Platform);
+    if (!(adapter instanceof MatrixBridgeAdapter)) return res.status(409).json({ success: false, error: 'Connection needs attention in Connections.' });
+    const session = await adapter.getSession(sessionId);
+    if (!session || session.userId !== userId || session.platform !== platform) {
+      return res.status(404).json({ success: false, error: 'Session not found' });
+    }
+    if (!session.lastConnectedAt) return res.status(409).json({ success: false, error: 'Connection needs attention in Connections.' });
+    adapter.recoverTransport();
+    // mautrix owns remote-network retries. Reconcile Claire's status against
+    // that exact existing login, without creating or rotating credentials.
+    const bridge = platform === Platform.WHATSAPP ? whatsappBridgeClient
+      : platform === Platform.INSTAGRAM ? instagramBridgeClient : undefined;
+    if (bridge && session.platformUserId) {
+      const state = await bridge.getConnectionState(session.platformUserId);
+      if (state === 'CONNECTED') await adapter.markSessionConnected(sessionId, session.platformUserId);
+      else if (!state || state === 'BAD_CREDENTIALS' || state === 'LOGGED_OUT') {
+        return res.status(409).json({ success: false, error: 'Connection needs attention in Connections.' });
+      }
+    }
+    const updated = await adapter.getSession(sessionId);
+    return res.json({ success: true, session: {
+      id: updated!.id, platform: updated!.platform, status: updated!.status,
+      authMethod: updated!.authMethod, platformUserId: updated!.platformUserId,
+      platformUsername: updated!.platformUsername, phoneNumber: updated!.phoneNumber,
+      createdAt: updated!.createdAt, lastConnectedAt: updated!.lastConnectedAt,
+    } });
+  } catch (error) {
+    return respondWithError(res, error, { logMessage: 'Error recovering platform connection', fallback: 'Connection recovery will retry.' });
+  }
+});
+
 /**
  * POST /platforms/:platform/reconnect
  * Reconnect an existing session
@@ -1034,7 +1074,7 @@ router.get('/:platform/chats/:sessionId', async (req: Request, res: Response) =>
  * hard, auditable size limit before it reaches a bridge.
  */
 router.post(
-  '/:platform/reactions',
+  ['/:platform/reactions', '/:platform/outbox/reactions'],
   async (req: Request, res: Response) => {
     try {
       const { platform } = req.params;
@@ -1060,6 +1100,10 @@ router.post(
         });
       }
 
+      if (req.path.includes('/outbox/') && !req.body.clientRequestId) {
+        throw new ClientFacingError('Outgoing request ID required');
+      }
+
       const adapter = platformManager.getAdapter(platform as Platform);
       if (!adapter) return res.status(404).json({ success: false, error: 'Platform not available' });
       if (!adapter.capabilities.canReactToMessages || !adapter.sendReaction) {
@@ -1067,6 +1111,10 @@ router.post(
           success: false,
           error: 'Platform does not support message reactions',
         });
+      }
+
+      if (req.body.clientRequestId && !(adapter instanceof MatrixBridgeAdapter)) {
+        return res.status(409).json({ success: false, error: 'Queued reactions are unavailable for this connection.' });
       }
 
       const session = await adapter.getSession(sessionId);
@@ -1112,7 +1160,8 @@ router.post(
       if (existing) return res.json({ success: true, reaction: existing, alreadyReacted: true });
 
       const startedAt = Date.now();
-      const sent = await adapter.sendReaction(sessionId, chatId, messageId, emoji);
+      const transactionId = outgoingTransactionId(userId, platform, chatId, 'reaction', req.body.clientRequestId);
+      const sent = await adapter.sendReaction(sessionId, chatId, messageId, emoji, transactionId);
       // Upsert, not insert. The duplicate check above runs before the bridge
       // call, so the whole provider round trip sits inside the window — and the
       // bridge echoes the reaction back through the normal ingest path, which
@@ -1267,10 +1316,10 @@ router.post(
  * POST /platforms/:platform/send
  * Send a text message via a platform
  */
-router.post('/:platform/send', async (req: Request, res: Response) => {
+router.post(['/:platform/send', '/:platform/outbox/send'], async (req: Request, res: Response) => {
   try {
     const { platform } = req.params;
-    const { sessionId, chatId, content, replyToMessageId } = req.body;
+    const { sessionId, chatId, content, replyToMessageId, clientRequestId } = req.body;
     const userId = req.user?.id;
 
     if (!userId) {
@@ -1287,12 +1336,20 @@ router.post('/:platform/send', async (req: Request, res: Response) => {
       });
     }
 
+    if (req.path.includes('/outbox/') && !clientRequestId) {
+      throw new ClientFacingError('Outgoing request ID required');
+    }
+
     const adapter = platformManager.getAdapter(platform as Platform);
     if (!adapter) {
       return res.status(404).json({
         success: false,
         error: 'Platform not available',
       });
+    }
+
+    if (clientRequestId && !(adapter instanceof MatrixBridgeAdapter)) {
+      return res.status(409).json({ success: false, error: 'Queued sending is unavailable for this connection.' });
     }
 
     // Verify session belongs to user
@@ -1355,11 +1412,14 @@ router.post('/:platform/send', async (req: Request, res: Response) => {
       }
     }
 
+    const transactionId = outgoingTransactionId(userId, platform, chatId, 'text', clientRequestId);
     const startedAt = Date.now();
     try {
     const message = await adapter.sendMessage(sessionId, chatId, {
       content,
       replyToMessageId,
+      transactionId,
+      clientRequestId,
     });
 
     void operationsTelemetry.record({

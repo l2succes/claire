@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { router } from 'expo-router';
 
 let refreshInFlight: Promise<string | null> | null = null;
 
@@ -21,6 +22,11 @@ function withBearerToken(init: RequestInit, token: string | null): RequestInit {
   return { ...init, headers };
 }
 
+function openPaywallOnExhaustedCredits(response: Response): void {
+  if (response.status !== 402) return;
+  router.push('/paywall?source=credits' as never);
+}
+
 /**
  * Fetch with the current Supabase session and retry one unauthorized response
  * after refreshing it. This keeps a token that expired while the app was in
@@ -29,11 +35,15 @@ function withBearerToken(init: RequestInit, token: string | null): RequestInit {
 export async function authenticatedFetch(input: string, init: RequestInit = {}): Promise<Response> {
   const { data: { session } } = await supabase.auth.getSession();
   let response = await fetch(input, withBearerToken(init, session?.access_token || null));
-  if (response.status !== 401) return response;
+  if (response.status !== 401) {
+    openPaywallOnExhaustedCredits(response);
+    return response;
+  }
 
   const refreshedToken = await refreshAccessToken();
   if (!refreshedToken) return response;
   response = await fetch(input, withBearerToken(init, refreshedToken));
+  openPaywallOnExhaustedCredits(response);
   return response;
 }
 
@@ -42,9 +52,13 @@ export async function authenticatedExpoFetch(input: string, init: RequestInit = 
   const { fetch: expoFetch } = await import('expo/fetch');
   const { data: { session } } = await supabase.auth.getSession();
   let response = await expoFetch(input, withBearerToken(init, session?.access_token || null)) as unknown as Response;
-  if (response.status !== 401) return response;
+  if (response.status !== 401) {
+    openPaywallOnExhaustedCredits(response);
+    return response;
+  }
   const refreshedToken = await refreshAccessToken();
   if (!refreshedToken) return response;
   response = await expoFetch(input, withBearerToken(init, refreshedToken)) as unknown as Response;
+  openPaywallOnExhaustedCredits(response);
   return response;
 }

@@ -109,6 +109,12 @@ export class BridgeHttpClient {
     return json as T;
   }
 
+  async getConnectionState(loginId: string): Promise<string | undefined> {
+    const response = await this.request<{ logins?: Array<{ id: string; state_event?: string; state?: { state_event?: string } }> }>('GET', '/v3/whoami');
+    const login = response.logins?.find((item) => item.id === loginId);
+    return login?.state?.state_event || login?.state_event;
+  }
+
   async getLoginFlows(): Promise<LoginFlow[]> {
     const data = await this.request<{ flows: LoginFlow[] }>('GET', '/v3/login/flows');
     return data.flows;

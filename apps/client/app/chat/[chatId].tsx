@@ -16,7 +16,6 @@ import {
   Video,
   FileText,
   AlertCircle,
-  Link2,
   MoreHorizontal,
   Sparkles,
   X,
@@ -43,6 +42,7 @@ import { ChatSkeleton } from '../../components/claire/skeleton';
 import { useConversationSettingsStore } from '../../stores/conversationSettingsStore';
 import { GroupChatSummary } from '../../components/GroupChatSummary';
 import { GroupAiBanner } from '../../features/chat/group-ai-banner';
+import { shouldShowQuickContext } from '../../features/chat/quick-context';
 import type { GroupCategory } from '../../types/conversationSettings';
 import { Platform } from '../../types/platform';
 import { PlatformName } from '../../components/PlatformIcon';
@@ -89,6 +89,10 @@ import {
   type ReactionRow,
 } from '@claire/chat-core';
 import { VoiceMessageBubble } from '../../features/chat/voice-message-bubble';
+import { enqueueChatEvent, newOutgoingMessage, useChatOutbox, getChatOutbox, removeFailedChatEvent } from '../../services/chat-outbox';
+import { requestConnectionRecovery } from '../../services/connection-recovery-signal';
+import { pendingReactions } from '../../features/chat/pending-reactions';
+import { ChatDeliveryStatus } from '../../features/chat/chat-delivery-status';
 import { StandaloneEmojiMessage } from '../../features/chat/standalone-emoji-message';
 import { MessageTextWithLinks } from '../../features/chat/message-link-card';
 
@@ -394,6 +398,11 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
   const accessToken = useAuthStore((state) => state.token);
   const connectedSessions = usePlatformStore((state) => state.connectedSessions);
   const sessionSyncStatus = usePlatformStore((state) => state.sessionSyncStatus);
+  const outboxEntries = useChatOutbox((state) => state.entries);
+  const attentionPlatforms = useChatOutbox((state) => state.attentionPlatforms);
+  const chatOutbox = outboxEntries.filter((entry) => entry.userId === user?.id && entry.chatId === chatId);
+  const failedOutboxEvent = chatOutbox.find((entry) => entry.error);
+  const outboxError = failedOutboxEvent?.error;
   const availablePlatforms = usePlatformStore((state) => state.availablePlatforms);
   // Selectors, not a bare destructure: subscribing to the whole store re-rendered
   // this screen on every settings mutation for every conversation. Only this
@@ -403,19 +412,20 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
   );
   const fetchConvSettings = useConversationSettingsStore((state) => state.fetchSettings);
   const dismissCard = useConversationSettingsStore((state) => state.dismissCard);
+  const dismissClarificationCard = useConversationSettingsStore((state) => state.dismissClarificationCard);
   const plusDefault = useChatPreferencesStore((state) => state.plusDefault);
   const hydrateChatPreferences = useChatPreferencesStore((state) => state.hydrate);
   const insets = useSafeAreaInsets();
   const smartCards = convChatSettings?.smartCards ?? [];
   const contactProfile = convChatSettings?.profile ?? null;
-  const fetchConnectedSessions = usePlatformStore((state) => state.fetchConnectedSessions);
+  const clarificationDismissed = convChatSettings?.clarificationDismissed ?? false;
 
   // The transcript lives in the query cache, not in this component. That is what
   // lets a second visit paint on the first frame and lets the app-wide realtime
   // channel keep this conversation current while it is closed.
   const timeline = useChatTimeline(user?.id, chatId, highlightMessageId);
   const messages = timeline.data?.messages ?? EMPTY_TIMELINE.messages;
-  const reactionsByMessage = timeline.data?.reactions ?? EMPTY_TIMELINE.reactions;
+  const reactionsByMessage = pendingReactions(timeline.data ?? EMPTY_TIMELINE, chatOutbox);
   // Not bare isPending: a disabled query stays pending forever, which would turn
   // "no chatId" into a permanent skeleton instead of the empty state.
   const loading = !!chatId && !!user?.id && timeline.isPending;
@@ -439,7 +449,6 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
   const [activeVoiceMessageId, setActiveVoiceMessageId] = useState<string | null>(null);
   const [suggestionRefreshKey, setSuggestionRefreshKey] = useState(0);
   const [showReplyOptions, setShowReplyOptions] = useState(false);
-  const [connectionRefreshing, setConnectionRefreshing] = useState(false);
   const [groupBannerDismissed, setGroupBannerDismissed] = useState(false);
   const [chatMetadata, setChatMetadata] = useState<{
     name: string | null;
@@ -505,8 +514,9 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
     (session) => session.platform === (resolvedPlatform as Platform) && session.status === 'connected'
   );
   const isConnected = !!activeSession;
-  const connectionIsAuthoritativelyDisconnected =
-    !isConnected && sessionSyncStatus === 'ready' && !connectionRefreshing;
+  const connectionNeedsAttention = !!resolvedPlatform && (attentionPlatforms.includes(resolvedPlatform as Platform)
+    || (!isConnected && sessionSyncStatus === 'ready' && !connectedSessions.some((session) => session.platform === resolvedPlatform && session.lastConnectedAt)));
+
   const contextCard = smartCards[0];
   const quickContext =
     contextCard?.subtitle ||
@@ -521,11 +531,14 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
   // isLoading, not isPending: a disabled query stays pending forever, which
   // would suppress quick context permanently. Waiting for the loop to resolve
   // avoids showing this card and then yanking it away a beat later.
-  const showQuickContext =
-    Boolean(quickContext || needsRelationshipContext) &&
-    !showReplyOptions &&
-    !chatLoop.isLoading &&
-    !chatLoop.data;
+  const showQuickContext = shouldShowQuickContext({
+    hasContextCard: Boolean(contextCard),
+    needsRelationshipContext,
+    clarificationDismissed,
+    replyOptionsOpen: showReplyOptions,
+    loopLoading: chatLoop.isLoading,
+    hasOpenLoop: Boolean(chatLoop.data),
+  });
 
   // Effective scope, mirroring the server rule: NULL inherits the default,
   // which is off for a group and on for a 1:1.
@@ -592,14 +605,9 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
   }, [chatId]);
 
   const refreshConnection = useCallback(async () => {
-    setConnectionRefreshing(true);
-    try {
-      await fetchConnectedSessions();
-      await fetchChatInfo();
-    } finally {
-      setConnectionRefreshing(false);
-    }
-  }, [fetchChatInfo, fetchConnectedSessions]);
+    requestConnectionRecovery();
+    await fetchChatInfo();
+  }, [fetchChatInfo]);
 
   const markConversationRead = useCallback(async () => {
     if (!chatId) return;
@@ -872,6 +880,25 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
       return;
     }
 
+    if (!(resolvedPlatform === Platform.IMESSAGE && host.name === 'electron')) {
+      try {
+        if (!user?.id || !chatId) throw new Error('Sign in to send a message.');
+        const message = newOutgoingMessage(text);
+        message.reply_to_message_id = replyTarget?.id ?? null;
+        message.reply_to_platform_message_id = replyTarget?.platform_message_id ?? null;
+        await enqueueChatEvent({ userId: user.id, chatId, platform: resolvedPlatform as Platform,
+          platformChatId: platformChatIdRef.current || undefined, kind: 'text', message,
+          target: replyTarget || undefined });
+        setInputText((current) => current.trim() === text ? '' : current);
+        setReplyTarget(null);
+        setSendError(null);
+        requestAnimationFrame(() => listRef.current?.scrollToOffset({ offset: 0, animated: true }));
+      } catch (error) {
+        setSendError('Could not save your message. Your draft is still here.');
+      } finally { textSendInFlightRef.current = false; }
+      return;
+    }
+
     let platformChatId = platformChatIdRef.current;
     if (!platformChatId) {
       try {
@@ -1081,103 +1108,24 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
     }
   }, [chatId, connectedSessions, fetchChatInfo, resolvedPlatform, replyTarget, user?.id]);
 
-  const handleReact = useCallback(
-    async (emoji: string) => {
-      const target = messageActionTarget;
-      const targetPlatformId = target?.platform_message_id;
-      const session = connectedSessions.find(
-        (candidate) =>
-          candidate.platform === (resolvedPlatform as Platform) && candidate.status === 'connected'
-      );
-      if (!target || !targetPlatformId || !resolvedPlatform || !session) {
-        setSendError('This message is still syncing. Try reacting in a moment.');
-        return;
-      }
-      if (!platformCapabilities?.canSendReactions) {
-        setSendError(`${resolvedPlatform} does not support message reactions.`);
-        return;
-      }
-
-      let platformChatId = platformChatIdRef.current;
-      if (!platformChatId) {
-        try {
-          await fetchChatInfo();
-          platformChatId = platformChatIdRef.current;
-        } catch (error) {
-          console.error('Could not resolve chat before reacting:', error);
-          setSendError('Chat configuration error - please reopen this chat');
-          return;
-        }
-      }
-      if (!platformChatId) {
-        setSendError('Chat configuration error - please reopen this chat');
-        return;
-      }
-
-      const reactionKey = `${target.id}:${emoji}`;
-      if (reactionInFlightRef.current.has(reactionKey)) return;
-      if (
-        (reactionsByMessage[target.id] || []).some(
-          (reaction) => reaction.from_me && reaction.emoji === emoji
-        )
-      ) {
-        setMessageActionTarget(null);
-        return;
-      }
-
-      reactionInFlightRef.current.add(reactionKey);
-      const optimisticId = `optimistic-reaction-${Date.now()}`;
-      const optimistic: ReactionRow = {
-        id: optimisticId,
-        message_id: target.id,
-        emoji,
-        from_me: true,
-        reactor_id: 'self',
-        reacted_at: new Date().toISOString(),
-      };
-      patchTimeline(
-        (previous) => ({
-          ...previous,
-          reactions: upsertReactionRow(previous.reactions, optimistic),
-        }),
-        { createIfMissing: true }
-      );
+  const handleReact = useCallback(async (emoji: string) => {
+    const target = messageActionTarget;
+    if (!target || !resolvedPlatform || !user?.id || !chatId) return;
+    if (!platformCapabilities?.canSendReactions) return;
+    const key = `${target.id}:${emoji}`;
+    if (reactionInFlightRef.current.has(key) || (reactionsByMessage[target.id] || [])
+      .some((reaction) => reaction.from_me && reaction.emoji === emoji)) return;
+    reactionInFlightRef.current.add(key);
+    try {
+      await enqueueChatEvent({ userId: user.id, chatId, platform: resolvedPlatform as Platform,
+        platformChatId: platformChatIdRef.current || undefined, kind: 'reaction',
+        message: newOutgoingMessage(''), target, emoji });
+      setSendError(null);
       setMessageActionTarget(null);
-
-      try {
-        const response = await platformsApi.reactToMessage(
-          resolvedPlatform as Platform,
-          session.id,
-          platformChatId,
-          targetPlatformId,
-          emoji
-        );
-        patchTimeline(
-          (previous) => ({
-            ...previous,
-            reactions: upsertReactionRow(previous.reactions, response.reaction as ReactionRow),
-          }),
-          { createIfMissing: true }
-        );
-      } catch (error) {
-        patchTimeline((previous) => ({
-          ...previous,
-          reactions: removeReactionRow(previous.reactions, { id: optimisticId }),
-        }));
-        setSendError(error instanceof Error ? error.message : 'Failed to add reaction. Try again.');
-      } finally {
-        reactionInFlightRef.current.delete(reactionKey);
-      }
-    },
-    [
-      connectedSessions,
-      fetchChatInfo,
-      messageActionTarget,
-      resolvedPlatform,
-      platformCapabilities?.canSendReactions,
-      reactionsByMessage,
-    ]
-  );
+    } catch (error) {
+      setSendError('Could not save your reaction. Please try again.');
+    } finally { reactionInFlightRef.current.delete(key); }
+  }, [messageActionTarget, resolvedPlatform, user?.id, chatId, platformCapabilities?.canSendReactions, reactionsByMessage]);
 
   const renderMessageBody = (item: ChatMessage) => {
     const textColor = colors.ink;
@@ -1465,6 +1413,7 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
                 messageId={item.id}
                 content={plainText.text ?? item.content}
                 timestamp={item.timestamp}
+                editedAt={item.edited_at}
                 fromMe={isMe}
               />
             ) : (
@@ -1479,6 +1428,7 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
                     textAlign: isMe ? 'right' : 'left',
                   }}
                 >
+                  {item.edited_at ? 'Edited · ' : ''}
                   {new Date(item.timestamp).toLocaleTimeString([], {
                     hour: '2-digit',
                     minute: '2-digit',
@@ -1631,11 +1581,14 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
               {quickContext || 'Add relationship context for more personal replies.'}
             </Text>
           </View>
-          {contextCard ? (
+          {contextCard || needsRelationshipContext ? (
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Dismiss quick context"
-              onPress={() => void dismissCard(chatId!, contextCard.id)}
+              onPress={() => {
+                if (contextCard) void dismissCard(chatId!, contextCard.id);
+                dismissClarificationCard(chatId!);
+              }}
               hitSlop={8}
               style={{ width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }}
             >
@@ -1777,96 +1730,56 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
             backgroundColor: colors.cream,
           }}
         >
-          {connectionIsAuthoritativelyDisconnected && resolvedPlatform ? (
-            <Pressable
-              testID="chat-reconnect"
-              accessibilityRole="button"
-              onPress={() => router.push('/connections')}
-              style={{
-                minHeight: 48,
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: space[2],
-                borderRadius: 16,
-                borderWidth: 1,
-                borderColor: colors.warning,
-                backgroundColor: colors.paper,
-              }}
-            >
-              <Link2 size={18} color={colors.warning} />
-              <Text
-                maxFontSizeMultiplier={1}
-                style={{ ...mobileType.bodySmall, fontWeight: '700', color: colors.warning }}
-              >
-                {`Reconnect ${resolvedPlatform}`}
-              </Text>
-            </Pressable>
-          ) : !isConnected && resolvedPlatform ? (
-            <Pressable
-              testID="chat-check-connection"
-              accessibilityRole="button"
-              accessibilityLabel="Check connection again"
-              accessibilityState={{ disabled: connectionRefreshing || sessionSyncStatus === 'refreshing' }}
-              disabled={connectionRefreshing || sessionSyncStatus === 'refreshing'}
-              onPress={() => void refreshConnection()}
-              style={{
-                minHeight: 48,
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: space[2],
-                borderRadius: 16,
-                borderWidth: 1,
-                borderColor: colors.neutral[300],
-                backgroundColor: colors.paper,
-                opacity: connectionRefreshing || sessionSyncStatus === 'refreshing' ? 0.65 : 1,
-              }}
-            >
-              {connectionRefreshing || sessionSyncStatus === 'refreshing' ? (
-                <ActivityIndicator size="small" color={colors.neutral[600]} />
-              ) : (
-                <Link2 size={18} color={colors.neutral[600]} />
-              )}
-              <Text maxFontSizeMultiplier={1} style={{ ...mobileType.bodySmall, fontWeight: '700', color: colors.neutral[600] }}>
-                {connectionRefreshing || sessionSyncStatus === 'refreshing'
-                  ? 'Checking connection…'
-                  : 'Could not verify connection · Try again'}
-              </Text>
-            </Pressable>
-          ) : (
-            <ChatComposer
-              value={inputText}
-              onChangeText={setInputText}
-              onSend={() => void handleSend()}
-              sending={sending}
-              plusDefault={plusDefault}
-              replyOptionsVisible={showReplyOptions}
-              onToggleReplyOptions={
-                lastInbound ? () => setShowReplyOptions((open) => !open) : undefined
-              }
-              voiceEnabled={Boolean(platformCapabilities?.canSendVoice) && isConnected}
-              onSendVoice={handleSendVoice}
-              accessory={
-                replyTarget ? (
-                  <ComposerReplyTarget
-                    sender={replyTarget.from_me ? 'You' : replyTarget.contact_name || displayName}
-                    content={replyTarget.content}
-                    onCancel={() => setReplyTarget(null)}
-                  />
-                ) : undefined
-              }
-              blurOnSubmit={false}
-              inputRef={composerRef}
-            />
-          )}
+          <ChatDeliveryStatus
+            visible={!isConnected || sessionSyncStatus === 'unavailable' || chatOutbox.length > 0}
+            needsAttention={connectionNeedsAttention}
+            count={chatOutbox.length}
+            error={outboxError}
+            onPress={() => {
+              if (connectionNeedsAttention) router.push('/connections');
+              else if (outboxError && user?.id) void getChatOutbox(user.id).retry(chatId).then(requestConnectionRecovery).catch(() => setSendError('Could not retry. Please try again.'));
+              else requestConnectionRecovery();
+            }}
+            restoreLabel={failedOutboxEvent?.kind === 'text' ? 'Move back to draft' : 'Discard failed reaction'}
+            onRestore={failedOutboxEvent && user?.id ? () => {
+              void removeFailedChatEvent(user.id, failedOutboxEvent.id).then((event) => {
+                if (event?.kind === 'text') {
+                  setInputText((current) => current ? `${current}\n${event.message.content}` : event.message.content);
+                  setReplyTarget(event.target || null);
+                }
+              }).catch(() => setSendError('Could not update the queue. Please try again.'));
+            } : undefined}
+          />
+          <ChatComposer
+            value={inputText}
+            onChangeText={setInputText}
+            onSend={() => void handleSend()}
+            sending={sending}
+            plusDefault={plusDefault}
+            replyOptionsVisible={showReplyOptions}
+            onToggleReplyOptions={
+              lastInbound ? () => setShowReplyOptions((open) => !open) : undefined
+            }
+            voiceEnabled={Boolean(platformCapabilities?.canSendVoice) && isConnected}
+            onSendVoice={handleSendVoice}
+            accessory={
+              replyTarget ? (
+                <ComposerReplyTarget
+                  sender={replyTarget.from_me ? 'You' : replyTarget.contact_name || displayName}
+                  content={replyTarget.content}
+                  onCancel={() => setReplyTarget(null)}
+                />
+              ) : undefined
+            }
+            blurOnSubmit={false}
+            inputRef={composerRef}
+          />
         </View>
       </KeyboardAvoidingView>
       <MessageContextMenu
         visible={!!messageActionTarget}
         canReact={
-          Boolean(messageActionTarget?.platform_message_id) &&
-          Boolean(platformCapabilities?.canSendReactions)
+          Boolean(messageActionTarget) && Boolean(platformCapabilities?.canSendReactions)
         }
         canReply={Boolean(messageActionTarget?.platform_message_id) && Boolean(platformCapabilities?.canReplyToMessages)}
         content={messageActionTarget?.content || ''}

@@ -24,6 +24,13 @@ const envSchema = z.object({
   OPENAI_MODEL: z.string().default('gpt-4-turbo-preview'),
   OPENAI_EMBEDDING_MODEL: z.string().default('text-embedding-3-small'),
 
+  // RevenueCat (public SDK keys stay in the client; these are server-only)
+  REVENUECAT_SECRET_API_KEY: z.string().optional(),
+  REVENUECAT_PROJECT_ID: z.string().optional(),
+  REVENUECAT_WEBHOOK_AUTH_TOKEN: z.string().min(32).optional(),
+  REVENUECAT_WEBHOOK_SIGNING_SECRET: z.string().min(32).optional(),
+  BILLING_ENFORCED: z.string().default('false').transform((val) => val === 'true'),
+
   // AWS Bedrock (primary AI provider)
   AWS_ACCESS_KEY_ID: z.string().optional(),
   AWS_SECRET_ACCESS_KEY: z.string().optional(),

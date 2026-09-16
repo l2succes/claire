@@ -27,7 +27,7 @@ import { cacheTimeline, cachedTimeline, usesNativeMobileCache } from '../service
 /** Columns the transcript renders. Deliberately explicit — `select('*')` here
  *  drags joined chat and contact rows onto all 100 messages. */
 const TIMELINE_COLUMNS =
-  'id, chat_id, content, timestamp, from_me, contact_name, contact_phone, content_type, media_url, media_mime_type, metadata, platform_message_id, reply_to_message_id, reply_to_platform_message_id';
+  'id, chat_id, content, timestamp, edited_at, from_me, contact_name, contact_phone, content_type, media_url, media_mime_type, metadata, platform_message_id, reply_to_message_id, reply_to_platform_message_id';
 
 const TIMELINE_LIMIT = 100;
 
@@ -208,6 +208,26 @@ export function patchChatTimelineMessage(
   updateChatTimeline(queryClient, userId, chatId, (previous) =>
     mergeRealtimeMessage(previous, row as unknown as ChatMessage),
   );
+}
+
+/** Remove a deleted database row from every warm variant immediately. */
+export function removeChatTimelineMessage(
+  queryClient: QueryClient,
+  userId: string | undefined,
+  row: Record<string, unknown>,
+): void {
+  const chatId = typeof row.chat_id === 'string' ? row.chat_id : undefined;
+  const messageId = typeof row.id === 'string' ? row.id : undefined;
+  if (!chatId || !messageId) return;
+  updateChatTimeline(queryClient, userId, chatId, (previous) => {
+    if (!previous.messages.some((message) => message.id === messageId)) return previous;
+    const reactions = { ...previous.reactions };
+    delete reactions[messageId];
+    return {
+      messages: previous.messages.filter((message) => message.id !== messageId),
+      reactions,
+    };
+  });
 }
 
 /** How many conversations to hold warm ahead of the user opening one. Free on

@@ -27,7 +27,18 @@ export interface SchemaRequirement {
  * Only include columns that exist once ALL migrations are applied.
  */
 export const REQUIRED_SCHEMA: SchemaRequirement[] = [
-  { table: 'messages', columns: ['snoozed_until', 'is_group', 'contact_name', 'contact_phone', 'media_mime_type'] },
+  {
+    table: 'messages',
+    columns: [
+      'snoozed_until',
+      'is_group',
+      'contact_name',
+      'contact_phone',
+      'media_mime_type',
+      'edited_at',
+      'latest_edit_platform_message_id',
+    ],
+  },
   { table: 'chats', columns: ['whatsapp_chat_id', 'last_message_at', 'is_group', 'ai_enabled', 'member_count'] },
   { table: 'chat_classifications', columns: ['category', 'confidence', 'method'] },
   // A view, not a table, but it fails the same way: People reads it directly,
@@ -39,7 +50,7 @@ export const REQUIRED_SCHEMA: SchemaRequirement[] = [
   { table: 'push_tokens', columns: ['token', 'device_id'] },
   { table: 'notification_devices', columns: ['device_id', 'provider', 'token', 'enabled', 'timezone', 'last_seen_at'] },
   { table: 'notification_deliveries', columns: ['device_id', 'message_id', 'loop_id', 'notification_type', 'subject_revision', 'state', 'attempts', 'provider_receipt_id'] },
-  { table: 'loops', columns: ['next_reminder_at', 'reminder_plan_state', 'reminder_reason', 'reminder_revision', 'reminder_count'] },
+  { table: 'loops', columns: ['next_reminder_at', 'reminder_plan_state', 'reminder_reason', 'reminder_revision', 'reminder_count', 'reviewed_at'] },
   { table: 'auto_reply_rules', columns: ['trigger_type', 'reply_template'] },
   { table: 'contact_memory', columns: ['key', 'value', 'confidence'] },
   { table: 'chat_categories', columns: ['category'] },
@@ -50,6 +61,9 @@ export const REQUIRED_SCHEMA: SchemaRequirement[] = [
   { table: 'conversation_message_embeddings', columns: ['message_id', 'content_hash', 'embedding_model', 'embedding_dimensions'] },
   { table: 'assistant_relationship_metrics', columns: ['user_id', 'chat_id', 'interaction_count_30d', 'interaction_count_90d'] },
   { table: 'platform_interest_requests', columns: ['user_id', 'platform_id', 'source'] },
+  { table: 'billing_accounts', columns: ['user_id', 'revenuecat_customer_id', 'plan', 'status', 'credit_reset_at'] },
+  { table: 'billing_credit_ledger', columns: ['user_id', 'amount', 'bucket', 'entry_type', 'source_key', 'expires_at'] },
+  { table: 'billing_webhook_events', columns: ['event_id', 'event_type', 'processed_at', 'processing_error'] },
 ];
 
 export interface SchemaDriftEntry {

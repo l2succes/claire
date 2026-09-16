@@ -224,12 +224,13 @@ export function patchInboxRealtimeMessage(
   queryClient: QueryClient,
   userId: string | undefined,
   row: InboxRealtimeRow,
+  options: { event?: 'insert' | 'update'; persist?: boolean } = {},
 ) {
   if (!row.chat_id && !row.id) return;
   const platform = row.platform || Platform.WHATSAPP;
   const key = conversationKey(row.chat_id || row.id, platform);
   const incomingName = displayContactName(row.contact_name, platform, row.contact_phone);
-  if (usesNativeMobileCache() && userId && row.chat_id && row.timestamp) {
+  if (options.persist !== false && usesNativeMobileCache() && userId && row.chat_id && row.timestamp) {
     void cacheTimeline(userId, row.chat_id, [row as RawMessage & { id: string; chat_id: string; timestamp: string }]).catch(() => undefined);
     // The conversation's own row has to move too. Caching only the message left
     // cache_chats to be updated by the foreground sync alone, so a cold start
@@ -244,6 +245,10 @@ export function patchInboxRealtimeMessage(
       const messages = page.messages.map((message) => {
         if (message.conversation_key !== key) return message;
         found = true;
+        // An edit to an older timeline row must not replace or re-order the
+        // conversation preview. Updates only affect the preview when that row
+        // is already the conversation's latest message.
+        if (options.event === 'update' && row.id !== message.id) return message;
         const next = { ...message,
           id: row.id || message.id,
           content: row.content ?? message.content,
@@ -253,7 +258,7 @@ export function patchInboxRealtimeMessage(
           status: row.status ?? message.status,
           contact_name: row.contact_name ? incomingName : message.contact_name,
           contact_phone: row.contact_phone || message.contact_phone,
-          unread_count: row.from_me === false
+          unread_count: options.event !== 'update' && row.from_me === false
             ? (message.unread_count || 0) + 1
             : message.unread_count,
           platform,

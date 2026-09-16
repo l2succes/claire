@@ -204,6 +204,61 @@ describe('PATCH /loops/:id', () => {
 });
 
 // ---------------------------------------------------------------------------
+describe('POST /loops/:id/review', () => {
+  const mockLoop = { id: VALID_UUID, user_id: 'user-123', content: 'call tomorrow', status: 'open', completed_at: null };
+
+  beforeEach(resetMocks);
+
+  it('persists keep-open so the same stale review does not immediately return', async () => {
+    mockQuery.single
+      .mockResolvedValueOnce({ data: mockLoop, error: null })
+      .mockResolvedValueOnce({ data: { ...mockLoop, reviewed_at: new Date().toISOString() }, error: null });
+
+    const res = await request(app).post(`/loops/${VALID_UUID}/review`).send({ action: 'keep_open' });
+
+    expect(res.status).toBe(200);
+    expect(mockQuery.update.mock.calls.at(-1)?.[0]).toMatchObject({
+      user_edited: true,
+      reviewed_at: expect.any(String),
+    });
+    expect(mockQuery.insert.mock.calls.at(-1)?.[0]).toMatchObject({
+      loop_id: VALID_UUID,
+      actor: 'user',
+      kind: 'user_edit',
+      payload: { action: 'keep_open', resolution: null },
+    });
+  });
+
+  it('accepts Claire’s evidenced cancellation suggestion without calling it fulfilled', async () => {
+    const suggestionId = '00000000-0000-4000-8000-000000000002';
+    mockQuery.single
+      .mockResolvedValueOnce({ data: mockLoop, error: null })
+      .mockResolvedValueOnce({ data: { ...mockLoop, status: 'done', resolution: 'cancelled' }, error: null });
+
+    const res = await request(app).post(`/loops/${VALID_UUID}/review`).send({
+      action: 'done',
+      resolution: 'cancelled',
+      suggestion_event_id: suggestionId,
+    });
+
+    expect(res.status).toBe(200);
+    expect(mockQuery.update.mock.calls.at(-1)?.[0]).toMatchObject({
+      status: 'done',
+      thread_state: 'resolved',
+      resolution: 'cancelled',
+    });
+    expect(mockQuery.insert.mock.calls.at(-1)?.[0]).toMatchObject({
+      kind: 'resolved',
+      payload: {
+        action: 'done',
+        resolution: 'cancelled',
+        reviewedSuggestionEventId: suggestionId,
+      },
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
 describe('POST /loops/:id/snooze', () => {
   const mockLoop = { id: VALID_UUID, user_id: 'user-123', content: 'call tomorrow', status: 'open' };
   const snoozeUntil = new Date(Date.now() + 86400000).toISOString();

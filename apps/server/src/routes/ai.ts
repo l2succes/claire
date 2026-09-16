@@ -1,4 +1,5 @@
-import { Router, Request, Response } from 'express';
+import { randomUUID } from 'crypto';
+import { Router, Request, Response, type NextFunction } from 'express';
 import { pipeUIMessageStreamToResponse } from 'ai';
 import { z } from 'zod';
 import { aiProcessor } from '../services/ai-processor';
@@ -9,6 +10,8 @@ import { requireAuth } from '../middleware/auth';
 import { logger } from '../utils/logger';
 import { supabase, type DbRow } from '../services/supabase';
 import { isAiProcessingEnabled } from '../services/ai-policy';
+import { config } from '../config';
+import { releaseBillingCredits, reserveBillingCredits } from '../services/billing';
 
 const router = Router();
 
@@ -19,6 +22,37 @@ async function requireAiProcessing(req: Request, res: Response, next: () => void
     return;
   }
   next();
+}
+
+async function requireBillingCredit(req: Request, res: Response, next: NextFunction): Promise<void> {
+  if (!config.BILLING_ENFORCED) { next(); return; }
+  const userId = req.user?.id;
+  if (!userId) { res.status(401).json({ error: 'User not authenticated' }); return; }
+  const sourceKey = `ai:${userId}:${randomUUID()}`;
+  try {
+    const reserved = await reserveBillingCredits(userId, sourceKey, 1, { path: req.path });
+    if (!reserved) {
+      res.status(402).json({
+        success: false,
+        code: 'AI_CREDITS_EXHAUSTED',
+        error: 'Your AI credits are used up. Upgrade to keep using Claire AI.',
+        upgradeRequired: true,
+      });
+      return;
+    }
+    let released = false;
+    const releaseOnFailure = () => {
+      if (released || res.statusCode < 400) return;
+      released = true;
+      void releaseBillingCredits(userId, sourceKey).catch((error) => logger.error('Could not release failed AI credit reservation', error));
+    };
+    res.once('finish', releaseOnFailure);
+    res.once('close', releaseOnFailure);
+    next();
+  } catch (error) {
+    logger.error('Could not reserve an AI credit', error);
+    res.status(503).json({ success: false, error: 'Billing status is temporarily unavailable' });
+  }
 }
 
 // Schema validators
@@ -93,6 +127,7 @@ router.post('/responses/generate',
   requireAuth,
   requireAiProcessing,
   validateRequest(generateResponseSchema),
+  requireBillingCredit,
   async (req: Request, res: Response) => {
     try {
       const { messageId, content, chatType, streaming, guidance, forceRefresh } = req.body;
@@ -152,6 +187,7 @@ router.post('/conversations/explain',
   requireAuth,
   requireAiProcessing,
   validateRequest(explainConversationSchema),
+  requireBillingCredit,
   async (req: Request, res: Response) => {
     try {
       const userId = req.user?.id;
@@ -215,7 +251,7 @@ router.delete('/assistant/threads/:threadId', requireAuth, async (req: Request, 
 });
 
 /** Create a thread and answer its first question in one round trip. */
-router.post('/assistant/messages', requireAuth, requireAiProcessing, validateRequest(assistantQuestionSchema), async (req: Request, res: Response) => {
+router.post('/assistant/messages', requireAuth, requireAiProcessing, validateRequest(assistantQuestionSchema), requireBillingCredit, async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ error: 'User not authenticated' });
@@ -251,7 +287,7 @@ router.get('/assistant/conversations/:chatId', requireAuth, async (req: Request,
   }
 });
 
-router.post('/assistant/conversations/:chatId/messages', requireAuth, requireAiProcessing, validateRequest(assistantQuestionSchema), async (req: Request, res: Response) => {
+router.post('/assistant/conversations/:chatId/messages', requireAuth, requireAiProcessing, validateRequest(assistantQuestionSchema), requireBillingCredit, async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ error: 'User not authenticated' });
@@ -286,7 +322,7 @@ router.delete('/assistant/conversations/:chatId', requireAuth, async (req: Reque
   }
 });
 
-router.post('/assistant/threads/:threadId/messages', requireAuth, requireAiProcessing, validateRequest(assistantQuestionSchema), async (req: Request, res: Response) => {
+router.post('/assistant/threads/:threadId/messages', requireAuth, requireAiProcessing, validateRequest(assistantQuestionSchema), requireBillingCredit, async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ error: 'User not authenticated' });
@@ -310,7 +346,7 @@ router.post('/assistant/threads/:threadId/messages', requireAuth, requireAiProce
 });
 
 /** Cited semantic search without adding noise to persisted Ask Claire threads. */
-router.post('/search', requireAuth, requireAiProcessing, validateRequest(aiSearchSchema), async (req: Request, res: Response) => {
+router.post('/search', requireAuth, requireAiProcessing, validateRequest(aiSearchSchema), requireBillingCredit, async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ error: 'User not authenticated' });
@@ -445,6 +481,7 @@ router.get('/analytics',
 router.post('/analyze/sentiment',
   requireAuth,
   requireAiProcessing,
+  requireBillingCredit,
   async (req: Request, res: Response) => {
     try {
       const { content } = req.body;
@@ -478,6 +515,7 @@ router.post('/analyze/sentiment',
 router.post('/analyze/topics',
   requireAuth,
   requireAiProcessing,
+  requireBillingCredit,
   async (req: Request, res: Response) => {
     try {
       const { content } = req.body;
@@ -689,6 +727,7 @@ router.get('/morning-brief',
 router.get('/group-summary/:chatId',
   requireAuth,
   requireAiProcessing,
+  requireBillingCredit,
   async (req: Request, res: Response) => {
     try {
       const userId = req.user?.id;

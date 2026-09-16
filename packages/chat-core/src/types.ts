@@ -7,6 +7,7 @@ export interface ChatMessage {
   id: string;
   content: string;
   timestamp: string;
+  edited_at?: string | null;
   from_me: boolean;
   contact_name?: string;
   contact_phone?: string;

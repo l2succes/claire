@@ -95,6 +95,8 @@
     "react-native-gifted-chat": "^3.3.2",
     "react-native-heroicons": "^4.0.0",
     "react-native-keyboard-controller": "1.20.7",
+    "react-native-purchases": "^10.9.1",
+    "react-native-purchases-ui": "^10.9.1",
     "react-native-reanimated": "4.2.1",
     "react-native-safe-area-context": "~5.6.2",
     "react-native-screens": "~4.23.0",

@@ -140,3 +140,20 @@ describe('isBridgeFailure', () => {
     expect(isBridgeFailure(content as string | undefined)).toBe(expected);
   });
 });
+
+describe('durable outbox identity', () => {
+  const pending = (id: string) => message({ id, from_me: true, metadata: { clientRequestId: id } });
+  it('keeps two identical queued sends separate', () => {
+    const next = mergeChatMessage([pending('optimistic-a')], pending('optimistic-b'));
+    expect(next.map((row) => row.id)).toEqual(['optimistic-a', 'optimistic-b']);
+  });
+  it('does not mistake old identical history for a new queued send', () => {
+    const result = keepPendingSends([message({ from_me: true })], [pending('optimistic-a')]);
+    expect(result).toHaveLength(2);
+  });
+  it('reconciles only the acknowledged event, even when responses arrive out of order', () => {
+    const result = mergeChatMessage([pending('optimistic-a'), pending('optimistic-b')],
+      message({ id: 'server-b', from_me: true, metadata: { clientRequestId: 'optimistic-b' } }));
+    expect(result.map((row) => row.id)).toEqual(['optimistic-a', 'server-b']);
+  });
+});

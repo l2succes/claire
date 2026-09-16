@@ -29,6 +29,8 @@ import { host } from '@claire/host';
 import { API_BASE_URL } from '../services/platforms';
 import { queryClient } from '../services/query-client';
 import { appMark } from '../services/perf-marks';
+import { useConnectionRecovery } from '../hooks/useConnectionRecovery';
+import { BillingBridge } from '../components/BillingBridge';
 import '../global.css';
 
 const SENTRY_DSN = process.env.EXPO_PUBLIC_SENTRY_DSN;
@@ -67,6 +69,7 @@ function InboxRealtimeBridge() {
 }
 
 export default function RootLayout() {
+  useConnectionRecovery();
   const [initialized, setInitialized] = useState(false);
   // Electron already owns a native startup experience. Replaying the large
   // lime reveal inside its renderer makes desktop feel slower and obscures the
@@ -199,10 +202,12 @@ export default function RootLayout() {
             <UnreadBadgeBridge />
             <WorkspaceHandoffBridge />
             <DesktopPushBridge />
+            <BillingBridge />
             <DesktopChrome>
             <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#F4F1EA' } }}>
               <Stack.Screen name="(tabs)" />
               <Stack.Screen name="(auth)" />
+              <Stack.Screen name="paywall" options={{ presentation: 'modal', gestureEnabled: false }} />
               <Stack.Screen
                 name="compose"
                 options={{
