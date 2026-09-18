@@ -467,25 +467,10 @@ claire-mobile-tabs button {
 }
 claire-mobile-tabs [data-tab='claire'] {
   position: relative;
-  z-index: 0;
   min-width: 42px;
   color: var(--claire-ink);
 }
-claire-mobile-tabs [data-tab='claire']:after {
-  content: '';
-  position: absolute;
-  z-index: -1;
-  top: -5px;
-  width: 40px;
-  height: 40px;
-  border: 1px solid var(--claire-ink);
-  border-radius: 13px;
-  background: var(--claire-lime);
-  box-shadow: 0 5px 14px rgb(223 255 100 / 38%);
-}
 claire-mobile-tabs [data-tab='claire'] img {
-  position: relative;
-  z-index: 1;
   width: 24px;
   height: 24px;
 }
@@ -1871,15 +1856,9 @@ claire-mobile-tabs .hero-icon {
   width: 24px;
   height: 24px;
 }
-claire-mobile-tabs [data-tab='claire']:after {
-  top: -5px;
-  width: 42px;
-  height: 42px;
-  border-radius: 14px;
-}
 claire-mobile-tabs [data-tab='claire'] img {
-  width: 21px;
-  height: 21px;
+  width: 24px;
+  height: 24px;
 }
 .brief-date {
   font-size: 9px;

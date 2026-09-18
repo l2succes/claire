@@ -7,7 +7,7 @@ export function ClaireMark({
 }: {
   size?: number;
   color?: string;
-  dot?: string;
+  dot?: string | null;
 }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 64 64" accessibilityIgnoresInvertColors>
@@ -20,7 +20,7 @@ export function ClaireMark({
           strokeLinecap="round"
           strokeLinejoin="round"
         />
-        <Circle cx={10} cy={34} r={4} fill={dot} />
+        {dot ? <Circle cx={10} cy={34} r={4} fill={dot} /> : null}
       </G>
     </Svg>
   );

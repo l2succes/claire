@@ -106,18 +106,26 @@ export function ClaireTabBar({ state, descriptors, navigation }: BottomTabBarPro
               {isAsk ? (
                 <View
                   style={{
-                    width: 40,
-                    height: 40,
+                    width: 28,
+                    height: 28,
                     alignItems: 'center',
                     justifyContent: 'center',
-                    borderRadius: 13,
-                    borderWidth: 1,
-                    borderColor: colors.ink,
-                    backgroundColor: colors.lime,
-                    boxShadow: '0 5px 14px rgba(223,255,100,0.38)',
                   }}
                 >
-                  <ClaireMark size={22} />
+                  <ClaireMark size={24} dot={null} />
+                  {focused && !badge ? (
+                    <View
+                      style={{
+                        position: 'absolute',
+                        top: -1,
+                        right: -1,
+                        width: 4,
+                        height: 4,
+                        borderRadius: 2,
+                        backgroundColor: colors.lime,
+                      }}
+                    />
+                  ) : null}
                 </View>
               ) : (
                 <View
@@ -154,6 +162,19 @@ export function ClaireTabBar({ state, descriptors, navigation }: BottomTabBarPro
                         {badge}
                       </Text>
                     </View>
+                  ) : null}
+                  {focused && !badge ? (
+                    <View
+                      style={{
+                        position: 'absolute',
+                        top: -1,
+                        right: -1,
+                        width: 4,
+                        height: 4,
+                        borderRadius: 2,
+                        backgroundColor: colors.lime,
+                      }}
+                    />
                   ) : null}
                 </View>
               )}
