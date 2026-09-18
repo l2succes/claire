@@ -6,6 +6,12 @@ export interface NotificationPayload {
   title: string;
   body: string;
   badge?: number;
+  channelId?: string;
+  categoryId?: string;
+  mutableContent?: boolean;
+  threadId?: string;
+  tag?: string;
+  richContent?: { image: string };
   data: Record<string, string | number | boolean>;
   collapseId: string;
 }
@@ -41,7 +47,12 @@ export class ExpoNotificationProvider implements NotificationProvider {
           title: payload.title,
           body: payload.body,
           sound: 'default',
-          channelId: 'messages',
+          channelId: payload.channelId || 'messages',
+          categoryId: payload.categoryId,
+          mutableContent: payload.mutableContent,
+          threadId: payload.threadId,
+          tag: payload.tag,
+          richContent: payload.richContent,
           badge: payload.badge,
           data: payload.data,
           collapseId: payload.collapseId,

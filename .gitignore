@@ -6,6 +6,7 @@ node_modules/
 # Testing
 coverage/
 *.lcov
+.watchman-cookie-*
 
 # Production
 build/

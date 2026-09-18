@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
 import { queryOptions, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
+import { useLocalSeed } from './useLocalFirstQuery';
 import {
   EMPTY_TIMELINE,
   groupReactionsByMessage,
@@ -27,7 +27,7 @@ import { cacheTimeline, cachedTimeline, usesNativeMobileCache } from '../service
 /** Columns the transcript renders. Deliberately explicit — `select('*')` here
  *  drags joined chat and contact rows onto all 100 messages. */
 const TIMELINE_COLUMNS =
-  'id, chat_id, content, timestamp, from_me, contact_name, contact_phone, content_type, media_url, media_mime_type, metadata, platform_message_id, reply_to_message_id, reply_to_platform_message_id';
+  'id, chat_id, content, timestamp, edited_at, from_me, contact_name, contact_phone, content_type, media_url, media_mime_type, metadata, platform_message_id, reply_to_message_id, reply_to_platform_message_id';
 
 const TIMELINE_LIMIT = 100;
 
@@ -210,6 +210,26 @@ export function patchChatTimelineMessage(
   );
 }
 
+/** Remove a deleted database row from every warm variant immediately. */
+export function removeChatTimelineMessage(
+  queryClient: QueryClient,
+  userId: string | undefined,
+  row: Record<string, unknown>,
+): void {
+  const chatId = typeof row.chat_id === 'string' ? row.chat_id : undefined;
+  const messageId = typeof row.id === 'string' ? row.id : undefined;
+  if (!chatId || !messageId) return;
+  updateChatTimeline(queryClient, userId, chatId, (previous) => {
+    if (!previous.messages.some((message) => message.id === messageId)) return previous;
+    const reactions = { ...previous.reactions };
+    delete reactions[messageId];
+    return {
+      messages: previous.messages.filter((message) => message.id !== messageId),
+      reactions,
+    };
+  });
+}
+
 /** How many conversations to hold warm ahead of the user opening one. Free on
  *  native (a local read); a bounded burst of requests everywhere else. */
 const WARM_LIMIT_NATIVE = 9;
@@ -277,28 +297,17 @@ export function useChatTimeline(
   const query = useQuery(chatTimelineOptions(queryClient, userId, chatId, highlightId));
 
   // Race the local cache against the network rather than gating the query on it.
-  // Holding `enabled` false until SQLite resolves — the pattern the inbox uses —
-  // would reintroduce exactly the async hop this hook exists to remove.
-  useEffect(() => {
-    if (!userId || !chatId || !usesNativeMobileCache()) return;
-    const key = chatTimelineKey(userId, chatId, highlightId);
-    if (queryClient.getQueryData(key)) return;
-    let active = true;
-    void cachedTimeline(userId, chatId, 200)
-      .then((rows) => {
-        if (!active || !rows.length) return;
-        if (queryClient.getQueryData(key)) return; // the network got there first
-        queryClient.setQueryData<ChatTimeline>(
-          key,
-          { messages: rows as unknown as ChatMessage[], reactions: {} },
-          { updatedAt: 0 },
-        );
-      })
-      .catch(() => undefined);
-    return () => {
-      active = false;
-    };
-  }, [queryClient, userId, chatId, highlightId]);
+  // Holding `enabled` false until SQLite resolves — the pattern the inbox used
+  // to use — would reintroduce exactly the async hop this hook exists to remove.
+  useLocalSeed<ChatTimeline>(queryClient, chatTimelineKey(userId ?? '', chatId ?? '', highlightId), {
+    enabled: !!userId && !!chatId,
+    read: async () => {
+      if (!userId || !chatId) return null;
+      const rows = await cachedTimeline(userId, chatId, 200);
+      return rows.length ? { messages: rows as unknown as ChatMessage[], reactions: {} } : null;
+    },
+    isEmpty: (timeline) => !timeline.messages.length,
+  });
 
   return query;
 }

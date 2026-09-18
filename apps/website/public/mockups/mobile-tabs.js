@@ -18,7 +18,7 @@ class ClaireMobileTabs extends HTMLElement {
       .map(([icon, label]) => {
         const isClaire = icon === 'claire';
         const contents = isClaire
-          ? '<img src="/assets/brand/claire-kept-thread-flipped.svg" alt="" />'
+          ? '<img src="/assets/brand/claire-mark-ink.svg" alt="" />'
           : `<i data-heroicon="${icon}"></i>`;
         return `<button type="button" data-tab="${icon}" class="${icon === active ? 'active' : ''}" aria-label="${label}">${contents}</button>`;
       })

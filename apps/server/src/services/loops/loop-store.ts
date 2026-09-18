@@ -168,7 +168,12 @@ export async function updateLoop(input: UpdateLoopInput): Promise<boolean> {
   if (input.threadState) patch.thread_state = input.threadState;
   if (input.status) patch.status = input.status;
   if (input.latestMessageId) patch.latest_message_id = input.latestMessageId;
-  if (input.lastEvidenceAt) patch.last_evidence_at = input.lastEvidenceAt;
+  if (input.lastEvidenceAt) {
+    patch.last_evidence_at = input.lastEvidenceAt;
+    // A new turn can materially change the state. Let the review queue consider
+    // it again even if the user previously chose “Keep open.”
+    patch.reviewed_at = null;
+  }
   if (input.confidence !== undefined) patch.confidence = input.confidence;
 
   // A human correction outranks the detector on the fields a human can set.

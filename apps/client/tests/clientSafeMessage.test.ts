@@ -2,6 +2,7 @@ import {
   clientSafeMessage,
   GENERIC_REQUEST_ERROR,
   GENERIC_SERVER_ERROR,
+  SESSION_ERROR,
   type FailedRequest,
 } from '../services/api-errors';
 
@@ -37,6 +38,10 @@ describe('clientSafeMessage', () => {
 
   it('falls back when a 4xx carries no body', () => {
     expect(clientSafeMessage(failure(400))).toBe(GENERIC_REQUEST_ERROR);
+  });
+
+  it('never exposes raw token validation errors', () => {
+    expect(clientSafeMessage(failure(401, { error: 'Invalid token' }))).toBe(SESSION_ERROR);
   });
 
   it('explains a request that never reached the server', () => {

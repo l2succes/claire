@@ -47,6 +47,7 @@ describe('conversation settings cache', () => {
 
     expect(settingsFor('chat-1').category).toBe('personal');
     expect(settingsFor('chat-1').smartCards).toHaveLength(1);
+    expect(settingsFor('chat-1').clarificationDismissed).toBe(true);
     // Still loading — the cache is a starting picture, not the answer.
     expect(settingsFor('chat-1').isLoading).toBe(true);
   });

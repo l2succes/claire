@@ -20,6 +20,11 @@ covers what types cannot: date formats, duplicate routes, and every internal
 - Markdown rendition of any page: append `.md` to its URL
 - Whole corpus for tools: `/llms.txt` and `/llms-full.txt`
 
+## Working handoffs
+
+- [Ask Claire v2 launch readiness](ASK_CLAIRE_V2_LAUNCH_READINESS.md) — shipped state,
+  dogfood plan, launch gates, rollout sequence, and the next implementation work.
+
 ## Adding a document
 
 1. Create `website/src/content/docs/<section>/<slug>.tsx`

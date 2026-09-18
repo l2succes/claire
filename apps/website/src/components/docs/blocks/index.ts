@@ -15,7 +15,25 @@ export { DocLink, Related } from '@/components/docs/blocks/doc-link';
 export { Figure } from '@/components/docs/blocks/figure';
 export { Mockup, MockupStrip } from '@/components/docs/blocks/mockup';
 export { Platforms } from '@/components/docs/blocks/platforms';
-export { Definitions, Divider, Doc, Facts, P, Section, Table } from '@/components/docs/blocks/prose';
+export {
+  Definitions,
+  Divider,
+  Doc,
+  Facts,
+  P,
+  Section,
+  Table,
+} from '@/components/docs/blocks/prose';
 export { Roadmap, RoadmapTeaser } from '@/components/docs/blocks/roadmap';
 export { Step, Steps } from '@/components/docs/blocks/steps';
 export { Tab, Tabs } from '@/components/docs/blocks/tabs';
+export {
+  BarChart,
+  CapabilityGrid,
+  MetricGrid,
+  Panel,
+  PanelGrid,
+  Timeline,
+  type CapabilityStatus,
+  type VisualTone,
+} from '@/components/docs/blocks/visuals';

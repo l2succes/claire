@@ -5,11 +5,13 @@ export function StandaloneEmojiMessage({
   messageId,
   content,
   timestamp,
+  editedAt,
   fromMe,
 }: {
   messageId: string;
   content: string;
   timestamp: string;
+  editedAt?: string | null;
   fromMe: boolean;
 }) {
   return (
@@ -36,6 +38,7 @@ export function StandaloneEmojiMessage({
           overflow: 'hidden',
         }}
       >
+        {editedAt ? 'Edited · ' : ''}
         {new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
       </Text>
     </View>

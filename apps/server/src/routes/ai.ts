@@ -1,4 +1,6 @@
-import { Router, Request, Response } from 'express';
+import { randomUUID } from 'crypto';
+import { Router, Request, Response, type NextFunction } from 'express';
+import { pipeUIMessageStreamToResponse } from 'ai';
 import { z } from 'zod';
 import { aiProcessor } from '../services/ai-processor';
 import { conversationAssistant } from '../services/conversation-assistant';
@@ -8,6 +10,8 @@ import { requireAuth } from '../middleware/auth';
 import { logger } from '../utils/logger';
 import { supabase, type DbRow } from '../services/supabase';
 import { isAiProcessingEnabled } from '../services/ai-policy';
+import { config } from '../config';
+import { releaseBillingCredits, reserveBillingCredits } from '../services/billing';
 
 const router = Router();
 
@@ -18,6 +22,37 @@ async function requireAiProcessing(req: Request, res: Response, next: () => void
     return;
   }
   next();
+}
+
+async function requireBillingCredit(req: Request, res: Response, next: NextFunction): Promise<void> {
+  if (!config.BILLING_ENFORCED) { next(); return; }
+  const userId = req.user?.id;
+  if (!userId) { res.status(401).json({ error: 'User not authenticated' }); return; }
+  const sourceKey = `ai:${userId}:${randomUUID()}`;
+  try {
+    const reserved = await reserveBillingCredits(userId, sourceKey, 1, { path: req.path });
+    if (!reserved) {
+      res.status(402).json({
+        success: false,
+        code: 'AI_CREDITS_EXHAUSTED',
+        error: 'Your AI credits are used up. Upgrade to keep using Claire AI.',
+        upgradeRequired: true,
+      });
+      return;
+    }
+    let released = false;
+    const releaseOnFailure = () => {
+      if (released || res.statusCode < 400) return;
+      released = true;
+      void releaseBillingCredits(userId, sourceKey).catch((error) => logger.error('Could not release failed AI credit reservation', error));
+    };
+    res.once('finish', releaseOnFailure);
+    res.once('close', releaseOnFailure);
+    next();
+  } catch (error) {
+    logger.error('Could not reserve an AI credit', error);
+    res.status(503).json({ success: false, error: 'Billing status is temporarily unavailable' });
+  }
 }
 
 // Schema validators
@@ -57,8 +92,21 @@ const assistantQuestionSchema = z.object({
   body: z.object({
     question: z.string().trim().min(1, 'Question is required').max(2_000),
     chatIds: z.array(z.string().uuid()).max(5).optional().default([]),
+    requestId: z.string().uuid().optional(),
+    stream: z.boolean().optional(),
   }),
 });
+
+function wantsAssistantStream(req: Request): boolean {
+  return req.body.stream === true || String(req.get('accept') || '').includes('text/event-stream');
+}
+
+function requestAbortSignal(req: Request, res: Response): AbortSignal {
+  const controller = new AbortController();
+  req.once('aborted', () => controller.abort());
+  res.once('close', () => { if (!res.writableEnded) controller.abort(); });
+  return controller.signal;
+}
 
 const aiSearchSchema = z.object({
   body: z.object({ query: z.string().trim().min(1).max(2_000) }),
@@ -79,6 +127,7 @@ router.post('/responses/generate',
   requireAuth,
   requireAiProcessing,
   validateRequest(generateResponseSchema),
+  requireBillingCredit,
   async (req: Request, res: Response) => {
     try {
       const { messageId, content, chatType, streaming, guidance, forceRefresh } = req.body;
@@ -138,6 +187,7 @@ router.post('/conversations/explain',
   requireAuth,
   requireAiProcessing,
   validateRequest(explainConversationSchema),
+  requireBillingCredit,
   async (req: Request, res: Response) => {
     try {
       const userId = req.user?.id;
@@ -200,6 +250,29 @@ router.delete('/assistant/threads/:threadId', requireAuth, async (req: Request, 
   }
 });
 
+/** Create a thread and answer its first question in one round trip. */
+router.post('/assistant/messages', requireAuth, requireAiProcessing, validateRequest(assistantQuestionSchema), requireBillingCredit, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: 'User not authenticated' });
+    if (!conversationAssistant.isConfigured) return res.status(503).json({ success: false, error: 'AI is not configured' });
+    const thread = await conversationAssistant.findThreadByRequestId(userId, req.body.requestId)
+      || await conversationAssistant.createThread(userId);
+    if (wantsAssistantStream(req)) {
+      const stream = conversationAssistant.createAnswerStream(
+        userId, thread.id, req.body.question, req.body.chatIds, false, req.body.requestId, requestAbortSignal(req, res),
+      );
+      await pipeUIMessageStreamToResponse({ response: res, stream });
+      return;
+    }
+    const answer = await conversationAssistant.ask(userId, thread.id, req.body.question, req.body.chatIds, false, req.body.requestId);
+    return res.status(201).json({ success: true, data: { ...answer, thread } });
+  } catch (error) {
+    logger.error('Error creating assistant question:', error);
+    return res.status(500).json({ success: false, error: 'Failed to answer assistant question' });
+  }
+});
+
 /** One persisted, strict-scope assistant thread for each conversation. */
 router.get('/assistant/conversations/:chatId', requireAuth, async (req: Request, res: Response) => {
   try {
@@ -214,12 +287,21 @@ router.get('/assistant/conversations/:chatId', requireAuth, async (req: Request,
   }
 });
 
-router.post('/assistant/conversations/:chatId/messages', requireAuth, requireAiProcessing, validateRequest(assistantQuestionSchema), async (req: Request, res: Response) => {
+router.post('/assistant/conversations/:chatId/messages', requireAuth, requireAiProcessing, validateRequest(assistantQuestionSchema), requireBillingCredit, async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ error: 'User not authenticated' });
     if (!conversationAssistant.isConfigured) return res.status(503).json({ success: false, error: 'AI is not configured' });
-    return res.json({ success: true, data: await conversationAssistant.askConversation(userId, req.params.chatId, req.body.question) });
+    if (wantsAssistantStream(req)) {
+      const stream = await conversationAssistant.createConversationAnswerStream(
+        userId, req.params.chatId, req.body.question, req.body.requestId, requestAbortSignal(req, res),
+      );
+      await pipeUIMessageStreamToResponse({ response: res, stream });
+      return;
+    }
+    return res.json({ success: true, data: await conversationAssistant.askConversation(
+      userId, req.params.chatId, req.body.question, req.body.requestId,
+    ) });
   } catch (error) {
     if ((error as Error).message === 'CHAT_NOT_FOUND') return res.status(404).json({ success: false, error: 'Conversation not found' });
     logger.error('Error answering conversation assistant:', error);
@@ -240,12 +322,22 @@ router.delete('/assistant/conversations/:chatId', requireAuth, async (req: Reque
   }
 });
 
-router.post('/assistant/threads/:threadId/messages', requireAuth, requireAiProcessing, validateRequest(assistantQuestionSchema), async (req: Request, res: Response) => {
+router.post('/assistant/threads/:threadId/messages', requireAuth, requireAiProcessing, validateRequest(assistantQuestionSchema), requireBillingCredit, async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ error: 'User not authenticated' });
     if (!conversationAssistant.isConfigured) return res.status(503).json({ success: false, error: 'AI is not configured' });
-    return res.json({ success: true, data: await conversationAssistant.ask(userId, req.params.threadId, req.body.question, req.body.chatIds) });
+    if (wantsAssistantStream(req)) {
+      const stream = conversationAssistant.createAnswerStream(
+        userId, req.params.threadId, req.body.question, req.body.chatIds, false,
+        req.body.requestId, requestAbortSignal(req, res),
+      );
+      await pipeUIMessageStreamToResponse({ response: res, stream });
+      return;
+    }
+    return res.json({ success: true, data: await conversationAssistant.ask(
+      userId, req.params.threadId, req.body.question, req.body.chatIds, false, req.body.requestId,
+    ) });
   } catch (error) {
     if ((error as Error).message === 'ASSISTANT_THREAD_NOT_FOUND') return res.status(404).json({ success: false, error: 'Assistant thread not found' });
     logger.error('Error answering assistant question:', error);
@@ -254,7 +346,7 @@ router.post('/assistant/threads/:threadId/messages', requireAuth, requireAiProce
 });
 
 /** Cited semantic search without adding noise to persisted Ask Claire threads. */
-router.post('/search', requireAuth, requireAiProcessing, validateRequest(aiSearchSchema), async (req: Request, res: Response) => {
+router.post('/search', requireAuth, requireAiProcessing, validateRequest(aiSearchSchema), requireBillingCredit, async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ error: 'User not authenticated' });
@@ -389,6 +481,7 @@ router.get('/analytics',
 router.post('/analyze/sentiment',
   requireAuth,
   requireAiProcessing,
+  requireBillingCredit,
   async (req: Request, res: Response) => {
     try {
       const { content } = req.body;
@@ -422,6 +515,7 @@ router.post('/analyze/sentiment',
 router.post('/analyze/topics',
   requireAuth,
   requireAiProcessing,
+  requireBillingCredit,
   async (req: Request, res: Response) => {
     try {
       const { content } = req.body;
@@ -520,13 +614,32 @@ router.get('/morning-brief',
 
       // Fetch most recent message per chat that we haven't replied to
       const since = new Date(Date.now() - 7 * 24 * 3600_000).toISOString(); // last 7 days
-      const { data: rows, error } = await supabase
+
+      // Groups are opt-in, so the brief only considers the ones turned on.
+      // Resolved as an explicit id list rather than a filter on the embedded
+      // chat: this list is tiny by construction, and it keeps the 200-row
+      // budget below from being spent on group traffic that is then discarded.
+      const { data: enabledGroups } = await supabase
+        .from('chats')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('is_group', true)
+        .eq('ai_enabled', true);
+      const enabledGroupIds = (enabledGroups || []).map((row: { id: string }) => row.id);
+
+      let briefQuery = supabase
         .from('messages')
         .select(`id, chat_id, content, timestamp, from_me, is_group, contact_name, platform,
                  chats!messages_chat_id_fkey(name, platform_chat_id)`)
         .eq('user_id', userId)
         .eq('from_me', false)
-        .gte('timestamp', since)
+        .gte('timestamp', since);
+
+      briefQuery = enabledGroupIds.length
+        ? briefQuery.or(`is_group.eq.false,chat_id.in.(${enabledGroupIds.join(',')})`)
+        : briefQuery.eq('is_group', false);
+
+      const { data: rows, error } = await briefQuery
         .order('timestamp', { ascending: false })
         .limit(200);
 
@@ -614,6 +727,7 @@ router.get('/morning-brief',
 router.get('/group-summary/:chatId',
   requireAuth,
   requireAiProcessing,
+  requireBillingCredit,
   async (req: Request, res: Response) => {
     try {
       const userId = req.user?.id;

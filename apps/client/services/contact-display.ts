@@ -82,6 +82,50 @@ export function displayPersonName(
       : fallback);
 }
 
+/**
+ * True when a People row gives the user no way to recognise or reach anyone.
+ *
+ * WhatsApp's bridge produces contacts that are pure residue: a profile name of
+ * a single character, no number, no username, and no conversation. They sort
+ * into the A–Z index like real people and lead nowhere when tapped.
+ *
+ * The test is deliberately conservative — every one of these has to be true
+ * before a row is hidden — because a false positive silently removes somebody
+ * the user was looking for. In particular a row that opens a real conversation
+ * is always kept, however useless its name: the chat is somewhere to go.
+ */
+export function isDeadEndContact(contact: {
+  name?: string | null;
+  inferred_name?: string | null;
+  username?: string | null;
+  phone_number?: string | null;
+  platform?: Platform | string | null;
+  is_group?: boolean | null;
+  chat?: { id?: string | null } | null;
+}): boolean {
+  // A group is identified by being a group; it is never this kind of residue.
+  if (contact.is_group) return false;
+  if (contact.chat?.id) return false;
+  if (formatPhoneNumber(contact.phone_number)) return false;
+  if (contact.username?.trim().replace(/^@+/, '')) return false;
+
+  // Both names, not just the one that would be displayed. `name` takes
+  // precedence for display, so a contact called "A" whose inferred_name is
+  // "Ada Lovelace" would otherwise be judged on the "A" alone and hidden --
+  // even though Claire knows exactly who they are.
+  const usable = (value: string | null | undefined): boolean => {
+    const trimmed = value?.trim() || '';
+    if (!trimmed) return false;
+    if (isWhatsAppPlatform(contact.platform) && !isUsableWhatsAppName(trimmed)) return false;
+    // Counted in code points, so a single emoji counts as one character. A
+    // grapheme cluster built from several (a ZWJ sequence, say) counts as more
+    // and is kept — erring toward showing the row.
+    return [...trimmed].length > 1;
+  };
+
+  return !usable(contact.name) && !usable(contact.inferred_name);
+}
+
 /** Secondary People identity detail, without duplicating its primary label. */
 export function displayPersonDetails(contact: {
   name?: string | null;

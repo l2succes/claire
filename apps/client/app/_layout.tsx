@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { AppState, Linking, Platform, View } from 'react-native';
+import { AppState, InteractionManager, Linking, Platform, View } from 'react-native';
 import { Stack, router } from 'expo-router';
 import * as Notifications from 'expo-notifications';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import * as SplashScreen from 'expo-splash-screen';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -14,8 +14,10 @@ import {
   addPushTokenRotationListener,
   getActiveNotificationChat,
   registerNotificationDevice,
+  setupNotificationCategories,
   updateNotificationPresence,
 } from '../services/notifications';
+import { handleNotificationResponse, type ClaireNotificationData } from '../services/notification-responses';
 import { bootstrapMobileCache, reconcileMobileCache } from '../services/mobile-sync';
 import { LaunchReveal } from '../components/LaunchReveal';
 import { useInboxRealtime } from '../hooks/useInboxRealtime';
@@ -25,6 +27,10 @@ import { useUnreadBadge } from '../hooks/useUnreadBadge';
 import { useWorkspaceHandoff } from '../hooks/useWorkspaceHandoff';
 import { host } from '@claire/host';
 import { API_BASE_URL } from '../services/platforms';
+import { queryClient } from '../services/query-client';
+import { appMark } from '../services/perf-marks';
+import { useConnectionRecovery } from '../hooks/useConnectionRecovery';
+import { BillingBridge } from '../components/BillingBridge';
 import '../global.css';
 
 const SENTRY_DSN = process.env.EXPO_PUBLIC_SENTRY_DSN;
@@ -36,15 +42,6 @@ if (SENTRY_DSN) {
 }
 
 SplashScreen.preventAutoHideAsync();
-
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 60 * 1000,
-      retry: 2,
-    },
-  },
-});
 
 function UnreadBadgeBridge() {
   useUnreadBadge();
@@ -72,6 +69,7 @@ function InboxRealtimeBridge() {
 }
 
 export default function RootLayout() {
+  useConnectionRecovery();
   const [initialized, setInitialized] = useState(false);
   // Electron already owns a native startup experience. Replaying the large
   // lime reveal inside its renderer makes desktop feel slower and obscures the
@@ -94,10 +92,12 @@ export default function RootLayout() {
       } catch (e) {
         console.error('Init error:', e);
       } finally {
+        appMark('auth-resolved');
         setInitialized(true);
         // Let React commit the lime handoff surface before the native splash leaves.
         await new Promise<void>((resolve) => setTimeout(resolve, 16));
         await SplashScreen.hideAsync();
+        appMark('splash-hidden');
       }
     }
     init();
@@ -116,7 +116,13 @@ export default function RootLayout() {
       if (state === 'active') {
         void fetchConnectedSessions();
         const currentUserId = useAuthStore.getState().user?.id;
-        if (currentUserId) void reconcileMobileCache(currentUserId, token).catch(() => undefined);
+        // Bounded on purpose: a foreground pass should catch the app up, not
+        // walk ten thousand events while the user is looking at the inbox.
+        if (currentUserId) {
+          InteractionManager.runAfterInteractions(() => {
+            void reconcileMobileCache(currentUserId, token, { maxPages: 5 }).catch(() => undefined);
+          });
+        }
       }
     });
     return () => subscription.remove();
@@ -154,27 +160,10 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (Platform.OS === 'web') return;
-    const openNotification = (notification: Notifications.Notification) => {
-      const data = notification.request.content.data as {
-        type?: unknown;
-        url?: unknown;
-        chatId?: unknown;
-        messageId?: unknown;
-        contactName?: unknown;
-        chatName?: unknown;
-        platform?: unknown;
-        isGroup?: unknown;
-      };
-      if (data.type === 'operations_incident') {
-        const dashboardUrl =
-          typeof data.url === 'string' && data.url.startsWith('https://')
-            ? data.url
-            : 'https://useclaire.co/ops';
-        void Linking.openURL(dashboardUrl).catch((error) => {
-          console.warn('Could not open the operations dashboard:', error);
-        });
-        return;
-      }
+    void setupNotificationCategories().catch((error) => {
+      console.warn('Could not register notification actions:', error);
+    });
+    const openChat = (data: ClaireNotificationData, draft?: string) => {
       if (typeof data.chatId !== 'string') return;
       router.push({ pathname: '/chat/[chatId]', params: {
         chatId: data.chatId,
@@ -183,11 +172,23 @@ export default function RootLayout() {
         ...(typeof data.chatName === 'string' ? { chat_name: data.chatName } : {}),
         ...(typeof data.platform === 'string' ? { platform: data.platform } : {}),
         ...(typeof data.isGroup === 'boolean' ? { is_group: data.isGroup ? '1' : '0' } : {}),
+        ...(draft ? { draft, notificationAction: 'reply' } : {}),
       } });
     };
+    const openResponse = (response: Notifications.NotificationResponse) => {
+      void handleNotificationResponse(response, {
+        openChat,
+        openLoop: (loopId) => router.push({ pathname: '/loops/[id]', params: { id: loopId } }),
+        openOperations: (url) => {
+          void Linking.openURL(url).catch((error) => {
+            console.warn('Could not open the operations dashboard:', error);
+          });
+        },
+      });
+    };
     const last = Notifications.getLastNotificationResponse();
-    if (last?.notification) openNotification(last.notification);
-    const response = Notifications.addNotificationResponseReceivedListener((event) => openNotification(event.notification));
+    if (last?.notification) openResponse(last);
+    const response = Notifications.addNotificationResponseReceivedListener(openResponse);
     return () => response.remove();
   }, []);
 
@@ -201,10 +202,12 @@ export default function RootLayout() {
             <UnreadBadgeBridge />
             <WorkspaceHandoffBridge />
             <DesktopPushBridge />
+            <BillingBridge />
             <DesktopChrome>
             <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#F4F1EA' } }}>
               <Stack.Screen name="(tabs)" />
               <Stack.Screen name="(auth)" />
+              <Stack.Screen name="paywall" options={{ presentation: 'modal', gestureEnabled: false }} />
               <Stack.Screen
                 name="compose"
                 options={{
@@ -218,15 +221,15 @@ export default function RootLayout() {
                   contentStyle: { backgroundColor: '#FFFDF8' },
                 }}
               />
-              <Stack.Screen name="assistant" options={{ presentation: 'formSheet', sheetGrabberVisible: true, sheetAllowedDetents: [0.7, 1] }} />
-              <Stack.Screen name="chat/assistant/[chatId]" options={{ presentation: 'formSheet', sheetGrabberVisible: true, sheetAllowedDetents: [0.7, 1] }} />
+              <Stack.Screen name="assistant" options={{ presentation: 'formSheet', sheetGrabberVisible: true, sheetAllowedDetents: [1] }} />
+              <Stack.Screen name="chat/assistant/[chatId]" options={{ presentation: 'formSheet', sheetGrabberVisible: true, sheetAllowedDetents: [1] }} />
             </Stack>
             </DesktopChrome>
           </QueryClientProvider>
           </ClaireThemeProvider>
         </SafeAreaProvider>
       </GestureHandlerRootView>
-      {showLaunchReveal ? <LaunchReveal ready={appReady} onFinish={() => setShowLaunchReveal(false)} /> : null}
+      {showLaunchReveal ? <LaunchReveal ready={appReady} onFinish={() => { appMark('reveal-finished'); setShowLaunchReveal(false); }} /> : null}
     </View>
   );
 }

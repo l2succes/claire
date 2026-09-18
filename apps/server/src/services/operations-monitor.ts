@@ -5,6 +5,8 @@ import { type DbRow, supabase } from './supabase';
 import { logger } from '../utils/logger';
 import { classifyBridgeSessions, classifyMessageFreshness } from './operations-health';
 import { sanitizeOperationsDetails } from './operations-privacy';
+import { classifyOperationsBridgeSessions, type OperationsBridgeSessionRow } from './operations-bridge-sessions';
+import { shouldAlertOperationsIncident } from './operations-alerting';
 
 export type OperationsStatus = 'healthy' | 'warning' | 'critical' | 'unknown';
 
@@ -99,11 +101,15 @@ class OperationsMonitor {
   }
 
   private async checkBridgeSessions(): Promise<OperationsComponentCheck> {
-    const { data, error } = await supabase.from('platform_sessions').select('platform,status');
+    const { data, error } = await supabase
+      .from('platform_sessions')
+      .select('session_id,user_id,platform,status,created_at,last_connected_at,updated_at,operations_retired_at');
     if (error) return { component: 'bridge_sessions', status: 'critical', summary: 'Could not read durable bridge sessions', details: { error: error.code || 'query_failed' } };
-    const connected = (data || []).filter((row: DbRow) => row.status === 'connected').length;
-    const disconnected = (data || []).filter((row: DbRow) => row.status === 'disconnected' || row.status === 'failed').length;
-    return { component: 'bridge_sessions', ...classifyBridgeSessions(connected, disconnected), details: { connected, disconnected } };
+    const sessions = classifyOperationsBridgeSessions((data || []) as OperationsBridgeSessionRow[]);
+    const connected = sessions.filter((session) => session.lifecycleState === 'connected').length;
+    const disconnected = sessions.filter((session) => session.lifecycleState === 'attention').length;
+    const ignored = sessions.filter((session) => session.lifecycleState === 'superseded' || session.lifecycleState === 'retired').length;
+    return { component: 'bridge_sessions', ...classifyBridgeSessions(connected, disconnected), details: { connected, disconnected, ignored } };
   }
 
   private async checkMessageFlow(): Promise<OperationsComponentCheck[]> {
@@ -153,7 +159,11 @@ class OperationsMonitor {
     const severity = severityFor(check.status);
     const fingerprint = `operations:${check.component}`;
     const now = new Date().toISOString();
-    const { data: existing } = await supabase.from('operations_incidents').select('id,status,last_alerted_at').eq('fingerprint', fingerprint).maybeSingle();
+    const { data: existing } = await supabase
+      .from('operations_incidents')
+      .select('id,status,severity,title,last_alerted_at')
+      .eq('fingerprint', fingerprint)
+      .maybeSingle();
     if (!severity) {
       if (existing?.status === 'open') await supabase.from('operations_incidents').update({ status: 'resolved', resolved_at: now, updated_at: now }).eq('id', existing.id);
       return;
@@ -164,8 +174,14 @@ class OperationsMonitor {
       ...(isNew ? { first_detected_at: now, resolved_at: null } : {}), last_detected_at: now, updated_at: now,
     }, { onConflict: 'fingerprint' }).select('id,last_alerted_at').single();
     if (error || !incident) throw error || new Error('Could not persist operational incident');
-    const lastAlerted = incident.last_alerted_at ? new Date(incident.last_alerted_at).getTime() : 0;
-    if (isNew || Date.now() - lastAlerted > 30 * 60_000) {
+    if (shouldAlertOperationsIncident({
+      isNew,
+      severity,
+      title: check.summary.slice(0, 240),
+      previousSeverity: existing?.severity,
+      previousTitle: existing?.title,
+      lastAlertedAt: incident.last_alerted_at,
+    })) {
       await this.sendAlert(severity, check.summary);
       await supabase.from('operations_incidents').update({ last_alerted_at: now, updated_at: now }).eq('id', incident.id);
     }

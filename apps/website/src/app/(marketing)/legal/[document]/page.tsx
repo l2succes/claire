@@ -7,7 +7,7 @@ import { SiteHeader } from '@/components/site/SiteHeader';
 const documents = {
   privacy: {
     title: 'Privacy',
-    body: 'Claire is alpha. Message data synchronized into Claire is stored so the unified inbox, search, and optional AI features can work. Connected networks keep their own privacy policies. Configured AI providers may receive selected conversation context. A verified desktop-only mode is not available yet.',
+    body: 'Claire is alpha. If you join the waitlist, we store your email address, signup source, consent time, and optional campaign/referrer data so we can send build notes and early-access invitations. You can unsubscribe from any email. Roadmap votes use a random first-party browser identifier to prevent duplicate votes; they do not store your email address or IP. Message data synchronized into Claire is stored so the unified inbox, search, and optional AI features can work. Connected networks keep their own privacy policies. Configured AI providers may receive selected conversation context. A verified desktop-only mode is not available yet.',
   },
   terms: {
     title: 'Terms',

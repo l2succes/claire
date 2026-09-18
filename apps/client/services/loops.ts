@@ -8,7 +8,7 @@
 
 import { supabase } from './supabase';
 import { API_BASE_URL } from './platforms';
-import type { LoopAgentResult, LoopDetail, LoopItem } from './loop-types';
+import type { LoopAgentResult, LoopDetail, LoopItem, LoopReviewInput } from './loop-types';
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const { data: { session } } = await supabase.auth.getSession();
@@ -34,8 +34,15 @@ export function fetchLoopDetail(id: string): Promise<LoopDetail> {
   return request<LoopDetail>(`/loops/${id}?include=events,participants`);
 }
 
+export function createLoop(content: string): Promise<LoopItem> {
+  return request<LoopItem>('/loops', {
+    method: 'POST',
+    body: JSON.stringify({ content, priority: 'medium' }),
+  });
+}
+
 export function updateLoop(id: string, patch: Partial<Pick<LoopItem,
-  'status' | 'notes' | 'deadline' | 'priority' | 'content'>>): Promise<LoopItem> {
+  'status' | 'owner' | 'notes' | 'deadline' | 'priority' | 'content'>>): Promise<LoopItem> {
   return request<LoopItem>(`/loops/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
 }
 
@@ -66,6 +73,22 @@ export function askLoopAgent(id: string, question: string): Promise<LoopAgentRes
 
 export function deleteLoop(id: string): Promise<void> {
   return request<void>(`/loops/${id}`, { method: 'DELETE' });
+}
+
+/**
+ * Record a deliberate stale-loop or close-suggestion decision. Unlike a local
+ * hide, this persists “keep open” so the same review does not reappear until
+ * the conversation adds new evidence.
+ */
+export function reviewLoop(id: string, input: LoopReviewInput): Promise<LoopItem> {
+  return request<LoopItem>(`/loops/${id}/review`, {
+    method: 'POST',
+    body: JSON.stringify({
+      action: input.action,
+      resolution: input.resolution,
+      suggestion_event_id: input.suggestionEventId,
+    }),
+  });
 }
 
 export * from './loop-types';

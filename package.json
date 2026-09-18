@@ -9,6 +9,7 @@
   ],
   "scripts": {
     "setup": "bun run scripts/setup.ts",
+    "worktree:env": "sh scripts/copy-worktree-env.sh",
     "dev": "concurrently \"bun run dev:server\" \"bun run dev:mobile\"",
     "dev:server": "cd apps/server && bun run dev",
     "dev:mobile": "cd apps/client && bun run dev",
@@ -16,6 +17,11 @@
     "dev:website": "cd apps/website && bun run dev",
     "dev:plugin": "bun test --watch examples/plugins",
     "plugin:create": "bun run scripts/plugin-create.ts",
+    "testflight:tickets": "bun run scripts/import-testflight-feedback.ts",
+    "revenuecat:setup": "bun run scripts/revenuecat-configure.ts",
+    "revenuecat:status": "bunx @revenuecat/cli auth status",
+    "revenuecat:verify": "bun run scripts/revenuecat-configure.ts --verify-only",
+    "revenuecat:apple": "bunx @revenuecat/cli setup apple",
     "test:plugins": "bun test examples/plugins",
     "landing": "bunx serve landing",
     "catalog:generate": "bun run scripts/generate-platform-catalog.ts",
@@ -36,6 +42,7 @@
     "mobile:staging": "cd apps/client && bun run start:staging",
     "mobile:prod:local": "cd apps/client && bun run start:prod:local",
     "mobile:ios:staging": "cd apps/client && bun run ios:staging",
+    "demo:seed": "cd apps/server && bun run demo:seed",
     "mobile:ios:prod": "cd apps/client && bun run ios:prod",
     "mobile:ios:prod:local": "cd apps/client && bun run ios:prod:local",
     "mobile:ios:prod:device": "cd apps/client && bun run ios:prod:device",
@@ -80,5 +87,9 @@
     "concurrently": "^8.2.2",
     "nx": "23.1.1",
     "prettier": "^3.1.1"
+  },
+  "patchedDependencies": {
+    "@react-native-cookies/cookies@6.2.1": "patches/@react-native-cookies%2Fcookies@6.2.1.patch",
+    "react-native-worklets@0.7.4": "patches/react-native-worklets@0.7.4.patch"
   }
 }

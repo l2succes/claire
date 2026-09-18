@@ -24,6 +24,13 @@ const envSchema = z.object({
   OPENAI_MODEL: z.string().default('gpt-4-turbo-preview'),
   OPENAI_EMBEDDING_MODEL: z.string().default('text-embedding-3-small'),
 
+  // RevenueCat (public SDK keys stay in the client; these are server-only)
+  REVENUECAT_SECRET_API_KEY: z.string().optional(),
+  REVENUECAT_PROJECT_ID: z.string().optional(),
+  REVENUECAT_WEBHOOK_AUTH_TOKEN: z.string().min(32).optional(),
+  REVENUECAT_WEBHOOK_SIGNING_SECRET: z.string().min(32).optional(),
+  BILLING_ENFORCED: z.string().default('false').transform((val) => val === 'true'),
+
   // AWS Bedrock (primary AI provider)
   AWS_ACCESS_KEY_ID: z.string().optional(),
   AWS_SECRET_ACCESS_KEY: z.string().optional(),
@@ -80,6 +87,11 @@ const envSchema = z.object({
 
   // Mock bridge mode — replaces all adapters with scripted fixtures (no Docker required)
   MOCK_BRIDGE: z.string().default('false').transform((val) => val === 'true'),
+
+  // Demo accounts — synthetic conversations and in-character replies for
+  // recorded product demos. Half the gate only: an account must ALSO carry
+  // users.is_demo, so enabling this cannot affect a real account.
+  DEMO_MODE_ENABLED: z.string().default('false').transform((val) => val === 'true'),
 
   // Matrix Configuration (required when PLATFORM_MODE=matrix)
   MATRIX_HOMESERVER_URL: z.string().url().optional(),
@@ -222,4 +234,8 @@ export const matrixConfig = {
 
 export const mockBridgeConfig = {
   enabled: config.MOCK_BRIDGE,
+};
+
+export const demoConfig = {
+  enabled: config.DEMO_MODE_ENABLED,
 };

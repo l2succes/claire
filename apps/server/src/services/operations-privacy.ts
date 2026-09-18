@@ -5,6 +5,7 @@ import { redactForOperations } from '../utils/redaction';
 const SAFE_DETAIL_KEYS = new Set([
   'latencyMs', 'httpStatus', 'connected', 'disconnected', 'recentCount', 'previousCount',
   'freshnessMinutes', 'failed', 'delivered', 'error', 'retries', 'queueDepth', 'activeClients',
+  'ignored',
 ]);
 
 /** The Operations Console is intentionally unable to become a chat viewer. */

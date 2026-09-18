@@ -23,10 +23,17 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
     const filter = typeof req.query.filter === 'string' ? req.query.filter : 'all';
 
     const contactsQuery = () => {
+      // people_directory is contacts plus is_dead_end: rows that identify
+      // nobody and lead nowhere (no number, username, usable name, or
+      // conversation). Filtering in the query rather than after the fetch is
+      // what keeps offsets and the chunk-exhaustion check below meaningful --
+      // dropping rows in JavaScript would make a full chunk look short and end
+      // the walk early.
       let query = supabase
-        .from('contacts')
-        .select('id, name, phone_number, platform_contact_id, avatar_url, inferred_name, inferred_relationship, is_group, platform, username')
+        .from('people_directory')
+        .select('id, name, phone_number, platform_contact_id, avatar_url, inferred_name, inferred_relationship, is_group, platform, username, notes')
         .eq('user_id', userId)
+        .eq('is_dead_end', false)
         .order('name', { ascending: true, nullsFirst: false })
         .order('id', { ascending: true });
 
@@ -120,6 +127,78 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
  * the linked account's contact directory, and the task reads no message
  * bodies.
  */
+/**
+ * A single contact, for the People detail view.
+ *
+ * The list already carries everything the detail view renders, but a detail
+ * view has to survive a deep link and a cold start, when no list has been
+ * fetched. Its own read keeps it self-sufficient.
+ */
+router.get('/:contactId', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.id as string;
+    const { data, error } = await supabase
+      .from('contacts')
+      .select('id, name, phone_number, platform_contact_id, avatar_url, inferred_name, inferred_relationship, is_group, platform, username, notes')
+      .eq('user_id', userId)
+      .eq('id', req.params.contactId)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return res.status(404).json({ success: false, error: 'Contact not found' });
+
+    const { data: chat, error: chatError } = await supabase
+      .from('chats')
+      .select('id, contact_id, name, platform, is_group, last_message_at')
+      .eq('user_id', userId)
+      .eq('contact_id', data.id)
+      .order('last_message_at', { ascending: false, nullsFirst: false })
+      .limit(1)
+      .maybeSingle();
+    if (chatError) throw chatError;
+
+    const platform = data.platform as Platform;
+    const phoneNumber = data.phone_number
+      || phoneNumberFromPlatformContactId(platform, data.platform_contact_id as string | null | undefined);
+    return res.json({ success: true, data: { ...data, phone_number: phoneNumber, chat: chat || null } });
+  } catch (error) {
+    logger.error('Error fetching contact:', error);
+    return res.status(500).json({ success: false, error: 'Failed to fetch contact' });
+  }
+});
+
+/**
+ * What the user wants Claire to know about this person.
+ *
+ * Writes contacts.notes, which the prompt builder already reads. Contact-scoped
+ * on purpose: the conversation-level equivalent lives on contact_profiles and
+ * is keyed by chat, so it has nowhere to go for the overwhelming majority of a
+ * directory this size that has never had a conversation.
+ */
+router.patch('/:contactId', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.id as string;
+    const raw = (req.body as { notes?: unknown })?.notes;
+    if (raw !== null && typeof raw !== 'string') {
+      return res.status(400).json({ success: false, error: 'Notes must be text' });
+    }
+    const notes = typeof raw === 'string' ? raw.trim().slice(0, 4000) : null;
+
+    const { data, error } = await supabase
+      .from('contacts')
+      .update({ notes: notes || null })
+      .eq('user_id', userId)
+      .eq('id', req.params.contactId)
+      .select('id, notes')
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return res.status(404).json({ success: false, error: 'Contact not found' });
+    return res.json({ success: true, data });
+  } catch (error) {
+    logger.error('Error updating contact:', error);
+    return res.status(500).json({ success: false, error: 'Failed to save this contact' });
+  }
+});
+
 router.post('/identity-backfill', requireAuth, async (req: Request, res: Response) => {
   const userId = req.user?.id;
   if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, ChevronLeft, Clock3, MessageCircle, RotateCcw, Trash2, UserRound } from 'lucide-react-native';
+import { Bell, Check, ChevronLeft, Clock3, MessageCircle, RotateCcw, Sparkles, XCircle, UserRound } from 'lucide-react-native';
 import { colors, mobileType, radius, space } from '@claire/design-system';
 
 import { MobileHeader, MobileIconButton, MobileState } from '../../components/mobile/claire-mobile';
@@ -14,11 +14,13 @@ import {
   formatDeadline,
   isOverdue,
   loopTitle,
+  reviewLoop,
   snoozeLoop,
   updateLoop,
   type LoopDetail,
   type LoopParticipant,
 } from '../../services/loops';
+import { pendingCloseSuggestion } from '../../services/loop-review';
 import { LoopAgentPanel } from './loop-agent-panel';
 import { LoopBlocks } from './loop-blocks';
 import { LoopTimeline } from './loop-timeline';
@@ -49,6 +51,13 @@ const STATE_LABEL: Record<string, string> = {
   pending_confirmation: 'Waiting on confirmation',
   agreed: 'Agreed',
   resolved: 'Resolved',
+};
+
+const REMINDER_LABEL: Record<string, string> = {
+  snooze_ended: 'Returns after snooze',
+  act_now: 'Needs attention',
+  deadline_soon: 'Before the deadline',
+  follow_up: 'Follow-up window',
 };
 
 /** A tappable pill. Static style plus press state — see the Pressable gotcha in CLAUDE.md. */
@@ -206,6 +215,11 @@ export function LoopDetailScreen() {
     },
   });
 
+  const review = useMutation({
+    mutationFn: (input: Parameters<typeof reviewLoop>[1]) => reviewLoop(String(id), input),
+    onSuccess: invalidate,
+  });
+
   const loop = query.data;
 
   if (query.isLoading) {
@@ -235,6 +249,8 @@ export function LoopDetailScreen() {
   const group = !!loop.chat?.is_group;
   const due = formatDeadline(loop.deadline, loop.deadline_precision);
   const snoozedUntil = formatDeadline(loop.snoozed_until, 'exact');
+  const nextReminder = formatDeadline(loop.next_reminder_at, 'exact');
+  const closeSuggestion = pendingCloseSuggestion(loop.events ?? []);
 
   const tomorrow = () => {
     const date = new Date();
@@ -311,7 +327,74 @@ export function LoopDetailScreen() {
               Snoozed until {snoozedUntil}
             </Text>
           ) : null}
+          {loop.reminder_plan_state === 'scheduled' && nextReminder ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}>
+              <Bell size={15} color={colors.neutral[600]} />
+              <Text testID="loop-detail-next-reminder" style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>
+                {REMINDER_LABEL[loop.reminder_reason ?? ''] ?? 'Reminder'} · {nextReminder}
+              </Text>
+            </View>
+          ) : null}
         </View>
+
+        {closeSuggestion && !done ? (
+          <View
+            testID="loop-close-suggestion"
+            style={{
+              padding: space[4],
+              borderRadius: radius.card,
+              borderWidth: 1,
+              borderColor: colors.ink,
+              backgroundColor: colors.sky,
+              gap: space[3],
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}>
+              <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: colors.lime, alignItems: 'center', justifyContent: 'center' }}>
+                <Sparkles size={15} color={colors.ink} />
+              </View>
+              <Text selectable style={{ ...mobileType.body, flex: 1, fontWeight: '700', color: colors.ink }}>
+                Claire thinks this loop is finished
+              </Text>
+            </View>
+            <Text selectable style={{ ...mobileType.bodySmall, color: colors.ink }}>
+              {closeSuggestion.summary}
+            </Text>
+            <View style={{ flexDirection: 'row', gap: space[2] }}>
+              <View style={{ flex: 1 }}>
+                <ActionButton
+                  testID="loop-close-suggestion-accept"
+                  label="Clear loop"
+                  icon={Check}
+                  tone="primary"
+                  disabled={review.isPending}
+                  onPress={() => review.mutate({
+                    action: 'done',
+                    resolution: closeSuggestion.resolution,
+                    suggestionEventId: closeSuggestion.eventId,
+                  })}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <ActionButton
+                  testID="loop-close-suggestion-keep"
+                  label="Keep open"
+                  icon={RotateCcw}
+                  disabled={review.isPending}
+                  onPress={() => review.mutate({
+                    action: 'keep_open',
+                    suggestionEventId: closeSuggestion.eventId,
+                  })}
+                />
+              </View>
+            </View>
+            {review.error ? (
+              <Text selectable style={{ ...mobileType.bodySmall, color: colors.danger }}>
+                {review.error.message}
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
 
         {/* Actions */}
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space[2] }}>
@@ -388,8 +471,8 @@ export function LoopDetailScreen() {
 
         <ActionButton
           testID="loop-detail-delete"
-          label="Delete this loop"
-          icon={Trash2}
+          label="Dismiss loop"
+          icon={XCircle}
           tone="danger"
           disabled={remove.isPending}
           onPress={() => remove.mutate()}

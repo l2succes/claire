@@ -5,15 +5,18 @@
  * Persists to /preferences on the server.
  */
 
-import { View, Text, ScrollView, Switch, TouchableOpacity, ActivityIndicator, Alert, Linking, Platform, Pressable } from 'react-native';
-import { useState, useEffect } from 'react';
+import { View, Text, ScrollView, ActivityIndicator, Alert, Linking, Platform, Pressable } from 'react-native';
+import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { router } from 'expo-router';
-import { ChevronLeft } from 'lucide-react-native';
-import { colors, mobileType, radius } from '@claire/design-system';
-import { MobileHeader, MobileIconButton } from '../../components/mobile/claire-mobile';
+import { BellRing, ChevronLeft, ChevronRight } from 'lucide-react-native';
+import { colors, mobileType, radius, space } from '@claire/design-system';
+import { MobileHeader, MobileIconButton, SectionLabel } from '../../components/mobile/claire-mobile';
 import { supabase } from '../../services/supabase';
 import { API_BASE_URL } from '../../services/platforms';
+import { useAuthStore } from '../../stores/authStore';
+import { readQuerySnapshot, writeQuerySnapshot } from '../../services/mobile-cache';
 import { getNativeNotificationPermission, registerNotificationDevice, requestWebNotificationPermission, supportsWebNotifications } from '../../services/notifications';
+import { createSerialSaveQueue } from '../../features/settings/serial-save-queue';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -97,6 +100,41 @@ async function saveNotificationPrefs(token: string, prefs: NotificationPrefs): P
 // Component
 // ---------------------------------------------------------------------------
 
+function SettingsSection({ title, detail, children }: { title: string; detail?: string; children: ReactNode }) {
+  return (
+    <View style={{ gap: 6 }}>
+      <SectionLabel title={title} />
+      {detail ? <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600], paddingHorizontal: 2 }}>{detail}</Text> : null}
+      <View style={{ backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.neutral[200], borderRadius: 16, overflow: 'hidden' }}>
+        {children}
+      </View>
+    </View>
+  );
+}
+
+function ClaireSwitch({ label, value, onValueChange, testID, disabled }: {
+  label: string;
+  value: boolean;
+  onValueChange: (value: boolean) => void;
+  testID?: string;
+  disabled?: boolean;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="switch"
+      accessibilityState={{ checked: value, disabled }}
+      accessibilityLabel={label}
+      disabled={disabled}
+      hitSlop={8}
+      onPress={() => onValueChange(!value)}
+      testID={testID}
+      style={{ width: 48, height: 28, flexShrink: 0, justifyContent: 'center', padding: 2, borderRadius: radius.pill, backgroundColor: value ? colors.lime : colors.neutral[200], opacity: disabled ? 0.45 : 1 }}
+    >
+      <View style={{ width: 24, height: 24, alignSelf: value ? 'flex-end' : 'flex-start', borderRadius: radius.pill, backgroundColor: colors.ink }} />
+    </Pressable>
+  );
+}
+
 function ToggleRow({
   label,
   description,
@@ -104,6 +142,7 @@ function ToggleRow({
   onValueChange,
   testID,
   disabled = false,
+  divided = false,
 }: {
   label: string;
   description?: string;
@@ -111,23 +150,23 @@ function ToggleRow({
   onValueChange: (v: boolean) => void;
   testID?: string;
   disabled?: boolean;
+  divided?: boolean;
 }) {
   return (
-    <View className="flex-row items-center bg-white dark:bg-gray-800 rounded-lg px-4 py-3 mb-2">
-      <View className="flex-1 mr-3">
-        <Text className={`font-semibold ${disabled ? 'text-gray-400 dark:text-gray-500' : 'text-gray-900 dark:text-white'}`}>
+    <View style={{ minHeight: 68, flexDirection: 'row', alignItems: 'center', gap: space[3], paddingHorizontal: space[4], paddingVertical: space[3], borderTopWidth: divided ? 1 : 0, borderTopColor: colors.neutral[200] }}>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={{ ...mobileType.body, fontWeight: '700', color: disabled ? colors.neutral[400] : colors.ink }}>
           {label}
         </Text>
         {description ? (
-          <Text className="text-sm text-gray-500 dark:text-gray-400">{description}</Text>
+          <Text style={{ ...mobileType.bodySmall, color: disabled ? colors.neutral[400] : colors.neutral[600], marginTop: 2 }}>{description}</Text>
         ) : null}
       </View>
-      <Switch
+      <ClaireSwitch
+        label={label}
         value={value}
         onValueChange={onValueChange}
         disabled={disabled}
-        trackColor={{ false: '#d1d5db', true: '#10b981' }}
-        thumbColor={value ? '#fff' : '#f9fafb'}
         testID={testID}
       />
     </View>
@@ -140,12 +179,14 @@ function TimeSelector({
   onChange,
   testID,
   disabled = false,
+  divided = false,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   testID?: string;
   disabled?: boolean;
+  divided?: boolean;
 }) {
   const index = QUIET_HOURS_OPTIONS.indexOf(value);
 
@@ -155,30 +196,36 @@ function TimeSelector({
   };
 
   return (
-    <View className="flex-row items-center bg-white dark:bg-gray-800 rounded-lg px-4 py-3 mb-2">
-      <Text className={`flex-1 font-semibold ${disabled ? 'text-gray-400 dark:text-gray-500' : 'text-gray-900 dark:text-white'}`}>
+    <View style={{ minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: space[3], paddingHorizontal: space[4], paddingVertical: 10, borderTopWidth: divided ? 1 : 0, borderTopColor: colors.neutral[200] }}>
+      <Text style={{ flex: 1, ...mobileType.body, fontWeight: '700', color: disabled ? colors.neutral[400] : colors.ink }}>
         {label}
       </Text>
-      <View className="flex-row items-center" testID={testID}>
-        <TouchableOpacity
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2], opacity: disabled ? 0.4 : 1 }} testID={testID}>
+        <Pressable
           onPress={() => step(-1)}
           disabled={disabled}
-          className="px-3 py-1"
+          accessibilityRole="button"
+          accessibilityLabel={`Earlier ${label.toLowerCase()}`}
+          hitSlop={6}
+          style={{ width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: colors.neutral[100] }}
           testID={testID ? `${testID}-dec` : undefined}
         >
-          <Text className={`text-xl ${disabled ? 'text-gray-300' : 'text-green-500'}`}>‹</Text>
-        </TouchableOpacity>
-        <Text className={`w-14 text-center font-mono ${disabled ? 'text-gray-400' : 'text-gray-900 dark:text-white'}`}>
+          <ChevronLeft size={16} color={colors.ink} />
+        </Pressable>
+        <Text style={{ width: 52, textAlign: 'center', ...mobileType.body, fontFamily: 'DM Mono', color: colors.ink }}>
           {value}
         </Text>
-        <TouchableOpacity
+        <Pressable
           onPress={() => step(1)}
           disabled={disabled}
-          className="px-3 py-1"
+          accessibilityRole="button"
+          accessibilityLabel={`Later ${label.toLowerCase()}`}
+          hitSlop={6}
+          style={{ width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: colors.neutral[100] }}
           testID={testID ? `${testID}-inc` : undefined}
         >
-          <Text className={`text-xl ${disabled ? 'text-gray-300' : 'text-green-500'}`}>›</Text>
-        </TouchableOpacity>
+          <ChevronRight size={16} color={colors.ink} />
+        </Pressable>
       </View>
     </View>
   );
@@ -187,17 +234,55 @@ function TimeSelector({
 export default function NotificationsSettingsScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [saveFailed, setSaveFailed] = useState(false);
   const [prefs, setPrefs] = useState<NotificationPrefs>(DEFAULTS);
   const [systemPermission, setSystemPermission] = useState('unknown');
+  const prefsRef = useRef(DEFAULTS);
+  const editRevisionRef = useRef(0);
+  const latestSaveRef = useRef<Promise<void> | null>(null);
+  const mountedRef = useRef(true);
+  const saveQueueRef = useRef(createSerialSaveQueue<NotificationPrefs>(async (next) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) throw new Error('Not authenticated');
+    await saveNotificationPrefs(session.access_token, next);
+    const userId = useAuthStore.getState().user?.id;
+    if (userId) await writeQuerySnapshot(userId, 'preferences:notifications', next);
+  }));
+
+  useEffect(() => () => { mountedRef.current = false; }, []);
 
   useEffect(() => {
+    // Preferences change only when the user edits them, so the last known set
+    // is the right first frame. Without this the screen showed a spinner on
+    // every open while it re-read values it already had.
+    const userId = useAuthStore.getState().user?.id;
+    if (!userId) return;
+    let active = true;
+    void readQuerySnapshot<NotificationPrefs>(userId, 'preferences:notifications')
+      .then((snapshot) => {
+        if (!active || !snapshot?.data || editRevisionRef.current > 0) return;
+        prefsRef.current = snapshot.data;
+        setPrefs(snapshot.data);
+        setLoading(false);
+      })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    const revisionAtStart = editRevisionRef.current;
     (async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token;
         if (!token) return;
         const loaded = await fetchNotificationPrefs(token);
-        setPrefs(loaded);
+        if (editRevisionRef.current === revisionAtStart) {
+          prefsRef.current = loaded;
+          setPrefs(loaded);
+          const userId = useAuthStore.getState().user?.id;
+          if (userId) void writeQuerySnapshot(userId, 'preferences:notifications', loaded).catch(() => undefined);
+        }
         setSystemPermission(await getNativeNotificationPermission());
       } catch {
         // silently use defaults
@@ -207,21 +292,31 @@ export default function NotificationsSettingsScreen() {
     })();
   }, []);
 
-  const update = (patch: Partial<NotificationPrefs>) => setPrefs((p) => ({ ...p, ...patch }));
-
-  const handleSave = async () => {
+  const enqueueSave = (next: NotificationPrefs): void => {
     setSaving(true);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
-      if (!token) throw new Error('Not authenticated');
-      await saveNotificationPrefs(token, prefs);
-      router.back();
-    } catch {
-      Alert.alert('Error', 'Failed to save notification preferences. Please try again.');
-    } finally {
+    setSaveFailed(false);
+    const task = saveQueueRef.current(next);
+    latestSaveRef.current = task;
+    void task.then(() => {
+      if (!mountedRef.current || latestSaveRef.current !== task) return;
       setSaving(false);
-    }
+    }).catch(() => {
+      if (!mountedRef.current || latestSaveRef.current !== task) return;
+      setSaving(false);
+      setSaveFailed(true);
+      Alert.alert('Changes not saved', 'Check your connection and try again.', [
+        { text: 'Not now', style: 'cancel' },
+        { text: 'Try again', onPress: () => enqueueSave(prefsRef.current) },
+      ]);
+    });
+  };
+
+  const update = (patch: Partial<NotificationPrefs>) => {
+    const next = { ...prefsRef.current, ...patch };
+    editRevisionRef.current += 1;
+    prefsRef.current = next;
+    setPrefs(next);
+    enqueueSave(next);
   };
 
   const handleEnableBrowserNotifications = async () => {
@@ -246,8 +341,8 @@ export default function NotificationsSettingsScreen() {
 
   if (loading) {
     return (
-      <View className="flex-1 items-center justify-center bg-gray-50 dark:bg-gray-900">
-        <ActivityIndicator size="large" color="#10b981" />
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.cream }}>
+        <ActivityIndicator size="large" color={colors.ink} />
       </View>
     );
   }
@@ -256,115 +351,114 @@ export default function NotificationsSettingsScreen() {
 
   return (
     <ScrollView
-      className="flex-1 bg-gray-50 dark:bg-gray-900"
       testID="notifications-settings-screen"
+      style={{ flex: 1, backgroundColor: colors.cream }}
+      contentInsetAdjustmentBehavior="never"
+      contentContainerStyle={{ paddingBottom: 64 }}
     >
       <MobileHeader
+        safeArea
         title="Notifications"
-        subtitle="Alerts, badges, and quiet hours."
+        subtitle="Alerts, reminders, and quiet hours."
         leading={<MobileIconButton label="Back to Settings" testID="notifications-settings-back" onPress={() => router.back()}><ChevronLeft size={20} color={colors.ink} /></MobileIconButton>}
-        actions={
-          <Pressable testID="notifications-settings-save" onPress={() => void handleSave()} disabled={saving} style={{ minHeight: 36, paddingHorizontal: 14, borderRadius: radius.pill, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center', opacity: saving ? 0.6 : 1 }}>
-            {saving ? <ActivityIndicator size="small" color={colors.lime} /> : <Text style={{ ...mobileType.label, color: colors.paper }}>Save</Text>}
-          </Pressable>
-        }
       />
-      <View className="p-4">
+      <View style={{ paddingHorizontal: space[4], gap: space[5] }}>
+        <SettingsSection title="Delivery">
+          <ToggleRow
+            label="Claire notifications"
+            description="Turn off to pause every alert from Claire."
+            value={prefs.notification_enabled}
+            onValueChange={(v) => update({ notification_enabled: v })}
+            testID="notif-toggle-enabled"
+          />
+          {supportsWebNotifications() ? (
+            <Pressable
+              onPress={() => void handleEnableBrowserNotifications()}
+              style={{ minHeight: 68, flexDirection: 'row', alignItems: 'center', gap: space[3], paddingHorizontal: space[4], paddingVertical: space[3], borderTopWidth: 1, borderTopColor: colors.neutral[200] }}
+              testID="notif-enable-browser"
+            >
+              <View style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 11, backgroundColor: colors.sky }}><BellRing size={17} color={colors.ink} /></View>
+              <View style={{ flex: 1, minWidth: 0 }}><Text style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>Browser notifications</Text><Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>Enable alerts while Claire is open in this browser.</Text></View>
+              <ChevronRight size={18} color={colors.neutral[400]} />
+            </Pressable>
+          ) : null}
+          {Platform.OS !== 'web' ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Device notification permission"
+              onPress={() => { handleNativePermission().catch(() => Alert.alert('Notifications unavailable', 'Claire could not update the system notification permission.')); }}
+              style={{ minHeight: 76, flexDirection: 'row', alignItems: 'center', gap: space[3], paddingHorizontal: space[4], paddingVertical: space[3], borderTopWidth: 1, borderTopColor: colors.neutral[200] }}
+              testID="notif-enable-native"
+            >
+              <View style={{ width: 36, height: 36, flexShrink: 0, alignItems: 'center', justifyContent: 'center', borderRadius: 11, backgroundColor: colors.sky }}><BellRing size={17} color={colors.ink} /></View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>Device notifications</Text>
+                <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600], marginTop: 2 }}>
+                  {systemPermission === 'granted' ? 'Allowed by iOS and registered with Claire.' : systemPermission === 'denied' ? 'Open iOS Settings to allow alerts.' : 'Tap to allow alerts on this device.'}
+                </Text>
+              </View>
+              <View style={{ minHeight: 26, justifyContent: 'center', paddingHorizontal: 9, borderRadius: radius.pill, backgroundColor: systemPermission === 'granted' ? colors.successSurface : colors.neutral[100] }}>
+                <Text style={{ ...mobileType.label, color: systemPermission === 'granted' ? colors.success : colors.neutral[600], textTransform: 'capitalize' }}>{systemPermission}</Text>
+              </View>
+            </Pressable>
+          ) : null}
+        </SettingsSection>
 
-        {/* DND — master kill-switch */}
-        <Text className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
-          Do Not Disturb
-        </Text>
-        <ToggleRow
-          label="Enable notifications"
-          description="Turn off to silence all Claire notifications"
-          value={prefs.notification_enabled}
-          onValueChange={(v) => update({ notification_enabled: v })}
-          testID="notif-toggle-enabled"
-        />
+        <SettingsSection title="What you receive">
+          <ToggleRow
+            label="New messages"
+            value={prefs.notify_messages}
+            onValueChange={(v) => update({ notify_messages: v })}
+            testID="notif-toggle-messages"
+            disabled={dndActive}
+          />
+          <ToggleRow
+            divided
+            label="Loop reminders"
+            description="Timed around urgency, deadlines, and who owes the next move."
+            value={prefs.notify_loops}
+            onValueChange={(v) => update({ notify_loops: v })}
+            testID="notif-toggle-loops"
+            disabled={dndActive}
+          />
+          <ToggleRow
+            divided
+            label="AI reply suggestions"
+            value={prefs.notify_ai_suggestions}
+            onValueChange={(v) => update({ notify_ai_suggestions: v })}
+            testID="notif-toggle-ai-suggestions"
+            disabled={dndActive}
+          />
+        </SettingsSection>
 
-        {/* Per-type toggles */}
-        <Text className="text-lg font-semibold text-gray-900 dark:text-white mt-4 mb-3">
-          Notification types
-        </Text>
-        <ToggleRow
-          label="New messages"
-          value={prefs.notify_messages}
-          onValueChange={(v) => update({ notify_messages: v })}
-          testID="notif-toggle-messages"
-          disabled={dndActive}
-        />
+        <SettingsSection title="Quiet hours" detail="Silence notifications during a nightly window.">
+          <ToggleRow
+            label="Use quiet hours"
+            value={prefs.quiet_hours_enabled}
+            onValueChange={(v) => update({ quiet_hours_enabled: v })}
+            testID="notif-toggle-quiet-hours"
+            disabled={dndActive}
+          />
+          <TimeSelector
+            divided
+            label="Start time"
+            value={prefs.quiet_hours_start}
+            onChange={(v) => update({ quiet_hours_start: v })}
+            testID="notif-quiet-start"
+            disabled={dndActive || !prefs.quiet_hours_enabled}
+          />
+          <TimeSelector
+            divided
+            label="End time"
+            value={prefs.quiet_hours_end}
+            onChange={(v) => update({ quiet_hours_end: v })}
+            testID="notif-quiet-end"
+            disabled={dndActive || !prefs.quiet_hours_enabled}
+          />
+        </SettingsSection>
 
-        {supportsWebNotifications() && (
-          <TouchableOpacity
-            onPress={handleEnableBrowserNotifications}
-            className="bg-white dark:bg-gray-800 rounded-xl px-4 py-3 mt-3"
-            testID="notif-enable-browser"
-          >
-            <Text className="font-semibold text-gray-900 dark:text-white">Enable browser notifications</Text>
-            <Text className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              Receive alerts while Claire is open in this browser.
-            </Text>
-          </TouchableOpacity>
-        )}
-        {Platform.OS !== 'web' && (
-          <TouchableOpacity
-            onPress={() => { handleNativePermission().catch(() => Alert.alert('Notifications unavailable', 'Claire could not update the system notification permission.')); }}
-            className="bg-white dark:bg-gray-800 rounded-xl px-4 py-3 mt-3"
-            testID="notif-enable-native"
-          >
-            <Text className="font-semibold text-gray-900 dark:text-white">System permission: {systemPermission}</Text>
-            <Text className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              {systemPermission === 'denied' ? 'Open system settings to allow Claire notifications.' : 'Tap to enable alerts and register this device.'}
-            </Text>
-          </TouchableOpacity>
-        )}
-        <ToggleRow
-          label="Loop reminders"
-          value={prefs.notify_loops}
-          onValueChange={(v) => update({ notify_loops: v })}
-          testID="notif-toggle-loops"
-          disabled={dndActive}
-        />
-        <ToggleRow
-          label="AI reply suggestions"
-          value={prefs.notify_ai_suggestions}
-          onValueChange={(v) => update({ notify_ai_suggestions: v })}
-          testID="notif-toggle-ai-suggestions"
-          disabled={dndActive}
-        />
-
-        {/* Quiet hours */}
-        <Text className="text-lg font-semibold text-gray-900 dark:text-white mt-4 mb-3">
-          Quiet hours
-        </Text>
-        <Text className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-          Silence notifications during a nightly window.
-        </Text>
-        <ToggleRow
-          label="Enable quiet hours"
-          value={prefs.quiet_hours_enabled}
-          onValueChange={(v) => update({ quiet_hours_enabled: v })}
-          testID="notif-toggle-quiet-hours"
-          disabled={dndActive}
-        />
-        <TimeSelector
-          label="Start time"
-          value={prefs.quiet_hours_start}
-          onChange={(v) => update({ quiet_hours_start: v })}
-          testID="notif-quiet-start"
-          disabled={dndActive || !prefs.quiet_hours_enabled}
-        />
-        <TimeSelector
-          label="End time"
-          value={prefs.quiet_hours_end}
-          onChange={(v) => update({ quiet_hours_end: v })}
-          testID="notif-quiet-end"
-          disabled={dndActive || !prefs.quiet_hours_enabled}
-        />
-
-        <Text className="text-xs text-gray-400 dark:text-gray-500 text-center mt-6">
-          These settings control when and how Claire sends you push notifications.
+        <Text testID="notifications-autosave-status" style={{ ...mobileType.bodySmall, color: saveFailed ? colors.danger : colors.neutral[400], textAlign: 'center', paddingHorizontal: space[4] }}>
+          {saveFailed ? 'Changes could not be saved.' : saving ? 'Saving changes…' : 'Changes save automatically.'}
         </Text>
       </View>
     </ScrollView>

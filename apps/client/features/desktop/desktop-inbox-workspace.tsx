@@ -9,7 +9,7 @@ import { host } from '@claire/host';
 import { ResizablePane } from '@claire/shell';
 import { useAuthStore } from '../../stores/authStore';
 import { MobileSearchField } from '../../components/mobile/claire-mobile';
-import { useInboxMessages, type InboxMessage } from '../../hooks/useInboxMessages';
+import { useInboxMessages, type InboxMessage, type InboxServerFilter } from '../../hooks/useInboxMessages';
 import { InboxConversationRow } from '../inbox/inbox-screen';
 import { chatTimelineOptions, warmChatTimelines } from '../../hooks/useChatTimeline';
 import { Platform } from '../../types/platform';
@@ -24,20 +24,23 @@ import { PlatformBadge } from '../../components/PlatformIcon';
 export function DesktopInboxWorkspace({ selectedChatId, conversation }: { selectedChatId?: string; conversation?: ReactNode }) {
   const user = useAuthStore((state) => state.user);
   const params = useLocalSearchParams<{ filter?: string }>();
-  const inbox = useInboxMessages(user?.id, { filter: params.filter === 'needs_reply' ? 'needs_reply' : 'all' });
   const queryClient = useQueryClient();
   const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState<'all' | 'unread' | 'needs_reply'>(params.filter === 'needs_reply' ? 'needs_reply' : 'all');
+  // Same union and same default as the phone inbox. This screen used to hold a
+  // narrower one and filter in memory, so the two disagreed about what the
+  // inbox contains — and only the loaded page was ever filtered.
+  const [filter, setFilter] = useState<InboxServerFilter>(params.filter === 'needs_reply' ? 'needs_reply' : 'dms');
+  const inbox = useInboxMessages(user?.id, { filter });
   const [platform, setPlatform] = useState<Platform | 'all'>('all');
   const media = useMedia();
+  // Scope now runs in the database with the rest of the filters; only search
+  // and the platform pill are still applied to the loaded page here.
   const messages = useMemo(() => inbox.messages.filter((message) => {
     const haystack = `${message.chat_name || ''} ${message.contact_name || ''} ${message.content || ''}`.toLowerCase();
     if (query && !haystack.includes(query.trim().toLowerCase())) return false;
-    if (filter === 'unread' && !message.unread_count) return false;
-    if (filter === 'needs_reply' && message.from_me) return false;
     if (platform !== 'all' && message.platform !== platform) return false;
     return true;
-  }), [filter, inbox.messages, platform, query]);
+  }), [inbox.messages, platform, query]);
   const selected = useMemo(() => messages.find((item) => item.chat_id === selectedChatId) || inbox.messages.find((item) => item.chat_id === selectedChatId) || messages[0], [inbox.messages, messages, selectedChatId]);
 
   const chatRoute = (message: InboxMessage) => ({ pathname: '/chat/[chatId]' as const, params: { chatId: message.chat_id, contact_name: message.contact_name || '', chat_name: message.chat_name || '', platform: message.platform || '', is_group: message.is_group ? '1' : '0' } });
@@ -87,7 +90,7 @@ export function DesktopInboxWorkspace({ selectedChatId, conversation }: { select
               onChangeText={setQuery}
               testID="messages-search-input"
             />
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ columnGap: 5, alignItems: 'center', paddingRight: 8 }}><>{([{ value: 'all', label: 'All' }, { value: 'unread', label: `Unread ${inbox.messages.filter((item) => !!item.unread_count).length}` }, { value: 'needs_reply', label: 'Needs reply' }] as const).map((item) => <Pressable key={item.value} accessibilityRole="button" accessibilityState={{ selected: filter === item.value }} onPress={() => setFilter(item.value)}><View paddingHorizontal="$2" paddingVertical={6} borderRadius={99} backgroundColor={filter === item.value ? '$ink' : 'transparent'}><Text style={{ ...type.label, fontSize: 10, color: filter === item.value ? colors.paper : colors.ink }}>{item.label}</Text></View></Pressable>)}{([{ value: Platform.WHATSAPP, label: 'WhatsApp' }, { value: Platform.INSTAGRAM, label: 'Instagram' }] as const).map((item) => <Pressable key={item.value} accessibilityRole="button" accessibilityState={{ selected: platform === item.value }} onPress={() => setPlatform((current) => current === item.value ? 'all' : item.value)}><View flexDirection="row" alignItems="center" columnGap={4} paddingHorizontal="$2" paddingVertical={6} borderRadius={99} borderWidth={platform === item.value ? 1 : 0} borderColor="$ink" backgroundColor={platform === item.value ? '$sky' : 'transparent'}><PlatformBadge platform={item.value} size={13} /><Text style={{ ...type.label, fontSize: 10, color: colors.ink }}>{item.label}</Text></View></Pressable>)}</></ScrollView>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ columnGap: 5, alignItems: 'center', paddingRight: 8 }}><>{([{ value: 'dms', label: 'DMs' }, { value: 'all', label: 'All' }, { value: 'groups', label: 'Groups' }, { value: 'unread', label: `Unread ${inbox.messages.filter((item) => !!item.unread_count).length}` }, { value: 'needs_reply', label: 'Needs reply' }] as const).map((item) => <Pressable key={item.value} accessibilityRole="button" accessibilityState={{ selected: filter === item.value }} onPress={() => setFilter(item.value)}><View paddingHorizontal="$2" paddingVertical={6} borderRadius={99} backgroundColor={filter === item.value ? '$ink' : 'transparent'}><Text style={{ ...type.label, fontSize: 10, color: filter === item.value ? colors.paper : colors.ink }}>{item.label}</Text></View></Pressable>)}{([{ value: Platform.WHATSAPP, label: 'WhatsApp' }, { value: Platform.INSTAGRAM, label: 'Instagram' }] as const).map((item) => <Pressable key={item.value} accessibilityRole="button" accessibilityState={{ selected: platform === item.value }} onPress={() => setPlatform((current) => current === item.value ? 'all' : item.value)}><View flexDirection="row" alignItems="center" columnGap={4} paddingHorizontal="$2" paddingVertical={6} borderRadius={99} borderWidth={platform === item.value ? 1 : 0} borderColor="$ink" backgroundColor={platform === item.value ? '$sky' : 'transparent'}><PlatformBadge platform={item.value} size={13} /><Text style={{ ...type.label, fontSize: 10, color: colors.ink }}>{item.label}</Text></View></Pressable>)}</></ScrollView>
           </View>
           <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingTop: 3, paddingBottom: 24 }}>
             <View flexDirection="row" justifyContent="space-between" paddingHorizontal="$3" paddingVertical="$1"><Text style={{ ...type.monoLabel, fontSize: 9, color: colors.neutral[600] }}>RECENT</Text><Text style={{ ...type.monoLabel, fontSize: 9, color: colors.neutral[600] }}>{messages.length}</Text></View>

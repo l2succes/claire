@@ -16,7 +16,6 @@ import {
   Video,
   FileText,
   AlertCircle,
-  Link2,
   MoreHorizontal,
   Sparkles,
   X,
@@ -42,6 +41,9 @@ import type { VoiceNoteDraft } from '../../components/claire/voice-note-control'
 import { ChatSkeleton } from '../../components/claire/skeleton';
 import { useConversationSettingsStore } from '../../stores/conversationSettingsStore';
 import { GroupChatSummary } from '../../components/GroupChatSummary';
+import { GroupAiBanner } from '../../features/chat/group-ai-banner';
+import { shouldShowQuickContext } from '../../features/chat/quick-context';
+import type { GroupCategory } from '../../types/conversationSettings';
 import { Platform } from '../../types/platform';
 import { PlatformName } from '../../components/PlatformIcon';
 import { displayContactName } from '../../services/contact-display';
@@ -59,6 +61,7 @@ import { MobileAvatar, MobileIconButton } from '../../components/mobile/claire-m
 import { cacheTimeline } from '../../services/mobile-cache';
 import {
   inboxQueryPrefix,
+  markInboxConversationRead,
   patchInboxChat,
   patchInboxRealtimeMessage,
 } from '../../hooks/useInboxMessages';
@@ -67,6 +70,7 @@ import {
   updateChatTimeline,
   useChatTimeline,
 } from '../../hooks/useChatTimeline';
+import { useScreenLoadMark } from '../../hooks/useScreenLoadMark';
 import {
   EMPTY_TIMELINE,
   chatMessageFromSend,
@@ -85,7 +89,12 @@ import {
   type ReactionRow,
 } from '@claire/chat-core';
 import { VoiceMessageBubble } from '../../features/chat/voice-message-bubble';
+import { enqueueChatEvent, newOutgoingMessage, useChatOutbox, getChatOutbox, removeFailedChatEvent } from '../../services/chat-outbox';
+import { requestConnectionRecovery } from '../../services/connection-recovery-signal';
+import { pendingReactions } from '../../features/chat/pending-reactions';
+import { ChatDeliveryStatus } from '../../features/chat/chat-delivery-status';
 import { StandaloneEmojiMessage } from '../../features/chat/standalone-emoji-message';
+import { MessageTextWithLinks } from '../../features/chat/message-link-card';
 
 function InjectedBubble({
   animate,
@@ -363,7 +372,7 @@ export default function ChatRoute() {
 
 export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
   const queryClient = useQueryClient();
-  const { chatId, contact_name, chat_name, platform, is_group, highlightMessageId, draft } =
+  const { chatId, contact_name, chat_name, platform, is_group, highlightMessageId, draft, notificationAction } =
     useLocalSearchParams<{
       chatId: string;
       contact_name: string;
@@ -372,6 +381,7 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
       is_group: string;
       highlightMessageId?: string;
       draft?: string;
+      notificationAction?: string;
     }>();
 
   const user = useAuthStore((state) => state.user);
@@ -387,6 +397,12 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
   });
   const accessToken = useAuthStore((state) => state.token);
   const connectedSessions = usePlatformStore((state) => state.connectedSessions);
+  const sessionSyncStatus = usePlatformStore((state) => state.sessionSyncStatus);
+  const outboxEntries = useChatOutbox((state) => state.entries);
+  const attentionPlatforms = useChatOutbox((state) => state.attentionPlatforms);
+  const chatOutbox = outboxEntries.filter((entry) => entry.userId === user?.id && entry.chatId === chatId);
+  const failedOutboxEvent = chatOutbox.find((entry) => entry.error);
+  const outboxError = failedOutboxEvent?.error;
   const availablePlatforms = usePlatformStore((state) => state.availablePlatforms);
   // Selectors, not a bare destructure: subscribing to the whole store re-rendered
   // this screen on every settings mutation for every conversation. Only this
@@ -396,22 +412,28 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
   );
   const fetchConvSettings = useConversationSettingsStore((state) => state.fetchSettings);
   const dismissCard = useConversationSettingsStore((state) => state.dismissCard);
+  const dismissClarificationCard = useConversationSettingsStore((state) => state.dismissClarificationCard);
   const plusDefault = useChatPreferencesStore((state) => state.plusDefault);
   const hydrateChatPreferences = useChatPreferencesStore((state) => state.hydrate);
   const insets = useSafeAreaInsets();
   const smartCards = convChatSettings?.smartCards ?? [];
   const contactProfile = convChatSettings?.profile ?? null;
-  const fetchConnectedSessions = usePlatformStore((state) => state.fetchConnectedSessions);
+  const clarificationDismissed = convChatSettings?.clarificationDismissed ?? false;
 
   // The transcript lives in the query cache, not in this component. That is what
   // lets a second visit paint on the first frame and lets the app-wide realtime
   // channel keep this conversation current while it is closed.
   const timeline = useChatTimeline(user?.id, chatId, highlightMessageId);
   const messages = timeline.data?.messages ?? EMPTY_TIMELINE.messages;
-  const reactionsByMessage = timeline.data?.reactions ?? EMPTY_TIMELINE.reactions;
+  const reactionsByMessage = pendingReactions(timeline.data ?? EMPTY_TIMELINE, chatOutbox);
   // Not bare isPending: a disabled query stays pending forever, which would turn
   // "no chatId" into a permanent skeleton instead of the empty state.
   const loading = !!chatId && !!user?.id && timeline.isPending;
+  useScreenLoadMark('chat', {
+    hasData: !loading,
+    isFetching: timeline.isFetching,
+    source: timeline.isFetching ? 'cache' : 'network',
+  });
 
   const patchTimeline = useCallback(
     (updater: (previous: ChatTimeline) => ChatTimeline, options?: { createIfMissing?: boolean }) =>
@@ -427,11 +449,15 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
   const [activeVoiceMessageId, setActiveVoiceMessageId] = useState<string | null>(null);
   const [suggestionRefreshKey, setSuggestionRefreshKey] = useState(0);
   const [showReplyOptions, setShowReplyOptions] = useState(false);
-  const [connectionRefreshing, setConnectionRefreshing] = useState(false);
+  const [groupBannerDismissed, setGroupBannerDismissed] = useState(false);
   const [chatMetadata, setChatMetadata] = useState<{
     name: string | null;
     platform: Platform | null;
     isGroup: boolean;
+    aiEnabled: boolean | null;
+    memberCount: number | null;
+    category: GroupCategory | null;
+    categoryConfidence: number | null;
   } | null>(null);
   const platformChatIdRef = useRef<string | null>(null);
   const listRef = useRef<FlatList>(null);
@@ -443,8 +469,12 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
   const reactionInFlightRef = useRef(new Set<string>());
 
   useEffect(() => {
-    if (draft) setInputText(draft);
-  }, [draft]);
+    if (!draft) return;
+    setInputText(draft);
+    if (notificationAction === 'reply') {
+      requestAnimationFrame(() => composerRef.current?.focus());
+    }
+  }, [draft, notificationAction]);
 
   const resolvedPlatform = platform || chatMetadata?.platform || undefined;
 
@@ -484,6 +514,9 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
     (session) => session.platform === (resolvedPlatform as Platform) && session.status === 'connected'
   );
   const isConnected = !!activeSession;
+  const connectionNeedsAttention = !!resolvedPlatform && (attentionPlatforms.includes(resolvedPlatform as Platform)
+    || (!isConnected && sessionSyncStatus === 'ready' && !connectedSessions.some((session) => session.platform === resolvedPlatform && session.lastConnectedAt)));
+
   const contextCard = smartCards[0];
   const quickContext =
     contextCard?.subtitle ||
@@ -498,18 +531,48 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
   // isLoading, not isPending: a disabled query stays pending forever, which
   // would suppress quick context permanently. Waiting for the loop to resolve
   // avoids showing this card and then yanking it away a beat later.
-  const showQuickContext =
-    Boolean(quickContext || needsRelationshipContext) &&
-    !showReplyOptions &&
-    !chatLoop.isLoading &&
-    !chatLoop.data;
+  const showQuickContext = shouldShowQuickContext({
+    hasContextCard: Boolean(contextCard),
+    needsRelationshipContext,
+    clarificationDismissed,
+    replyOptionsOpen: showReplyOptions,
+    loopLoading: chatLoop.isLoading,
+    hasOpenLoop: Boolean(chatLoop.data),
+  });
+
+  // Effective scope, mirroring the server rule: NULL inherits the default,
+  // which is off for a group and on for a 1:1.
+  const groupAiEnabled = chatMetadata?.aiEnabled ?? !isGroup;
+  // Wait for metadata before deciding. Rendering the banner off a null
+  // chatMetadata would flash "Claire isn't reading this" into every group the
+  // user has already turned on.
+  const showGroupAiBanner =
+    isGroup &&
+    !!chatMetadata &&
+    !groupAiEnabled &&
+    !groupBannerDismissed &&
+    !showQuickContext &&
+    !showReplyOptions;
+
+  const enableGroupAi = useCallback(async () => {
+    if (!chatId || !accessToken) return;
+    const response = await fetch(`${API_BASE_URL}/messages/chats/${encodeURIComponent(chatId)}/ai`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: true }),
+    });
+    if (!response.ok) throw new Error(`Could not turn on Claire (${response.status})`);
+    setChatMetadata((current) => (current ? { ...current, aiEnabled: true } : current));
+    // The inbox filters on this column, so its cached feeds are now stale.
+    void queryClient.invalidateQueries({ queryKey: inboxQueryPrefix(user?.id) });
+  }, [accessToken, chatId, queryClient, user?.id]);
 
 
   const fetchChatInfo = useCallback(async () => {
     if (!chatId) return false;
     const { data, error } = await supabase
       .from('chats')
-      .select('platform_chat_id, name, platform, is_group')
+      .select('platform_chat_id, name, platform, is_group, ai_enabled, member_count, chat_classifications(category, confidence)')
       .eq('id', chatId)
       .single();
     if (error) {
@@ -518,10 +581,23 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
     }
     if (data?.platform_chat_id) {
       platformChatIdRef.current = data.platform_chat_id;
+      // PostgREST returns an embedded one-to-one as either an object or a
+      // single-element array depending on how it infers the relationship.
+      const embedded = data.chat_classifications as
+        | { category?: string | null; confidence?: number | null }
+        | Array<{ category?: string | null; confidence?: number | null }>
+        | null
+        | undefined;
+      const classification = Array.isArray(embedded) ? embedded[0] : embedded;
       setChatMetadata({
         name: typeof data.name === 'string' && data.name.trim() ? data.name : null,
         platform: typeof data.platform === 'string' ? data.platform as Platform : null,
         isGroup: data.is_group === true,
+        aiEnabled: typeof data.ai_enabled === 'boolean' ? data.ai_enabled : null,
+        memberCount: typeof data.member_count === 'number' ? data.member_count : null,
+        category: (classification?.category as GroupCategory) ?? null,
+        categoryConfidence:
+          typeof classification?.confidence === 'number' ? classification.confidence : null,
       });
       return true;
     }
@@ -529,14 +605,9 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
   }, [chatId]);
 
   const refreshConnection = useCallback(async () => {
-    setConnectionRefreshing(true);
-    try {
-      await fetchConnectedSessions();
-      await fetchChatInfo();
-    } finally {
-      setConnectionRefreshing(false);
-    }
-  }, [fetchChatInfo, fetchConnectedSessions]);
+    requestConnectionRecovery();
+    await fetchChatInfo();
+  }, [fetchChatInfo]);
 
   const markConversationRead = useCallback(async () => {
     if (!chatId) return;
@@ -544,6 +615,9 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
       (candidate) =>
         candidate.platform === (resolvedPlatform as Platform) && candidate.status === 'connected'
     );
+    // Clear every visible/local representation before the network request. A
+    // quick back gesture must not be able to strand the old count in the inbox.
+    markInboxConversationRead(queryClient, user?.id, chatId, resolvedPlatform as Platform);
     try {
       await platformsApi.markChatRead(chatId, session?.id);
       // Realtime normally carries this chat-row update back to the inbox, but
@@ -634,6 +708,17 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
       )
       .on(
         'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'chats', filter: `id=eq.${chatId}` },
+        (payload) => {
+          // Message insertion and unread increment are separate writes. If the
+          // increment lands after this open chat marked itself read, advance
+          // the cursor again so the inbox cannot regain a stale unread badge.
+          const updated = payload.new as { unread_count?: number };
+          if ((updated.unread_count || 0) > 0) void chatEffectRef.current.markConversationRead();
+        }
+      )
+      .on(
+        'postgres_changes',
         {
           event: 'INSERT',
           schema: 'public',
@@ -714,44 +799,47 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
     hasScrolledToHighlight.current = false;
   }, [highlightMessageId]);
 
-  const listData = useMemo(() => [...messages].reverse(), [messages]);
-  const lastInbound = useMemo(
-    () => [...messages].reverse().find((message) => !message.from_me),
-    [messages]
-  );
+  // One reversed copy, three answers.
+  //
+  // This built three separate reversed copies of the timeline -- for the list,
+  // for the newest inbound message, and for the newest local send -- plus a Map
+  // over all of them, so every realtime patch walked a hundred-message
+  // conversation four times over.
+  const { listData, lastInbound, latestInjectedId } = useMemo(() => {
+    const reversed = [...messages].reverse();
+    let inbound: (typeof reversed)[number] | undefined;
+    let injected: string | null = null;
+    for (const message of reversed) {
+      if (!inbound && !message.from_me) inbound = message;
+      if (injected === null && message.from_me && isLocalSend(message.id)) injected = message.id;
+      if (inbound && injected !== null) break;
+    }
+    return { listData: reversed, lastInbound: inbound, latestInjectedId: injected };
+  }, [messages]);
 
-  // Mark read once per newest inbound message, whatever delivered it: the first
-  // fetch, the app-wide realtime channel, a local-cache seed, or a refetch after
-  // reconnecting. The old trigger fired only from this screen's own INSERT
-  // subscription, so anything already merged into the cache before the screen
-  // mounted left the conversation reading as unread. An empty token covers a
-  // conversation with no inbound messages, which still needs one call on open.
+  // Start the local/server read transition on mount. This used to wait for the
+  // push animation and its cleanup cancelled the work when the user went back
+  // quickly — exactly the path that left the inbox count stale.
   const markedInboundRef = useRef<string | null>(null);
   useEffect(() => {
-    markedInboundRef.current = null;
+    if (!chatId) return;
+    markedInboundRef.current = '__opening__';
+    void chatEffectRef.current.markConversationRead();
   }, [chatId]);
+  // A newly arriving inbound message while the conversation remains open needs
+  // a new read cursor. The first timeline payload is already covered by the
+  // mount call, so adopt that token without issuing a duplicate request.
   useEffect(() => {
     if (!chatId || timeline.isPending) return;
     const token = lastInbound?.id ?? '';
-    if (markedInboundRef.current === token) return;
-    let settled = false;
-    // Still deferred: this is a POST plus an inbox cache patch, and neither is
-    // worth contending with the push animation.
-    const handle = InteractionManager.runAfterInteractions(() => {
-      settled = true;
+    if (markedInboundRef.current === '__opening__') {
       markedInboundRef.current = token;
-      void chatEffectRef.current.markConversationRead();
-    });
-    return () => {
-      if (!settled) handle.cancel();
-    };
+      return;
+    }
+    if (markedInboundRef.current === token) return;
+    markedInboundRef.current = token;
+    void chatEffectRef.current.markConversationRead();
   }, [chatId, timeline.isPending, lastInbound?.id]);
-  const latestInjectedId = useMemo(
-    () =>
-      [...messages].reverse().find((message) => message.from_me && isLocalSend(message.id))?.id ??
-      null,
-    [messages]
-  );
   const messageById = useMemo(
     () => new Map(messages.map((message) => [message.id, message])),
     [messages]
@@ -775,6 +863,13 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
     }
   }, [inputText, sendError]);
 
+  // A refreshed auth session makes an error from the prior token obsolete.
+  // Without this, a successful background refresh could leave the old banner
+  // pinned above a fully usable composer.
+  useEffect(() => {
+    setSendError(null);
+  }, [accessToken]);
+
   const handleSend = useCallback(async () => {
     if (textSendInFlightRef.current) return;
     textSendInFlightRef.current = true;
@@ -782,6 +877,25 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
     if (!text || !resolvedPlatform) {
       setSendError('Unable to determine platform');
       textSendInFlightRef.current = false;
+      return;
+    }
+
+    if (!(resolvedPlatform === Platform.IMESSAGE && host.name === 'electron')) {
+      try {
+        if (!user?.id || !chatId) throw new Error('Sign in to send a message.');
+        const message = newOutgoingMessage(text);
+        message.reply_to_message_id = replyTarget?.id ?? null;
+        message.reply_to_platform_message_id = replyTarget?.platform_message_id ?? null;
+        await enqueueChatEvent({ userId: user.id, chatId, platform: resolvedPlatform as Platform,
+          platformChatId: platformChatIdRef.current || undefined, kind: 'text', message,
+          target: replyTarget || undefined });
+        setInputText((current) => current.trim() === text ? '' : current);
+        setReplyTarget(null);
+        setSendError(null);
+        requestAnimationFrame(() => listRef.current?.scrollToOffset({ offset: 0, animated: true }));
+      } catch (error) {
+        setSendError('Could not save your message. Your draft is still here.');
+      } finally { textSendInFlightRef.current = false; }
       return;
     }
 
@@ -994,103 +1108,24 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
     }
   }, [chatId, connectedSessions, fetchChatInfo, resolvedPlatform, replyTarget, user?.id]);
 
-  const handleReact = useCallback(
-    async (emoji: string) => {
-      const target = messageActionTarget;
-      const targetPlatformId = target?.platform_message_id;
-      const session = connectedSessions.find(
-        (candidate) =>
-          candidate.platform === (resolvedPlatform as Platform) && candidate.status === 'connected'
-      );
-      if (!target || !targetPlatformId || !resolvedPlatform || !session) {
-        setSendError('This message is still syncing. Try reacting in a moment.');
-        return;
-      }
-      if (!platformCapabilities?.canSendReactions) {
-        setSendError(`${resolvedPlatform} does not support message reactions.`);
-        return;
-      }
-
-      let platformChatId = platformChatIdRef.current;
-      if (!platformChatId) {
-        try {
-          await fetchChatInfo();
-          platformChatId = platformChatIdRef.current;
-        } catch (error) {
-          console.error('Could not resolve chat before reacting:', error);
-          setSendError('Chat configuration error - please reopen this chat');
-          return;
-        }
-      }
-      if (!platformChatId) {
-        setSendError('Chat configuration error - please reopen this chat');
-        return;
-      }
-
-      const reactionKey = `${target.id}:${emoji}`;
-      if (reactionInFlightRef.current.has(reactionKey)) return;
-      if (
-        (reactionsByMessage[target.id] || []).some(
-          (reaction) => reaction.from_me && reaction.emoji === emoji
-        )
-      ) {
-        setMessageActionTarget(null);
-        return;
-      }
-
-      reactionInFlightRef.current.add(reactionKey);
-      const optimisticId = `optimistic-reaction-${Date.now()}`;
-      const optimistic: ReactionRow = {
-        id: optimisticId,
-        message_id: target.id,
-        emoji,
-        from_me: true,
-        reactor_id: 'self',
-        reacted_at: new Date().toISOString(),
-      };
-      patchTimeline(
-        (previous) => ({
-          ...previous,
-          reactions: upsertReactionRow(previous.reactions, optimistic),
-        }),
-        { createIfMissing: true }
-      );
+  const handleReact = useCallback(async (emoji: string) => {
+    const target = messageActionTarget;
+    if (!target || !resolvedPlatform || !user?.id || !chatId) return;
+    if (!platformCapabilities?.canSendReactions) return;
+    const key = `${target.id}:${emoji}`;
+    if (reactionInFlightRef.current.has(key) || (reactionsByMessage[target.id] || [])
+      .some((reaction) => reaction.from_me && reaction.emoji === emoji)) return;
+    reactionInFlightRef.current.add(key);
+    try {
+      await enqueueChatEvent({ userId: user.id, chatId, platform: resolvedPlatform as Platform,
+        platformChatId: platformChatIdRef.current || undefined, kind: 'reaction',
+        message: newOutgoingMessage(''), target, emoji });
+      setSendError(null);
       setMessageActionTarget(null);
-
-      try {
-        const response = await platformsApi.reactToMessage(
-          resolvedPlatform as Platform,
-          session.id,
-          platformChatId,
-          targetPlatformId,
-          emoji
-        );
-        patchTimeline(
-          (previous) => ({
-            ...previous,
-            reactions: upsertReactionRow(previous.reactions, response.reaction as ReactionRow),
-          }),
-          { createIfMissing: true }
-        );
-      } catch (error) {
-        patchTimeline((previous) => ({
-          ...previous,
-          reactions: removeReactionRow(previous.reactions, { id: optimisticId }),
-        }));
-        setSendError(error instanceof Error ? error.message : 'Failed to add reaction. Try again.');
-      } finally {
-        reactionInFlightRef.current.delete(reactionKey);
-      }
-    },
-    [
-      connectedSessions,
-      fetchChatInfo,
-      messageActionTarget,
-      resolvedPlatform,
-      platformCapabilities?.canSendReactions,
-      reactionsByMessage,
-    ]
-  );
+    } catch (error) {
+      setSendError('Could not save your reaction. Please try again.');
+    } finally { reactionInFlightRef.current.delete(key); }
+  }, [messageActionTarget, resolvedPlatform, user?.id, chatId, platformCapabilities?.canSendReactions, reactionsByMessage]);
 
   const renderMessageBody = (item: ChatMessage) => {
     const textColor = colors.ink;
@@ -1258,19 +1293,13 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
     // hint so they do not read as body copy.
     const body = parseMediaCaption(item.content, { dropSelfLinks: false });
     if (!body.badge && !body.hint) {
-      return (
-        <Text style={{ ...mobileType.body, color: textColor, textAlign: 'left' }}>
-          {body.text ?? item.content}
-        </Text>
-      );
+      return <MessageTextWithLinks text={body.text ?? item.content} fromMe={item.from_me} />;
     }
     return (
       <View>
         {body.badge ? <MessageBadge label={body.badge} testID={`text-badge-${item.id}`} /> : null}
         {body.text ? (
-          <Text style={{ ...mobileType.body, color: textColor, textAlign: 'left' }}>
-            {body.text}
-          </Text>
+          <MessageTextWithLinks text={body.text} fromMe={item.from_me} />
         ) : null}
         {body.hint ? (
           <MessageHint
@@ -1384,6 +1413,7 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
                 messageId={item.id}
                 content={plainText.text ?? item.content}
                 timestamp={item.timestamp}
+                editedAt={item.edited_at}
                 fromMe={isMe}
               />
             ) : (
@@ -1398,6 +1428,7 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
                     textAlign: isMe ? 'right' : 'left',
                   }}
                 >
+                  {item.edited_at ? 'Edited · ' : ''}
                   {new Date(item.timestamp).toLocaleTimeString([], {
                     hour: '2-digit',
                     minute: '2-digit',
@@ -1550,11 +1581,14 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
               {quickContext || 'Add relationship context for more personal replies.'}
             </Text>
           </View>
-          {contextCard ? (
+          {contextCard || needsRelationshipContext ? (
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Dismiss quick context"
-              onPress={() => void dismissCard(chatId!, contextCard.id)}
+              onPress={() => {
+                if (contextCard) void dismissCard(chatId!, contextCard.id);
+                dismissClarificationCard(chatId!);
+              }}
               hitSlop={8}
               style={{ width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }}
             >
@@ -1589,6 +1623,14 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
             </Text>
           </Pressable>
         </View>
+      ) : showGroupAiBanner ? (
+        <GroupAiBanner
+          category={chatMetadata?.category ?? null}
+          categoryConfidence={chatMetadata?.categoryConfidence ?? null}
+          memberCount={chatMetadata?.memberCount ?? null}
+          onEnable={enableGroupAi}
+          onDismiss={() => setGroupBannerDismissed(true)}
+        />
       ) : (
         <View style={{ height: space[2] }} />
       )}
@@ -1598,8 +1640,10 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
         behavior={RNPlatform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={0}
       >
-        {/* Group Summary Banner — only shown for group chats */}
-        {is_group === '1' && chatId && <GroupChatSummary chatId={chatId} />}
+        {/* Group summary. Uses the resolved isGroup rather than the raw route
+            param, which is absent whenever the chat is opened from anywhere
+            that does not pass it (search, a notification, a deep link). */}
+        {isGroup && chatId && groupAiEnabled ? <GroupChatSummary chatId={chatId} /> : null}
         {chatLoop.data ? <Pressable testID="chat-open-loop-card" onPress={() => router.push({ pathname: '/loops/[id]', params: { id: chatLoop.data!.id } })} style={{ marginHorizontal: space[3], marginTop: space[2], padding: space[3], gap: space[2], borderRadius: radius.control, borderWidth: 1, borderColor: colors.neutral[200], backgroundColor: colors.paper, flexDirection: 'row', alignItems: 'center' }}><View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: (chatLoop.data.priority_score ?? 0) >= 80 ? colors.blush : colors.sky, alignItems: 'center', justifyContent: 'center' }}><CheckCircle2 size={17} color={colors.ink} /></View><View style={{ flex: 1, minWidth: 0 }}><Text style={{ ...mobileType.monoLabel, color: colors.neutral[600] }}>{chatLoop.data.owner === 'them' ? 'WAITING ON THEM' : 'OPEN LOOP'}</Text><Text numberOfLines={1} style={{ ...mobileType.bodySmall, fontWeight: '700', color: colors.ink }}>{chatLoop.data.title || chatLoop.data.content}</Text></View><Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>View</Text></Pressable> : null}
 
         {loading ? (
@@ -1617,6 +1661,14 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
             contentContainerStyle={{ paddingVertical: space[3] }}
             keyboardShouldPersistTaps="handled"
             maintainVisibleContentPosition={{ minIndexForVisible: 0, autoscrollToTopThreshold: 80 }}
+            // A chat opens to the newest messages, so rendering the whole
+            // hundred-message page before the push animation finishes is work
+            // nobody sees. Left as FlatList on purpose: inverted plus
+            // maintainVisibleContentPosition is the one list in the app where
+            // swapping the implementation risks the scroll position.
+            initialNumToRender={15}
+            maxToRenderPerBatch={10}
+            windowSize={7}
             onScrollToIndexFailed={({ index, averageItemLength }) => {
               listRef.current?.scrollToOffset({
                 offset: Math.max(0, index * averageItemLength),
@@ -1678,65 +1730,56 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
             backgroundColor: colors.cream,
           }}
         >
-          {!isConnected && resolvedPlatform ? (
-            <Pressable
-              testID="chat-reconnect"
-              accessibilityRole="button"
-              onPress={() => router.push('/connections')}
-              style={({ pressed }) => ({
-                minHeight: 48,
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: space[2],
-                borderRadius: 16,
-                borderWidth: 1,
-                borderColor: colors.warning,
-                backgroundColor: pressed ? colors.warningSurface : colors.paper,
-                opacity: connectionRefreshing ? 0.65 : 1,
-              })}
-            >
-              <Link2 size={18} color={colors.warning} />
-              <Text
-                maxFontSizeMultiplier={1}
-                style={{ ...mobileType.bodySmall, fontWeight: '700', color: colors.warning }}
-              >
-                {connectionRefreshing ? 'Checking connection…' : `Reconnect ${resolvedPlatform}`}
-              </Text>
-            </Pressable>
-          ) : (
-            <ChatComposer
-              value={inputText}
-              onChangeText={setInputText}
-              onSend={() => void handleSend()}
-              sending={sending}
-              plusDefault={plusDefault}
-              replyOptionsVisible={showReplyOptions}
-              onToggleReplyOptions={
-                lastInbound ? () => setShowReplyOptions((open) => !open) : undefined
-              }
-              voiceEnabled={Boolean(platformCapabilities?.canSendVoice) && isConnected}
-              onSendVoice={handleSendVoice}
-              accessory={
-                replyTarget ? (
-                  <ComposerReplyTarget
-                    sender={replyTarget.from_me ? 'You' : replyTarget.contact_name || displayName}
-                    content={replyTarget.content}
-                    onCancel={() => setReplyTarget(null)}
-                  />
-                ) : undefined
-              }
-              blurOnSubmit={false}
-              inputRef={composerRef}
-            />
-          )}
+          <ChatDeliveryStatus
+            visible={!isConnected || sessionSyncStatus === 'unavailable' || chatOutbox.length > 0}
+            needsAttention={connectionNeedsAttention}
+            count={chatOutbox.length}
+            error={outboxError}
+            onPress={() => {
+              if (connectionNeedsAttention) router.push('/connections');
+              else if (outboxError && user?.id) void getChatOutbox(user.id).retry(chatId).then(requestConnectionRecovery).catch(() => setSendError('Could not retry. Please try again.'));
+              else requestConnectionRecovery();
+            }}
+            restoreLabel={failedOutboxEvent?.kind === 'text' ? 'Move back to draft' : 'Discard failed reaction'}
+            onRestore={failedOutboxEvent && user?.id ? () => {
+              void removeFailedChatEvent(user.id, failedOutboxEvent.id).then((event) => {
+                if (event?.kind === 'text') {
+                  setInputText((current) => current ? `${current}\n${event.message.content}` : event.message.content);
+                  setReplyTarget(event.target || null);
+                }
+              }).catch(() => setSendError('Could not update the queue. Please try again.'));
+            } : undefined}
+          />
+          <ChatComposer
+            value={inputText}
+            onChangeText={setInputText}
+            onSend={() => void handleSend()}
+            sending={sending}
+            plusDefault={plusDefault}
+            replyOptionsVisible={showReplyOptions}
+            onToggleReplyOptions={
+              lastInbound ? () => setShowReplyOptions((open) => !open) : undefined
+            }
+            voiceEnabled={Boolean(platformCapabilities?.canSendVoice) && isConnected}
+            onSendVoice={handleSendVoice}
+            accessory={
+              replyTarget ? (
+                <ComposerReplyTarget
+                  sender={replyTarget.from_me ? 'You' : replyTarget.contact_name || displayName}
+                  content={replyTarget.content}
+                  onCancel={() => setReplyTarget(null)}
+                />
+              ) : undefined
+            }
+            blurOnSubmit={false}
+            inputRef={composerRef}
+          />
         </View>
       </KeyboardAvoidingView>
       <MessageContextMenu
         visible={!!messageActionTarget}
         canReact={
-          Boolean(messageActionTarget?.platform_message_id) &&
-          Boolean(platformCapabilities?.canSendReactions)
+          Boolean(messageActionTarget) && Boolean(platformCapabilities?.canSendReactions)
         }
         canReply={Boolean(messageActionTarget?.platform_message_id) && Boolean(platformCapabilities?.canReplyToMessages)}
         content={messageActionTarget?.content || ''}

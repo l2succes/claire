@@ -92,6 +92,14 @@ export interface UnifiedMessage {
   isRead: boolean;
   replyToMessageId?: string;
 
+  // Replacement events keep their own platform event ID for idempotency, but
+  // update the referenced message in place. This preserves the original row
+  // identity used by replies, reactions, caches, and assistant citations.
+  editOfPlatformMessageId?: string;
+  /** Latest provider edit attached to an original event during history sync. */
+  latestEditPlatformMessageId?: string;
+  editedAt?: Date;
+
   // Conversation structure. `threadRootId` is set only on platforms with native
   // threading (Slack, Discord); reply-only platforms leave it undefined.
   threadRootId?: string;
@@ -237,6 +245,8 @@ export interface PlatformCapabilities {
  * Outgoing message structure
  */
 export interface OutgoingMessage {
+  transactionId?: string;
+  clientRequestId?: string;
   content: string;
   contentType?: MessageContentType;
   replyToMessageId?: string;
@@ -308,7 +318,8 @@ export interface IPlatformAdapter {
     sessionId: string,
     chatId: string,
     messageId: string,
-    emoji: string
+    emoji: string,
+    transactionId?: string
   ): Promise<{ platformEventId: string }>;
   markAsRead(sessionId: string, chatId: string, messageId: string): Promise<void>;
 

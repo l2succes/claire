@@ -77,6 +77,46 @@ function makeVoiceEvent(senderId: string) {
   } as unknown as import('matrix-js-sdk').MatrixEvent;
 }
 
+function makeEditEvent(senderId: string) {
+  return {
+    getContent: () => ({
+      msgtype: 'm.text',
+      body: '* corrected text',
+      formatted_body: '<strong>* corrected text</strong>',
+      'm.mentions': { user_ids: ['@newly-notified:claire.local'] },
+      'm.new_content': {
+        msgtype: 'm.text',
+        body: 'corrected text',
+        formatted_body: '<strong>corrected text</strong>',
+        'm.mentions': {
+          user_ids: ['@alice:claire.local', '@newly-notified:claire.local'],
+        },
+      },
+      'm.relates_to': {
+        rel_type: 'm.replace',
+        event_id: 'evt-original',
+      },
+    }),
+    getSender: () => senderId,
+    getId: () => 'evt-edit',
+    getDate: () => new Date('2025-01-01T00:01:00Z'),
+  } as unknown as import('matrix-js-sdk').MatrixEvent;
+}
+
+function makeAggregatedEditEvent(senderId: string) {
+  return {
+    // matrix-js-sdk has already applied m.new_content in this initial-sync
+    // shape, so getContent exposes only the final content.
+    getContent: () => ({ msgtype: 'm.text', body: 'aggregated correction' }),
+    getRelation: () => null,
+    getSender: () => senderId,
+    getId: () => 'evt-original',
+    getDate: () => new Date('2025-01-01T00:00:00Z'),
+    replacingEventId: () => 'evt-aggregated-edit',
+    replacingEventDate: () => new Date('2025-01-01T00:02:00Z'),
+  } as unknown as import('matrix-js-sdk').MatrixEvent;
+}
+
 // ---------------------------------------------------------------------------
 // WhatsApp — DM
 // ---------------------------------------------------------------------------
@@ -188,6 +228,44 @@ describe('WhatsApp DM (1:1)', () => {
       waveform: [0, 20, 255],
       isVoice: true,
     });
+  });
+
+  it('converts a Matrix replacement into an in-place edit using m.new_content', async () => {
+    const msg = await converter.toUnifiedMessage(
+      makeEditEvent(selfGhost), room, 'sess1', 'user1', Platform.WHATSAPP, selfGhost,
+    );
+
+    expect(msg.platformMessageId).toBe('evt-edit');
+    expect(msg.editOfPlatformMessageId).toBe('evt-original');
+    expect(msg.content).toBe('corrected text');
+    expect(msg.content).not.toStartWith('* ');
+    expect(msg.formattedBody).toBe('<strong>corrected text</strong>');
+    expect(msg.mentions).toEqual(['@alice:claire.local', '@newly-notified:claire.local']);
+  });
+
+  it('rejects a malformed replacement instead of rendering its fallback body', () => {
+    const malformed = {
+      getContent: () => ({
+        msgtype: 'm.text',
+        body: '* should never render',
+        'm.relates_to': { rel_type: 'm.replace', event_id: 'evt-original' },
+      }),
+    } as unknown as import('matrix-js-sdk').MatrixEvent;
+
+    expect(converter.isSupportedMessageEvent(malformed)).toBe(false);
+  });
+
+  it('turns an SDK-aggregated replacement into the same edit envelope during backfill', async () => {
+    const msg = await converter.toUnifiedMessage(
+      makeAggregatedEditEvent(selfGhost), room, 'sess1', 'user1', Platform.WHATSAPP, selfGhost,
+    );
+
+    expect(msg.platformMessageId).toBe('evt-original');
+    expect(msg.editOfPlatformMessageId).toBeUndefined();
+    expect(msg.latestEditPlatformMessageId).toBe('evt-aggregated-edit');
+    expect(msg.content).toBe('aggregated correction');
+    expect(msg.timestamp.toISOString()).toBe('2025-01-01T00:00:00.000Z');
+    expect(msg.editedAt?.toISOString()).toBe('2025-01-01T00:02:00.000Z');
   });
 });
 

@@ -2,7 +2,7 @@
 'use client';
 
 import { platformCatalog, type PlatformDefinition } from '@claire/platform-catalog';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { HeroIcon, type HeroIconName } from '@/components/site/HeroIcon';
 import { PlatformMark } from '@/components/site/PlatformMark';
 
@@ -11,14 +11,6 @@ const supportLabels = {
   beta: 'BETA',
   planned: 'PLANNED',
   unavailable: 'UNAVAILABLE',
-} as const;
-
-const deliveryLabels = {
-  current: 'Current',
-  wave_1: 'Wave 1',
-  wave_2: 'Wave 2',
-  wave_3: 'Wave 3',
-  parallel_mac: 'Mac track',
 } as const;
 
 const setupIcons: Record<PlatformDefinition['setupSurface'], HeroIconName> = {
@@ -57,11 +49,42 @@ export function PlatformRail() {
 
 export function PlatformCatalog() {
   const [filter, setFilter] = useState<Filter>('all');
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [votedIds, setVotedIds] = useState<Set<string>>(() => new Set());
+  const [votingId, setVotingId] = useState<string | null>(null);
+  const [voteErrorId, setVoteErrorId] = useState<string | null>(null);
+  const [confirmedPlatform, setConfirmedPlatform] = useState<PlatformDefinition | null>(null);
+  const confirmationDialogRef = useRef<HTMLDialogElement>(null);
   const visible = useMemo(
     () => platformCatalog.filter((platform) => matchesFilter(platform, filter)),
     [filter],
   );
+
+  useEffect(() => {
+    const dialog = confirmationDialogRef.current;
+    if (!dialog) return;
+
+    if (confirmedPlatform && !dialog.open) dialog.showModal();
+    if (!confirmedPlatform && dialog.open) dialog.close();
+  }, [confirmedPlatform]);
+
+  async function voteFor(platform: PlatformDefinition) {
+    setVotingId(platform.id);
+    setVoteErrorId(null);
+    try {
+      const response = await fetch('/api/platform-votes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ platformId: platform.id }),
+      });
+      if (!response.ok) throw new Error('vote_failed');
+      setVotedIds((current) => new Set(current).add(platform.id));
+      setConfirmedPlatform(platform);
+    } catch {
+      setVoteErrorId(platform.id);
+    } finally {
+      setVotingId(null);
+    }
+  }
 
   return (
     <>
@@ -92,69 +115,67 @@ export function PlatformCatalog() {
         </p>
       </div>
       <div className="platform-grid">
-        {visible.map((platform) => {
-          const expanded = openId === platform.id;
-          return (
-            <article
-              className={`platform-card${expanded ? ' is-expanded' : ''}`}
-              key={platform.id}
-            >
-              <div className="platform-card-header">
-                <PlatformMark platform={platform} />
-                <span className={`status-pill ${platform.supportStatus}`}>
-                  {supportLabels[platform.supportStatus]}
-                </span>
-              </div>
-              <h3>{platform.name}</h3>
-              <p className="platform-bridge">{platform.bridge}</p>
-              <p className="platform-setup">
-                <span className="platform-setup-icon" aria-hidden="true">
-                  <HeroIcon name={setupIcons[platform.setupSurface]} className="size-4" />
-                </span>
-                {platform.setupLabel}
-              </p>
+        {visible.map((platform) => (
+          <article className="platform-card" key={platform.id}>
+            <div className="platform-card-header">
+              <PlatformMark platform={platform} />
+              <span className={`status-pill ${platform.supportStatus}`}>
+                {supportLabels[platform.supportStatus]}
+              </span>
+            </div>
+            <h3>{platform.name}</h3>
+            <p className="platform-bridge">{platform.bridge}</p>
+            <p className="platform-setup">
+              <span className="platform-setup-icon" aria-hidden="true">
+                <HeroIcon name={setupIcons[platform.setupSurface]} className="size-4" />
+              </span>
+              {platform.setupLabel}
+            </p>
+            {platform.supportStatus === 'planned' ? (
               <div className="platform-card-footer">
-                <span className="platform-runtime">
-                  <span>●</span>
-                  {platform.runtimeLabel}
-                </span>
                 <button
-                  className="platform-detail-toggle"
+                  className={`platform-vote-button${votedIds.has(platform.id) ? ' is-voted' : ''}`}
                   type="button"
-                  aria-expanded={expanded}
-                  onClick={() => setOpenId(expanded ? null : platform.id)}
+                  disabled={votedIds.has(platform.id) || votingId === platform.id}
+                  onClick={() => voteFor(platform)}
                 >
-                  {expanded ? 'Hide −' : 'Details +'}
+                  {votedIds.has(platform.id)
+                    ? 'Voted'
+                    : votingId === platform.id
+                      ? 'Voting…'
+                      : 'Vote'}
                 </button>
               </div>
-              {expanded ? (
-                <div className="platform-details">
-                  <p>{platform.detail}</p>
-                  <dl>
-                    <dt>Sign-in</dt>
-                    <dd>{platform.authSummary}</dd>
-                    <dt>Delivery</dt>
-                    <dd>{deliveryLabels[platform.deliveryWave]}</dd>
-                  </dl>
-                  <a className="platform-doc-link" href={platform.docsUrl} target="_blank" rel="noreferrer">
-                    Official bridge docs ↗
-                  </a>
-                  <a
-                    className="platform-doc-link"
-                    href={platform.iconSourceUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    {platform.iconTreatment === 'generic'
-                      ? 'Protocol icon source ↗'
-                      : 'Brand icon source ↗'}
-                  </a>
-                </div>
-              ) : null}
-            </article>
-          );
-        })}
+            ) : null}
+            {voteErrorId === platform.id ? (
+              <p className="platform-vote-error" role="alert">
+                Couldn’t save your vote. Try again.
+              </p>
+            ) : null}
+          </article>
+        ))}
       </div>
+      <dialog
+        className="vote-confirmation"
+        ref={confirmationDialogRef}
+        aria-labelledby="vote-confirmation-title"
+        onCancel={() => setConfirmedPlatform(null)}
+        onClick={(event) => {
+          if (event.currentTarget === event.target) setConfirmedPlatform(null);
+        }}
+      >
+        <div className="vote-confirmation-card">
+          <span className="vote-confirmation-icon" aria-hidden="true">
+            <HeroIcon name="check-circle" />
+          </span>
+          <p className="kicker">VOTE COUNTED</p>
+          <h3 id="vote-confirmation-title">Your vote for {confirmedPlatform?.name} is in.</h3>
+          <p>Thanks for helping us decide what Claire should support next.</p>
+          <button type="button" onClick={() => setConfirmedPlatform(null)}>
+            Done
+          </button>
+        </div>
+      </dialog>
     </>
   );
 }

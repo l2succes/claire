@@ -25,6 +25,10 @@
     "build:staging": "bunx eas build --profile staging --platform ios",
     "build:preview": "bunx eas build --profile preview --platform ios",
     "build:prod": "bunx eas build --profile production --platform ios",
+    "update:staging": "bunx eas update --channel staging --environment preview --auto",
+    "update:preview": "bun run update:staging",
+    "update:production": "bunx eas update --channel production --environment production --auto",
+    "update:prod": "bun run update:production",
     "test": "bunx jest",
     "test:watch": "bunx jest --watch",
     "lint": "bunx eslint . --ext .ts,.tsx",
@@ -35,6 +39,7 @@
     "e2e:web": "bunx playwright test"
   },
   "dependencies": {
+    "@bacons/apple-targets": "5.0.0",
     "@claire/chat-core": "workspace:*",
     "@claire/design-system": "workspace:*",
     "@claire/host": "workspace:*",
@@ -90,6 +95,8 @@
     "react-native-gifted-chat": "^3.3.2",
     "react-native-heroicons": "^4.0.0",
     "react-native-keyboard-controller": "1.20.7",
+    "react-native-purchases": "^10.9.1",
+    "react-native-purchases-ui": "^10.9.1",
     "react-native-reanimated": "4.2.1",
     "react-native-safe-area-context": "~5.6.2",
     "react-native-screens": "~4.23.0",
