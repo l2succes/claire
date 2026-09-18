@@ -120,7 +120,13 @@ export function WaitlistForm({ source, tone = 'light' }: WaitlistFormProps) {
       >
         {submission.status === 'error'
           ? submission.message
-          : (
+          : source === 'homepage_footer'
+            ? (
+                <>
+                  Beta access and occasional updates. <Link href="/legal/privacy">Privacy</Link>
+                </>
+              )
+            : (
               <>
                 By joining, you agree to receive short build notes and your beta invitation. You can
                 {' '}unsubscribe anytime. <Link href="/legal/privacy">Privacy</Link>
