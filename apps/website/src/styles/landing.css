@@ -2081,7 +2081,7 @@ button {
   justify-content: space-between;
   padding: 0 9px;
 }
-.phone-top i {
+.phone-top > .hero-mobile-island {
   width: 75px;
   height: 20px;
   background: var(--claire-ink);
