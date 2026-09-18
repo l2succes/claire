@@ -117,7 +117,10 @@ export function ClaireTabBar({ state, descriptors, navigation }: BottomTabBarPro
                     boxShadow: '0 5px 14px rgba(223,255,100,0.38)',
                   }}
                 >
-                  <ClaireMark size={22} />
+                  <ClaireMark
+                    size={22}
+                    color={focused ? colors.ink : colors.neutral[400]}
+                  />
                 </View>
               ) : (
                 <View

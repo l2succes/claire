@@ -18,6 +18,7 @@ import {
   snoozeLoop,
   updateLoop,
   type LoopDetail,
+  type LoopItem,
   type LoopParticipant,
 } from '../../services/loops';
 import { pendingCloseSuggestion } from '../../services/loop-review';
@@ -185,11 +186,19 @@ export function LoopDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const user = useAuthStore((state) => state.user);
   const queryClient = useQueryClient();
+  // Opening from the list should paint the loop the person just tapped before
+  // its timeline and participants finish downloading. The detail request still
+  // runs immediately and replaces this lightweight list shape when it lands.
+  const listLoop = queryClient
+    .getQueryData<LoopItem[]>(['mobile-loops', user?.id])
+    ?.find((item) => item.id === String(id));
 
   const query = useQuery({
     queryKey: ['loop-detail', id],
     enabled: !!id && !!user?.id,
     queryFn: () => fetchLoopDetail(String(id)),
+    initialData: listLoop as LoopDetail | undefined,
+    initialDataUpdatedAt: listLoop ? 0 : undefined,
   });
 
   const invalidate = () => {

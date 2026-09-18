@@ -1,5 +1,5 @@
-import { supabase } from './supabase';
 import { API_BASE_URL } from './platforms';
+import { authenticatedFetch } from './authenticated-fetch';
 import type { Platform } from '../types/platform';
 
 export type PeopleFilter = 'all' | 'contacted' | 'needs_context' | 'groups';
@@ -64,12 +64,11 @@ interface PeoplePage {
 const REQUEST_TIMEOUT_MS = 30_000;
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const { data: { session } } = await supabase.auth.getSession();
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   let response: Response;
   try {
-    response = await fetch(`${API_BASE_URL}${path}`, {
+    response = await authenticatedFetch(`${API_BASE_URL}${path}`, {
       ...init,
       signal: controller.signal,
       // Merge, never replace: a caller sending a body supplies its own
@@ -77,7 +76,6 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       // which the server then reads as an empty body.
       headers: {
         ...(init?.headers as Record<string, string> | undefined),
-        ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
       },
     });
   } catch (cause) {

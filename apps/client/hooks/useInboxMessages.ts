@@ -484,6 +484,10 @@ export function useInboxMessages(
         // Older rows carry no platform_chat_id, so match the name too.
         .not('platform_chat_id', 'eq', 'status@broadcast')
         .not('chat_name', 'eq', 'WhatsApp Status Broadcast')
+        // A bridge can create the Matrix room before any timeline event has
+        // arrived. It is not an inbox conversation yet; rendering it produces
+        // a stack of indistinguishable “Empty room / No messages yet” rows.
+        .not('last_message_id', 'is', null)
         .or(`last_message_snoozed_until.is.null,last_message_snoozed_until.lte.${now}`)
         .order('last_activity_at', { ascending: false })
         .order('chat_id', { ascending: false })

@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
-import { AlertCircle, ArrowUpRight, CheckCircle2, MessageCircle, Settings, Sparkles } from 'lucide-react-native';
+import { AlertCircle, Bell, CheckCircle2, MessageCircle, Settings, Sparkles } from 'lucide-react-native';
 import { router } from 'expo-router';
 
 import { colors, mobileType, radius, space } from '@claire/design-system';
@@ -119,6 +119,10 @@ export function HomeScreen() {
   // canonical on-device. Falling back here keeps Home useful during a deploy,
   // while offline after cached data loads, or when AI is unavailable.
   const urgent = brief.data?.urgent_messages?.length ? brief.data.urgent_messages : inboxUrgent;
+  const unreadNotifications = useMemo(
+    () => inbox.messages.reduce((total, message) => total + Math.max(0, message.unread_count || 0), 0),
+    [inbox.messages],
+  );
   // Memoised: these were recomputed on every render, including every render
   // caused by a realtime message patch.
   const openLoops = useMemo(() => loops.data ?? [], [loops.data]);
@@ -196,14 +200,14 @@ export function HomeScreen() {
         <Pressable
           testID="home-needs-reply"
           accessibilityRole="button"
-          onPress={() => router.push({ pathname: '/(tabs)/messages', params: { filter: 'needs_reply' } })}
+          onPress={() => router.push({ pathname: '/(tabs)/messages', params: { filter: 'unread' } })}
           style={({ pressed }) => ({ width: '100%', opacity: pressed ? 0.78 : 1 })}
         >
           <View style={{ width: '100%', minHeight: 82, flexDirection: 'row', alignItems: 'center', gap: space[3], paddingHorizontal: space[4], paddingVertical: space[3], borderRadius: radius.card, borderCurve: 'continuous', borderWidth: 1, borderColor: colors.ink, backgroundColor: colors.lime }}>
-            <View style={{ width: 42, height: 42, borderRadius: 13, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' }}><ArrowUpRight size={22} color={colors.paper} /></View>
+            <View style={{ width: 42, height: 42, borderRadius: 13, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' }}><Bell size={21} color={colors.paper} /></View>
             <View style={{ flex: 1, justifyContent: 'center', gap: 2 }}>
-              <Text selectable style={{ ...mobileType.monoLabel, color: colors.ink }}>NEEDS A REPLY</Text>
-              <Text selectable style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>{urgent.length} conversation{urgent.length === 1 ? '' : 's'} waiting</Text>
+              <Text selectable style={{ ...mobileType.monoLabel, color: colors.ink }}>NOTIFICATIONS</Text>
+              <Text selectable style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>{unreadNotifications ? `${unreadNotifications} unread message${unreadNotifications === 1 ? '' : 's'}` : 'You’re all caught up'}</Text>
             </View>
             <Text style={{ ...mobileType.label, color: colors.ink }}>View</Text>
           </View>

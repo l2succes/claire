@@ -3,6 +3,7 @@ import { FlatList, Modal, Pressable, RefreshControl, Text, TextInput, View } fro
 import { Check, Plus, RotateCcw, Sparkles, X, XCircle } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import Animated, { FadeInRight, FadeOutLeft } from 'react-native-reanimated';
 import { colors, mobileType, radius, space } from '@claire/design-system';
 import { MobileChip, MobileHeader, MobileIconButton, MobileState } from '../../components/mobile/claire-mobile';
 import type { LoopItem } from '../../services/loop-types';
@@ -303,7 +304,12 @@ export function LoopsScreen() {
             <Text style={{ ...mobileType.monoLabel, color: colors.neutral[600] }}>
               {reviewCandidates.length} {reviewCandidates.length === 1 ? 'LOOP LEFT' : 'LOOPS LEFT'}
             </Text>
-            <View style={{ padding: space[4], borderRadius: radius.card, borderWidth: 1, borderColor: colors.neutral[200], backgroundColor: colors.cream, gap: space[2] }}>
+            <Animated.View
+              key={reviewTarget.id}
+              entering={FadeInRight.duration(220)}
+              exiting={FadeOutLeft.duration(150)}
+              style={{ padding: space[4], borderRadius: radius.card, borderWidth: 1, borderColor: colors.neutral[200], backgroundColor: colors.cream, gap: space[2] }}
+            >
               <Text selectable style={{ ...mobileType.sectionTitle, color: colors.ink }}>
                 {reviewTarget.title?.trim() || reviewTarget.content}
               </Text>
@@ -315,7 +321,7 @@ export function LoopsScreen() {
               <Text style={{ ...mobileType.label, color: colors.neutral[600] }}>
                 Claire will keep this open unless you choose Done or Dismiss.
               </Text>
-            </View>
+            </Animated.View>
             <ReviewButton
               testID="loop-review-done"
               label="Done"
