@@ -2,18 +2,24 @@
 import { Battery100Icon, WifiIcon } from '@heroicons/react/24/outline';
 import { HeroIcon } from './HeroIcon';
 
+export function MobileStatusBar({ className = '' }: { className?: string }) {
+  return (
+    <div className={`hero-mobile-status${className ? ` ${className}` : ''}`}>
+      <span>9:41</span>
+      <i className="hero-mobile-island" />
+      <span className="hero-mobile-status-icons" aria-hidden="true">
+        <i className="hero-mobile-signal"><i /><i /><i /><i /></i>
+        <WifiIcon />
+        <Battery100Icon />
+      </span>
+    </div>
+  );
+}
+
 export function HeroMobilePreview() {
   return (
     <article className="hero-mobile-preview" aria-label="Ask Claire mobile conversation preview">
-      <div className="hero-mobile-status">
-        <span>9:41</span>
-        <i className="hero-mobile-island" />
-        <span className="hero-mobile-status-icons" aria-hidden="true">
-          <i className="hero-mobile-signal"><i /><i /><i /><i /></i>
-          <WifiIcon />
-          <Battery100Icon />
-        </span>
-      </div>
+      <MobileStatusBar />
       <div className="hero-mobile-heading"><h3>Ask Claire</h3><HeroIcon name="compose" /></div>
       <div className="hero-mobile-thread">
         <p className="hero-mobile-question">What did Maya say about launch timing?</p>

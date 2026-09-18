@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import Link from 'next/link';
 import { HeroIcon } from '@/components/site/HeroIcon';
-import { HeroMobilePreview } from '@/components/site/HeroMobilePreview';
+import { HeroMobilePreview, MobileStatusBar } from '@/components/site/HeroMobilePreview';
 import { PlatformCatalog, PlatformRail } from '@/components/site/PlatformCatalog';
 import { SiteFooter } from '@/components/site/SiteFooter';
 import { SiteHeader } from '@/components/site/SiteHeader';
@@ -426,11 +426,7 @@ export function HomePage() {
           </div>
           <div className="phone-wrap">
             <div className="phone">
-              <div className="phone-top">
-                <span>9:41</span>
-                <i />
-                <span>● ◒</span>
-              </div>
+              <MobileStatusBar className="phone-top" />
               <div className="phone-greeting">
                 <small>CLAIRE AI · ALL CHATS</small>
                 <h3>What did I promise Maya?</h3>
