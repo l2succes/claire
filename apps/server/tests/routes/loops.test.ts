@@ -82,6 +82,28 @@ describe('GET /loops', () => {
 });
 
 // ---------------------------------------------------------------------------
+describe('POST /loops', () => {
+  beforeEach(resetMocks);
+
+  it('creates a human-authored actionable loop', async () => {
+    const created = { id: VALID_UUID, user_id: 'user-123', title: 'Send the revised deck', status: 'open' };
+    mockQuery.single.mockResolvedValueOnce({ data: created, error: null });
+
+    const res = await request(app).post('/loops').send({ content: 'Send the revised deck' });
+
+    expect(res.status).toBe(201);
+    expect(mockQuery.insert.mock.calls.at(-1)?.[0]).toMatchObject({
+      title: 'Send the revised deck',
+      owner: 'me',
+      requester: 'me',
+      thread_state: 'agreed',
+      source: 'user',
+      user_edited: true,
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
 describe('GET /loops/:id', () => {
   beforeEach(resetMocks);
 
@@ -132,10 +154,107 @@ describe('PATCH /loops/:id', () => {
     expect(res.body.data.status).toBe('done');
   });
 
+  it('accepts an ownership transition for swipe actions', async () => {
+    const updated = { ...mockLoop, owner: 'them', status: 'waiting' };
+    mockQuery.single
+      .mockResolvedValueOnce({ data: mockLoop, error: null })
+      .mockResolvedValueOnce({ data: updated, error: null });
+
+    const res = await request(app)
+      .patch(`/loops/${VALID_UUID}`)
+      .send({ owner: 'them', status: 'waiting' });
+
+    expect(res.status).toBe(200);
+    expect(mockQuery.update.mock.calls.at(-1)?.[0]).toEqual({
+      owner: 'them',
+      status: 'waiting',
+      user_edited: true,
+      completed_at: null,
+      resolved_at: null,
+      resolution: null,
+    });
+  });
+
+  it('allows a human to replace outdated timing and protects the correction', async () => {
+    const updated = { ...mockLoop, title: 'Send revised deck', deadline: null, deadline_precision: 'none' };
+    mockQuery.single
+      .mockResolvedValueOnce({ data: mockLoop, error: null })
+      .mockResolvedValueOnce({ data: updated, error: null });
+
+    const res = await request(app).patch(`/loops/${VALID_UUID}`).send({
+      title: 'Send revised deck',
+      deadline: null,
+      deadline_precision: 'none',
+    });
+
+    expect(res.status).toBe(200);
+    expect(mockQuery.update.mock.calls.at(-1)?.[0]).toMatchObject({
+      title: 'Send revised deck',
+      deadline: null,
+      deadline_precision: 'none',
+      user_edited: true,
+    });
+  });
+
   it('blocks cross-user access — returns 404', async () => {
     mockQuery.single.mockResolvedValueOnce({ data: null, error: null }); // null = not owned
     const res = await request(app).patch(`/loops/${VALID_UUID}`).send({ status: 'done' });
     expect(res.status).toBe(404);
+  });
+});
+
+// ---------------------------------------------------------------------------
+describe('POST /loops/:id/review', () => {
+  const mockLoop = { id: VALID_UUID, user_id: 'user-123', content: 'call tomorrow', status: 'open', completed_at: null };
+
+  beforeEach(resetMocks);
+
+  it('persists keep-open so the same stale review does not immediately return', async () => {
+    mockQuery.single
+      .mockResolvedValueOnce({ data: mockLoop, error: null })
+      .mockResolvedValueOnce({ data: { ...mockLoop, reviewed_at: new Date().toISOString() }, error: null });
+
+    const res = await request(app).post(`/loops/${VALID_UUID}/review`).send({ action: 'keep_open' });
+
+    expect(res.status).toBe(200);
+    expect(mockQuery.update.mock.calls.at(-1)?.[0]).toMatchObject({
+      user_edited: true,
+      reviewed_at: expect.any(String),
+    });
+    expect(mockQuery.insert.mock.calls.at(-1)?.[0]).toMatchObject({
+      loop_id: VALID_UUID,
+      actor: 'user',
+      kind: 'user_edit',
+      payload: { action: 'keep_open', resolution: null },
+    });
+  });
+
+  it('accepts Claire’s evidenced cancellation suggestion without calling it fulfilled', async () => {
+    const suggestionId = '00000000-0000-4000-8000-000000000002';
+    mockQuery.single
+      .mockResolvedValueOnce({ data: mockLoop, error: null })
+      .mockResolvedValueOnce({ data: { ...mockLoop, status: 'done', resolution: 'cancelled' }, error: null });
+
+    const res = await request(app).post(`/loops/${VALID_UUID}/review`).send({
+      action: 'done',
+      resolution: 'cancelled',
+      suggestion_event_id: suggestionId,
+    });
+
+    expect(res.status).toBe(200);
+    expect(mockQuery.update.mock.calls.at(-1)?.[0]).toMatchObject({
+      status: 'done',
+      thread_state: 'resolved',
+      resolution: 'cancelled',
+    });
+    expect(mockQuery.insert.mock.calls.at(-1)?.[0]).toMatchObject({
+      kind: 'resolved',
+      payload: {
+        action: 'done',
+        resolution: 'cancelled',
+        reviewedSuggestionEventId: suggestionId,
+      },
+    });
   });
 });
 

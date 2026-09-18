@@ -23,6 +23,7 @@ export interface FailedRequest {
 export const GENERIC_SERVER_ERROR = 'Something went wrong on our end. Please try again.';
 export const GENERIC_REQUEST_ERROR = 'Something went wrong. Please try again.';
 export const UNREACHABLE_ERROR = 'Could not reach Claire. Check your connection and try again.';
+export const SESSION_ERROR = 'Your session needs to be refreshed. Please try again.';
 
 export function clientSafeMessage(error: FailedRequest): string {
   const status = error.response?.status;
@@ -34,8 +35,21 @@ export function clientSafeMessage(error: FailedRequest): string {
     return GENERIC_SERVER_ERROR;
   }
 
+  if (status === 401) return SESSION_ERROR;
+
   // No response at all: the request never completed.
   if (status === undefined) return UNREACHABLE_ERROR;
 
   return body || GENERIC_REQUEST_ERROR;
+}
+
+/** Retain machine-readable retry information without displaying server internals. */
+export class PlatformRequestError extends Error {
+  readonly retryable: boolean;
+  constructor(message: string, readonly status?: number, serverMessage?: string) {
+    super(message);
+    this.retryable = status === undefined || status >= 500 || [401, 408, 429].includes(status)
+      || serverMessage === 'Session not connected' || serverMessage === 'Session not found'
+      || serverMessage === 'Message not found' || serverMessage === 'Reply target is unavailable in this conversation';
+  }
 }

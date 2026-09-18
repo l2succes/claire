@@ -33,13 +33,13 @@ describe('contactsApi.listAll', () => {
 
   it('never asks for the 10k page that made the API return 500', async () => {
     // The exact page size is tuned to what the deployed API accepts, so assert
-    // the property rather than the number: it must be bounded and well under
-    // the ceiling that was returning 500.
+    // the property rather than the number: it must be bounded, and strictly
+    // below the server's 10,000 ceiling that used to answer with a 500.
     const calls = mockPages([{ contacts: [person('a')], nextOffset: null }]);
     await contactsApi.listAll({ query: '', platform: 'all', filter: 'all' });
     const limit = Number(new URL(calls[0]).searchParams.get('limit'));
     expect(limit).toBeGreaterThan(0);
-    expect(limit).toBeLessThanOrEqual(500);
+    expect(limit).toBeLessThan(10_000);
   });
 
   it('stops when a page comes back empty, even with a nextOffset', async () => {
@@ -55,9 +55,28 @@ describe('contactsApi.listAll', () => {
 
   it('is bounded even if nextOffset never terminates', async () => {
     const calls = mockPages(
-      Array.from({ length: 100 }, () => ({ contacts: [person('x')], nextOffset: 500 })),
+      Array.from({ length: 500 }, () => ({ contacts: [person('x')], nextOffset: 500 })),
     );
     await contactsApi.listAll({ query: '', platform: 'all', filter: 'all' });
-    expect(calls.length).toBeLessThanOrEqual(40);
+    expect(calls.length).toBeLessThanOrEqual(200);
+  });
+
+  it('says so loudly when it stops before the directory is exhausted', async () => {
+    // A truncated directory is indistinguishable from a complete one on screen,
+    // and its A-Z index is confidently wrong. This guard once sat below a real
+    // account size and cut it off at 6,000 of 21,366 in silence.
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    mockPages(Array.from({ length: 500 }, () => ({ contacts: [person('x')], nextOffset: 500 })));
+    await contactsApi.listAll({ query: '', platform: 'all', filter: 'all' });
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('incomplete'));
+    warn.mockRestore();
+  });
+
+  it('stays quiet when the directory is fully walked', async () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    mockPages([{ contacts: [person('a')], nextOffset: null }]);
+    await contactsApi.listAll({ query: '', platform: 'all', filter: 'all' });
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
   });
 });

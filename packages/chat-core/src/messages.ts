@@ -16,13 +16,20 @@ export function isLocalSend(id: string): boolean {
  * local id. Matching on content lets the real row *replace* the placeholder
  * rather than appearing beside it as a duplicate.
  */
+function sameOutgoingMessage(local: ChatMessage, incoming: ChatMessage): boolean {
+  if (local.platform_message_id && incoming.platform_message_id) return local.platform_message_id === incoming.platform_message_id;
+  const requestId = local.metadata?.clientRequestId;
+  if (requestId) return requestId === incoming.metadata?.clientRequestId;
+  return local.content === incoming.content;
+}
+
 export function mergeChatMessage(prev: ChatMessage[], incoming: ChatMessage): ChatMessage[] {
   if (prev.some((message) => message.id === incoming.id)) {
     return prev.map((message) => (message.id === incoming.id ? { ...message, ...incoming } : message));
   }
   if (incoming.from_me) {
     const localIndex = prev.findIndex(
-      (message) => isLocalSend(message.id) && message.content === incoming.content,
+      (message) => isLocalSend(message.id) && sameOutgoingMessage(message, incoming),
     );
     if (localIndex >= 0) {
       const next = [...prev];
@@ -43,7 +50,7 @@ export function keepPendingSends(serverMessages: ChatMessage[], current: ChatMes
     (message) =>
       isLocalSend(message.id) &&
       !serverMessages.some(
-        (row) => row.id === message.id || (row.from_me && row.content === message.content),
+        (row) => row.id === message.id || (row.from_me && sameOutgoingMessage(message, row)),
       ),
   );
   return [...serverMessages, ...pending].sort(

@@ -18,6 +18,7 @@ import { loopSemanticsFor, type LoopSensitivity } from '@claire/platform-catalog
 
 import { logger } from '../../utils/logger';
 import { supabase } from '../supabase';
+import { chatAiProcessingEnabled } from '../ai-policy';
 import type { OpenLoopSummary } from './loop-prompts';
 import { normalizeAlias, type ParticipantRef, type WindowMessage } from './relevance';
 
@@ -55,6 +56,12 @@ export interface LoopContext {
   openLoops: OpenLoopSummary[];
   settings: ChatLoopSettings;
   detectionEnabled: boolean;
+  /**
+   * Effective per-chat AI scope: groups are opt-in. Resolved here rather than
+   * at the call site so cron, replay, and manual re-runs cannot route around
+   * it by simply not asking.
+   */
+  aiEnabled: boolean;
   timezone: string;
   consecutiveEmpty: number;
   /** Cursor position to advance to if the pass succeeds. */
@@ -130,7 +137,7 @@ export async function buildLoopContext(
 ): Promise<LoopContext | null> {
   const { data: chat, error: chatError } = await supabase
     .from('chats')
-    .select('id, name, platform, is_group, member_count, platform_chat_id')
+    .select('id, name, platform, is_group, member_count, platform_chat_id, ai_enabled')
     .eq('id', chatId)
     .eq('user_id', userId)
     .maybeSingle();
@@ -208,6 +215,7 @@ export async function buildLoopContext(
     roster,
     openLoops,
     settings,
+    aiEnabled: chatAiProcessingEnabled(chat),
     detectionEnabled: prefsResult.data?.loop_detection_enabled ?? true,
     timezone: prefsResult.data?.timezone || 'UTC',
     consecutiveEmpty,

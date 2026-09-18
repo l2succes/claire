@@ -1,26 +1,109 @@
 import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View } from 'react-native';
+import { Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
-import { ArrowLeft, Mail } from 'lucide-react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, mobileType, radius, space } from '@claire/design-system';
-import { supabase } from '../../services/supabase';
+import { Mail } from 'lucide-react-native';
+import { colors, mobileType, space } from '@claire/design-system';
+import {
+  AuthInlineMessage,
+  AuthPrimaryButton,
+  AuthScreenShell,
+} from './auth-screen-shell';
+import { useEmailSignIn } from './use-email-sign-in';
 
 export function EmailSignInScreen() {
-  const insets = useSafeAreaInsets();
-  const [email, setEmail] = useState('');
-  const [loading, setLoading] = useState(false);
-  const sendCode = async () => {
-    const normalized = email.trim().toLowerCase();
-    if (!normalized.includes('@')) return Alert.alert('Enter your email', 'Use the email address you want to use with Claire.');
-    setLoading(true);
-    try {
-      const { error } = await supabase.auth.signInWithOtp({ email: normalized, options: { shouldCreateUser: true } });
-      if (error) throw error;
-      router.push({ pathname: '/(auth)/verify', params: { email: normalized } });
-    } catch (error) {
-      Alert.alert('Could not send a code', error instanceof Error ? error.message : 'Please try again.');
-    } finally { setLoading(false); }
-  };
-  return <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.sky }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}><View style={{ flex: 1, paddingHorizontal: space[6], paddingTop: Math.max(insets.top, space[6]), paddingBottom: Math.max(insets.bottom, space[6]), justifyContent: 'space-between' }}><View><Pressable accessibilityRole="button" onPress={() => router.back()} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.paper, alignItems: 'center', justifyContent: 'center' }}><ArrowLeft size={20} color={colors.ink} /></Pressable><Text style={{ ...mobileType.monoLabel, color: colors.ink, marginTop: space[10] }}>SIGN IN WITH EMAIL</Text><Text style={{ ...mobileType.display, color: colors.ink, marginTop: space[3] }}>What’s your email?</Text><Text style={{ ...mobileType.body, color: colors.neutral[600], marginTop: space[3] }}>We’ll send a one-time code. No password needed.</Text></View><View style={{ gap: space[3] }}><View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2], minHeight: 56, paddingHorizontal: space[3], borderRadius: radius.control, backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.neutral[200] }}><Mail size={19} color={colors.neutral[600]} /><TextInput testID="signin-email-input" style={{ flex: 1, ...mobileType.body, color: colors.ink }} placeholder="you@example.com" placeholderTextColor={colors.neutral[400]} autoCapitalize="none" autoComplete="email" keyboardType="email-address" textContentType="emailAddress" value={email} onChangeText={setEmail} editable={!loading} /></View><Pressable testID="signin-send-otp" accessibilityRole="button" onPress={() => void sendCode()} disabled={loading} style={{ minHeight: 56, borderRadius: radius.control, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.ink, opacity: loading ? 0.5 : 1 }}><Text style={{ ...mobileType.body, color: colors.lime, fontWeight: '700' }}>{loading ? 'Sending…' : 'Email me a code'}</Text></Pressable></View></View></KeyboardAvoidingView>;
+  const auth = useEmailSignIn();
+  const [focused, setFocused] = useState(false);
+
+  return (
+    <AuthScreenShell
+      testID="email-signin-screen"
+      kicker="WELCOME BACK"
+      title="Sign in with email."
+      description="Enter your email and we’ll send you a one-time verification code. No password needed."
+      onBack={() => router.back()}
+      footer={
+        <>
+          <AuthPrimaryButton
+            testID="signin-send-otp"
+            label="Send verification code"
+            loadingLabel="Sending code…"
+            loading={auth.loading}
+            disabled={!auth.canSubmit}
+            onPress={() => void auth.sendCode()}
+          />
+          <Text
+            selectable
+            style={{ ...mobileType.label, color: colors.neutral[600], textAlign: 'center' }}
+          >
+            Your messages are never used to train shared AI models.
+          </Text>
+        </>
+      }
+    >
+      <View style={{ gap: space[2] }}>
+        <Text selectable style={{ ...mobileType.monoLabel, color: colors.neutral[600] }}>
+          EMAIL ADDRESS
+        </Text>
+        <View
+          style={{
+            minHeight: 58,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: space[3],
+            paddingHorizontal: space[4],
+            borderRadius: 16,
+            borderCurve: 'continuous',
+            borderWidth: focused || auth.emailInvalid ? 2 : 1,
+            borderColor: auth.emailInvalid
+              ? colors.danger
+              : focused
+                ? colors.ink
+                : colors.neutral[200],
+            backgroundColor: auth.emailInvalid ? colors.blush : colors.paper,
+            boxShadow: focused && !auth.emailInvalid ? `0 0 0 3px ${colors.lime}` : undefined,
+          }}
+        >
+          <Mail size={19} color={auth.emailInvalid ? colors.danger : colors.neutral[600]} />
+          <TextInput
+            testID="signin-email-input"
+            accessibilityLabel="Email address"
+            style={{
+              flex: 1,
+              height: 48,
+              ...mobileType.body,
+              lineHeight: 24,
+              paddingTop: 6,
+              paddingBottom: 12,
+              color: colors.ink,
+              textAlignVertical: 'center',
+            }}
+            placeholder="you@example.com"
+            placeholderTextColor={colors.neutral[400]}
+            autoCapitalize="none"
+            autoCorrect={false}
+            autoComplete="email"
+            keyboardType="email-address"
+            textContentType="emailAddress"
+            returnKeyType="send"
+            value={auth.email}
+            onChangeText={auth.setEmail}
+            onFocus={() => setFocused(true)}
+            onBlur={() => {
+              setFocused(false);
+              auth.validateEmail();
+            }}
+            onSubmitEditing={() => void auth.sendCode()}
+            editable={!auth.loading}
+          />
+        </View>
+        {auth.error ? (
+          <AuthInlineMessage testID="signin-email-error" tone="error" message={auth.error} />
+        ) : (
+          <Text selectable style={{ ...mobileType.bodySmall, color: colors.neutral[400] }}>
+            We’ll only use this to sign you in.
+          </Text>
+        )}
+      </View>
+    </AuthScreenShell>
+  );
 }

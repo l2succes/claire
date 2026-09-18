@@ -7,7 +7,8 @@
 
 import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios';
 import { supabase } from './supabase';
-import { clientSafeMessage } from './api-errors';
+import { clientSafeMessage, PlatformRequestError } from './api-errors';
+import { requestConnectionRecovery } from './connection-recovery-signal';
 import {
   Platform,
   PlatformStatus,
@@ -120,7 +121,10 @@ api.interceptors.response.use(
       }
     }
 
-    return Promise.reject(new Error(clientSafeMessage(error)));
+    const failure = new PlatformRequestError(clientSafeMessage(error), error.response?.status,
+      error.response?.data?.error);
+    if (failure.retryable) requestConnectionRecovery();
+    return Promise.reject(failure);
   }
 );
 
@@ -220,6 +224,10 @@ export const platformsApi = {
 
   /**
    * Submit verification code (for Telegram phone verification)
+   *
+   * Server follow-up: Matrix mode does not yet expose POST /verify for
+   * Telegram. Keep this client contract unchanged; E2E completion is mocked
+   * explicitly until that bridge route ships.
    */
   async submitVerificationCode(
     platform: Platform,
@@ -258,6 +266,12 @@ export const platformsApi = {
     return response.data;
   },
 
+  async recoverPlatform(platform: Platform, sessionId: string): Promise<{ session: PlatformSession }> {
+    const response = await api.post<{ session: PlatformSession }>(`/platforms/${platform}/recover`,
+      { sessionId });
+    return response.data;
+  },
+
   /**
    * Send a message via a platform
    */
@@ -266,11 +280,12 @@ export const platformsApi = {
     sessionId: string,
     chatId: string,
     content: string,
-    replyToMessageId?: string
+    replyToMessageId?: string,
+    clientRequestId?: string
   ): Promise<{ success: boolean; message: unknown }> {
     const response = await api.post<{ success: boolean; message: unknown }>(
-      `/platforms/${platform}/send`,
-      { sessionId, chatId, content, replyToMessageId }
+      `/platforms/${platform}/${clientRequestId ? 'outbox/send' : 'send'}`,
+      { sessionId, chatId, content, replyToMessageId, clientRequestId }
     );
     return response.data;
   },
@@ -281,11 +296,12 @@ export const platformsApi = {
     sessionId: string,
     chatId: string,
     messageId: string,
-    emoji: string
+    emoji: string,
+    clientRequestId?: string
   ): Promise<{ success: boolean; reaction: unknown; alreadyReacted?: boolean }> {
     const response = await api.post<{ success: boolean; reaction: unknown; alreadyReacted?: boolean }>(
-      `/platforms/${platform}/reactions`,
-      { sessionId, chatId, messageId, emoji }
+      `/platforms/${platform}/${clientRequestId ? 'outbox/reactions' : 'reactions'}`,
+      { sessionId, chatId, messageId, emoji, clientRequestId }
     );
     return response.data;
   },

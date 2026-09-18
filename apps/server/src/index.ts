@@ -3,7 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import * as Sentry from '@sentry/node';
-import { config, platformConfig, matrixConfig, mockBridgeConfig, serverConfig } from './config';
+import { config, platformConfig, matrixConfig, mockBridgeConfig, demoConfig, serverConfig } from './config';
 import { initSentry } from './utils/sentry';
 import { logger, stream } from './utils/logger';
 
@@ -24,6 +24,7 @@ import preferencesRoutes from './routes/preferences';
 import autoReplyRoutes from './routes/auto-reply';
 import { aiRateLimit, authRateLimit } from './middleware/rate-limit';
 import seedRoutes from './routes/seed';
+import demoRoutes from './routes/demo';
 import loopRoutes from './routes/loops';
 import pushTokenRoutes from './routes/push-tokens';
 import notificationDeviceRoutes from './routes/notification-devices';
@@ -34,6 +35,7 @@ import deviceRoutes from './routes/devices';
 import searchRoutes from './routes/search';
 import desktopSyncRoutes from './routes/desktop-sync';
 import handoffRoutes from './routes/handoffs';
+import billingRoutes from './routes/billing';
 import { ensureCompanionSchema } from './services/companion-schema';
 import { platformManager } from './adapters';
 import { aiProcessor } from './services/ai-processor';
@@ -42,6 +44,7 @@ import { voiceProfileService } from './services/voice-profile-service';
 import {
   displayNameFromBridge,
   incomingContactId,
+  messageContactId,
   phoneNumberFromBridgeIdentifiers,
   phoneNumberFromPlatformContactId,
   resolveMentions,
@@ -50,9 +53,19 @@ import { scheduleChat } from './services/loops/loop-queue';
 import { operationsMonitor } from './services/operations-monitor';
 import { operationsTelemetry } from './services/operations-telemetry';
 import { autoReplyEngine } from './services/auto-reply-engine';
+import { DemoBridgeAdapter } from './adapters/demo';
+import { demoResponder } from './services/demo-responder';
+import { isDemoUser } from './demo/demo-accounts';
 import { notificationDeliveryService } from './services/notification-delivery';
-import { isAiProcessingEnabled } from './services/ai-policy';
-import { MessageContentType, Platform, PlatformStatus } from './adapters/types';
+import { chatAiProcessingEnabled, isAiProcessingEnabled } from './services/ai-policy';
+import { scheduleGroupClassification } from './services/group-classifier';
+import {
+  IPlatformAdapter,
+  MessageContentType,
+  Platform,
+  PlatformStatus,
+  type UnifiedMessage,
+} from './adapters/types';
 import { whatsappAdapter } from './adapters/whatsapp';
 import { telegramAdapter } from './adapters/telegram';
 import { imessageAdapter } from './adapters/imessage';
@@ -60,6 +73,7 @@ import { instagramAdapter } from './adapters/instagram';
 import { MatrixBridgeAdapter } from './adapters/matrix';
 import { mockBridgeAdapter } from './adapters/mock';
 import { transcodeVoiceToM4aOnce } from './services/audio-transcoder';
+import { applyIncomingMessageEdit } from './services/message-edits';
 import { isWhatsAppStatusUpdate } from './services/whatsapp-status';
 
 // Initialise Sentry as early as possible (no-op when SENTRY_DSN is unset)
@@ -77,6 +91,7 @@ async function notifyIncomingMessage(message: {
   userId: string;
   chatId: string;
   platform: string;
+  senderContactId?: string;
   senderName?: string;
   chatName?: string;
   isGroup?: boolean;
@@ -84,6 +99,58 @@ async function notifyIncomingMessage(message: {
   messageId: string;
 }): Promise<void> {
   await notificationDeliveryService.enqueueIncomingMessage(message);
+}
+
+async function reconcilePlatformMessageEdit(
+  message: UnifiedMessage,
+  receivedAt: number,
+  direction: 'inbound' | 'outbound'
+): Promise<void> {
+  const edit = await applyIncomingMessageEdit(message);
+  if (!edit) {
+    logger.warn('Message edit target was not found or did not match its conversation', {
+      platform: message.platform,
+    });
+    return;
+  }
+
+  logger.info('Platform message edit reconciled', {
+    platform: message.platform,
+    applied: edit.applied,
+    repairedDuplicate: edit.duplicateRemoved,
+  });
+  void operationsTelemetry.record({
+    traceSource: message.platformMessageId,
+    userId: message.userId,
+    platform: message.platform,
+    direction,
+    stage: 'database',
+    outcome: 'persisted',
+    durationMs: Date.now() - receivedAt,
+  });
+
+  // The embedding is keyed by the original UUID. Re-indexing that same row
+  // replaces stale Ask Claire search content without a duplicate.
+  if (
+    edit.applied &&
+    message.content.trim() &&
+    (await isAiProcessingEnabled(message.userId)) &&
+    conversationAssistant.isConfigured
+  ) {
+    void conversationAssistant
+      .indexMessage({
+        id: edit.messageId,
+        user_id: message.userId,
+        content: message.content,
+        contact_name: edit.contactName,
+        from_me: edit.fromMe,
+        timestamp: edit.timestamp,
+        platform: edit.platform,
+      })
+      .catch((err) =>
+        logger.debug('Conversation assistant edit re-index skipped:', (err as Error).message)
+      );
+  }
 }
 
 // Sentry request handler — must come first in the middleware chain
@@ -109,7 +176,14 @@ app.use(
     credentials: true,
   })
 );
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({
+  limit: '10mb',
+  verify: (req, _res, body) => {
+    if ('originalUrl' in req && typeof req.originalUrl === 'string' && req.originalUrl.startsWith('/billing/revenuecat/webhook')) {
+      (req as express.Request).rawBody = Buffer.from(body);
+    }
+  },
+}));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Keep HTTP diagnostics useful without recording search terms, OAuth values,
 // or other query parameters that can contain private data.
@@ -136,6 +210,8 @@ app.use('/conversations', conversationRoutes);
 app.use('/preferences', preferencesRoutes);
 // Seed/reset route — only functional when MOCK_BRIDGE=true (guarded inside route)
 app.use('/seed', seedRoutes);
+// Demo account seeding — every route 404s unless the caller is a demo account
+app.use('/demo', demoRoutes);
 app.use('/loops', loopRoutes);
 app.use('/push-tokens', pushTokenRoutes);
 app.use('/notification-devices', notificationDeviceRoutes);
@@ -147,6 +223,7 @@ app.use('/search', searchRoutes);
 app.use('/desktop', desktopSyncRoutes);
 app.use('/handoffs', handoffRoutes);
 app.use('/auto-reply', autoReplyRoutes);
+app.use('/billing', billingRoutes);
 
 // GoTrue sends an OAuth authorization code to its configured site URL when a
 // custom mobile/desktop redirect is not allow-listed. The production site URL
@@ -335,12 +412,31 @@ app.use((_req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
+/**
+ * Wrap an adapter so demo accounts get synthetic sessions and in-character
+ * replies. Inert unless DEMO_MODE_ENABLED is set, and even then every call for
+ * a non-demo account passes straight through to the real adapter.
+ */
+function withDemoSupport(adapter: IPlatformAdapter): IPlatformAdapter {
+  if (!demoConfig.enabled) return adapter;
+  return new DemoBridgeAdapter(adapter, {
+    ingest: (message) => platformManager.ingestMessage(message),
+    isDemoUser,
+    onOutgoing: (outgoing) => demoResponder.respondTo(outgoing),
+  });
+}
+
 // Initialize platform adapters
 async function initializePlatforms() {
+  if (demoConfig.enabled) {
+    logger.info('DEMO_MODE_ENABLED=true — demo accounts will receive synthetic sessions and in-character replies');
+    demoResponder.configure((message) => platformManager.ingestMessage(message));
+  }
+
   if (mockBridgeConfig.enabled) {
     // Mock mode: replace all real adapters with a scripted fake adapter
     logger.info('MOCK_BRIDGE=true — using mock bridge adapter (no Docker/Matrix required)');
-    platformManager.setMatrixMode(mockBridgeAdapter);
+    platformManager.setMatrixMode(withDemoSupport(mockBridgeAdapter));
   } else {
     const mode = matrixConfig.enabled ? 'matrix' : 'direct';
     logger.info(`Initializing platform adapters in ${mode} mode...`);
@@ -413,22 +509,22 @@ async function initializePlatforms() {
         },
       });
 
-      platformManager.setMatrixMode(matrixAdapter);
+      platformManager.setMatrixMode(withDemoSupport(matrixAdapter));
     } else {
       // Direct mode: Use native platform adapters
       logger.info('Using direct platform adapters');
 
       if (platformConfig.whatsapp.enabled) {
-        platformManager.registerAdapter(whatsappAdapter);
+        platformManager.registerAdapter(withDemoSupport(whatsappAdapter));
       }
       if (platformConfig.telegram.enabled) {
-        platformManager.registerAdapter(telegramAdapter);
+        platformManager.registerAdapter(withDemoSupport(telegramAdapter));
       }
       if (platformConfig.imessage.enabled) {
-        platformManager.registerAdapter(imessageAdapter);
+        platformManager.registerAdapter(withDemoSupport(imessageAdapter));
       }
       if (platformConfig.instagram.enabled) {
-        platformManager.registerAdapter(instagramAdapter);
+        platformManager.registerAdapter(withDemoSupport(instagramAdapter));
       }
     }
   }
@@ -456,6 +552,11 @@ async function initializePlatforms() {
     });
 
     try {
+      if (message.editOfPlatformMessageId) {
+        await reconcilePlatformMessageEdit(message, receivedAt, direction);
+        return;
+      }
+
       // Fast-path: skip duplicate messages (backfill replay) without touching the DB further
       const { data: existing } = await supabase
         .from('messages')
@@ -464,6 +565,20 @@ async function initializePlatforms() {
         .maybeSingle();
 
       if (existing) {
+        // Initial Matrix sync can attach the latest replacement to the original
+        // event instead of replaying the edit as a separate timeline item.
+        if (message.latestEditPlatformMessageId && message.editedAt) {
+          await reconcilePlatformMessageEdit(
+            {
+              ...message,
+              platformMessageId: message.latestEditPlatformMessageId,
+              editOfPlatformMessageId: message.platformMessageId,
+              timestamp: message.editedAt,
+            },
+            receivedAt,
+            direction
+          );
+        }
         // Replaying a Mac history sync is also our repair path when a newer
         // local Messages decoder can recover text that an older build could
         // not read. Keep the operation idempotent and never overwrite content
@@ -508,17 +623,29 @@ async function initializePlatforms() {
             platform: message.platform,
             ...(chatDisplayName ? { name: chatDisplayName } : {}),
             is_group: message.chatType === 'group',
+            // Audience size, not distinct-people count. The bridge already
+            // computes it; persisting it lets group relevance scoring and the
+            // classifier stop guessing from the roster. Omitted when unknown so
+            // a bridge that does not report it cannot null out a good value.
+            ...(message.memberCount ? { member_count: message.memberCount } : {}),
             last_message_at: message.timestamp,
           },
           { onConflict: 'user_id,platform,platform_chat_id' }
         )
-        .select('id, name, is_group')
+        .select('id, name, is_group, ai_enabled, member_count, contact_id')
         .single();
 
       if (chatError || !chat) {
         logger.error('Failed to upsert chat:', chatError);
         return;
       }
+
+      // Two tiers, and they are not the same question. `aiProcessingEnabled` is
+      // the account switch and still governs storage-adjacent work like the Ask
+      // Claire index — retrieval stays complete or search silently goes blind.
+      // `proactiveAi` governs everything that *produces* something unprompted,
+      // which is what makes an un-opted-in group expensive and noisy.
+      const proactiveAi = aiProcessingEnabled && chatAiProcessingEnabled(chat);
 
       // History replays and own-device messages must never create unread
       // badges. Only a newly inserted live incoming message increments the
@@ -571,6 +698,24 @@ async function initializePlatforms() {
       if (contactId && message.chatType === 'individual') {
         await supabase.from('chats').update({ contact_id: contactId }).eq('id', chat.id);
       }
+
+      // An outbound message has no remote sender, so incomingContactId returns
+      // null for it and `contact_id` was left empty on every row the account
+      // owner sent. That silently broke the People "Contacted" filter, which
+      // counts exactly those rows: contacts.outbound_message_count is
+      // maintained from `from_me = TRUE AND contact_id IS NOT NULL`, so the
+      // counter never left zero and the filter could never return anyone.
+      //
+      // In a 1:1 the counterpart is unambiguous -- it is the chat's own linked
+      // contact. A group has no single counterpart, and "contacted" is defined
+      // as direct messages only (routes/contacts.ts filters is_group = false),
+      // so groups stay null on purpose.
+      const linkedContactId = messageContactId({
+        senderContactId: contactId,
+        isFromMe: message.isFromMe,
+        isGroup: message.chatType === 'group',
+        chatContactId: (chat as { contact_id?: string | null }).contact_id,
+      });
       if (message.chatType === 'individual' && !chatDisplayName) {
         // Outgoing messages do not have a remote sender to upsert above, and
         // some bridges only learn the profile name during contact sync. Reuse
@@ -633,7 +778,7 @@ async function initializePlatforms() {
             content_type: message.contentType,
             timestamp: message.timestamp,
             is_group: message.chatType === 'group',
-            contact_id: contactId,
+            contact_id: linkedContactId,
             contact_name: message.isFromMe
               ? null
               : displayNameFromBridge(message.senderName, message.platform, senderContactId),
@@ -647,6 +792,8 @@ async function initializePlatforms() {
             mentions: resolveMentions(message.mentions),
             mentions_room: message.mentionsRoom === true,
             formatted_body: message.formattedBody || null,
+            edited_at: message.editedAt || null,
+            latest_edit_platform_message_id: message.latestEditPlatformMessageId || null,
             metadata: message.platformMetadata || null,
             media_url: (() => {
               const mediaUrl = message.platformMetadata?.mediaUrl;
@@ -759,6 +906,7 @@ async function initializePlatforms() {
             userId: message.userId,
             chatId: chat.id,
             platform: message.platform,
+            senderContactId: contactId || undefined,
             senderName: message.senderName,
             chatName: chat.name || chatDisplayName,
             isGroup: chat.is_group,
@@ -774,7 +922,7 @@ async function initializePlatforms() {
           !message.isFromMe &&
           savedMsg?.id &&
           message.content?.trim() &&
-          aiProcessingEnabled &&
+          proactiveAi &&
           aiProcessor.isConfigured
         ) {
           const chatType = message.chatType === 'group' ? 'group' : 'individual';
@@ -814,7 +962,7 @@ async function initializePlatforms() {
           savedMsg?.id &&
           message.isFromMe &&
           message.content?.trim() &&
-          aiProcessingEnabled &&
+          proactiveAi &&
           voiceProfileService.isConfigured
         ) {
           void voiceProfileService
@@ -824,10 +972,25 @@ async function initializePlatforms() {
 
         // Detection is debounced per conversation and excludes backfill, so a
         // burst is reconciled as one thread of intent rather than one row per
-        // message. The loop detector applies its own per-user enablement gate.
-        if (savedMsg?.id && !isBackfill && message.content?.trim() && chat?.id) {
+        // message.
+        //
+        // The detector's own gate is `user_preferences.loop_detection_enabled`,
+        // which never consulted the AI switch at all — so this ran for every
+        // chat of every user, including accounts with AI turned off. buildLoopContext
+        // now refuses too; this check just avoids queueing work that will be dropped.
+        if (savedMsg?.id && !isBackfill && message.content?.trim() && chat?.id && proactiveAi) {
           void scheduleChat(message.userId, chat.id).catch((err) =>
             logger.debug('Loop detection skipped:', (err as Error).message)
+          );
+        }
+
+        // Classifying a group is how the user decides whether to enable it, so
+        // it cannot require the group to already be enabled — it is gated by the
+        // account switch only. Cheap by construction: heuristics resolve most
+        // groups for free and a classified group is never looked at again.
+        if (chat?.is_group && !isBackfill && aiProcessingEnabled) {
+          void scheduleGroupClassification(message.userId, chat.id).catch((err) =>
+            logger.debug('Group classification skipped:', (err as Error).message)
           );
         }
 

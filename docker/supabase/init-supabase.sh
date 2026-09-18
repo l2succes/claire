@@ -96,7 +96,7 @@ DASHBOARD_USERNAME=supabase
 # Auth
 ############
 SITE_URL=http://localhost:3000
-ADDITIONAL_REDIRECT_URLS=
+ADDITIONAL_REDIRECT_URLS=http://localhost:3000/confirm,http://localhost:3000/ops/confirm,http://localhost:8081/confirm,http://localhost:8083/confirm,claire://confirm,claire-staging://confirm,claire-app://app/confirm
 DISABLE_SIGNUP=false
 JWT_EXPIRY=3600
 

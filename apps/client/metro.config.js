@@ -4,6 +4,17 @@ const { getDefaultConfig } = require('expo/metro-config');
 const { withNativeWind } = require('nativewind/metro');
 
 const config = getDefaultConfig(__dirname);
+
+// Expo's default is `inlineRequires: false`, which means every module in the
+// graph is evaluated at bundle start whether or not the first screen needs it.
+// Requiring at first use instead keeps the settings screens, the desktop
+// workspace and the connection flows out of the startup path.
+config.transformer.getTransformOptions = async () => ({
+  transform: {
+    experimentalImportSupport: true,
+    inlineRequires: true,
+  },
+});
 // The app lives at apps/client, so the workspace root is two levels up.
 const workspaceRoot = path.resolve(__dirname, '../..');
 

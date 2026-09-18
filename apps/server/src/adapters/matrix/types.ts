@@ -135,6 +135,9 @@ export interface MatrixMessageContent {
     rel_type?: string;
     event_id?: string;
   };
+  // Matrix edits carry a compatibility body at the top level (normally
+  // prefixed with "* "). The actual replacement content lives here.
+  'm.new_content'?: MatrixReplacementContent;
   // Structured mentions. Bridges render the display form into `body` differently
   // per platform (WhatsApp writes the phone number, Telegram the handle), so this
   // is the only mention representation that generalizes.
@@ -143,6 +146,11 @@ export interface MatrixMessageContent {
     room?: boolean;
   };
 }
+
+export type MatrixReplacementContent = Omit<
+  MatrixMessageContent,
+  'm.relates_to' | 'm.new_content'
+>;
 
 /**
  * Bridge authentication state

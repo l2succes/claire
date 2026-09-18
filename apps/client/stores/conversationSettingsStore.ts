@@ -36,6 +36,17 @@ const defaultSettings: ChatSettings = {
   clarificationDismissed: false,
 };
 
+function hasConfiguredContext(
+  category: ChatCategory | null | undefined,
+  profile: ContactProfile | null | undefined,
+): boolean {
+  return Boolean(
+    category
+      || profile?.relationship_context?.trim()
+      || profile?.ai_instruction?.trim(),
+  );
+}
+
 export const useConversationSettingsStore = create<ConversationSettingsState>((set, get) => ({
   settings: {},
 
@@ -68,6 +79,10 @@ export const useConversationSettingsStore = create<ConversationSettingsState>((s
               category: (cached.category as ChatCategory | null) ?? null,
               profile: (cached.profile as ContactProfile | null) ?? null,
               smartCards: (cached.smartCards as SmartCard[]) ?? [],
+              clarificationDismissed: hasConfiguredContext(
+                cached.category as ChatCategory | null,
+                cached.profile as ContactProfile | null,
+              ) || (state.settings[chatId]?.clarificationDismissed ?? false),
               // Still loading: this is a starting picture, not the answer.
               isLoading: true,
             },
@@ -112,8 +127,12 @@ export const useConversationSettingsStore = create<ConversationSettingsState>((s
             profile: profileRes.data ?? null,
             smartCards: cardsRes.data ?? [],
             isLoading: false,
-            // Preserve dismissal state: if profile now has relationship_context, keep dismissed
-            clarificationDismissed: (profileRes.data?.relationship_context != null)
+            // A category, memory, or tone means setup is complete. Keep the
+            // onboarding strip dismissed across app launches.
+            clarificationDismissed: hasConfiguredContext(
+              (categoryRes.data?.category as ChatCategory | null) ?? null,
+              profileRes.data as ContactProfile | null,
+            )
               || (state.settings[chatId]?.clarificationDismissed ?? false),
           },
         },
@@ -134,7 +153,11 @@ export const useConversationSettingsStore = create<ConversationSettingsState>((s
     set((state) => ({
       settings: {
         ...state.settings,
-        [chatId]: { ...(state.settings[chatId] || defaultSettings), category },
+        [chatId]: {
+          ...(state.settings[chatId] || defaultSettings),
+          category,
+          clarificationDismissed: true,
+        },
       },
     }));
 
@@ -165,7 +188,10 @@ export const useConversationSettingsStore = create<ConversationSettingsState>((s
               ? { ...current.profile, ...updates }
               : { id: '', user_id: userId, contact_id: null, chat_id: chatId, display_name: null, email: null, phone_number: null, location: null, key_facts: [], relationship_context: null, ai_instruction: null, created_at: '', updated_at: '', ...updates } as ContactProfile,
             // Once the relationship is saved, dismiss the card
-            clarificationDismissed: updates.relationship_context !== undefined ? true : current.clarificationDismissed,
+            clarificationDismissed:
+              updates.relationship_context !== undefined || updates.ai_instruction !== undefined
+                ? true
+                : current.clarificationDismissed,
           },
         },
       };

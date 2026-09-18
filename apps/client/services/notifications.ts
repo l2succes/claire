@@ -12,6 +12,20 @@ const DEVICE_ID_KEY = 'claire.notification.device-id';
 let registeredToken: string | null = null;
 let activeNotificationChatId: string | undefined;
 
+export const notificationCategories = {
+  message: 'claire_message',
+  loop: 'claire_loop',
+} as const;
+
+export const notificationActions = {
+  reply: 'claire_reply',
+  markRead: 'claire_mark_read',
+  openMessage: 'claire_open_message',
+  completeLoop: 'claire_complete_loop',
+  snoozeLoop: 'claire_snooze_loop',
+  openLoop: 'claire_open_loop',
+} as const;
+
 if (platformCapabilities.supportsNativeNotifications) {
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
@@ -53,18 +67,11 @@ export async function setupNotifications() {
     return null;
   }
 
+  await setupNotificationCategories();
+
   if (!Device.isDevice) {
     console.log('Push notifications only work on physical devices');
     return null;
-  }
-
-  if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync('messages', {
-      name: 'Messages',
-      importance: Notifications.AndroidImportance.HIGH,
-      sound: 'default',
-      vibrationPattern: [0, 250, 250, 250],
-    });
   }
 
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
@@ -100,6 +107,64 @@ export async function setupNotifications() {
     console.error('Error getting push token:', error);
     return null;
   }
+}
+
+/** Register actions on every launch, before any push can be acted on. */
+export async function setupNotificationCategories(): Promise<void> {
+  if (!platformCapabilities.supportsNativeNotifications) return;
+  await Promise.all([
+    Notifications.setNotificationCategoryAsync(notificationCategories.message, [
+      {
+        identifier: notificationActions.reply,
+        buttonTitle: 'Reply',
+        textInput: { submitButtonTitle: 'Open draft', placeholder: 'Write a reply' },
+        options: { opensAppToForeground: true, isAuthenticationRequired: true },
+      },
+      {
+        identifier: notificationActions.markRead,
+        buttonTitle: 'Mark read',
+        options: { opensAppToForeground: true, isAuthenticationRequired: true },
+      },
+      {
+        identifier: notificationActions.openMessage,
+        buttonTitle: 'Open',
+        options: { opensAppToForeground: true },
+      },
+    ], {
+      intentIdentifiers: ['INSendMessageIntent'],
+      categorySummaryFormat: '%u more messages',
+    }),
+    Notifications.setNotificationCategoryAsync(notificationCategories.loop, [
+      {
+        identifier: notificationActions.completeLoop,
+        buttonTitle: 'Done',
+        options: { opensAppToForeground: true, isAuthenticationRequired: true },
+      },
+      {
+        identifier: notificationActions.snoozeLoop,
+        buttonTitle: 'Snooze 1 hr',
+        options: { opensAppToForeground: true, isAuthenticationRequired: true },
+      },
+      {
+        identifier: notificationActions.openLoop,
+        buttonTitle: 'Open',
+        options: { opensAppToForeground: true },
+      },
+    ]),
+    ...(Platform.OS === 'android' ? [
+      Notifications.setNotificationChannelAsync('messages', {
+        name: 'Messages',
+        importance: Notifications.AndroidImportance.HIGH,
+        sound: 'default',
+        vibrationPattern: [0, 250, 250, 250],
+      }),
+      Notifications.setNotificationChannelAsync('loops', {
+        name: 'Loop reminders',
+        importance: Notifications.AndroidImportance.DEFAULT,
+        sound: 'default',
+      }),
+    ] : []),
+  ]);
 }
 
 export async function getNativeNotificationPermission(): Promise<string> {

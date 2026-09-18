@@ -26,32 +26,37 @@ export function LaunchReveal({ ready, onFinish }: LaunchRevealProps) {
   useEffect(() => {
     if (!ready) return;
 
+    // Roughly 500ms end to end, down from about 1.65s. The old timings were
+    // longer than the work they were covering, so the animation itself became
+    // the reason a cold start felt slow: the inbox was ready and waiting behind
+    // it. Same shape, same easings, played at a speed that reads as launch
+    // rather than as a wait.
     const animation = Animated.sequence([
       Animated.timing(threadOffset, {
         toValue: 0,
-        duration: 680,
+        duration: 200,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: false,
       }),
       Animated.timing(dotRadius, {
         toValue: 8,
-        duration: 170,
+        duration: 70,
         easing: Easing.out(Easing.back(1.7)),
         useNativeDriver: false,
       }),
-      Animated.delay(180),
+      Animated.delay(40),
       Animated.parallel([
         Animated.timing(expansion, {
           toValue: 11,
-          duration: 620,
+          duration: 200,
           easing: Easing.in(Easing.cubic),
           useNativeDriver: true,
         }),
         Animated.sequence([
-          Animated.delay(430),
+          Animated.delay(90),
           Animated.timing(overlayOpacity, {
             toValue: 0,
-            duration: 190,
+            duration: 110,
             easing: Easing.out(Easing.quad),
             useNativeDriver: true,
           }),

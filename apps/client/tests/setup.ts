@@ -15,12 +15,20 @@ import '@testing-library/jest-native/extend-expect';
 
 // Mock expo modules
 jest.mock('expo-router', () => ({
+  router: {
+    push: jest.fn(),
+    replace: jest.fn(),
+    back: jest.fn(),
+    canGoBack: jest.fn(() => true),
+  },
   useRouter: () => ({
     push: jest.fn(),
     replace: jest.fn(),
     back: jest.fn(),
   }),
   useLocalSearchParams: () => ({}),
+  useFocusEffect: (callback: () => void) => callback(),
+  Redirect: () => null,
   Link: ({ children }: any) => children,
   Stack: {
     Screen: () => null,
@@ -35,6 +43,11 @@ jest.mock('expo-notifications', () => ({
   requestPermissionsAsync: jest.fn(),
   getExpoPushTokenAsync: jest.fn(),
   setNotificationHandler: jest.fn(),
+  setNotificationCategoryAsync: jest.fn(),
+  setNotificationChannelAsync: jest.fn(),
+  AndroidImportance: { HIGH: 4, DEFAULT: 3 },
+  DEFAULT_ACTION_IDENTIFIER: 'expo.modules.notifications.actions.DEFAULT',
+  getLastNotificationResponse: jest.fn(),
   addNotificationReceivedListener: jest.fn(),
   addNotificationResponseReceivedListener: jest.fn(),
   removeNotificationSubscription: jest.fn(),

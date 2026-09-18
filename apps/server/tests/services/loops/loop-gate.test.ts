@@ -26,6 +26,7 @@ function gate(overrides: Partial<GateInput> = {}) {
     platform: 'whatsapp',
     sensitivity: 'normal',
     detectionEnabled: true,
+    aiEnabled: true,
     delta: [],
     openLoopCount: 0,
     consecutiveEmpty: 0,
@@ -42,6 +43,23 @@ describe('loop gate — hard skips', () => {
     });
     expect(result.run).toBe(false);
     expect(result.skipReason).toBe('sensitivity_off');
+  });
+
+  it('never runs for a group the user has not turned AI on for', () => {
+    const result = gate({
+      aiEnabled: false,
+      delta: [msg("I'll send it tomorrow")],
+      openLoopCount: 3,
+    });
+    expect(result.run).toBe(false);
+    expect(result.skipReason).toBe('ai_disabled');
+  });
+
+  it('reports ai_disabled rather than sensitivity_off when both apply', () => {
+    // An un-opted-in group still carries a default sensitivity, so reporting
+    // that would explain the skip with a setting the user never touched.
+    const result = gate({ aiEnabled: false, sensitivity: 'off', delta: [msg("I'll send it tomorrow")] });
+    expect(result.skipReason).toBe('ai_disabled');
   });
 
   it('never runs when the user disabled detection', () => {
