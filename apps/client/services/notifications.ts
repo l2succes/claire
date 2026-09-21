@@ -10,6 +10,7 @@ import { supabase, type DbRow } from './supabase';
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001';
 const DEVICE_ID_KEY = 'claire.notification.device-id';
 let registeredToken: string | null = null;
+let registrationInFlight: Promise<string | null> | null = null;
 let activeNotificationChatId: string | undefined;
 
 export const notificationCategories = {
@@ -61,7 +62,7 @@ export function notifyWebMessageUpdate(title: string, body: string, data?: Recor
   new globalThis.Notification(title, { body, data });
 }
 
-export async function setupNotifications() {
+export async function setupNotifications(devicePushToken?: Notifications.DevicePushToken) {
   if (!platformCapabilities.supportsNativeNotifications) {
     logWebNoop('setupNotifications');
     return null;
@@ -97,9 +98,10 @@ export async function setupNotifications() {
       return null;
     }
 
-    const token = await Notifications.getExpoPushTokenAsync({
-      projectId,
-    });
+    // A token rotation listener already receives the new native token. Passing
+    // it through prevents getExpoPushTokenAsync from fetching it again, which
+    // would re-trigger the listener and create an unbounded registration loop.
+    const token = await Notifications.getExpoPushTokenAsync({ projectId, devicePushToken });
 
     console.log('Push token:', token.data);
     return token.data;
@@ -199,24 +201,38 @@ async function authenticatedRequest(path: string, accessToken: string, init: Req
   throw lastError instanceof Error ? lastError : new Error('Notification request failed');
 }
 
-export async function registerNotificationDevice(accessToken: string): Promise<string | null> {
-  const token = await setupNotifications();
-  if (!token) return null;
-  const deviceId = await getDeviceId();
-  const response = await authenticatedRequest('/notification-devices', accessToken, {
-    method: 'PUT',
-    body: JSON.stringify({
-      deviceId,
-      platform: Platform.OS,
-      provider: 'expo',
-      token,
-      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
-      appVersion: Constants.expoConfig?.version,
-    }),
+export function registerNotificationDevice(
+  accessToken: string,
+  devicePushToken?: Notifications.DevicePushToken,
+): Promise<string | null> {
+  if (!devicePushToken && registeredToken) return Promise.resolve(registeredToken);
+  if (registrationInFlight) return registrationInFlight;
+
+  registrationInFlight = (async () => {
+    const token = await setupNotifications(devicePushToken);
+    if (!token) return null;
+    if (token === registeredToken) return token;
+
+    const deviceId = await getDeviceId();
+    const response = await authenticatedRequest('/notification-devices', accessToken, {
+      method: 'PUT',
+      body: JSON.stringify({
+        deviceId,
+        platform: Platform.OS,
+        provider: 'expo',
+        token,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+        appVersion: Constants.expoConfig?.version,
+      }),
+    });
+    if (!response.ok) throw new Error(`Notification device registration failed with status ${response.status}`);
+    registeredToken = token;
+    return token;
+  })().finally(() => {
+    registrationInFlight = null;
   });
-  if (!response.ok) throw new Error(`Notification device registration failed with status ${response.status}`);
-  registeredToken = token;
-  return token;
+
+  return registrationInFlight;
 }
 
 export async function updateNotificationPresence(accessToken: string, state: 'foreground' | 'background', chatId?: string): Promise<void> {
@@ -238,8 +254,8 @@ export async function deregisterNotificationDevice(accessToken: string): Promise
 
 export function addPushTokenRotationListener(accessToken: string) {
   if (!platformCapabilities.supportsNativeNotifications) return { remove: () => undefined };
-  return Notifications.addPushTokenListener(() => {
-    registerNotificationDevice(accessToken).catch((error) => console.warn('Push token refresh registration failed:', error));
+  return Notifications.addPushTokenListener((devicePushToken) => {
+    registerNotificationDevice(accessToken, devicePushToken).catch((error) => console.warn('Push token refresh registration failed:', error));
   });
 }
 
