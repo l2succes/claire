@@ -35,7 +35,7 @@ export function EmailSignInScreen() {
             selectable
             style={{ ...mobileType.label, color: colors.neutral[600], textAlign: 'center' }}
           >
-            Your messages are never used to train shared AI models.
+            By continuing, you agree to the Terms of Service and Privacy Policy.
           </Text>
         </>
       }

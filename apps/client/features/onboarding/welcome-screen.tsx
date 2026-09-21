@@ -42,7 +42,7 @@ export function WelcomeScreen() {
           <Pressable testID="signin-use-email" accessibilityRole="button" onPress={() => router.push('/(auth)/email')} style={{ minHeight: 52, borderRadius: 22, borderWidth: 1, borderColor: colors.ink, backgroundColor: colors.paper, paddingHorizontal: 16, paddingVertical: 12, alignItems: 'center', justifyContent: 'center' }}>
             <Text style={{ ...mobileType.body, fontWeight: '700', color: colors.ink, textAlign: 'center' }}>Continue with email</Text>
           </Pressable>
-          <Text style={{ ...mobileType.label, color: colors.neutral[600], textAlign: 'center', paddingTop: 4, paddingHorizontal: 12 }}>Your messages are never used to train shared AI models.</Text>
+          <Text style={{ ...mobileType.label, color: colors.neutral[600], textAlign: 'center', paddingTop: 4, paddingHorizontal: 12 }}>By continuing, you agree to the Terms of Service and Privacy Policy.</Text>
         </OnboardingReveal>
       </ScrollView>
     </Animated.View>

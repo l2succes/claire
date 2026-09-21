@@ -54,7 +54,7 @@ export default function SigninScreen() {
           </Pressable>
 
       <Text style={{ ...mobileType.label, color: colors.neutral[600], textAlign: 'center', marginTop: space[2] }}>
-        Your messages are never used to train shared AI models.
+        By continuing, you agree to the Terms of Service and Privacy Policy.
       </Text>
     </View>
   );
