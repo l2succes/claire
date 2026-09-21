@@ -8,6 +8,7 @@ import { colors, mobileType, radius, space } from '@claire/design-system';
 import { MobileChip, MobileHeader, MobileSearchField, MobileState, SectionLabel } from '../../components/mobile/claire-mobile';
 import { useAuthStore } from '../../stores/authStore';
 import { searchApi, type SearchScope } from '../../services/search';
+import { userFacingErrorMessage } from '../../services/api-errors';
 
 const scopes: Array<{ value: SearchScope; label: string }> = [
   { value: 'everything', label: 'Everything' }, { value: 'messages', label: 'Messages' }, { value: 'people', label: 'People' }, { value: 'files', label: 'Files' }, { value: 'loops', label: 'Loops' },
@@ -70,7 +71,7 @@ export function SearchScreen() {
             <View style={{ flex: 1, minWidth: 0 }}><Text selectable numberOfLines={1} style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>{item.title}</Text><Text selectable numberOfLines={2} style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{item.subtitle}</Text></View>
             <Text style={{ ...mobileType.monoLabel, color: colors.neutral[400], maxWidth: 76 }} numberOfLines={2}>{item.meta}</Text>
           </Pressable>}
-          ListEmptyComponent={exact.isLoading ? <ActivityIndicator color={colors.ink} /> : <MobileState error={!!exact.error} title={exact.error ? 'Search is unavailable' : 'No matches'} message={exact.error ? exact.error.message : 'Try a different phrase or search Everything for a semantic answer.'} />}
+          ListEmptyComponent={exact.isLoading ? <ActivityIndicator color={colors.ink} /> : <MobileState error={!!exact.error} title={exact.error ? 'Search is unavailable' : 'No matches'} message={exact.error ? userFacingErrorMessage(exact.error) : 'Try a different phrase or search Everything for a semantic answer.'} />}
         />
       </View>
     );

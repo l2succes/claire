@@ -25,6 +25,33 @@ export const GENERIC_REQUEST_ERROR = 'Something went wrong. Please try again.';
 export const UNREACHABLE_ERROR = 'Could not reach Claire. Check your connection and try again.';
 export const SESSION_ERROR = 'Your session needs to be refreshed. Please try again.';
 
+const NETWORK_CONNECTION_LOST = /\b(?:the\s+)?network connection (?:was|has been) lost\b/i;
+
+/**
+ * Convert an arbitrary failure into copy that is safe to render in the UI.
+ *
+ * Apple networking can surface its localized transport description directly
+ * through several SDKs. Keep that diagnostic detail in logs, but never make a
+ * person read the system phrase in a banner, alert, composer, or error state.
+ */
+export function userFacingErrorMessage(
+  error: unknown,
+  fallback = GENERIC_REQUEST_ERROR,
+): string {
+  const message = error instanceof Error
+    ? error.message
+    : typeof error === 'string'
+      ? error
+      : error && typeof error === 'object' && 'message' in error
+        && typeof error.message === 'string'
+        ? error.message
+        : '';
+
+  if (!message) return fallback;
+  if (NETWORK_CONNECTION_LOST.test(message)) return UNREACHABLE_ERROR;
+  return message;
+}
+
 export function clientSafeMessage(error: FailedRequest): string {
   const status = error.response?.status;
   const body = error.response?.data?.error || error.response?.data?.message;
@@ -40,7 +67,7 @@ export function clientSafeMessage(error: FailedRequest): string {
   // No response at all: the request never completed.
   if (status === undefined) return UNREACHABLE_ERROR;
 
-  return body || GENERIC_REQUEST_ERROR;
+  return userFacingErrorMessage(body, GENERIC_REQUEST_ERROR);
 }
 
 /** Retain machine-readable retry information without displaying server internals. */

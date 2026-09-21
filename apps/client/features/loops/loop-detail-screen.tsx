@@ -25,6 +25,7 @@ import { pendingCloseSuggestion } from '../../services/loop-review';
 import { LoopAgentPanel } from './loop-agent-panel';
 import { LoopBlocks } from './loop-blocks';
 import { LoopTimeline } from './loop-timeline';
+import { userFacingErrorMessage } from '../../services/api-errors';
 
 /**
  * Where a loop is actually resolved.
@@ -246,7 +247,7 @@ export function LoopDetailScreen() {
         <MobileHeader title="Loop" safeArea leading={<BackButton />} />
         <MobileState
           title="Could not open this loop"
-          message={query.error instanceof Error ? query.error.message : 'It may have been deleted.'}
+          message={userFacingErrorMessage(query.error, 'It may have been deleted.')}
         />
       </View>
     );
@@ -399,7 +400,7 @@ export function LoopDetailScreen() {
             </View>
             {review.error ? (
               <Text selectable style={{ ...mobileType.bodySmall, color: colors.danger }}>
-                {review.error.message}
+                {userFacingErrorMessage(review.error)}
               </Text>
             ) : null}
           </View>

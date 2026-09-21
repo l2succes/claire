@@ -5,6 +5,7 @@ import { MessageCircle } from 'lucide-react-native';
 import { colors, mobileType, radius, space } from '@claire/design-system';
 
 import { askLoopAgent, type LoopAgentResult } from '../../services/loops';
+import { userFacingErrorMessage } from '../../services/api-errors';
 
 /**
  * "Ask Claire to help close this."
@@ -156,7 +157,7 @@ export function LoopAgentPanel({ loopId }: { loopId: string }) {
 
       {ask.error ? (
         <Text selectable style={{ ...mobileType.bodySmall, color: colors.danger }}>
-          {ask.error instanceof Error ? ask.error.message : 'Claire could not answer.'}
+          {userFacingErrorMessage(ask.error, 'Claire could not answer.')}
         </Text>
       ) : null}
 

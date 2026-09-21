@@ -9,6 +9,7 @@ import { create, type StoreApi } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { platformsApi, pollAuthStatus } from '../services/platforms';
+import { userFacingErrorMessage } from '../services/api-errors';
 import {
   Platform,
   PlatformStatus,
@@ -93,7 +94,7 @@ function applyAuthSessionUpdate(
       activeAuthFlow: {
         ...currentFlow,
         step: 'error',
-        error: session.error || 'Authentication failed',
+        error: userFacingErrorMessage(session.error, 'Authentication failed'),
       },
       _pollController: null,
     }));
@@ -159,7 +160,7 @@ export const usePlatformStore = create<PlatformState>()(persist((set, get) => ({
       console.error('Platform store initialization error:', error);
       set({
         isLoading: false,
-        error: error instanceof Error ? error.message : 'Failed to initialize',
+        error: userFacingErrorMessage(error, 'Failed to initialize'),
       });
     }
   },
@@ -304,7 +305,7 @@ export const usePlatformStore = create<PlatformState>()(persist((set, get) => ({
     } catch (error) {
       set({
         isLoading: false,
-        error: error instanceof Error ? error.message : 'Failed to connect',
+        error: userFacingErrorMessage(error, 'Failed to connect'),
         activeAuthFlow: null,
       });
     }
@@ -382,7 +383,7 @@ export const usePlatformStore = create<PlatformState>()(persist((set, get) => ({
     } catch (error) {
       set({
         isLoading: false,
-        error: error instanceof Error ? error.message : 'Could not resume setup',
+        error: userFacingErrorMessage(error, 'Could not resume setup'),
       });
       return false;
     }
@@ -398,7 +399,7 @@ export const usePlatformStore = create<PlatformState>()(persist((set, get) => ({
       if (session) applyAuthSessionUpdate(set, get, session);
       return session;
     } catch (error) {
-      set({ error: error instanceof Error ? error.message : 'Could not check connection' });
+      set({ error: userFacingErrorMessage(error, 'Could not check connection') });
       return undefined;
     }
   },
@@ -420,7 +421,7 @@ export const usePlatformStore = create<PlatformState>()(persist((set, get) => ({
     } catch (error) {
       set({
         isLoading: false,
-        error: error instanceof Error ? error.message : 'Failed to disconnect',
+        error: userFacingErrorMessage(error, 'Failed to disconnect'),
       });
     }
   },
@@ -444,7 +445,7 @@ export const usePlatformStore = create<PlatformState>()(persist((set, get) => ({
     } catch (error) {
       set({
         isLoading: false,
-        error: error instanceof Error ? error.message : 'Failed to reconnect',
+        error: userFacingErrorMessage(error, 'Failed to reconnect'),
       });
     }
   },
@@ -497,7 +498,7 @@ export const usePlatformStore = create<PlatformState>()(persist((set, get) => ({
         activeAuthFlow: {
           ...authFlow,
           step: 'error',
-          error: error instanceof Error ? error.message : 'Verification failed',
+          error: userFacingErrorMessage(error, 'Verification failed'),
         },
       });
     }

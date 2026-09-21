@@ -13,6 +13,7 @@ import {
 } from '../../services/billing';
 import { getServerBillingSummary, refreshServerBillingSummary } from '../../services/billing-api';
 import type { BillingPackage, ServerBillingSummary } from '../../services/billing-types';
+import { userFacingErrorMessage } from '../../services/api-errors';
 import {
   CadenceSelector,
   PaywallHeader,
@@ -69,7 +70,7 @@ export function PaywallScreen() {
         if (active)
           Alert.alert(
             'Plans unavailable',
-            error instanceof Error ? error.message : 'Please try again.'
+            userFacingErrorMessage(error, 'Please try again.')
           );
       } finally {
         if (active) setLoading(false);
@@ -108,7 +109,7 @@ export function PaywallScreen() {
     } catch (error) {
       const purchaseError = error as { userCancelled?: boolean; message?: string };
       if (!purchaseError.userCancelled)
-        Alert.alert('Purchase not completed', purchaseError.message || 'Please try again.');
+        Alert.alert('Purchase not completed', userFacingErrorMessage(purchaseError, 'Please try again.'));
     } finally {
       setPurchasing(false);
     }
@@ -128,7 +129,7 @@ export function PaywallScreen() {
         finish(source);
       }
     } catch (error) {
-      Alert.alert('Restore failed', error instanceof Error ? error.message : 'Please try again.');
+      Alert.alert('Restore failed', userFacingErrorMessage(error, 'Please try again.'));
     } finally {
       setPurchasing(false);
     }

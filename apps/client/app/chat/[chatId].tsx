@@ -95,6 +95,7 @@ import { pendingReactions } from '../../features/chat/pending-reactions';
 import { ChatDeliveryStatus } from '../../features/chat/chat-delivery-status';
 import { StandaloneEmojiMessage } from '../../features/chat/standalone-emoji-message';
 import { MessageTextWithLinks } from '../../features/chat/message-link-card';
+import { userFacingErrorMessage } from '../../services/api-errors';
 
 function InjectedBubble({
   animate,
@@ -1008,8 +1009,7 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
       console.error('Send failed:', err);
 
       // Extract error message
-      const errorMessage =
-        err instanceof Error ? err.message : 'Failed to send message. Please try again.';
+      const errorMessage = userFacingErrorMessage(err, 'Failed to send message. Please try again.');
 
       setSendError(errorMessage);
 
@@ -1102,7 +1102,7 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
       requestAnimationFrame(() => listRef.current?.scrollToOffset({ offset: 0, animated: true }));
     } catch (error) {
       console.error('Voice-note send failed:', error);
-      const message = error instanceof Error ? error.message : 'Failed to send voice note. Please try again.';
+      const message = userFacingErrorMessage(error, 'Failed to send voice note. Please try again.');
       setSendError(message);
       patchTimeline((previous) => ({
         ...previous,

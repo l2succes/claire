@@ -3,6 +3,8 @@ import {
   GENERIC_REQUEST_ERROR,
   GENERIC_SERVER_ERROR,
   SESSION_ERROR,
+  UNREACHABLE_ERROR,
+  userFacingErrorMessage,
   type FailedRequest,
 } from '../services/api-errors';
 
@@ -46,5 +48,22 @@ describe('clientSafeMessage', () => {
 
   it('explains a request that never reached the server', () => {
     expect(clientSafeMessage(failure(undefined))).toContain('Check your connection');
+  });
+
+  it('never renders the native network-connection-lost description', () => {
+    expect(userFacingErrorMessage(new Error('The network connection was lost.'))).toBe(
+      UNREACHABLE_ERROR,
+    );
+    expect(userFacingErrorMessage({ message: 'Network connection has been lost' })).toBe(
+      UNREACHABLE_ERROR,
+    );
+    expect(clientSafeMessage(failure(400, { error: 'The network connection was lost.' }))).toBe(
+      UNREACHABLE_ERROR,
+    );
+  });
+
+  it('preserves useful non-network copy and honors its fallback', () => {
+    expect(userFacingErrorMessage(new Error('Conversation not found'))).toBe('Conversation not found');
+    expect(userFacingErrorMessage(null, 'Try again later.')).toBe('Try again later.');
   });
 });

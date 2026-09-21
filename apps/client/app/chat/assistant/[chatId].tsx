@@ -13,6 +13,7 @@ import { MobileIconButton, MobileSearchField } from '../../../components/mobile/
 import { AssistantAnswerActions } from '../../../components/claire/assistant-answer-actions';
 import { AssistantRichText } from '../../../components/claire/assistant-rich-text';
 import { useAssistantStream } from '../../../hooks/useAssistantStream';
+import { userFacingErrorMessage } from '../../../services/api-errors';
 
 type QuickAction = {
   label: string;
@@ -45,7 +46,7 @@ export default function ConversationAssistantScreen() {
     if (!chatId) return;
     conversationAssistantApi.getConversation(chatId)
       .then(result => setTurns(result?.turns || []))
-      .catch(cause => setError(cause instanceof Error ? cause.message : 'Claire could not load this chat.'))
+      .catch(cause => setError(userFacingErrorMessage(cause, 'Claire could not load this chat.')))
       .finally(() => setLoading(false));
   }, [chatId]);
 
@@ -96,7 +97,7 @@ export default function ConversationAssistantScreen() {
         : turn));
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 40);
     } catch (cause) {
-      const message = cause instanceof Error ? cause.message : 'Claire could not answer right now.';
+      const message = userFacingErrorMessage(cause, 'Claire could not answer right now.');
       setTurns(current => current.map(turn => turn.id === streamingTurn.id ? { ...turn, status: message === 'Answer stopped.' ? 'cancelled' : 'failed' } : turn));
       setError(message);
     }

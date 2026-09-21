@@ -18,6 +18,7 @@ import { createLoop, reviewLoop, snoozeLoop, updateLoop } from '../../services/l
 import { BottomSheet } from '../../components/mobile/bottom-sheet';
 import { isLoopDeferred } from '../../services/loop-display';
 import { loopNeedsReview } from '../../services/loop-review';
+import { userFacingErrorMessage } from '../../services/api-errors';
 
 type LoopFilter = 'for_you' | 'done' | 'waiting' | 'all';
 
@@ -353,7 +354,7 @@ export function LoopsScreen() {
             </View>
             {review.error ? (
               <Text selectable style={{ ...mobileType.bodySmall, color: colors.danger }}>
-                {review.error.message}
+                {userFacingErrorMessage(review.error)}
               </Text>
             ) : null}
           </View>
@@ -365,7 +366,7 @@ export function LoopsScreen() {
           <View style={{ backgroundColor: colors.paper, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: space[5], paddingBottom: 36, gap: space[4] }}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}><Text style={{ ...mobileType.sectionTitle, flex: 1, color: colors.ink }}>Add a loop</Text><MobileIconButton label="Close" onPress={() => setShowCreate(false)}><X size={19} color={colors.ink} /></MobileIconButton></View>
             <TextInput autoFocus multiline value={newLoop} onChangeText={setNewLoop} placeholder="What do you want to remember?" placeholderTextColor={colors.neutral[400]} style={{ minHeight: 110, textAlignVertical: 'top', padding: space[4], borderRadius: radius.card, borderWidth: 1, borderColor: colors.neutral[200], backgroundColor: colors.cream, ...mobileType.body, color: colors.ink }} />
-            {create.error ? <Text selectable style={{ ...mobileType.bodySmall, color: colors.danger }}>{create.error.message}</Text> : null}
+            {create.error ? <Text selectable style={{ ...mobileType.bodySmall, color: colors.danger }}>{userFacingErrorMessage(create.error)}</Text> : null}
             <Pressable disabled={!newLoop.trim() || create.isPending} onPress={() => create.mutate(newLoop.trim())} style={({ pressed }) => ({ minHeight: 50, borderRadius: radius.control, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center', opacity: !newLoop.trim() || create.isPending ? 0.42 : pressed ? 0.78 : 1 })}><Text style={{ ...mobileType.body, fontWeight: '700', color: colors.paper }}>{create.isPending ? 'Adding…' : 'Add loop'}</Text></Pressable>
           </View>
         </View>

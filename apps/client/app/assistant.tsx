@@ -17,6 +17,7 @@ import { useChromeStore } from '../stores/chromeStore';
 import { useAuthStore } from '../stores/authStore';
 import { readQuerySnapshot, writeQuerySnapshot } from '../services/mobile-cache';
 import { useAssistantStream } from '../hooks/useAssistantStream';
+import { userFacingErrorMessage } from '../services/api-errors';
 import {
   AssistantCitation,
   AssistantIndexStatus,
@@ -276,7 +277,7 @@ export function AssistantScreen({ inTab = false }: { inTab?: boolean }) {
       // An initial/background load can finish after a person has already asked
       // a question. Never let that older failure overwrite a newer answer.
       if (requestEpoch === interactiveRequestEpoch.current) {
-        setError(cause instanceof Error ? cause.message : 'Could not load Ask Claire.');
+        setError(userFacingErrorMessage(cause, 'Could not load Ask Claire.'));
       }
     } finally {
       setLoading(false);
@@ -311,7 +312,7 @@ export function AssistantScreen({ inTab = false }: { inTab?: boolean }) {
       setError(null);
       return thread;
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not create a conversation.');
+      setError(userFacingErrorMessage(cause, 'Could not create a conversation.'));
       return null;
     }
   };
@@ -375,7 +376,7 @@ export function AssistantScreen({ inTab = false }: { inTab?: boolean }) {
       const persistedThread = result.thread || thread;
       setActiveThread(refreshed.find((item) => item.id === persistedThread.id) || persistedThread);
     } catch (cause) {
-      const message = cause instanceof Error ? cause.message : 'Claire could not answer that right now.';
+      const message = userFacingErrorMessage(cause, 'Claire could not answer that right now.');
       setError(message);
       setTurns((current) => current.map((turn) => turn.status === 'streaming' ? { ...turn, status: message === 'Answer stopped.' ? 'cancelled' : 'failed' } : turn));
     }
@@ -388,7 +389,7 @@ export function AssistantScreen({ inTab = false }: { inTab?: boolean }) {
       setThreads((current) => current.filter((thread) => thread.id !== activeThread.id));
       goHome();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not delete this conversation.');
+      setError(userFacingErrorMessage(cause, 'Could not delete this conversation.'));
     }
   };
 
