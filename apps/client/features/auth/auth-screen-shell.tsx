@@ -11,6 +11,7 @@ import { AlertCircle, ArrowLeft, CheckCircle2 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, mobileType, radius, space } from '@claire/design-system';
 import { ClaireMark } from '../../components/claire/mark';
+import { OnboardingReveal } from '../onboarding/onboarding-reveal';
 
 export function AuthScreenShell({
   kicker,
@@ -94,7 +95,7 @@ export function AuthScreenShell({
             <View style={{ width: 44 }} />
           </View>
 
-          <View style={{ paddingTop: space[10], gap: space[3] }}>
+          <OnboardingReveal delay={60} style={{ paddingTop: space[10], gap: space[3] }}>
             <Text selectable style={{ ...mobileType.monoLabel, color: colors.neutral[600] }}>
               {kicker}
             </Text>
@@ -110,8 +111,8 @@ export function AuthScreenShell({
             >
               {description}
             </Text>
-            <View style={{ paddingTop: space[5] }}>{children}</View>
-          </View>
+            <OnboardingReveal delay={120} style={{ paddingTop: space[5] }}>{children}</OnboardingReveal>
+          </OnboardingReveal>
 
         </View>
       </ScrollView>

@@ -15,6 +15,7 @@ import {
   connectionRoute,
 } from './connection-platform-config';
 import { ConnectionRow, type ConnectionRowState } from './connection-row';
+import { OnboardingReveal } from '../onboarding/onboarding-reveal';
 
 export type OnboardingConnectionStates = Partial<Record<Platform, ConnectionRowState>>;
 
@@ -78,21 +79,21 @@ export function OnboardingConnectionsView({
       </View>
 
       <ScrollView style={{ flex: 1 }} contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ paddingHorizontal: space[4], paddingTop: space[3], paddingBottom: space[5], gap: space[5] }}>
-        <View style={{ gap: 7, paddingVertical: space[2] }}>
+        <OnboardingReveal style={{ gap: 7, paddingVertical: space[2] }}>
           <Text style={{ ...mobileType.monoLabel, color: colors.neutral[600] }}>CONNECT YOUR ACCOUNTS</Text>
           <Text style={{ ...mobileType.screenTitle, fontSize: 31, lineHeight: 34, color: colors.ink }}>Bring every conversation into Claire.</Text>
           <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600], maxWidth: 340 }}>Start with one account. After it connects, come back here to add another or continue to Claire.</Text>
-        </View>
+        </OnboardingReveal>
 
-        <View>
+        <OnboardingReveal delay={100}>
           <Text style={{ ...mobileType.monoLabel, color: colors.neutral[600] }}>CONNECT ON THIS PHONE</Text>
           {renderRows(PHONE_CONNECTION_PLATFORMS)}
-        </View>
+        </OnboardingReveal>
 
-        <View>
+        <OnboardingReveal delay={160}>
           <Text style={{ ...mobileType.monoLabel, color: colors.neutral[600] }}>FINISH ON ANOTHER DEVICE</Text>
           {renderRows(COMPANION_CONNECTION_PLATFORMS)}
-        </View>
+        </OnboardingReveal>
 
         <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: space[2], padding: space[3], borderRadius: 15, borderCurve: 'continuous', backgroundColor: colors.mint }}>
           <ShieldCheck size={18} color={colors.ink} />

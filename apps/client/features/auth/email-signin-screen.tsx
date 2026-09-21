@@ -9,6 +9,7 @@ import {
   AuthScreenShell,
 } from './auth-screen-shell';
 import { useEmailSignIn } from './use-email-sign-in';
+import { LegalConsent } from '../legal/legal-consent';
 
 export function EmailSignInView({
   email,
@@ -50,12 +51,7 @@ export function EmailSignInView({
             disabled={!canSubmit}
             onPress={onSubmit}
           />
-          <Text
-            selectable
-            style={{ ...mobileType.label, color: colors.neutral[600], textAlign: 'center' }}
-          >
-            Your messages are never used to train shared AI models.
-          </Text>
+          <LegalConsent />
         </>
       }
     >

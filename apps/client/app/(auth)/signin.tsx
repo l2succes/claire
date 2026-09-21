@@ -1,1 +1,2 @@
-export { WelcomeScreen as default } from '../../features/auth/welcome-screen';
+// To restore the previous welcome screen, export legacy-signin-screen instead.
+export { WelcomeScreen as default } from '../../features/onboarding/welcome-screen';
