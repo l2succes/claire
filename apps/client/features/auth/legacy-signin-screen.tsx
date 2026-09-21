@@ -3,6 +3,7 @@ import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GoogleSignInButton } from '../../components/GoogleSignInButton';
 import { ClaireMark } from '../../components/claire/mark';
+import { LegalConsent } from '../legal/legal-consent';
 import { colors, mobileType, space, type, useIsDesktopLayout } from '@claire/design-system';
 
 export default function SigninScreen() {
@@ -53,9 +54,7 @@ export default function SigninScreen() {
             </Text>
           </Pressable>
 
-      <Text style={{ ...mobileType.label, color: colors.neutral[600], textAlign: 'center', marginTop: space[2] }}>
-        By continuing, you agree to the Terms of Service and Privacy Policy.
-      </Text>
+      <LegalConsent style={{ marginTop: space[2] }} />
     </View>
   );
 

@@ -10,6 +10,7 @@ import { OnboardingReveal } from './onboarding-reveal';
 import { useOnboardingMotion } from './use-onboarding-motion';
 import { WelcomeCarousel } from './welcome-carousel';
 import { WELCOME_SCENES } from './welcome-scenes';
+import { LegalConsent } from '../legal/legal-consent';
 
 export function WelcomeScreen() {
   const insets = useSafeAreaInsets();
@@ -42,7 +43,7 @@ export function WelcomeScreen() {
           <Pressable testID="signin-use-email" accessibilityRole="button" onPress={() => router.push('/(auth)/email')} style={{ minHeight: 52, borderRadius: 22, borderWidth: 1, borderColor: colors.ink, backgroundColor: colors.paper, paddingHorizontal: 16, paddingVertical: 12, alignItems: 'center', justifyContent: 'center' }}>
             <Text style={{ ...mobileType.body, fontWeight: '700', color: colors.ink, textAlign: 'center' }}>Continue with email</Text>
           </Pressable>
-          <Text style={{ ...mobileType.label, color: colors.neutral[600], textAlign: 'center', paddingTop: 4, paddingHorizontal: 12 }}>By continuing, you agree to the Terms of Service and Privacy Policy.</Text>
+          <LegalConsent style={{ paddingTop: 4, paddingHorizontal: 12 }} />
         </OnboardingReveal>
       </ScrollView>
     </Animated.View>

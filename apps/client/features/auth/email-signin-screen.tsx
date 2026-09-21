@@ -9,6 +9,7 @@ import {
   AuthScreenShell,
 } from './auth-screen-shell';
 import { useEmailSignIn } from './use-email-sign-in';
+import { LegalConsent } from '../legal/legal-consent';
 
 export function EmailSignInScreen() {
   const auth = useEmailSignIn();
@@ -31,12 +32,7 @@ export function EmailSignInScreen() {
             disabled={!auth.canSubmit}
             onPress={() => void auth.sendCode()}
           />
-          <Text
-            selectable
-            style={{ ...mobileType.label, color: colors.neutral[600], textAlign: 'center' }}
-          >
-            By continuing, you agree to the Terms of Service and Privacy Policy.
-          </Text>
+          <LegalConsent />
         </>
       }
     >
