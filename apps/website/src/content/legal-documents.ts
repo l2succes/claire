@@ -29,7 +29,7 @@ export const legalDocuments: Record<'privacy' | 'terms', LegalDocumentContent> =
         id: 'scope',
         title: '1. Scope and who is responsible',
         paragraphs: [
-          'This Privacy Policy applies to the Claire mobile and desktop applications, Claire Cloud, useclaire.co, and related support and waitlist services (together, the “Service”). LS Studio, Inc. (“LS Studio,” “Claire,” “we,” “us,” or “our”) operates the Service and is the controller of personal data processed for Claire Cloud and the website. A person or organization running a self-hosted Claire deployment is responsible for that deployment and its privacy practices.',
+          'This Privacy Policy applies to the Claire mobile and desktop applications, Claire Cloud, useclaire.co, and related support and waitlist services (together, the “Service”). LS Studio LLC, a Delaware limited liability company (“LS Studio,” “Claire,” “we,” “us,” or “our”), operates the Service and is the controller of personal data processed for Claire Cloud and the website. A person or organization running a self-hosted Claire deployment is responsible for that deployment and its privacy practices.',
           'This policy does not govern WhatsApp, Instagram, Telegram, Apple, Google, or any other connected network. Those services process information under their own terms and privacy policies.',
         ],
       },
@@ -171,6 +171,7 @@ export const legalDocuments: Record<'privacy' | 'terms', LegalDocumentContent> =
         title: '15. Contact us',
         paragraphs: [
           'For privacy questions or requests, email hello@useclaire.co. Include the email address associated with your Claire account and the country or state where you live. Do not send passwords, verification codes, messaging-service cookies, or message contents by email.',
+          'LS Studio LLC, 250 Melrose Street, Apartment 1R, Brooklyn, New York 11206, United States.',
         ],
       },
     ],
@@ -186,7 +187,7 @@ export const legalDocuments: Record<'privacy' | 'terms', LegalDocumentContent> =
         id: 'agreement',
         title: '1. Agreement and eligibility',
         paragraphs: [
-          'These Terms are an agreement between you and LS Studio, Inc. (“LS Studio,” “Claire,” “we,” “us,” or “our”). By creating an account, connecting a messaging service, purchasing a subscription, or otherwise using Claire, you agree to these Terms and the Privacy Policy. If you use Claire for an organization, you represent that you can bind that organization. You must be at least 18 years old and legally able to enter into this agreement.',
+          'These Terms are an agreement between you and LS Studio LLC, a Delaware limited liability company (“LS Studio,” “Claire,” “we,” “us,” or “our”). By creating an account, connecting a messaging service, purchasing a subscription, or otherwise using Claire, you agree to these Terms and the Privacy Policy. If you use Claire for an organization, you represent that you can bind that organization. You must be at least 18 years old and legally able to enter into this agreement.',
           'If you do not agree, do not use the Service. Additional terms presented for a feature or purchase become part of these Terms when you use that feature or complete that purchase.',
         ],
       },
@@ -305,7 +306,7 @@ export const legalDocuments: Record<'privacy' | 'terms', LegalDocumentContent> =
         id: 'disputes',
         title: '15. Disputes and applicable law',
         paragraphs: [
-          'Before filing a claim, please email hello@useclaire.co with a description of the issue and the resolution you seek. We will try to resolve it informally. If we cannot, either party may bring a claim in a court that has jurisdiction under applicable law. These Terms do not restrict non-waivable consumer rights or your right to contact a regulator. The law that applies is determined by ordinary conflict-of-law rules and any mandatory law where you live.',
+          'Before filing a claim, please email hello@useclaire.co with a description of the issue and the resolution you seek. We will try to resolve it informally. These Terms are governed by the laws of the State of Delaware, without regard to its conflict-of-law rules. Any dispute that cannot be resolved informally may be brought in the state or federal courts located in Delaware, and each party consents to their jurisdiction. These Terms do not restrict non-waivable consumer rights, any mandatory law where you live, or your right to contact a regulator.',
         ],
       },
       {
@@ -320,7 +321,7 @@ export const legalDocuments: Record<'privacy' | 'terms', LegalDocumentContent> =
         title: '17. Changes and contact',
         paragraphs: [
           'We may update these Terms. We will post the revised Terms with a new effective date and provide additional notice for material changes. Continuing to use the Service after the effective date means you accept the revised Terms where permitted by law. If you do not agree, stop using the Service and cancel any subscription.',
-          'Questions about these Terms may be sent to hello@useclaire.co.',
+          'Questions about these Terms may be sent to hello@useclaire.co or mailed to LS Studio LLC, 250 Melrose Street, Apartment 1R, Brooklyn, New York 11206, United States.',
         ],
       },
     ],
