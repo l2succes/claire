@@ -415,6 +415,72 @@ function ErrorCallout({ text, warning = false }: { text: string; warning?: boole
   );
 }
 
+export type ConnectionFlowPreviewState =
+  | 'phone'
+  | 'loading'
+  | 'link-code'
+  | 'telegram-code'
+  | 'companion'
+  | 'error'
+  | 'success';
+
+/**
+ * Storybook-only state adapter around the production connection UI. It reuses
+ * the exact screen pieces while replacing bridge calls with local callbacks.
+ */
+export function ConnectionFlowPreview({
+  platform,
+  state,
+  onBack,
+  onAdvance,
+}: {
+  platform: Platform;
+  state: ConnectionFlowPreviewState;
+  onBack: () => void;
+  onAdvance: () => void;
+}) {
+  const insets = useSafeAreaInsets();
+  const config = CONNECTION_PLATFORM_CONFIG[platform];
+  let body: ReactNode;
+  let footer: ReactNode = null;
+
+  if (state === 'success') {
+    body = <SuccessState platform={platform} account={platform === Platform.WHATSAPP ? '+52 55 1234 5678' : '@luc'} />;
+    footer = <FlowButton label="Back to accounts" onPress={onAdvance} />;
+  } else if (state === 'companion' && (platform === Platform.INSTAGRAM || platform === Platform.IMESSAGE)) {
+    body = <CompanionGuide platform={platform} error="" />;
+    footer = <><FlowButton label="I’ve finished — check connection" onPress={onAdvance} /><FlowButton label="Do this later" variant="tertiary" onPress={onBack} /></>;
+  } else if (state === 'error') {
+    body = <WhatsAppErrorState error="The link code expired before setup finished." rateLimited={false} expired />;
+    footer = <><FlowButton label="Request a new code" onPress={onAdvance} /><FlowButton label="Back to accounts" variant="tertiary" onPress={onBack} /></>;
+  } else if (state === 'link-code') {
+    body = <WhatsAppCodeState code="ABCD-EFGH" copied={false} handoffMessage={null} onCopy={() => undefined} />;
+    footer = <><FlowButton icon={<ExternalLink size={17} color={colors.paper} />} label="Copy code & open WhatsApp" onPress={onAdvance} /><FlowButton label="Check again" variant="secondary" onPress={onAdvance} /></>;
+  } else if (state === 'telegram-code') {
+    body = <TelegramCodeState value="12345" error="" onChange={() => undefined} onChangeNumber={onBack} />;
+    footer = <FlowButton label="Verify and connect" onPress={onAdvance} />;
+  } else if (state === 'loading') {
+    body = <LoadingState platform={platform} message="Getting your link code…" />;
+  } else {
+    const phonePlatform = platform === Platform.TELEGRAM ? Platform.TELEGRAM : Platform.WHATSAPP;
+    body = <PhoneEntry platform={phonePlatform} value="+52 55 1234 5678" error="" onChange={() => undefined} />;
+    footer = <FlowButton label={phonePlatform === Platform.WHATSAPP ? 'Get link code' : 'Send verification code'} icon={<ArrowRight size={17} color={colors.paper} />} onPress={onAdvance} />;
+  }
+
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.cream }} testID={`connection-preview-${platform}-${state}`}>
+      <StatusBar style="dark" />
+      <FlowHeader title={state === 'success' ? `${config.name} connection` : `Connect ${config.name}`} topInset={insets.top} onBack={onBack} />
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={process.env.EXPO_OS === 'ios' ? 'padding' : 'height'}>
+        <ScrollView style={{ flex: 1 }} contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled" contentContainerStyle={{ flexGrow: 1, paddingHorizontal: space[4], paddingTop: space[4], paddingBottom: space[5] }}>
+          {body}
+        </ScrollView>
+        {footer ? <View style={{ gap: space[2], paddingHorizontal: space[4], paddingTop: space[3], paddingBottom: Math.max(insets.bottom, space[4]), borderTopWidth: 1, borderTopColor: colors.neutral[200], backgroundColor: colors.cream }}>{footer}</View> : null}
+      </KeyboardAvoidingView>
+    </View>
+  );
+}
+
 function FlowButton({
   label,
   onPress,
