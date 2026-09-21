@@ -32,7 +32,7 @@ public class ProfileAvatarMaskerModule: Module {
   private func destinationURL(for sourceURL: String) throws -> URL {
     // Include the visual treatment in the cache key so a styling update never
     // reuses an older generated tab icon.
-    let cacheKey = "profile-tab-avatar-v2:\(sourceURL)"
+    let cacheKey = "profile-tab-avatar-v4:\(sourceURL)"
     let hash = SHA256.hash(data: Data(cacheKey.utf8)).map { String(format: "%02x", $0) }.joined()
     let directory = try FileManager.default.url(
       for: .cachesDirectory,
@@ -49,8 +49,10 @@ public class ProfileAvatarMaskerModule: Module {
     // Native tab icons are 24 points. A 24-point result avoids the oversized
     // intrinsic dimensions that an unprocessed remote photo supplies.
     let size = CGSize(width: 24, height: 24)
-    let avatarRect = CGRect(x: 1, y: 1, width: 22, height: 22)
-    let borderWidth: CGFloat = 1.25
+    // SF Symbols leave optical whitespace inside their icon canvas. Matching
+    // that footprint keeps the photo from reading larger than neighboring tabs.
+    let avatarRect = CGRect(x: 5, y: 5, width: 14, height: 14)
+    let borderWidth: CGFloat = 1
     let renderer = UIGraphicsImageRenderer(size: size)
 
     return renderer.image { context in
@@ -78,9 +80,9 @@ public class ProfileAvatarMaskerModule: Module {
       border.lineWidth = borderWidth
       border.stroke()
 
-      let dotCenter = CGPoint(x: 19.5, y: 4.5)
-      let dotBorderRadius: CGFloat = 3.25
-      let dotRadius: CGFloat = 2.25
+      let dotCenter = CGPoint(x: 17.25, y: 6.75)
+      let dotBorderRadius: CGFloat = 2.25
+      let dotRadius: CGFloat = 1.45
       UIColor(red: 1, green: 0.99, blue: 0.95, alpha: 1).setFill()
       UIBezierPath(
         ovalIn: CGRect(
