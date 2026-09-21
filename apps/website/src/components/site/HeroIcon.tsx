@@ -24,7 +24,6 @@ import {
   PencilSquareIcon,
   PlusIcon,
   ServerStackIcon,
-  SparklesIcon,
   UsersIcon,
 } from '@heroicons/react/24/outline';
 import type { ComponentType, SVGProps } from 'react';
@@ -39,7 +38,6 @@ const icons = {
   search: MagnifyingGlassIcon,
   plus: PlusIcon,
   compose: PencilSquareIcon,
-  sparkles: SparklesIcon,
   send: PaperAirplaneIcon,
   settings: Cog6ToothIcon,
   people: UsersIcon,

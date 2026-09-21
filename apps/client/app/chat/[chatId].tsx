@@ -17,7 +17,7 @@ import {
   FileText,
   AlertCircle,
   MoreHorizontal,
-  Sparkles,
+  MessageCircle,
   X,
   ChevronLeft,
   Play,
@@ -1574,7 +1574,7 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
               backgroundColor: colors.lime,
             }}
           >
-            <Sparkles size={15} color={colors.ink} />
+            <MessageCircle size={15} color={colors.ink} />
           </View>
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text maxFontSizeMultiplier={1} style={{ ...mobileType.monoLabel, color: colors.ink }}>

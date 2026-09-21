@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bell, Check, ChevronLeft, Clock3, MessageCircle, RotateCcw, Sparkles, XCircle, UserRound } from 'lucide-react-native';
+import { Bell, Check, CheckCircle2, ChevronLeft, Clock3, MessageCircle, RotateCcw, XCircle, UserRound } from 'lucide-react-native';
 import { colors, mobileType, radius, space } from '@claire/design-system';
 
 import { MobileHeader, MobileIconButton, MobileState } from '../../components/mobile/claire-mobile';
@@ -360,7 +360,7 @@ export function LoopDetailScreen() {
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}>
               <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: colors.lime, alignItems: 'center', justifyContent: 'center' }}>
-                <Sparkles size={15} color={colors.ink} />
+                <CheckCircle2 size={15} color={colors.ink} />
               </View>
               <Text selectable style={{ ...mobileType.body, flex: 1, fontWeight: '700', color: colors.ink }}>
                 Claire thinks this loop is finished

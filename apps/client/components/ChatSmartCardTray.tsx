@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, Animated, Keyboard } from 'react-native';
-import { Sparkles, ChevronUp, ChevronDown } from 'lucide-react-native';
+import { Lightbulb, ChevronUp, ChevronDown } from 'lucide-react-native';
 import { SmartCardList } from './SmartCardList';
 import type { SmartCard } from '../types/conversationSettings';
 
@@ -56,7 +56,7 @@ export function ChatSmartCardTray({ cards, onDismiss, onDraftMessage, onActed }:
           height: COLLAPSED_HEIGHT,
         }}
       >
-        <Sparkles size={14} color="#6366f1" />
+        <Lightbulb size={14} color="#6366f1" />
         <Text style={{ fontSize: 13, fontWeight: '600', color: '#6b7280', marginLeft: 6, flex: 1 }}>
           {cards.length} suggestion{cards.length !== 1 ? 's' : ''}
         </Text>

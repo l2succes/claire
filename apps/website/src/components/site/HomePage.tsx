@@ -42,7 +42,7 @@ export function HomePage() {
             </div>
             <div className="float-note note-two">
               <span className="platform claire-ai">
-                <HeroIcon name="sparkles" />
+                <HeroIcon name="chat" />
               </span>
               <span>
                 <strong>AI found a promise</strong>
@@ -129,7 +129,7 @@ export function HomePage() {
                   <div className="bubble outgoing">Absolutely. I’ll send the updated deck before 10.</div>
                   <div className="promise-card">
                     <span>
-                      <HeroIcon name="sparkles" />
+                      <HeroIcon name="chat" />
                     </span>
                     <div>
                       <small>CLAIRE CAUGHT A PROMISE</small>
@@ -154,7 +154,7 @@ export function HomePage() {
                 <h3>Ask across every conversation.</h3>
                 <div className="brief">
                   <span className="spark">
-                    <HeroIcon name="sparkles" />
+                    <HeroIcon name="chat" />
                   </span>
                   <p>
                     <b>AI brief</b>
@@ -535,7 +535,7 @@ export function HomePage() {
               <span className="card-number">02</span>
               <div className="ai-demo">
                 <span>
-                  <HeroIcon name="sparkles" />
+                  <HeroIcon name="chat" />
                 </span>
                 <p>“Tell Maya the deck is ready and ask if 11 still works.”</p>
                 <button>Use reply</button>
@@ -610,7 +610,7 @@ export function HomePage() {
               </div>
               <div className="phone-card urgent">
                 <span className="ai-mark">
-                  <HeroIcon name="sparkles" />
+                  <HeroIcon name="chat" />
                 </span>
                 <div>
                   <small>ANSWER WITH SOURCES</small>
@@ -646,7 +646,7 @@ export function HomePage() {
               </div>
               <div className="phone-card recap">
                 <span className="ai-mark">
-                  <HeroIcon name="sparkles" />
+                  <HeroIcon name="chat" />
                 </span>
                 <div>
                   <small>NEXT STEP</small>
@@ -661,7 +661,7 @@ export function HomePage() {
                   <HeroIcon name="inbox" />
                 </span>
                 <span className="phone-tab-ask">
-                  <HeroIcon name="sparkles" />
+                  <HeroIcon name="chat" />
                 </span>
                 <span>
                   <HeroIcon name="promises" />
@@ -780,7 +780,7 @@ export function HomePage() {
               <small>FREE</small>
               <strong>$0</strong>
               <b>
-                <HeroIcon name="sparkles" />1 Loop run per week
+                <HeroIcon name="check-circle" />1 Loop run per week
               </b>
               <p>Up to five networks in one inbox, with search and reminders.</p>
             </article>
@@ -791,7 +791,7 @@ export function HomePage() {
                 $10<em>/mo</em>
               </strong>
               <b>
-                <HeroIcon name="sparkles" />
+                <HeroIcon name="check-circle" />
                 Up to 3 Loop runs per day
               </b>
               <p>Every network, the full AI, and a monthly Claire AI credit allowance.</p>
@@ -802,7 +802,7 @@ export function HomePage() {
                 $20<em>/mo</em>
               </strong>
               <b>
-                <HeroIcon name="sparkles" />A Loop every morning
+                <HeroIcon name="check-circle" />A Loop every morning
               </b>
               <p>Claire runs the Loop for you, on the best model tier, without being asked.</p>
             </article>
@@ -810,7 +810,7 @@ export function HomePage() {
               <small>ULTIMATE</small>
               <strong>Business</strong>
               <b>
-                <HeroIcon name="sparkles" />
+                <HeroIcon name="check-circle" />
                 Continuous Loop, with agents
               </b>
               <p>Plugins that act on what customers say—calendar, CRM, payments, and more.</p>
@@ -864,7 +864,7 @@ export function HomePage() {
               </article>
               <span className="security-flow-line" aria-hidden="true" />
               <article>
-                <HeroIcon name="sparkles" />
+                <HeroIcon name="chat" />
                 <small>AI, WHEN USED</small>
                 <b>Only selected context goes to the active AI mode.</b>
               </article>
@@ -882,7 +882,7 @@ export function HomePage() {
         <section className="final-cta shell" aria-labelledby="final-cta-title">
           <div>
             <span className="asterisk">
-              <HeroIcon name="sparkles" />
+              <HeroIcon name="chat" />
             </span>
             <h2 id="final-cta-title">
               Follow the build

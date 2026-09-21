@@ -21,7 +21,7 @@ export type StartPath = {
 
 export const startPaths: StartPath[] = [
   {
-    icon: 'sparkles',
+    icon: 'chat',
     eyebrow: 'For contributors',
     title: 'Run Claire locally',
     description:

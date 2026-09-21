@@ -1,6 +1,6 @@
 import { useEffect, type ComponentType, type ReactNode } from 'react';
 import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
-import { Bell, Bot, Check, ChevronRight, CreditCard, DatabaseZap, KeyRound, Link2, LogOut, MessageCircle, Smile, Sparkles } from 'lucide-react-native';
+import { Bell, Bot, Check, ChevronRight, CreditCard, DatabaseZap, KeyRound, Link2, LogOut, MessageCircle, Smile } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, mobileType, radius, space, useIsDesktopLayout } from '@claire/design-system';
@@ -93,7 +93,7 @@ export default function SettingsScreen() {
   const accountLine = user?.email || 'Manage your profile';
 
   const claireRows: SettingsRow[] = [
-    { title: 'AI behavior', detail: 'Suggestions, summaries, and memory', icon: Sparkles, href: '/settings/ai', testID: 'settings-ai-settings', iconBackground: colors.lavender },
+    { title: 'AI behavior', detail: 'Suggestions, summaries, and memory', icon: Bot, href: '/settings/ai', testID: 'settings-ai-settings', iconBackground: colors.lavender },
     { title: 'Relationships', detail: 'People, categories, and prompts', icon: Smile, href: '/(tabs)/contacts', testID: 'settings-relationships', iconBackground: colors.blush },
     {
       title: 'Loop detection',

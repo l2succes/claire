@@ -441,7 +441,7 @@ export default function PricingPage() {
                 <h3>{tier.title}</h3>
                 <p>{tier.body}</p>
                 <div className="pr-tier-loop">
-                  <HeroIcon name="sparkles" />
+                  <HeroIcon name="check-circle" />
                   <b>{tier.loop}</b>
                 </div>
                 <ul>
@@ -496,7 +496,7 @@ export default function PricingPage() {
           <div className="usage-grid">
             <article className="usage-card usage-managed">
               <span className="usage-icon">
-                <HeroIcon name="sparkles" />
+                <HeroIcon name="check-circle" />
               </span>
               <h4>Claire AI credits</h4>
               <p>
@@ -750,7 +750,7 @@ export default function PricingPage() {
         <section className="final-cta shell">
           <div>
             <span className="asterisk">
-              <HeroIcon name="sparkles" />
+              <HeroIcon name="check-circle" />
             </span>
             <h2>
               Close the loops

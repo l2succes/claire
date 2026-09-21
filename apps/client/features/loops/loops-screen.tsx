@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { FlatList, Modal, Pressable, RefreshControl, Text, TextInput, View } from 'react-native';
-import { Check, Plus, RotateCcw, Sparkles, X, XCircle } from 'lucide-react-native';
+import { Check, Plus, RotateCcw, X, XCircle } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import Animated, { FadeInRight, FadeOutLeft } from 'react-native-reanimated';
@@ -247,7 +247,7 @@ export function LoopsScreen() {
               backgroundColor: colors.sky,
             }}
           >
-            <Sparkles size={17} color={colors.ink} />
+            <RotateCcw size={17} color={colors.ink} />
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={{ ...mobileType.bodySmall, fontWeight: '700', color: colors.ink }}>
                 Review old loops

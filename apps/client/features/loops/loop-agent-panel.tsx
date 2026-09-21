@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native';
 import { useMutation } from '@tanstack/react-query';
-import { Sparkles } from 'lucide-react-native';
+import { MessageCircle } from 'lucide-react-native';
 import { colors, mobileType, radius, space } from '@claire/design-system';
 
 import { askLoopAgent, type LoopAgentResult } from '../../services/loops';
@@ -115,7 +115,7 @@ export function LoopAgentPanel({ loopId }: { loopId: string }) {
   return (
     <View testID="loop-agent-panel" style={{ gap: space[3] }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}>
-        <Sparkles size={16} color={colors.ink} />
+        <MessageCircle size={16} color={colors.ink} />
         <Text style={{ ...mobileType.monoLabel, color: colors.neutral[600] }}>
           ASK CLAIRE TO HELP CLOSE THIS
         </Text>

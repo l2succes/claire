@@ -8,7 +8,6 @@ import {
   CheckBadgeIcon,
   EllipsisHorizontalIcon,
   HomeIcon,
-  SparklesIcon,
 } from '@heroicons/react/24/outline';
 import { colors, mobileType, radius, space } from '@claire/design-system';
 
@@ -17,7 +16,7 @@ type Screen = 'home' | 'inbox' | 'chat' | 'promises' | 'search';
 const tabItems = [
   { key: 'home', label: 'Home', Icon: HomeIcon },
   { key: 'inbox', label: 'Inbox', Icon: ChatBubbleLeftRightIcon },
-  { key: 'chat', label: 'Ask Claire', Icon: SparklesIcon },
+  { key: 'chat', label: 'Ask Claire', Icon: ChatBubbleLeftRightIcon },
   { key: 'promises', label: 'Promises', Icon: CheckBadgeIcon },
   { key: 'search', label: 'More', Icon: EllipsisHorizontalIcon },
 ] as const;

@@ -114,7 +114,7 @@ export default function Page() {
       </Section>
       <Section id="action-generic-action-card" title="action — Generic Action Card" level={4}>
       <ul>
-              <li><b>Icon</b>{": Sparkles (Claire's accent color)"}</li>
+              <li><b>Icon</b>{": Forward action (Claire's accent color)"}</li>
               <li><b>Title</b>{": Action description (e.g., \"Plan a date this week\" or \"Book accommodation\")"}</li>
               <li><b>Subtitle</b>{": Context (e.g., \"You mentioned wanting to try somewhere new\")"}</li>
               <li><b>Body</b>: Optional list of 2-3 quick-pick options as small tappable chips (e.g., restaurant names, activity types)</li>
@@ -128,7 +128,7 @@ export default function Page() {
               <li><b>Swipe left</b>{" on a card to reveal a red \"Dismiss\" zone (alternative to X button)"}</li>
               <li><b>Tap CTA</b> performs the action and sets <C>acted_on=true</C> via API</li>
               <li><b>Long press</b>{" shows a tooltip: \"Why this suggestion?\" with a 1-line AI reasoning"}</li>
-              <li><b>Empty state</b>{": When no cards exist yet, show a muted message: \"Set a category above to get smart suggestions\" with a sparkle icon"}</li>
+              <li><b>Empty state</b>{": When no cards exist yet, show a muted message: \"Set a category above to get smart suggestions\" with a lightbulb icon"}</li>
               <li><b>Loading state</b>: While cards are generating after category change, show 2 skeleton placeholder cards (pulsing animation)</li>
               <li><b>Refresh</b>: Pull-down on the smart cards section or a small refresh icon in the section header re-triggers <C>POST /conversations/:chatId/smart-cards</C></li>
             </ul>
@@ -243,12 +243,12 @@ export default function Page() {
       <P><b>New component</b>: <C>mobile/components/ChatSmartCardTray.tsx</C></P>
       <Section id="placement" title="Placement" level={3}>
       <P>The tray sits <b>between the message FlatList and the input bar</b>, inside the existing <C>KeyboardAvoidingView</C>. It slides up when cards are available and collapses when dismissed.</P>
-      <Code lang="text">{"+-----------------------------------+\n|          Chat Header              |\n+-----------------------------------+\n|                                   |\n|         Message FlatList          |\n|         (scrollable)              |\n|                                   |\n+-----------------------------------+\n|  [sparkle] Smart Suggestions  [v] |  <- tray header (collapsible)\n|  +--------+  +--------+  +----   |  <- horizontal card scroll\n|  | Card 1 |  | Card 2 |  | Ca   |\n|  +--------+  +--------+  +----   |\n+-----------------------------------+\n|  [attach] [Message...    ] [send] |  <- input bar\n+-----------------------------------+"}</Code>
+      <Code lang="text">{"+-----------------------------------+\n|          Chat Header              |\n+-----------------------------------+\n|                                   |\n|         Message FlatList          |\n|         (scrollable)              |\n|                                   |\n+-----------------------------------+\n| [lightbulb] Smart Suggestions [v] |  <- tray header (collapsible)\n|  +--------+  +--------+  +----   |  <- horizontal card scroll\n|  | Card 1 |  | Card 2 |  | Ca   |\n|  +--------+  +--------+  +----   |\n+-----------------------------------+\n|  [attach] [Message...    ] [send] |  <- input bar\n+-----------------------------------+"}</Code>
       </Section>
       <Section id="tray-behavior" title="Tray Behavior" level={3}>
       <ul>
               <li><b>Auto-shows</b> when <C>smart_cards</C> for this chatId exist (fetched from store on mount)</li>
-              <li><b>Collapsed state</b>{": Single row, 48px tall. Shows: sparkle icon + \"3 suggestions\" text + chevron-up icon. Tapping expands."}</li>
+              <li><b>Collapsed state</b>{": Single row, 48px tall. Shows: lightbulb icon + \"3 suggestions\" text + chevron-up icon. Tapping expands."}</li>
               <li><b>Expanded state</b>: ~160px tall. Horizontal <C>ScrollView</C> of mini smart cards. Chevron-down icon to collapse.</li>
               <li><b>Collapse animation</b>: <C>Animated.timing</C> height transition (200ms, easeInOut)</li>
               <li><b>Dismiss all</b>{": Long-press the tray header shows \"Hide suggestions\" option. Sets a local flag (per session, not persisted — cards reappear on next open)."}</li>

@@ -15,7 +15,6 @@ import {
   PauseIcon,
   PencilSquareIcon,
   PlayIcon,
-  SparklesIcon,
   VideoCameraIcon,
 } from '@heroicons/react/24/outline';
 import gsap from 'gsap';
@@ -305,7 +304,7 @@ export function ConversationLoopDemo({
             </button>
             <button aria-label="Replay demo" className={styles.replayButton} onClick={replay} type="button"><ArrowPathIcon /></button>
           </div>
-          <span><SparklesIcon /> A normal message becomes something Claire can help you keep.</span>
+          <span><CheckCircleIcon /> A normal message becomes something Claire can help you keep.</span>
           <label>
             <input checked={loop} onChange={(event) => setLoop(event.target.checked)} type="checkbox" />
             <i /> Loop demo

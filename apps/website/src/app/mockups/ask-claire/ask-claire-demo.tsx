@@ -18,7 +18,6 @@ import {
   PauseIcon,
   PlayIcon,
   PlusIcon,
-  SparklesIcon,
   UserGroupIcon,
 } from '@heroicons/react/24/outline';
 import gsap from 'gsap';
@@ -818,7 +817,7 @@ export function AskClaireDemo({
             <aside className={styles.sidebar}>
               <div className={styles.askSidebarHeader}>
                 <span>
-                  <SparklesIcon />
+                  <ChatBubbleLeftRightIcon />
                   ASK CLAIRE
                 </span>
                 <button aria-label="New Ask Claire conversation" type="button">

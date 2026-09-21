@@ -1,6 +1,6 @@
 import { Pressable, Text, View } from 'react-native';
 import { Image } from 'expo-image';
-import { BellOff, Check, CheckCheck, Clock, Pin, Sparkles, UserRound, UsersRound } from 'lucide-react-native';
+import { BellOff, Check, CheckCheck, Clock, Pin, Reply, UserRound, UsersRound } from 'lucide-react-native';
 import { colors, mobileType, space } from '@claire/design-system';
 import { useState } from 'react';
 import { PlatformBadge } from './PlatformIcon';
@@ -100,7 +100,7 @@ export function MessageCard({ message, variant = 'default', onPress, onLongPress
         {variant === 'default' && (message.has_open_loop || message.has_ai_response) ? (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2], paddingTop: 2 }}>
             {message.has_open_loop ? <Text testID={`message-card-loop-badge-${message.id}`} style={{ ...mobileType.monoLabel, color: colors.warning }}>OPEN LOOP</Text> : null}
-            {message.has_ai_response ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}><Sparkles size={11} color={colors.focus} /><Text style={{ ...mobileType.monoLabel, color: colors.focus }}>REPLY READY</Text></View> : null}
+            {message.has_ai_response ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}><Reply size={11} color={colors.focus} /><Text style={{ ...mobileType.monoLabel, color: colors.focus }}>REPLY READY</Text></View> : null}
           </View>
         ) : null}
       </View>

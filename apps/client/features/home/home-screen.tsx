@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
-import { AlertCircle, Bell, CheckCircle2, MessageCircle, Settings, Sparkles } from 'lucide-react-native';
+import { AlertCircle, Bell, CheckCircle2, MessageCircle, Settings } from 'lucide-react-native';
 import { router } from 'expo-router';
 
 import { colors, mobileType, radius, space } from '@claire/design-system';
@@ -245,7 +245,7 @@ export function HomeScreen() {
         )}
 
         <View style={{ flexDirection: 'row', gap: space[3], padding: space[4], backgroundColor: colors.sky, borderRadius: radius.card, borderCurve: 'continuous' }}>
-          <Sparkles size={21} color={colors.ink} />
+          <MessageCircle size={21} color={colors.ink} />
           <View style={{ flex: 1, gap: 3 }}>
             <Text selectable style={{ ...mobileType.monoLabel, color: colors.ink }}>CLAIRE'S TAKE</Text>
             <Text selectable style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>{brief.data?.brief_text || defaultBrief}</Text>

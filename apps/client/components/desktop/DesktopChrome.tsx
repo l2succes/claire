@@ -2,10 +2,10 @@ import React, { useCallback, type ReactNode } from 'react';
 import { router, usePathname } from 'expo-router';
 import {
   CheckBadgeIcon,
+  ChatBubbleLeftRightIcon,
   Cog6ToothIcon,
   HomeIcon,
   InboxIcon,
-  SparklesIcon,
   UserGroupIcon,
 } from 'react-native-heroicons/outline';
 import { useIsDesktopLayout } from '@claire/design-system';
@@ -70,7 +70,7 @@ const DESTINATIONS: DesktopDestination[] = [
   {
     route: '/ask-claire',
     label: 'Ask Claire',
-    icon: (props) => <SparklesIcon {...props} />,
+    icon: (props) => <ChatBubbleLeftRightIcon {...props} />,
   },
   {
     route: '/contacts',
