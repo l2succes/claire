@@ -172,7 +172,7 @@ function AssistantHomeSection({ title, children }: { title: string; children: Re
 
 function AskRecommendationRail({ onSelect }: { onSelect: (prompt: string) => void }) {
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space[3] }} testID="assistant-recommendations">
+    <ScrollView horizontal style={{ marginHorizontal: -space[4] }} showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space[3] }} testID="assistant-recommendations">
       {HOME_RECOMMENDATIONS.map((recommendation) => {
         const Icon = recommendation.icon;
         return (
