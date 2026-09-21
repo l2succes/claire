@@ -46,6 +46,15 @@
       "expo-dev-client",
       "expo-router",
       [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#DFFF64",
+          "image": "./assets/splash.png",
+          "imageWidth": 128,
+          "resizeMode": "contain"
+        }
+      ],
+      [
         "expo-notifications",
         {
           "icon": "./assets/notification-icon.png",
