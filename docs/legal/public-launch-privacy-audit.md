@@ -36,9 +36,9 @@ Official references:
 - [Apple: Offering account deletion in your app](https://developer.apple.com/support/offering-account-deletion-in-your-app)
 - [Google Play: Account deletion requirements](https://support.google.com/googleplay/android-developer/answer/13327111)
 
-### 2. Finalize the contracting entity and address
+### 2. Add the controller address and governing jurisdiction
 
-The repository does not identify a legal company, controller address, or governing jurisdiction. Before public launch, replace the policy's app-store/operator description with the exact legal name and postal address that match the App Store, Google Play, payment, and tax accounts. Select governing law and venue with counsel. GDPR Article 13 requires the controller's identity and contact details.
+LS Studio, Inc. is now identified as the operator, contracting party, and controller in the public documents. Before public launch, add its complete postal address and confirm that the legal name matches the App Store, Google Play, payment, incorporation, and tax records. Select governing law and venue with counsel. GDPR Article 13 requires the controller's identity and contact details.
 
 Official reference: [GDPR, Articles 13 and 14](https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:02016R0679-20160504)
 
