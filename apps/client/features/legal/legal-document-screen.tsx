@@ -2,7 +2,6 @@ import { ActivityIndicator, Linking, Pressable, Text, View } from 'react-native'
 import { router, useLocalSearchParams } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import { X } from 'lucide-react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, mobileType, space } from '@claire/design-system';
 import type { LegalDocument } from './legal-consent';
 
@@ -18,13 +17,12 @@ function documentFromParam(document: string | string[] | undefined): LegalDocume
 }
 
 export function LegalDocumentScreen() {
-  const insets = useSafeAreaInsets();
   const { document } = useLocalSearchParams<{ document?: string | string[] }>();
   const legalDocument = DOCUMENTS[documentFromParam(document)];
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.paper }} testID="legal-document-screen">
-      <View style={{ minHeight: 58 + insets.top, paddingTop: insets.top, paddingHorizontal: space[4], flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: colors.neutral[200] }}>
+      <View style={{ height: 58, paddingHorizontal: space[4], flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: colors.neutral[200] }}>
         <View style={{ width: 44 }} />
         <Text accessibilityRole="header" style={{ flex: 1, ...mobileType.body, fontWeight: '700', color: colors.ink, textAlign: 'center' }}>
           {legalDocument.title}
