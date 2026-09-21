@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
-import { ArrowUpRight, ExternalLink, List, Search, SendHorizontal, Smile, Sparkles, Square, X } from 'lucide-react-native';
+import { ArrowUpRight, ExternalLink, List, MessageCircle, Search, SendHorizontal, Smile, Square, X } from 'lucide-react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as Crypto from 'expo-crypto';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -13,6 +13,7 @@ import { MobileIconButton, MobileSearchField } from '../../../components/mobile/
 import { AssistantAnswerActions } from '../../../components/claire/assistant-answer-actions';
 import { AssistantRichText } from '../../../components/claire/assistant-rich-text';
 import { useAssistantStream } from '../../../hooks/useAssistantStream';
+import { userFacingErrorMessage } from '../../../services/api-errors';
 
 type QuickAction = {
   label: string;
@@ -45,7 +46,7 @@ export default function ConversationAssistantScreen() {
     if (!chatId) return;
     conversationAssistantApi.getConversation(chatId)
       .then(result => setTurns(result?.turns || []))
-      .catch(cause => setError(cause instanceof Error ? cause.message : 'Claire could not load this chat.'))
+      .catch(cause => setError(userFacingErrorMessage(cause, 'Claire could not load this chat.')))
       .finally(() => setLoading(false));
   }, [chatId]);
 
@@ -96,7 +97,7 @@ export default function ConversationAssistantScreen() {
         : turn));
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 40);
     } catch (cause) {
-      const message = cause instanceof Error ? cause.message : 'Claire could not answer right now.';
+      const message = userFacingErrorMessage(cause, 'Claire could not answer right now.');
       setTurns(current => current.map(turn => turn.id === streamingTurn.id ? { ...turn, status: message === 'Answer stopped.' ? 'cancelled' : 'failed' } : turn));
       setError(message);
     }
@@ -163,7 +164,7 @@ export default function ConversationAssistantScreen() {
                 {item.citations?.slice(0, 3).map(citation => <Pressable key={`${item.id}-${citation.messageId}`} onPress={() => openCitation(citation)} style={({ pressed }) => ({ padding: space[3], borderRadius: radius.control, borderWidth: 1, borderColor: colors.neutral[300], backgroundColor: pressed ? colors.paper : 'rgba(255,255,255,0.48)', gap: 3 })}><View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}><Text style={{ ...mobileType.label, color: colors.ink, flex: 1 }}>{citation.senderName} · {new Date(citation.timestamp).toLocaleDateString()}</Text><ExternalLink size={14} color={colors.neutral[600]} /></View><Text numberOfLines={2} style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{citation.excerpt}</Text></Pressable>)}
               </View>
             )}
-            ListFooterComponent={asking ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2], padding: space[3] }}><Sparkles size={16} color={colors.focus} /><Text style={{ ...mobileType.bodySmall, color: colors.neutral[600], flex: 1 }}>{streamPhase === 'planning' ? 'Understanding your question…' : streamPhase === 'saving' ? 'Saving the answer…' : 'Reading this conversation…'}</Text><Pressable accessibilityRole="button" accessibilityLabel="Stop Claire" onPress={stopStream} style={{ minWidth: 44, minHeight: 36, alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill, borderWidth: 1, borderColor: colors.neutral[400] }}><Square size={13} color={colors.ink} /></Pressable></View> : null}
+            ListFooterComponent={asking ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2], padding: space[3] }}><MessageCircle size={16} color={colors.focus} /><Text style={{ ...mobileType.bodySmall, color: colors.neutral[600], flex: 1 }}>{streamPhase === 'planning' ? 'Understanding your question…' : streamPhase === 'saving' ? 'Saving the answer…' : 'Reading this conversation…'}</Text><Pressable accessibilityRole="button" accessibilityLabel="Stop Claire" onPress={stopStream} style={{ minWidth: 44, minHeight: 36, alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill, borderWidth: 1, borderColor: colors.neutral[400] }}><Square size={13} color={colors.ink} /></Pressable></View> : null}
           />
         )}
         {error && turns.length > 0 ? <Text style={{ ...mobileType.bodySmall, color: colors.danger, paddingHorizontal: space[4], paddingBottom: space[2] }}>{error}</Text> : null}

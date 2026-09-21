@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, ScrollView, Text, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Brain, CheckCircle2, Clock3, FileText, MessageCircle, Search, Sparkles, UserRound, X } from 'lucide-react-native';
+import { Brain, CheckCircle2, Clock3, FileText, MessageCircle, Search, UserRound, X } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { colors, mobileType, radius, space } from '@claire/design-system';
 import { MobileChip, MobileHeader, MobileSearchField, MobileState, SectionLabel } from '../../components/mobile/claire-mobile';
 import { useAuthStore } from '../../stores/authStore';
 import { searchApi, type SearchScope } from '../../services/search';
+import { userFacingErrorMessage } from '../../services/api-errors';
 
 const scopes: Array<{ value: SearchScope; label: string }> = [
   { value: 'everything', label: 'Everything' }, { value: 'messages', label: 'Messages' }, { value: 'people', label: 'People' }, { value: 'files', label: 'Files' }, { value: 'loops', label: 'Loops' },
@@ -56,7 +57,7 @@ export function SearchScreen() {
           ListHeaderComponent={<View style={{ gap: space[4], paddingBottom: space[3] }}>
             {semantic.isLoading ? <View style={{ minHeight: 100, borderRadius: radius.card, backgroundColor: colors.lavender, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator color={colors.ink} /></View> : semantic.data ? (
               <View style={{ padding: space[4], gap: space[2], borderRadius: radius.card, borderCurve: 'continuous', borderWidth: 1, borderColor: colors.ink, backgroundColor: colors.lavender }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}><Sparkles size={17} color={colors.ink} /><Text style={{ ...mobileType.monoLabel, color: colors.ink }}>CLAIRE'S ANSWER</Text></View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}><Brain size={17} color={colors.ink} /><Text style={{ ...mobileType.monoLabel, color: colors.ink }}>CLAIRE'S ANSWER</Text></View>
                 <Text selectable style={{ ...mobileType.body, color: colors.ink }}>{semantic.data.answer}</Text>
                 <Text style={{ ...mobileType.label, color: colors.neutral[600] }}>{semantic.data.citations.length} source message{semantic.data.citations.length === 1 ? '' : 's'}</Text>
                 <View style={{ gap: space[2] }}>{semantic.data.citations.slice(0, 3).map(citation => <Pressable key={citation.messageId} onPress={() => router.push({ pathname: '/chat/[chatId]', params: { chatId: citation.chatId, chat_name: citation.chatName || '', platform: citation.platform, is_group: citation.isGroup ? '1' : '0', highlightMessageId: citation.messageId } })} style={({ pressed }) => ({ padding: space[3], borderRadius: radius.control, backgroundColor: colors.paper, opacity: pressed ? 0.68 : 1 })}><Text style={{ ...mobileType.label, color: colors.ink }}>{citation.chatName || citation.senderName} · {citation.platform}</Text><Text numberOfLines={2} style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{citation.excerpt}</Text></Pressable>)}</View>
@@ -70,7 +71,7 @@ export function SearchScreen() {
             <View style={{ flex: 1, minWidth: 0 }}><Text selectable numberOfLines={1} style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>{item.title}</Text><Text selectable numberOfLines={2} style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{item.subtitle}</Text></View>
             <Text style={{ ...mobileType.monoLabel, color: colors.neutral[400], maxWidth: 76 }} numberOfLines={2}>{item.meta}</Text>
           </Pressable>}
-          ListEmptyComponent={exact.isLoading ? <ActivityIndicator color={colors.ink} /> : <MobileState error={!!exact.error} title={exact.error ? 'Search is unavailable' : 'No matches'} message={exact.error ? exact.error.message : 'Try a different phrase or search Everything for a semantic answer.'} />}
+          ListEmptyComponent={exact.isLoading ? <ActivityIndicator color={colors.ink} /> : <MobileState error={!!exact.error} title={exact.error ? 'Search is unavailable' : 'No matches'} message={exact.error ? userFacingErrorMessage(exact.error) : 'Try a different phrase or search Everything for a semantic answer.'} />}
         />
       </View>
     );
@@ -83,7 +84,7 @@ export function SearchScreen() {
         <MobileSearchField icon={<Search size={20} color={colors.ink} />} value={query} onChangeText={setQuery} onSubmitEditing={runSearch} placeholder="Messages, people, loops…" returnKeyType="search" style={{ minHeight: 52, backgroundColor: colors.paper, borderWidth: 2, borderColor: colors.ink }} testID="global-search-input" />
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space[2] }}>{scopes.map(item => <MobileChip key={item.value} label={item.label} active={scope === item.value} onPress={() => setScope(item.value)} />)}</ScrollView>
         {recent.length ? <><SectionLabel title="Recent searches" detail="Clear" />{recent.map(item => <Pressable key={item} onPress={() => { setQuery(item); setSubmitted(item); }} style={({ pressed }) => ({ minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: space[3], borderBottomWidth: 1, borderBottomColor: colors.neutral[200], opacity: pressed ? 0.64 : 1 })}><Clock3 size={17} color={colors.neutral[600]} /><Text numberOfLines={1} style={{ ...mobileType.body, flex: 1, color: colors.ink }}>{item}</Text><Pressable accessibilityLabel={`Remove ${item}`} onPress={() => { const next = recent.filter(value => value !== item); setRecent(next); void AsyncStorage.setItem(storageKey, JSON.stringify(next)); }} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}><X size={16} color={colors.neutral[400]} /></Pressable></Pressable>)}</> : null}
-        <View style={{ padding: space[4], gap: space[2], borderRadius: radius.card, backgroundColor: colors.lavender }}><Sparkles size={21} color={colors.ink} /><Text style={{ ...mobileType.sectionTitle, color: colors.ink }}>Ask naturally.</Text><Text selectable style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>Try “Who recommended the Oaxaca hotel?” or “What did Maya say about launch timing?”</Text></View>
+        <View style={{ padding: space[4], gap: space[2], borderRadius: radius.card, backgroundColor: colors.lavender }}><Brain size={21} color={colors.ink} /><Text style={{ ...mobileType.sectionTitle, color: colors.ink }}>Ask naturally.</Text><Text selectable style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>Try “Who recommended the Oaxaca hotel?” or “What did Maya say about launch timing?”</Text></View>
       </View>
     </ScrollView>
   );

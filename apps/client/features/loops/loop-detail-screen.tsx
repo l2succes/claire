@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bell, Check, ChevronLeft, Clock3, MessageCircle, RotateCcw, Sparkles, XCircle, UserRound } from 'lucide-react-native';
+import { Bell, Check, CheckCircle2, ChevronLeft, Clock3, MessageCircle, RotateCcw, XCircle, UserRound } from 'lucide-react-native';
 import { colors, mobileType, radius, space } from '@claire/design-system';
 
 import { MobileHeader, MobileIconButton, MobileState } from '../../components/mobile/claire-mobile';
@@ -18,12 +18,14 @@ import {
   snoozeLoop,
   updateLoop,
   type LoopDetail,
+  type LoopItem,
   type LoopParticipant,
 } from '../../services/loops';
 import { pendingCloseSuggestion } from '../../services/loop-review';
 import { LoopAgentPanel } from './loop-agent-panel';
 import { LoopBlocks } from './loop-blocks';
 import { LoopTimeline } from './loop-timeline';
+import { userFacingErrorMessage } from '../../services/api-errors';
 
 /**
  * Where a loop is actually resolved.
@@ -185,11 +187,19 @@ export function LoopDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const user = useAuthStore((state) => state.user);
   const queryClient = useQueryClient();
+  // Opening from the list should paint the loop the person just tapped before
+  // its timeline and participants finish downloading. The detail request still
+  // runs immediately and replaces this lightweight list shape when it lands.
+  const listLoop = queryClient
+    .getQueryData<LoopItem[]>(['mobile-loops', user?.id])
+    ?.find((item) => item.id === String(id));
 
   const query = useQuery({
     queryKey: ['loop-detail', id],
     enabled: !!id && !!user?.id,
     queryFn: () => fetchLoopDetail(String(id)),
+    initialData: listLoop as LoopDetail | undefined,
+    initialDataUpdatedAt: listLoop ? 0 : undefined,
   });
 
   const invalidate = () => {
@@ -237,7 +247,7 @@ export function LoopDetailScreen() {
         <MobileHeader title="Loop" safeArea leading={<BackButton />} />
         <MobileState
           title="Could not open this loop"
-          message={query.error instanceof Error ? query.error.message : 'It may have been deleted.'}
+          message={userFacingErrorMessage(query.error, 'It may have been deleted.')}
         />
       </View>
     );
@@ -351,7 +361,7 @@ export function LoopDetailScreen() {
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}>
               <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: colors.lime, alignItems: 'center', justifyContent: 'center' }}>
-                <Sparkles size={15} color={colors.ink} />
+                <CheckCircle2 size={15} color={colors.ink} />
               </View>
               <Text selectable style={{ ...mobileType.body, flex: 1, fontWeight: '700', color: colors.ink }}>
                 Claire thinks this loop is finished
@@ -390,7 +400,7 @@ export function LoopDetailScreen() {
             </View>
             {review.error ? (
               <Text selectable style={{ ...mobileType.bodySmall, color: colors.danger }}>
-                {review.error.message}
+                {userFacingErrorMessage(review.error)}
               </Text>
             ) : null}
           </View>

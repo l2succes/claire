@@ -11,8 +11,27 @@ import {
 import { useEmailSignIn } from './use-email-sign-in';
 import { LegalConsent } from '../legal/legal-consent';
 
-export function EmailSignInScreen() {
-  const auth = useEmailSignIn();
+export function EmailSignInView({
+  email,
+  loading,
+  canSubmit,
+  emailInvalid,
+  error,
+  onBack,
+  onChangeEmail,
+  onValidateEmail,
+  onSubmit,
+}: {
+  email: string;
+  loading: boolean;
+  canSubmit: boolean;
+  emailInvalid: boolean;
+  error: string | null;
+  onBack: () => void;
+  onChangeEmail: (value: string) => void;
+  onValidateEmail: () => void;
+  onSubmit: () => void;
+}) {
   const [focused, setFocused] = useState(false);
 
   return (
@@ -21,16 +40,16 @@ export function EmailSignInScreen() {
       kicker="WELCOME BACK"
       title="Sign in with email."
       description="Enter your email and we’ll send you a one-time verification code. No password needed."
-      onBack={() => router.back()}
+      onBack={onBack}
       footer={
         <>
           <AuthPrimaryButton
             testID="signin-send-otp"
             label="Send verification code"
             loadingLabel="Sending code…"
-            loading={auth.loading}
-            disabled={!auth.canSubmit}
-            onPress={() => void auth.sendCode()}
+            loading={loading}
+            disabled={!canSubmit}
+            onPress={onSubmit}
           />
           <LegalConsent />
         </>
@@ -49,17 +68,17 @@ export function EmailSignInScreen() {
             paddingHorizontal: space[4],
             borderRadius: 16,
             borderCurve: 'continuous',
-            borderWidth: focused || auth.emailInvalid ? 2 : 1,
-            borderColor: auth.emailInvalid
+            borderWidth: focused || emailInvalid ? 2 : 1,
+            borderColor: emailInvalid
               ? colors.danger
               : focused
                 ? colors.ink
                 : colors.neutral[200],
-            backgroundColor: auth.emailInvalid ? colors.blush : colors.paper,
-            boxShadow: focused && !auth.emailInvalid ? `0 0 0 3px ${colors.lime}` : undefined,
+            backgroundColor: emailInvalid ? colors.blush : colors.paper,
+            boxShadow: focused && !emailInvalid ? `0 0 0 3px ${colors.lime}` : undefined,
           }}
         >
-          <Mail size={19} color={auth.emailInvalid ? colors.danger : colors.neutral[600]} />
+          <Mail size={19} color={emailInvalid ? colors.danger : colors.neutral[600]} />
           <TextInput
             testID="signin-email-input"
             accessibilityLabel="Email address"
@@ -81,19 +100,19 @@ export function EmailSignInScreen() {
             keyboardType="email-address"
             textContentType="emailAddress"
             returnKeyType="send"
-            value={auth.email}
-            onChangeText={auth.setEmail}
+            value={email}
+            onChangeText={onChangeEmail}
             onFocus={() => setFocused(true)}
             onBlur={() => {
               setFocused(false);
-              auth.validateEmail();
+              onValidateEmail();
             }}
-            onSubmitEditing={() => void auth.sendCode()}
-            editable={!auth.loading}
+            onSubmitEditing={onSubmit}
+            editable={!loading}
           />
         </View>
-        {auth.error ? (
-          <AuthInlineMessage testID="signin-email-error" tone="error" message={auth.error} />
+        {error ? (
+          <AuthInlineMessage testID="signin-email-error" tone="error" message={error} />
         ) : (
           <Text selectable style={{ ...mobileType.bodySmall, color: colors.neutral[400] }}>
             We’ll only use this to sign you in.
@@ -101,5 +120,22 @@ export function EmailSignInScreen() {
         )}
       </View>
     </AuthScreenShell>
+  );
+}
+
+export function EmailSignInScreen() {
+  const auth = useEmailSignIn();
+  return (
+    <EmailSignInView
+      email={auth.email}
+      loading={auth.loading}
+      canSubmit={auth.canSubmit}
+      emailInvalid={auth.emailInvalid}
+      error={auth.error}
+      onBack={() => router.back()}
+      onChangeEmail={auth.setEmail}
+      onValidateEmail={auth.validateEmail}
+      onSubmit={() => void auth.sendCode()}
+    />
   );
 }

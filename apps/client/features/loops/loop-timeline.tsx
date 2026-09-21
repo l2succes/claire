@@ -1,11 +1,11 @@
 import { Text, View } from 'react-native';
 import {
   CheckCircle2,
+  Plus,
   GitMerge,
   MessageSquare,
   Pencil,
   Plug,
-  Sparkles,
   Clock3,
   EyeOff,
 } from 'lucide-react-native';
@@ -28,7 +28,7 @@ interface EventStyle {
 }
 
 const EVENT_STYLES: Record<LoopEventKind, EventStyle> = {
-  created: { icon: Sparkles, tint: colors.lime, label: 'Opened' },
+  created: { icon: Plus, tint: colors.lime, label: 'Opened' },
   evidence: { icon: MessageSquare, tint: colors.sky, label: 'From the conversation' },
   state_change: { icon: Clock3, tint: colors.sky, label: 'Updated' },
   deadline_change: { icon: Clock3, tint: colors.sky, label: 'Date changed' },
@@ -38,7 +38,7 @@ const EVENT_STYLES: Record<LoopEventKind, EventStyle> = {
   reminder_sent: { icon: Clock3, tint: colors.neutral[200], label: 'Reminder sent' },
   plugin_proposed: { icon: Plug, tint: colors.blush, label: 'Action proposed' },
   plugin_executed: { icon: Plug, tint: colors.lime, label: 'Action taken' },
-  agent_note: { icon: Sparkles, tint: colors.blush, label: 'Claire noted' },
+  agent_note: { icon: MessageSquare, tint: colors.blush, label: 'Claire noted' },
   resolved: { icon: CheckCircle2, tint: colors.lime, label: 'Closed' },
   reopened: { icon: Clock3, tint: colors.blush, label: 'Reopened' },
   suppressed: { icon: EyeOff, tint: colors.neutral[200], label: 'Not surfaced' },

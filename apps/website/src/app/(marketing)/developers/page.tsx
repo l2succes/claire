@@ -96,7 +96,7 @@ const lanes = [
   {
     tint: 'lane-lavender',
     number: '04',
-    icon: 'sparkles',
+    icon: 'chat',
     title: 'AI and plugins',
     body: 'Provider-neutral inference, Ask Claire, typed tools, permissions, approvals, and auditable automation.',
     tags: ['Typed tools', 'Receipts', 'BYO model'],
@@ -217,7 +217,7 @@ export default function DevelopersPage() {
             </div>
             <div className="dev-float dev-float-two">
               <span className="dev-float-mark is-lime">
-                <HeroIcon name="sparkles" />
+                <HeroIcon name="chat" />
               </span>
               <div>
                 <b>Plugin approved</b>
@@ -509,7 +509,7 @@ export default function DevelopersPage() {
               <article className="dev-approval">
                 <header>
                   <span className="dev-approval-mark">
-                    <HeroIcon name="sparkles" />
+                    <HeroIcon name="chat" />
                   </span>
                   <div>
                     <small>CLAIRE WANTS TO RUN AN ACTION</small>
@@ -618,7 +618,7 @@ export default function DevelopersPage() {
                   </article>
                   <i aria-hidden="true" />
                   <article className="accent">
-                    <HeroIcon name="sparkles" />
+                    <HeroIcon name="chat" />
                     <span>Approved action</span>
                   </article>
                 </div>

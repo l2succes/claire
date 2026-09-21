@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
-import { BellOff, Check, ChevronLeft, Mail, MapPin, Phone, RefreshCw, Sparkles } from 'lucide-react-native';
+import { BellOff, Brain, Check, ChevronLeft, Lightbulb, Mail, MapPin, Phone, RefreshCw } from 'lucide-react-native';
 import { colors, mobileType, radius, space } from '@claire/design-system';
 import { useAuthStore } from '../../../stores/authStore';
 import {
@@ -246,7 +246,7 @@ export default function ConversationSettingsScreen() {
                 consequential of the two, and it is the one the banner in the
                 chat sends people here to find. */}
             <View testID="conversation-ai-settings" style={{ minHeight: 76, flexDirection: 'row', alignItems: 'center', gap: space[3], paddingHorizontal: space[3], borderRadius: radius.card, backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.neutral[200] }}>
-              <View style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: radius.control, backgroundColor: effectiveAi ? colors.lime : colors.neutral[100] }}><Sparkles size={19} color={colors.ink} /></View>
+              <View style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: radius.control, backgroundColor: effectiveAi ? colors.lime : colors.neutral[100] }}><Brain size={19} color={colors.ink} /></View>
               <View style={{ flex: 1, gap: 2 }}>
                 <Text style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>Claire AI</Text>
                 <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>
@@ -299,7 +299,7 @@ export default function ConversationSettingsScreen() {
 
           <View style={{ gap: space[2] }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}><SectionLabel title="What Claire knows" /><Pressable accessibilityRole="button" onPress={() => void refreshInsights(chatId)}><View style={{ minHeight: 32, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, borderRadius: radius.pill, backgroundColor: colors.neutral[100] }}><RefreshCw size={14} color={colors.ink} /><Text style={{ ...mobileType.label, color: colors.ink }}>Refresh</Text></View></Pressable></View>
-            {chatSettings?.profile?.key_facts?.length ? chatSettings.profile.key_facts.slice(0, 3).map((fact, index) => <View key={`${fact.fact}-${index}`} style={{ flexDirection: 'row', gap: space[2], padding: space[3], borderRadius: radius.control, backgroundColor: colors.sky }}><Sparkles size={16} color={colors.ink} /><Text style={{ ...mobileType.bodySmall, flex: 1, color: colors.ink }}>{fact.fact}</Text></View>) : <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>Save a relationship memory, then refresh when you want Claire to look for useful context.</Text>}
+            {chatSettings?.profile?.key_facts?.length ? chatSettings.profile.key_facts.slice(0, 3).map((fact, index) => <View key={`${fact.fact}-${index}`} style={{ flexDirection: 'row', gap: space[2], padding: space[3], borderRadius: radius.control, backgroundColor: colors.sky }}><Lightbulb size={16} color={colors.ink} /><Text style={{ ...mobileType.bodySmall, flex: 1, color: colors.ink }}>{fact.fact}</Text></View>) : <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>Save a relationship memory, then refresh when you want Claire to look for useful context.</Text>}
           </View>
         </ScrollView>
       )}

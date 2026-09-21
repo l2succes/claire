@@ -1,5 +1,5 @@
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { Sparkles, RefreshCw } from 'lucide-react-native';
+import { Lightbulb, RefreshCw } from 'lucide-react-native';
 import { SmartCard } from './SmartCard';
 import type { SmartCard as SmartCardType } from '../types/conversationSettings';
 
@@ -25,7 +25,7 @@ export function SmartCardList({
   if (!isGenerating && cards.length === 0) {
     return (
       <View style={{ paddingHorizontal: 16, paddingVertical: 20, alignItems: 'center', gap: 6 }}>
-        <Sparkles size={20} color="#d1d5db" />
+        <Lightbulb size={20} color="#d1d5db" />
         <Text style={{ fontSize: 13, color: '#9ca3af', textAlign: 'center' }}>
           Set a category above to get smart suggestions
         </Text>
@@ -43,7 +43,7 @@ export function SmartCardList({
           paddingHorizontal: 16,
           marginBottom: 8,
         }}>
-          <Sparkles size={14} color="#6366f1" />
+          <Lightbulb size={14} color="#6366f1" />
           <Text style={{ fontSize: 13, fontWeight: '600', color: '#6b7280', marginLeft: 6, flex: 1 }}>
             Smart Suggestions
           </Text>

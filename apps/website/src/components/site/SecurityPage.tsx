@@ -148,7 +148,7 @@ export function SecurityPage() {
             </article>
             <article className="security-map-step">
               <span>03</span>
-              <HeroIcon name="sparkles" size="xl" />
+              <HeroIcon name="shield" size="xl" />
               <h3>AI only when invoked</h3>
               <p>
                 Ask Claire, summaries, and suggestions use selected conversation context with the

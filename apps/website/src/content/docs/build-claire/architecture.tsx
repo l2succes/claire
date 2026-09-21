@@ -87,7 +87,7 @@ export default function Page() {
           />
           <Card
             href="/docs/get-started/mock-mode"
-            icon="sparkles"
+            icon="chat"
             title="Mock bridge mode"
             description="Develop the full product surface without a messaging account."
           />

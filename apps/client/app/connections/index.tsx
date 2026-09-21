@@ -17,6 +17,7 @@ import { ConnectionPlatformMark } from '../../features/connections/connection-pl
 import { ConnectionRow, type ConnectionRowState } from '../../features/connections/connection-row';
 import { RoadmapConnectionRow } from '../../features/connections/roadmap-connection-row';
 import { CONNECTION_PLATFORM_CONFIG, connectionRoute } from '../../features/connections/connection-platform-config';
+import { userFacingErrorMessage } from '../../services/api-errors';
 
 function ConnectionMark({ definition }: { definition: PlatformDefinition }) {
   const platform = resolvePlatform(definition.id);
@@ -53,7 +54,7 @@ export default function ConnectionsScreen() {
       const userId = useAuthStore.getState().user?.id;
       if (userId) void writeQuerySnapshot(userId, 'platform-definitions', catalog).catch(() => undefined);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not load connections.');
+      setError(userFacingErrorMessage(cause, 'Could not load connections.'));
     } finally {
       setLoading(false);
     }
@@ -106,7 +107,7 @@ export default function ConnectionsScreen() {
     if (definition.id === Platform.INSTAGRAM && host.name === 'electron' && accessToken) {
       setError(null);
       const result = await host.startInstagramLogin({ apiUrl: API_BASE_URL, accessToken });
-      if (!result.success) setError(result.error || 'Instagram sign-in did not finish.');
+      if (!result.success) setError(userFacingErrorMessage(result.error, 'Instagram sign-in did not finish.'));
       else await load();
       return;
     }
@@ -118,7 +119,7 @@ export default function ConnectionsScreen() {
           return;
         }
         const result = await host.configureCompanion({ apiUrl: API_BASE_URL, accessToken, userId: user.id });
-        if (!result.success) setError(result.error || 'Could not start iMessage sync.');
+        if (!result.success) setError(userFacingErrorMessage(result.error, 'Could not start iMessage sync.'));
         else { setError(null); await load(); }
       } else if (status.imessage === 'needs_permission') {
         await host.openSystemSettings('full_disk_access');
@@ -133,7 +134,7 @@ export default function ConnectionsScreen() {
         await platformsApi.requestPlatformInterest(definition.id);
         setRequested(current => current.includes(definition.id) ? current : [...current, definition.id]);
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : `Could not request ${definition.name}.`);
+        setError(userFacingErrorMessage(cause, `Could not request ${definition.name}.`));
       }
     }
   };

@@ -8,7 +8,7 @@ const tabs = [
   ['home', 'Home'],
   ['inbox', 'Inbox'],
   ['promises', 'Promises'],
-  ['sparkles', 'Ask Claire'],
+  ['chat', 'Ask Claire'],
   ['people', 'People'],
   ['chat', 'Connections'],
 ];
