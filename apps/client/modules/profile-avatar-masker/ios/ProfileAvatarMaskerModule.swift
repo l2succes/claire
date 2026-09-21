@@ -1,0 +1,82 @@
+import CryptoKit
+import ExpoModulesCore
+import UIKit
+
+public class ProfileAvatarMaskerModule: Module {
+  public func definition() -> ModuleDefinition {
+    Name("ProfileAvatarMasker")
+
+    // NativeTabs renders supplied image sources as-is. Preparing the image here
+    // preserves its Liquid Glass host while giving the avatar the same circular
+    // treatment used by the rest of the app.
+    AsyncFunction("createMaskedAvatar") { (sourceURL: String) throws -> String in
+      guard let url = URL(string: sourceURL) else {
+        throw ProfileAvatarMaskerError.invalidURL
+      }
+
+      let destination = try self.destinationURL(for: sourceURL)
+      if FileManager.default.fileExists(atPath: destination.path) {
+        return destination.absoluteString
+      }
+
+      let data = try Data(contentsOf: url)
+      guard let image = UIImage(data: data), let rendered = self.render(image), let png = rendered.pngData() else {
+        throw ProfileAvatarMaskerError.invalidImage
+      }
+
+      try png.write(to: destination, options: .atomic)
+      return destination.absoluteString
+    }
+  }
+
+  private func destinationURL(for sourceURL: String) throws -> URL {
+    let hash = SHA256.hash(data: Data(sourceURL.utf8)).map { String(format: "%02x", $0) }.joined()
+    let directory = try FileManager.default.url(
+      for: .cachesDirectory,
+      in: .userDomainMask,
+      appropriateFor: nil,
+      create: true
+    ).appendingPathComponent("profile-avatar-masker", isDirectory: true)
+
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    return directory.appendingPathComponent("\(hash).png")
+  }
+
+  private func render(_ image: UIImage) -> UIImage? {
+    // Native tab icons are 24 points. A 24-point result avoids the oversized
+    // intrinsic dimensions that an unprocessed remote photo supplies.
+    let size = CGSize(width: 24, height: 24)
+    let borderWidth: CGFloat = 1.5
+    let renderer = UIGraphicsImageRenderer(size: size)
+
+    return renderer.image { context in
+      let bounds = CGRect(origin: .zero, size: size)
+      let imageSize = image.size
+      guard imageSize.width > 0, imageSize.height > 0 else { return }
+
+      let scale = max(size.width / imageSize.width, size.height / imageSize.height)
+      let drawSize = CGSize(width: imageSize.width * scale, height: imageSize.height * scale)
+      let drawRect = CGRect(
+        x: (size.width - drawSize.width) / 2,
+        y: (size.height - drawSize.height) / 2,
+        width: drawSize.width,
+        height: drawSize.height
+      )
+
+      context.cgContext.saveGState()
+      UIBezierPath(ovalIn: bounds.insetBy(dx: borderWidth / 2, dy: borderWidth / 2)).addClip()
+      image.draw(in: drawRect)
+      context.cgContext.restoreGState()
+
+      UIColor(red: 1, green: 0.99, blue: 0.95, alpha: 1).setStroke()
+      let border = UIBezierPath(ovalIn: bounds.insetBy(dx: borderWidth / 2, dy: borderWidth / 2))
+      border.lineWidth = borderWidth
+      border.stroke()
+    }
+  }
+}
+
+private enum ProfileAvatarMaskerError: Error {
+  case invalidURL
+  case invalidImage
+}
