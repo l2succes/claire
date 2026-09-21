@@ -1,5 +1,5 @@
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
-import { Check, RefreshCw, Sparkles, X } from 'lucide-react-native';
+import { Check, RefreshCw, X } from 'lucide-react-native';
 import { colors, mobileType, radius, space } from '@claire/design-system';
 import { ClaireMark } from '../../components/claire/mark';
 import type { BillingPackage } from '../../services/billing-types';
@@ -112,7 +112,7 @@ export function PreviewStatusCard({
           justifyContent: 'center',
         }}
       >
-        <Sparkles size={19} color={colors.paper} strokeWidth={2} />
+        <ClaireMark size={19} color={colors.paper} dot={colors.lime} />
       </View>
       <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
         <Text style={{ ...mobileType.monoLabel, color: colors.ink }}>{label}</Text>

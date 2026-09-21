@@ -10,6 +10,7 @@ import { PlatformBadge } from '../../components/PlatformIcon';
 import { contactsApi, type PersonContact } from '../../services/contacts';
 import { displayPersonDetails, displayPersonName } from '../../services/contact-display';
 import { Platform, platformLabel } from '../../types/platform';
+import { userFacingErrorMessage } from '../../services/api-errors';
 
 function identity(contact: PersonContact) {
   return {
@@ -89,7 +90,7 @@ export function PersonDetailScreen() {
       setSaved(true);
       setTimeout(() => setSaved(false), 1800);
     } catch (error) {
-      setSaveError(error instanceof Error ? error.message : 'Could not save. Try again.');
+      setSaveError(userFacingErrorMessage(error, 'Could not save. Try again.'));
     } finally {
       setSaving(false);
     }

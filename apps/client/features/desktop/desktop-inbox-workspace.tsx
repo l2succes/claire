@@ -3,7 +3,7 @@ import { Pressable, ScrollView } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { Text, View, useMedia } from '@tamagui/core';
-import { Circle, PenLine, Search, Sparkles } from 'lucide-react-native';
+import { Circle, MessageCircle, PenLine, Search } from 'lucide-react-native';
 import { colors, type } from '@claire/design-system';
 import { host } from '@claire/host';
 import { ResizablePane } from '@claire/shell';
@@ -111,7 +111,7 @@ export function DesktopInboxWorkspace({ selectedChatId, conversation }: { select
   );
 }
 
-function WorkspaceEmpty() { return <View flex={1} alignItems="center" justifyContent="center" rowGap="$2"><Sparkles size={28} color={colors.ink} /><Text style={type.sectionTitle}>Choose a conversation</Text><Text color="$neutral600">Your inbox stays visible while you work.</Text></View>; }
+function WorkspaceEmpty() { return <View flex={1} alignItems="center" justifyContent="center" rowGap="$2"><MessageCircle size={28} color={colors.ink} /><Text style={type.sectionTitle}>Choose a conversation</Text><Text color="$neutral600">Your inbox stays visible while you work.</Text></View>; }
 
 function ConversationInspector({ message }: { message?: InboxMessage }) {
   if (!message) return <View flex={1} padding="$4" backgroundColor="$paper" borderLeftWidth={1} borderColor="$neutral200" justifyContent="center"><Text color="$neutral600">Select a conversation to see context.</Text></View>;

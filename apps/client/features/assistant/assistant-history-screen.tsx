@@ -6,6 +6,7 @@ import { colors, mobileType, space } from '@claire/design-system';
 import { ClaireMark } from '../../components/claire/mark';
 import { MobileHeader, MobileIconButton, MobileState } from '../../components/mobile/claire-mobile';
 import { type AssistantThread, conversationAssistantApi } from '../../services/conversationAssistant';
+import { userFacingErrorMessage } from '../../services/api-errors';
 
 function formatThreadTime(value: string) {
   const delta = Date.now() - new Date(value).getTime();
@@ -24,7 +25,7 @@ export function AssistantHistoryScreen() {
     let active = true;
     void conversationAssistantApi.listThreads()
       .then((items) => { if (active) setThreads(items); })
-      .catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : 'Could not load conversations.'); })
+      .catch((cause) => { if (active) setError(userFacingErrorMessage(cause, 'Could not load conversations.')); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, []);

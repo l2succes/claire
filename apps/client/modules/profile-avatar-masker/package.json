@@ -1,0 +1,14 @@
+{
+  "name": "expo-profile-avatar-masker",
+  "version": "1.0.0",
+  "description": "Prepares circular profile avatars for native tabs",
+  "main": "index.ts",
+  "types": "index.ts",
+  "license": "MIT",
+  "author": "Claire",
+  "homepage": "https://github.com/l2succes/claire",
+  "peerDependencies": {
+    "expo": "*",
+    "react-native": "*"
+  }
+}

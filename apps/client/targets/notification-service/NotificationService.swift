@@ -10,28 +10,32 @@ class NotificationService: UNNotificationServiceExtension {
         self.contentHandler = contentHandler
         bestAttemptContent = (request.content.mutableCopy() as? UNMutableNotificationContent)
 
+        guard let content = bestAttemptContent else {
+            finish()
+            return
+        }
+
         guard
-            let content = bestAttemptContent,
             let avatar = content.userInfo["avatarUrl"] as? String,
             let avatarURL = URL(string: avatar),
             avatarURL.scheme == "https"
         else {
-            finish()
+            applyCommunicationNotification(avatarData: nil)
             return
         }
 
         downloadTask = URLSession.shared.dataTask(with: avatarURL) { [weak self] data, _, _ in
             guard let self else { return }
             guard let data, !data.isEmpty, data.count <= 10 * 1_024 * 1_024 else {
-                self.finish()
+                self.applyCommunicationNotification(avatarData: nil)
                 return
             }
-            self.applyCommunicationAvatar(data: data)
+            self.applyCommunicationNotification(avatarData: data)
         }
         downloadTask?.resume()
     }
 
-    private func applyCommunicationAvatar(data: Data) {
+    private func applyCommunicationNotification(avatarData: Data?) {
         guard let content = bestAttemptContent else {
             finish()
             return
@@ -47,7 +51,7 @@ class NotificationService: UNNotificationServiceExtension {
             personHandle: handle,
             nameComponents: nil,
             displayName: senderName,
-            image: INImage(imageData: data),
+            image: avatarData.map { INImage(imageData: $0) },
             contactIdentifier: nil,
             customIdentifier: senderID
         )
@@ -65,8 +69,8 @@ class NotificationService: UNNotificationServiceExtension {
             attachments: nil
         )
 
-        if groupName != nil {
-            intent.setImage(INImage(imageData: data), forParameterNamed: \INSendMessageIntent.speakableGroupName)
+        if groupName != nil, let avatarData {
+            intent.setImage(INImage(imageData: avatarData), forParameterNamed: \INSendMessageIntent.speakableGroupName)
         }
 
         let interaction = INInteraction(intent: intent, response: nil)

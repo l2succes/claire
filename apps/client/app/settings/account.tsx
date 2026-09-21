@@ -6,6 +6,7 @@ import { colors, mobileType, radius, space } from '@claire/design-system';
 import { MobileIconButton, SectionLabel } from '../../components/mobile/claire-mobile';
 import { supabase } from '../../services/supabase';
 import { useAuthStore } from '../../stores/authStore';
+import { userFacingErrorMessage } from '../../services/api-errors';
 
 const MIN_PASSWORD_LENGTH = 12;
 
@@ -49,7 +50,7 @@ export default function AccountSecurityScreen() {
         'You can now sign in with your email and this password on any Claire client.'
       );
     } catch (error) {
-      Alert.alert('Could not save password', error instanceof Error ? error.message : 'Please try again.');
+      Alert.alert('Could not save password', userFacingErrorMessage(error, 'Please try again.'));
     } finally {
       setSaving(false);
     }

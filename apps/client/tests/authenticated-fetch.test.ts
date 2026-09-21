@@ -26,6 +26,25 @@ describe('authenticatedFetch', () => {
     global.fetch = previousFetch;
   });
 
+  it('refreshes an expiring session before starting the request', async () => {
+    (supabase.auth.getSession as jest.Mock).mockResolvedValue({
+      data: { session: { access_token: 'expiring-token', expires_at: Math.floor(Date.now() / 1000) + 30 } },
+    });
+    (supabase.auth.refreshSession as jest.Mock).mockResolvedValue({
+      data: { session: { access_token: 'fresh-token' } },
+      error: null,
+    });
+    const previousFetch = global.fetch;
+    const fetchMock = jest.fn().mockResolvedValue({ status: 200 } as Response);
+    global.fetch = fetchMock;
+
+    await authenticatedFetch('https://claire.test/ai');
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(new Headers(fetchMock.mock.calls[0][1]?.headers).get('Authorization')).toBe('Bearer fresh-token');
+    global.fetch = previousFetch;
+  });
+
   it('opens the upgrade screen when the server reports exhausted credits', async () => {
     (supabase.auth.getSession as jest.Mock).mockResolvedValue({
       data: { session: { access_token: 'valid-token' } },

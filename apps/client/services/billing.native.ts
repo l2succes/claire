@@ -52,12 +52,15 @@ function publicPackage(item: PurchasesPackage): BillingPackage {
 }
 
 export function billingIsConfigured(): boolean {
-  return Boolean(apiKey());
+  // A development client can be older than the JavaScript bundle and not yet
+  // include the RevenueCat native module. Treat that as an unavailable store
+  // instead of throwing during app startup.
+  return Boolean(apiKey() && Purchases);
 }
 
 export async function initializeBilling(userId: string): Promise<boolean> {
   const key = apiKey();
-  if (!key) return false;
+  if (!key || !Purchases) return false;
   if (!configured) {
     if (__DEV__) Purchases.setLogLevel(LOG_LEVEL.DEBUG);
     Purchases.configure({ apiKey: key, appUserID: userId });

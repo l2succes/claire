@@ -40,7 +40,6 @@ const icons = {
   plus: PlusIcon,
   compose: PencilSquareIcon,
   // Keep the existing key for content metadata while using a less clichéd mark.
-  sparkles: ChatBubbleLeftEllipsisIcon,
   'chat-ellipsis': ChatBubbleLeftEllipsisIcon,
   send: PaperAirplaneIcon,
   settings: Cog6ToothIcon,

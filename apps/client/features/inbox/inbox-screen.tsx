@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Modal, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
-import { BellOff, Check, CheckCircle2, Clock3, PenSquare, Pin, Search, Sparkles, X } from 'lucide-react-native';
+import { BellOff, Check, CheckCircle2, Clock3, PenSquare, Pin, Search, X } from 'lucide-react-native';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -238,7 +238,7 @@ function HighlightCard({ message, onPress }: { message: InboxMessage; onPress: (
     <Pressable testID={`inbox-highlight-${message.id}`} accessibilityRole="button" accessibilityLabel={`${name}. ${reason}`} onPress={onPress} style={{ width: 272 }}>
       <View style={{ minHeight: 138, padding: space[3], gap: space[2], borderRadius: radius.card, borderCurve: 'continuous', borderWidth: 1, borderColor: colors.ink, backgroundColor: colors.sky }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <Sparkles size={15} color={colors.ink} />
+          <CheckCircle2 size={15} color={colors.ink} />
           <Text maxFontSizeMultiplier={1} style={{ ...mobileType.monoLabel, flex: 1, color: colors.ink }}>CLAIRE'S PICK</Text>
           {message.platform ? <PlatformBadge platform={message.platform} size={16} /> : null}
         </View>

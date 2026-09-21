@@ -423,7 +423,7 @@ export default function PricingPage() {
                   </a>
                 )}
                 <div className="pr-tier-loop">
-                  <HeroIcon name="sparkles" />
+                  <HeroIcon name="check-circle" />
                   <b>{tier.loop}</b>
                 </div>
                 <ul>

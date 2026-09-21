@@ -25,7 +25,6 @@ import {
   Search,
   SendHorizonal,
   Smile,
-  Sparkles,
   Trash2,
   ArrowUpRight,
 } from 'lucide-react-native';
@@ -382,7 +381,7 @@ export function ChatComposer({
             description: replyOptionsVisible
               ? 'Put Claire’s drafts away.'
               : 'Claire drafts a few ways to answer.',
-            icon: <Sparkles size={13} color={colors.ink} />,
+            icon: <MessageCircle size={13} color={colors.ink} />,
             onPress: toggleReplyOptions,
           },
         ]

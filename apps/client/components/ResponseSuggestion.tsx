@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
-import { ChevronDown, ChevronUp, Expand, RefreshCw, Send, SlidersHorizontal, Sparkles, ThumbsDown, ThumbsUp } from 'lucide-react-native';
+import { ChevronDown, ChevronUp, Expand, MessageSquare, RefreshCw, Send, SlidersHorizontal, ThumbsDown, ThumbsUp } from 'lucide-react-native';
 import { supabase } from '../services/supabase';
 import { platformsApi } from '../services/platforms';
 import { colors, mobileType, radius, space } from '@claire/design-system';
@@ -121,7 +121,7 @@ export function ResponseSuggestion({ messageId, messageContent, isGroup, refresh
       <Pressable testID="reply-options-toggle" accessibilityRole="button" accessibilityState={{ expanded }} accessibilityLabel={`${summary}. ${expanded ? 'Collapse' : 'Expand'} reply options`} onPress={() => setExpanded(current => !current)}>
         <View style={{ minHeight: 62, flexDirection: 'row', alignItems: 'center', gap: space[2], paddingHorizontal: space[3] }}>
           <View style={{ width: 34, height: 34, alignItems: 'center', justifyContent: 'center', borderRadius: 11, backgroundColor: colors.lime }}>
-            {pending ? <ActivityIndicator size="small" color={colors.ink} /> : <Sparkles size={18} color={colors.ink} />}
+            {pending ? <ActivityIndicator size="small" color={colors.ink} /> : <MessageSquare size={18} color={colors.ink} />}
           </View>
           <View style={{ flex: 1, minWidth: 0, gap: 1 }}>
             <Text maxFontSizeMultiplier={1} style={{ ...mobileType.monoLabel, color: colors.ink }}>REPLY OPTIONS</Text>

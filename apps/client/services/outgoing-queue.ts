@@ -1,3 +1,5 @@
+import { userFacingErrorMessage } from './api-errors';
+
 /** Durable FIFO per conversation. A failed conversation cannot block another. */
 export interface QueueEntry {
   id: string;
@@ -62,7 +64,7 @@ export class OutgoingQueue<T extends QueueEntry> {
           blocked.add(entry.chatId);
           if (!this.options.retryable(error)) {
             await this.update((entries) => entries.map((item) => item.id === entry.id
-              ? { ...item, error: error instanceof Error ? error.message : 'Could not send. Try again.' } : item));
+              ? { ...item, error: userFacingErrorMessage(error, 'Could not send. Try again.') } : item));
           }
         }
       }

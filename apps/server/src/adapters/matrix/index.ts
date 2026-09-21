@@ -300,6 +300,12 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
         contactPhone: phoneNumber,
       };
     }
+    if (identity.avatarUrl) {
+      message.platformMetadata = {
+        ...message.platformMetadata,
+        contactAvatarUrl: this.matrixMediaProxyUrl(identity.avatarUrl) || identity.avatarUrl,
+      };
+    }
   }
 
   private mediaProxyPath(mediaUrl: unknown): string | null {
@@ -1518,7 +1524,9 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
             const resolvedPhone = phoneNumberFromBridgeIdentifiers([identity.phoneNumber]);
             if (resolvedPhone) contact.phoneNumber = resolvedPhone;
             if (identity.username) contact.username = identity.username;
-            if (identity.avatarUrl) contact.avatarUrl = identity.avatarUrl;
+            if (identity.avatarUrl) {
+              contact.avatarUrl = this.matrixMediaProxyUrl(identity.avatarUrl) || identity.avatarUrl;
+            }
           }
         }
 

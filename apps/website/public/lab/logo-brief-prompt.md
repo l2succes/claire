@@ -48,7 +48,7 @@ failures:
    product — appears in exactly one mark, and only as two overlapping bubbles.
 5. **Nothing says memory or promise-tracking**, which is the feature people
    would actually miss.
-6. **AI is expressed as a four-point sparkle.** This is the single most
+6. **AI is expressed through the Claire kept-thread mark.** This is the single most
    exhausted cliché in software branding right now.
 7. **The name is completely unused.** Zero marks explore clarity or light.
 

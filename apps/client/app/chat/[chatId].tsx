@@ -17,7 +17,7 @@ import {
   FileText,
   AlertCircle,
   MoreHorizontal,
-  Sparkles,
+  MessageCircle,
   X,
   ChevronLeft,
   Play,
@@ -95,6 +95,7 @@ import { pendingReactions } from '../../features/chat/pending-reactions';
 import { ChatDeliveryStatus } from '../../features/chat/chat-delivery-status';
 import { StandaloneEmojiMessage } from '../../features/chat/standalone-emoji-message';
 import { MessageTextWithLinks } from '../../features/chat/message-link-card';
+import { userFacingErrorMessage } from '../../services/api-errors';
 
 function InjectedBubble({
   animate,
@@ -503,7 +504,13 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
     [queryClient, user?.id, chatId, is_group, resolvedPlatform, contact_name, chat_name]
   );
   const isGroup = is_group === '1' || (!is_group && chatMetadata?.isGroup === true);
-  const resolvedName = chat_name || contact_name || chatMetadata?.name || undefined;
+  const counterpartName = useMemo(
+    () => messages.find((message) => !message.from_me && message.contact_name?.trim())?.contact_name?.trim(),
+    [messages],
+  );
+  const resolvedName = isGroup
+    ? chat_name || contact_name || chatMetadata?.name || undefined
+    : counterpartName || chat_name || contact_name || chatMetadata?.name || undefined;
   const platformCapabilities = availablePlatforms.find(
     (candidate) => candidate.platform === (resolvedPlatform as Platform)
   )?.capabilities;
@@ -519,10 +526,10 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
 
   const contextCard = smartCards[0];
   const quickContext =
+    contactProfile?.relationship_context ||
+    contactProfile?.ai_instruction ||
     contextCard?.subtitle ||
     contextCard?.title ||
-    contactProfile?.ai_instruction ||
-    contactProfile?.relationship_context ||
     null;
   const needsRelationshipContext = !isGroup && !contactProfile?.relationship_context;
   // The open loop is the more actionable of the two and they compete for the
@@ -533,6 +540,7 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
   // avoids showing this card and then yanking it away a beat later.
   const showQuickContext = shouldShowQuickContext({
     hasContextCard: Boolean(contextCard),
+    hasSavedRelationshipContext: Boolean(contactProfile?.relationship_context?.trim()),
     needsRelationshipContext,
     clarificationDismissed,
     replyOptionsOpen: showReplyOptions,
@@ -1001,8 +1009,7 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
       console.error('Send failed:', err);
 
       // Extract error message
-      const errorMessage =
-        err instanceof Error ? err.message : 'Failed to send message. Please try again.';
+      const errorMessage = userFacingErrorMessage(err, 'Failed to send message. Please try again.');
 
       setSendError(errorMessage);
 
@@ -1095,7 +1102,7 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
       requestAnimationFrame(() => listRef.current?.scrollToOffset({ offset: 0, animated: true }));
     } catch (error) {
       console.error('Voice-note send failed:', error);
-      const message = error instanceof Error ? error.message : 'Failed to send voice note. Please try again.';
+      const message = userFacingErrorMessage(error, 'Failed to send voice note. Please try again.');
       setSendError(message);
       patchTimeline((previous) => ({
         ...previous,
@@ -1567,7 +1574,7 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
               backgroundColor: colors.lime,
             }}
           >
-            <Sparkles size={15} color={colors.ink} />
+            <MessageCircle size={15} color={colors.ink} />
           </View>
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text maxFontSizeMultiplier={1} style={{ ...mobileType.monoLabel, color: colors.ink }}>
@@ -1731,7 +1738,11 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
           }}
         >
           <ChatDeliveryStatus
-            visible={!isConnected || sessionSyncStatus === 'unavailable' || chatOutbox.length > 0}
+            // Connection recovery runs silently. The composer is still usable
+            // while it happens, and a persistent “Reconnecting” line above it
+            // added alarm without an action. Keep delivery errors and queued
+            // work visible, where the person can actually resolve them.
+            visible={connectionNeedsAttention || chatOutbox.length > 0 || !!outboxError}
             needsAttention={connectionNeedsAttention}
             count={chatOutbox.length}
             error={outboxError}

@@ -213,7 +213,9 @@ export class NotificationDeliveryService {
         badge,
         collapseId: event.messageId,
         categoryId: MESSAGE_NOTIFICATION_CATEGORY,
-        mutableContent: Boolean(avatarUrl),
+        // iOS uses the service extension for communication-style sender and
+        // group details even before an avatar has been learned.
+        mutableContent: true,
         threadId: `chat:${event.chatId}`,
         tag: `chat:${event.chatId}`,
         ...(avatarUrl ? { richContent: { image: avatarUrl } } : {}),

@@ -106,7 +106,7 @@ const controls = [
     body: 'Who or what replied, which inputs were used, what was edited, and how to undo it.',
   },
   {
-    icon: 'sparkles',
+    icon: 'chat',
     title: 'AI controls',
     body: 'Managed credits, bring-your-own-key, model policy, budget caps, and a disable switch.',
   },
@@ -191,7 +191,7 @@ export default function BusinessPage() {
                   <HeroIcon name="people" />
                 </span>
                 <span>
-                  <HeroIcon name="sparkles" />
+                  <HeroIcon name="chat" />
                 </span>
                 <span>
                   <HeroIcon name="settings" />
@@ -252,7 +252,7 @@ export default function BusinessPage() {
                   <p className="customer">Do you have the blue one in medium?</p>
                   <div className="ai-card">
                     <small>
-                      <HeroIcon name="sparkles" /> CLAIRE FOUND THE ANSWER
+                      <HeroIcon name="chat" /> CLAIRE FOUND THE ANSWER
                     </small>
                     <b>Blue / Medium is in stock. 4 units remain.</b>
                     <p>Source: inventory sync · updated 2m ago</p>
@@ -453,7 +453,7 @@ export default function BusinessPage() {
                   <span>Policy · Returns within 30 days</span>
                 </div>
                 <div className="copilot-draft">
-                  <HeroIcon name="sparkles" />
+                  <HeroIcon name="chat" />
                   <span>“You’re inside the 30-day window—want a prepaid label?”</span>
                 </div>
               </div>
