@@ -17,10 +17,13 @@ export function LiquidGlassTabs({ loopCount }: { loopCount?: number }) {
         <NativeTabs.Trigger.Label hidden>Inbox</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="ask-claire" disableTransparentOnScrollEdge>
-        <NativeTabs.Trigger.Icon
-          src={require('../../assets/claire-tab-icon.png')}
-          renderingMode="original"
-        />
+          <NativeTabs.Trigger.Icon
+            src={{
+              default: require('../../assets/claire-tab-icon.png'),
+              selected: require('../../assets/claire-tab-icon-selected.png'),
+            }}
+            renderingMode="original"
+          />
         <NativeTabs.Trigger.Label hidden>Ask Claire</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="loops" disableTransparentOnScrollEdge>
