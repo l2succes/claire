@@ -2,9 +2,10 @@
 
 import { useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { Image, Pressable, Text, TextInput, View } from 'react-native';
 import {
   ChatBubbleLeftRightIcon,
+  ChatBubbleLeftEllipsisIcon,
   CheckBadgeIcon,
   EllipsisHorizontalIcon,
   HomeIcon,
@@ -16,7 +17,7 @@ type Screen = 'home' | 'inbox' | 'chat' | 'promises' | 'search';
 const tabItems = [
   { key: 'home', label: 'Home', Icon: HomeIcon },
   { key: 'inbox', label: 'Inbox', Icon: ChatBubbleLeftRightIcon },
-  { key: 'chat', label: 'Ask Claire', Icon: ChatBubbleLeftRightIcon },
+  { key: 'chat', label: 'Ask Claire', Icon: ChatBubbleLeftEllipsisIcon },
   { key: 'promises', label: 'Promises', Icon: CheckBadgeIcon },
   { key: 'search', label: 'More', Icon: EllipsisHorizontalIcon },
 ] as const;
@@ -59,6 +60,12 @@ export function MobileAppPreview() {
       {screen === 'promises' ? <>{['Send updated deck', 'Confirm dinner with Dad', 'Review Noah’s introduction'].map((item, index) => <View key={item} style={{ minHeight: 66, flexDirection: 'row', alignItems: 'center', gap: space[3], borderBottomWidth: 1, borderBottomColor: colors.neutral[200] }}><Text style={{ fontSize: 20, color: index === 0 ? colors.warning : colors.neutral[400] }}>{index === 0 ? '!' : '○'}</Text><View style={{ flex: 1 }}><Text style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>{item}</Text><Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{index === 0 ? 'WhatsApp · due today' : 'Added from a conversation'}</Text></View><Text style={{ ...mobileType.monoLabel, color: index === 0 ? colors.warning : colors.neutral[400] }}>{index === 0 ? 'NOW' : 'FRI'}</Text></View>)}</> : null}
       {screen === 'search' ? <><View style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: space[3], borderRadius: 13, backgroundColor: colors.neutral[100] }}><Text style={{ ...mobileType.body, color: colors.neutral[400] }}>Search messages, people, and promises</Text></View><View style={{ padding: space[3], gap: 5, borderRadius: radius.card, backgroundColor: colors.lavender }}><Text style={{ ...mobileType.monoLabel, color: colors.ink }}>CLAIRE’S ANSWER</Text><Text style={{ ...mobileType.body, color: colors.ink }}>Maya said the deck will be ready before tomorrow morning.</Text></View>{conversations.map((item) => <ConversationRow key={item.name} {...item} />)}</> : null}
     </View>
-    <View style={{ position: 'absolute', left: 18, right: 18, bottom: 10, height: 64, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', borderRadius: 22, borderWidth: 1, borderColor: colors.neutral[200], backgroundColor: colors.paper }}>{tabItems.map(({ key, label, Icon }) => <Pressable key={key} accessibilityLabel={label} onPress={() => setScreen(key)} style={{ width: 46, height: 46, alignItems: 'center', justifyContent: 'center', borderRadius: 14, borderWidth: key === 'chat' ? 1 : 0, borderColor: key === 'chat' ? colors.ink : 'transparent', backgroundColor: screen === key || key === 'chat' ? colors.lime : 'transparent' }}><Icon aria-hidden="true" width={24} height={24} strokeWidth={1.7} style={{ color: colors.ink }} /></Pressable>)}</View>
+    <View style={{ position: 'absolute', left: 18, right: 18, bottom: 10, height: 64, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', borderRadius: 22, borderWidth: 1, borderColor: colors.neutral[200], backgroundColor: colors.paper }}>{tabItems.map(({ key, label, Icon }) => {
+      const focused = screen === key;
+      return <Pressable key={key} accessibilityLabel={label} accessibilityState={{ selected: focused }} onPress={() => setScreen(key)} style={{ width: 46, height: 46, alignItems: 'center', justifyContent: 'center' }}>
+        {key === 'chat' ? <Image source={{ uri: '/assets/brand/claire-mark-ink.svg' }} alt={label} accessibilityLabel={label} style={{ width: 24, height: 24 }} /> : <Icon aria-hidden="true" width={24} height={24} strokeWidth={1.7} style={{ color: focused ? colors.ink : colors.neutral[400] }} />}
+        {focused ? <View style={{ position: 'absolute', top: 6, right: 6, width: 4, height: 4, borderRadius: 2, backgroundColor: colors.lime }} /> : null}
+      </Pressable>;
+    })}</View>
   </View>;
 }

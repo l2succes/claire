@@ -4,6 +4,7 @@ import {
   ArrowRightIcon,
   ArrowTopRightOnSquareIcon,
   Bars3Icon,
+  ChatBubbleLeftEllipsisIcon,
   ChatBubbleLeftRightIcon,
   CheckBadgeIcon,
   CheckCircleIcon,
@@ -38,6 +39,8 @@ const icons = {
   search: MagnifyingGlassIcon,
   plus: PlusIcon,
   compose: PencilSquareIcon,
+  // Keep the existing key for content metadata while using a less clichéd mark.
+  'chat-ellipsis': ChatBubbleLeftEllipsisIcon,
   send: PaperAirplaneIcon,
   settings: Cog6ToothIcon,
   people: UsersIcon,

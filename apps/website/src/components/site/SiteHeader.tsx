@@ -47,12 +47,8 @@ export function SiteHeader({ active }: { active?: string }) {
               {item.title}
             </Link>
           ))}
-          <Link href="/#waitlist">Join the waitlist</Link>
         </nav>
       </details>
-      <Link className="button button-dark button-small" href="/#waitlist">
-        Join the waitlist
-      </Link>
     </header>
   );
 }

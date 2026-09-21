@@ -19,11 +19,14 @@ type BridgeActivityEvent = { id: string; direction: 'inbound' | 'outbound' | 'sy
 type BridgeActivity = { total: number; failed: number; retrying: number; p95Ms: number | null; lastEventAt: string | null; events: BridgeActivityEvent[] };
 type BridgePlatform = { id: string; name: string; mark: string; bridge: string; supportStatus: 'available' | 'beta' | 'planned' | 'unavailable'; setupLabel: string; runtimeLabel: string; detail: string; flow: string[]; connected: number; setup: number; attention: number; ignored: number; latestSessionUpdateAt: string | null; activity: BridgeActivity };
 type BridgeData = { generatedAt: string; platforms: BridgePlatform[]; sessions: BridgeSession[] };
+type UserPlatformState = 'connected' | 'setup' | 'attention' | 'retired';
+type UserPlatform = { platform: string; state: UserPlatformState; lastConnectedAt: string | null; statusChangedAt: string | null };
+type OperationsUser = { accountRef: string; email: string; signedUpAt: string | null; isDemo: boolean; lastConnectionUpdateAt: string | null; platforms: UserPlatform[] };
+type UserDirectory = { generatedAt: string; totals: { users: number; connected: number; attention: number; withoutPlatforms: number }; users: OperationsUser[] };
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.useclaire.co';
-const operationsOAuthCallbackUrl = 'https://useclaire.co/ops/confirm';
 const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 const configurationError = supabase ? '' : 'Operations Console is missing its public Supabase configuration.';
 
@@ -177,6 +180,57 @@ function BridgeRecoveryPanel({
   </section>;
 }
 
+const userPlatformCopy: Record<UserPlatformState, string> = {
+  connected: 'connected',
+  setup: 'setup',
+  attention: 'needs attention',
+  retired: 'retired',
+};
+
+function UserDirectoryModule({ data }: { data: UserDirectory | null }) {
+  const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState<'all' | 'connected' | 'attention' | 'withoutPlatforms'>('all');
+  const normalizedQuery = query.trim().toLowerCase();
+  const users = (data?.users || []).filter((user) => {
+    const matchesQuery = !normalizedQuery
+      || user.email.toLowerCase().includes(normalizedQuery)
+      || user.platforms.some((platform) => platform.platform.toLowerCase().includes(normalizedQuery));
+    const matchesFilter = filter === 'all'
+      || (filter === 'connected' && user.platforms.some((platform) => platform.state === 'connected'))
+      || (filter === 'attention' && user.platforms.some((platform) => platform.state === 'attention'))
+      || (filter === 'withoutPlatforms' && user.platforms.length === 0);
+    return matchesQuery && matchesFilter;
+  });
+
+  return <>
+    <section className="mt-9 border border-[#c8c8c0] bg-paper p-5 sm:p-8">
+      <div className="flex flex-col gap-5 border-b border-neutral-200 pb-6 lg:flex-row lg:items-end lg:justify-between">
+        <div><p className="font-mono text-xs font-semibold uppercase tracking-[.16em] text-neutral-600">Owner-only directory</p><h2 className="mt-1 text-3xl font-semibold tracking-[-.045em]">Signed-up users</h2><p className="mt-2 max-w-3xl text-lg text-neutral-600">Account emails and platform connection state, without conversation content, contacts, phone numbers, or provider credentials.</p></div>
+        <p className="font-mono text-xs text-neutral-600">{data ? `updated ${relativeTime(data.generatedAt)}` : 'Loading user directory…'}</p>
+      </div>
+      <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {[
+          ['Total signups', data?.totals.users || 0],
+          ['Connected now', data?.totals.connected || 0],
+          ['Need attention', data?.totals.attention || 0],
+          ['No platform yet', data?.totals.withoutPlatforms || 0],
+        ].map(([label, value]) => <article className="border border-neutral-300 bg-[#f8f7f2] p-4" key={String(label)}><p className="font-mono text-xs uppercase text-neutral-600">{label}</p><strong className="mt-2 block text-3xl">{value}</strong></article>)}
+      </div>
+      <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+        <label className="min-w-0 flex-1"><span className="sr-only">Search users</span><input className="w-full border border-ink bg-paper px-4 py-3" type="search" placeholder="Search email or platform" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
+        <label><span className="sr-only">Filter users</span><select className="w-full border border-ink bg-paper px-4 py-3 font-mono text-sm sm:w-auto" value={filter} onChange={(event) => setFilter(event.target.value as typeof filter)}><option value="all">All users</option><option value="connected">Connected now</option><option value="attention">Needs attention</option><option value="withoutPlatforms">No platform yet</option></select></label>
+      </div>
+      <div className="mt-6 overflow-x-auto">
+        <table className="w-full min-w-[920px] border-collapse text-left">
+          <thead className="border-y border-neutral-200 font-mono text-xs uppercase text-neutral-600"><tr><th className="px-2 py-3 font-medium">User email</th><th className="px-2 py-3 font-medium">Signed up</th><th className="px-2 py-3 font-medium">Platforms</th><th className="px-2 py-3 font-medium">Latest connection update</th></tr></thead>
+          <tbody>{users.map((user) => <tr className="border-b border-neutral-200 align-top" key={user.accountRef}><td className="px-2 py-4"><p className="font-semibold">{user.email}</p><p className="mt-1 font-mono text-xs text-neutral-500">acct_{user.accountRef.slice(0, 8)}{user.isDemo ? ' · demo' : ''}</p></td><td className="px-2 py-4 font-mono text-sm" title={absoluteTime(user.signedUpAt)}>{relativeTime(user.signedUpAt)}</td><td className="px-2 py-4"><div className="flex max-w-2xl flex-wrap gap-2">{user.platforms.map((platform) => <span className={`inline-flex items-center gap-2 border px-3 py-2 text-sm ${platform.state === 'connected' ? 'border-[#4abd6b] bg-[#effbef]' : platform.state === 'attention' ? 'border-[#d89631] bg-[#fff3df]' : 'border-neutral-300 bg-[#f8f7f2]'}`} key={platform.platform} title={`Last connected: ${absoluteTime(platform.lastConnectedAt)}`}><PlatformIcon id={platform.platform} size="sm" /><span className="capitalize">{platform.platform}</span><span className="font-mono text-[11px] uppercase text-neutral-600">{userPlatformCopy[platform.state]}</span></span>)}{!user.platforms.length && <span className="text-neutral-600">No platform connected</span>}</div></td><td className="px-2 py-4 font-mono text-sm" title={absoluteTime(user.lastConnectionUpdateAt)}>{relativeTime(user.lastConnectionUpdateAt)}</td></tr>)}{data && !users.length && <tr><td colSpan={4} className="px-2 py-8 text-neutral-600">No users match this search or filter.</td></tr>}{!data && <tr><td colSpan={4} className="px-2 py-8 text-neutral-600">Loading signed-up users…</td></tr>}</tbody>
+        </table>
+      </div>
+    </section>
+    <section className="mt-7 bg-[#151a16] p-6 text-paper sm:p-8"><h2 className="text-2xl font-semibold tracking-[-.035em]">What this view excludes</h2><p className="mt-3 max-w-5xl text-lg leading-relaxed text-[#d9ddd6]">This directory reads account emails and platform-session metadata only. It never queries or renders messages, attachments, contacts, participant identities, phone numbers, or credentials. Every directory read is restricted to Operations owners and written to the audit trail.</p></section>
+  </>;
+}
+
 export function OperationsConsole() {
   const [session, setSession] = useState<Session | null>(null);
   const [checks, setChecks] = useState<Check[]>([]);
@@ -184,7 +238,8 @@ export function OperationsConsole() {
   const [admins, setAdmins] = useState<Admin[]>([]);
   const [telemetry, setTelemetry] = useState<Telemetry | null>(null);
   const [bridges, setBridges] = useState<BridgeData | null>(null);
-  const [activeView, setActiveView] = useState<'overview' | 'bridges'>('overview');
+  const [userDirectory, setUserDirectory] = useState<UserDirectory | null>(null);
+  const [activeView, setActiveView] = useState<'overview' | 'bridges' | 'users'>('overview');
   const [bridgeAttentionOnly, setBridgeAttentionOnly] = useState(false);
   const [rangeMinutes, setRangeMinutes] = useState(60);
   const [error, setError] = useState('');
@@ -203,9 +258,13 @@ export function OperationsConsole() {
     if (!silent) setLoading(true); setError('');
     try {
       const [snapshot, incidentData, adminData, telemetryData, bridgeData] = await Promise.all([request('/snapshot'), request('/incidents'), request('/admins'), request(`/telemetry?rangeMinutes=${rangeMinutes}`), request('/bridges')]);
-      setChecks(snapshot.checks || []); setIncidents(incidentData.incidents || []); setAdmins(adminData.admins || []);
+      const nextAdmins = (adminData.admins || []) as Admin[];
+      setChecks(snapshot.checks || []); setIncidents(incidentData.incidents || []); setAdmins(nextAdmins);
       setTelemetry(telemetryData as Telemetry);
       setBridges(bridgeData as BridgeData);
+      const isOwner = nextAdmins.some((admin) => admin.role === 'owner' && admin.email.toLowerCase() === session.user.email?.toLowerCase());
+      if (isOwner && !silent) setUserDirectory(await request('/users') as UserDirectory);
+      if (!isOwner) setUserDirectory(null);
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not load Operations'); }
     finally { if (!silent) setLoading(false); }
   }, [rangeMinutes, request, session]);
@@ -237,10 +296,15 @@ export function OperationsConsole() {
   const needsAttention = Number(bridge?.details.disconnected || 0);
   const attentionSessions = useMemo(() => (bridges?.sessions || []).filter((bridgeSession) => bridgeSession.state === 'attention'), [bridges]);
   const canRetireBridge = admins.some((admin) => admin.role === 'owner' && admin.email.toLowerCase() === session?.user.email?.toLowerCase());
+  const canViewUsers = canRetireBridge;
   const stageByName = useMemo(() => new Map((telemetry?.stages || []).map((stage) => [stage.stage, stage])), [telemetry]);
   const headline = health === 'healthy' ? 'All core paths green' : health === 'warning' ? 'Attention required' : health === 'critical' ? 'Messaging needs attention' : 'Health is still loading';
+  const viewTitle = activeView === 'bridges' ? 'Platform bridges' : activeView === 'users' ? 'Users' : 'Messaging health';
+  const viewFreshness = activeView === 'users'
+    ? `Account directory · ${userDirectory ? `updated ${relativeTime(userDirectory.generatedAt)}` : 'loading'} · use Refresh for the latest signups`
+    : `Live metadata · refreshes every 8 seconds ${telemetry ? `· updated ${relativeTime(telemetry.generatedAt)}` : ''}`;
 
-  const signIn = async () => { if (!supabase) return; await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: operationsOAuthCallbackUrl } }); };
+  const signIn = async () => { if (!supabase) return; await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: `${window.location.origin}/ops/confirm` } }); };
   const refresh = async () => { await request('/snapshot/refresh', { method: 'POST' }); await load(); };
   const retireBridge = async (accountRef: string) => {
     setError('');
@@ -258,9 +322,9 @@ export function OperationsConsole() {
   if (!session) return <main className="grid min-h-screen place-items-center bg-cream p-5"><section className="w-full max-w-xl border border-ink bg-paper p-8 shadow-[7px_7px_0_#dfff64]"><p className="font-mono text-xs font-semibold uppercase tracking-[.16em] text-neutral-600">Claire · Operations</p><h1 className="mt-2 font-display text-5xl font-bold tracking-[-.065em]">Messaging health</h1><p className="mt-5 max-w-md text-lg text-neutral-600">A private, metadata-only view of whether Claire’s messaging system is working.</p><button className="mt-8 border-2 border-ink bg-lime px-5 py-3 font-semibold transition hover:bg-[#ccee49]" onClick={() => void signIn()}>Continue with Google</button>{(error || configurationError) && <p className="mt-4 text-sm text-danger">{error || configurationError}</p>}</section></main>;
 
   return <main className="min-h-screen bg-cream px-3 py-5 text-ink sm:px-8 lg:px-14"><div className="mx-auto max-w-[1500px]">
-    <header className="flex flex-col gap-5 border-b border-[#c8c8c0] pb-6 sm:flex-row sm:items-end sm:justify-between"><div><p className="font-mono text-xs font-semibold uppercase tracking-[.18em] text-neutral-600">Claire · Operations</p><h1 className="mt-1 font-display text-5xl font-bold tracking-[-.07em] sm:text-6xl">{activeView === 'bridges' ? 'Platform bridges' : 'Messaging health'}</h1><p className="mt-2 font-mono text-xs text-neutral-600">Live metadata · refreshes every 8 seconds {telemetry ? `· updated ${relativeTime(telemetry.generatedAt)}` : ''}</p><nav className="mt-5 flex gap-2" aria-label="Operations sections"><button type="button" className={`border px-3 py-2 font-mono text-xs font-semibold uppercase ${activeView === 'overview' ? 'border-ink bg-ink text-paper' : 'border-neutral-300 bg-paper hover:border-ink'}`} onClick={() => { setActiveView('overview'); setBridgeAttentionOnly(false); }}>Overview</button><button type="button" className={`border px-3 py-2 font-mono text-xs font-semibold uppercase ${activeView === 'bridges' ? 'border-ink bg-ink text-paper' : 'border-neutral-300 bg-paper hover:border-ink'}`} onClick={() => { setActiveView('bridges'); setBridgeAttentionOnly(false); }}>Platform bridges</button></nav></div><div className="flex flex-wrap items-center gap-3"><select aria-label="Telemetry range" className="border border-ink bg-paper px-3 py-2 font-mono text-sm" value={rangeMinutes} onChange={(event) => setRangeMinutes(Number(event.target.value))}><option value={15}>Last 15 min</option><option value={60}>Last hour</option><option value={360}>Last 6 hours</option><option value={1440}>Last 24 hours</option></select><span className={`rounded-full border-2 border-ink px-5 py-2 font-mono text-sm font-semibold uppercase tracking-[.05em] ${health === 'healthy' ? 'bg-lime' : health === 'warning' ? 'bg-[#ffe3ad]' : health === 'critical' ? 'bg-coral text-paper' : 'bg-paper'}`}>{headline}</span><button className="border border-ink bg-paper px-3 py-2 text-sm font-semibold hover:bg-neutral-100" onClick={() => void refresh()}>Refresh</button></div></header>
+    <header className="flex flex-col gap-5 border-b border-[#c8c8c0] pb-6 sm:flex-row sm:items-end sm:justify-between"><div><p className="font-mono text-xs font-semibold uppercase tracking-[.18em] text-neutral-600">Claire · Operations</p><h1 className="mt-1 font-display text-5xl font-bold tracking-[-.07em] sm:text-6xl">{viewTitle}</h1><p className="mt-2 font-mono text-xs text-neutral-600">{viewFreshness}</p><nav className="mt-5 flex flex-wrap gap-2" aria-label="Operations sections"><button type="button" className={`border px-3 py-2 font-mono text-xs font-semibold uppercase ${activeView === 'overview' ? 'border-ink bg-ink text-paper' : 'border-neutral-300 bg-paper hover:border-ink'}`} onClick={() => { setActiveView('overview'); setBridgeAttentionOnly(false); }}>Overview</button><button type="button" className={`border px-3 py-2 font-mono text-xs font-semibold uppercase ${activeView === 'bridges' ? 'border-ink bg-ink text-paper' : 'border-neutral-300 bg-paper hover:border-ink'}`} onClick={() => { setActiveView('bridges'); setBridgeAttentionOnly(false); }}>Platform bridges</button>{canViewUsers && <button type="button" className={`border px-3 py-2 font-mono text-xs font-semibold uppercase ${activeView === 'users' ? 'border-ink bg-ink text-paper' : 'border-neutral-300 bg-paper hover:border-ink'}`} onClick={() => { setActiveView('users'); setBridgeAttentionOnly(false); }}>Users</button>}</nav></div><div className="flex flex-wrap items-center gap-3"><select aria-label="Telemetry range" className="border border-ink bg-paper px-3 py-2 font-mono text-sm" value={rangeMinutes} onChange={(event) => setRangeMinutes(Number(event.target.value))}><option value={15}>Last 15 min</option><option value={60}>Last hour</option><option value={360}>Last 6 hours</option><option value={1440}>Last 24 hours</option></select><span className={`rounded-full border-2 border-ink px-5 py-2 font-mono text-sm font-semibold uppercase tracking-[.05em] ${health === 'healthy' ? 'bg-lime' : health === 'warning' ? 'bg-[#ffe3ad]' : health === 'critical' ? 'bg-coral text-paper' : 'bg-paper'}`}>{headline}</span><button className="border border-ink bg-paper px-3 py-2 text-sm font-semibold hover:bg-neutral-100" onClick={() => void refresh()}>Refresh</button></div></header>
     {error && <p className="mt-5 border border-danger bg-blush px-4 py-3 text-sm">{error}</p>}
-    {activeView === 'bridges' ? <BridgeModule data={bridges} attentionOnly={bridgeAttentionOnly} onClearAttention={() => setBridgeAttentionOnly(false)} /> : <>
+    {activeView === 'bridges' ? <BridgeModule data={bridges} attentionOnly={bridgeAttentionOnly} onClearAttention={() => setBridgeAttentionOnly(false)} /> : activeView === 'users' ? <UserDirectoryModule data={userDirectory} /> : <>
     <BridgeRecoveryPanel sessions={attentionSessions} traffic={telemetry?.platforms || []} canRetire={canRetireBridge} onRetire={retireBridge} onViewDetails={() => { setBridgeAttentionOnly(true); setActiveView('bridges'); }} />
     <div className="mt-9 grid gap-7 lg:grid-cols-[1.45fr_.95fr]">
       <section className="border border-[#c8c8c0] bg-paper p-5 sm:p-8"><h2 className="text-2xl font-semibold tracking-[-.035em]">Live message path</h2><p className="mt-2 text-lg text-neutral-600">Stage events are metadata only. An uninstrumented stage is never reported as delivery.</p><div className="mt-8 flex flex-wrap items-center gap-3 sm:gap-4"><FlowStage name="bridge" metric={stageByName.get('bridge')} /><span className="text-3xl text-neutral-400">→</span><FlowStage name="matrix" metric={stageByName.get('matrix')} /><span className="text-3xl text-neutral-400">→</span><FlowStage name="api" metric={stageByName.get('api')} /><span className="text-3xl text-neutral-400">→</span><FlowStage name="database" metric={stageByName.get('database')} /><span className="text-3xl text-neutral-400">→</span><FlowStage name="realtime" metric={stageByName.get('realtime') || stageByName.get('client_ack')} /></div><div className="mt-6 text-lg"><MetricRow label="Messages ingested" value={messageFlow ? `${messageCount} / ${measuredWindow} min` : 'Measuring'} /><MetricRow label="Active client signals" value={telemetry ? String(telemetry.totals.activeClients) : 'Measuring'} /><MetricRow label="Current monitor state" value={loading ? 'Refreshing' : headline} /><MetricRow label="Open incidents" value={String(openIncidents.length)} /></div></section>
@@ -274,7 +338,7 @@ export function OperationsConsole() {
     </div>
     <section className="mt-7 border border-[#c8c8c0] bg-paper p-5 sm:p-8"><div className="flex flex-wrap items-end justify-between gap-3"><div><h2 className="text-2xl font-semibold tracking-[-.035em]">Operational event journal</h2><p className="mt-2 text-neutral-600">Structured event classes only — no raw log lines, payloads, message text, or identifiers.</p></div><span className="font-mono text-xs uppercase text-neutral-600">Latest {telemetry?.journal.length || 0} events</span></div><div className="mt-6 overflow-x-auto"><table className="w-full min-w-[720px] border-collapse text-left"><thead className="border-y border-neutral-200 font-mono text-xs uppercase text-neutral-600"><tr><th className="px-2 py-3 font-medium">When</th><th className="px-2 py-3 font-medium">Platform</th><th className="px-2 py-3 font-medium">Path</th><th className="px-2 py-3 font-medium">Outcome</th><th className="px-2 py-3 font-medium">Timing</th><th className="px-2 py-3 font-medium">Error class</th></tr></thead><tbody>{(telemetry?.journal || []).map((event) => <tr className="border-b border-neutral-200" key={event.id}><td className="px-2 py-3 font-mono text-sm">{relativeTime(event.occurredAt)}</td><td className="px-2 py-3 capitalize">{event.platform}</td><td className="px-2 py-3 font-mono text-sm">{event.direction} → {event.stage}</td><td className="px-2 py-3"><span className={event.outcome === 'failed' ? 'font-mono text-danger' : 'font-mono text-[#277d41]'}>{event.outcome}</span></td><td className="px-2 py-3 font-mono text-sm">{event.durationMs === null ? '—' : `${event.durationMs}ms`}{event.retryCount ? ` · retry ${event.retryCount}` : ''}</td><td className="px-2 py-3 font-mono text-sm text-neutral-600">{event.errorClass || '—'}</td></tr>)}{!telemetry?.journal.length && <tr><td colSpan={6} className="px-2 py-5 text-neutral-600">Awaiting privacy-safe event telemetry.</td></tr>}</tbody></table></div></section>
     <section id="access" className="mt-7 border border-[#c8c8c0] bg-paper p-5 sm:p-8"><div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between"><div><h2 className="text-2xl font-semibold tracking-[-.035em]">Dashboard access</h2><p className="mt-2 text-neutral-600">Google establishes identity; this allowlist controls console access.</p></div><form className="flex w-full max-w-xl gap-2" onSubmit={addAdmin}><input className="min-w-0 flex-1 border border-ink bg-paper px-3 py-2" type="email" placeholder="person@company.com" value={email} onChange={(event) => setEmail(event.target.value)} /><button className="border border-ink bg-lime px-4 py-2 font-semibold">Add</button></form></div><div className="mt-6 divide-y divide-neutral-200">{admins.map((admin) => <div className="flex items-center justify-between gap-3 py-3" key={admin.id}><span>{admin.email} <em className="ml-2 font-mono text-xs not-italic text-neutral-600">{admin.role}</em></span><button className="text-sm font-semibold text-danger disabled:text-neutral-400" disabled={admin.role === 'owner'} onClick={() => void removeAdmin(admin.id)}>Remove</button></div>)}</div></section>
-    <section className="mt-7 bg-[#151a16] p-6 text-paper sm:p-8"><h2 className="text-2xl font-semibold tracking-[-.035em]">Privacy boundary</h2><p className="mt-3 max-w-5xl text-lg leading-relaxed text-[#d9ddd6]">Operators can see service state, timing, delivery outcome, error class, and aggregated platform health. Conversation bodies, attachments, participant names, phone numbers, and full message IDs are never rendered or searchable here.</p><div className="mt-5 flex flex-wrap gap-2 font-mono text-sm"><span className="rounded-full border border-[#78806e] px-3 py-1">metadata-only</span><span className="rounded-full border border-[#78806e] px-3 py-1">RBAC</span><span className="rounded-full border border-[#78806e] px-3 py-1">audited actions</span><span className="rounded-full border border-[#78806e] px-3 py-1">break-glass disabled by default</span></div></section>
+    <section className="mt-7 bg-[#151a16] p-6 text-paper sm:p-8"><h2 className="text-2xl font-semibold tracking-[-.035em]">Privacy boundary</h2><p className="mt-3 max-w-5xl text-lg leading-relaxed text-[#d9ddd6]">Operators can see service state, timing, delivery outcome, error class, and aggregated platform health. Operations owners can also open the audited user directory for signup emails and platform connection state. Conversation bodies, attachments, contacts, participant names, phone numbers, credentials, and full message IDs are never rendered or searchable here.</p><div className="mt-5 flex flex-wrap gap-2 font-mono text-sm"><span className="rounded-full border border-[#78806e] px-3 py-1">metadata-only</span><span className="rounded-full border border-[#78806e] px-3 py-1">RBAC</span><span className="rounded-full border border-[#78806e] px-3 py-1">audited actions</span><span className="rounded-full border border-[#78806e] px-3 py-1">break-glass disabled by default</span></div></section>
     </>}
   </div></main>;
 }

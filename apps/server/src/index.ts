@@ -606,6 +606,10 @@ async function initializePlatforms() {
           ? message.platformMetadata.contactPhone
           : undefined,
       ]);
+      const resolvedContactAvatar =
+        typeof message.platformMetadata?.contactAvatarUrl === 'string'
+          ? message.platformMetadata.contactAvatarUrl.trim()
+          : '';
       const chatDisplayName =
         message.chatType === 'group'
           ? message.chatName || message.chatId
@@ -678,6 +682,7 @@ async function initializePlatforms() {
                 whatsapp_id: platformContactId,
                 ...(contactName ? { name: contactName } : {}),
                 ...(contactPhone ? { phone_number: contactPhone } : {}),
+                ...(resolvedContactAvatar ? { avatar_url: resolvedContactAvatar } : {}),
               },
               { onConflict: 'user_id,platform,platform_contact_id' }
             )

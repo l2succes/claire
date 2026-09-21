@@ -70,6 +70,7 @@ export function clientSafeMessage(error: FailedRequest): string {
   return userFacingErrorMessage(body, GENERIC_REQUEST_ERROR);
 }
 
+
 /** Retain machine-readable retry information without displaying server internals. */
 export class PlatformRequestError extends Error {
   readonly retryable: boolean;
