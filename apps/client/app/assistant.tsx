@@ -71,7 +71,7 @@ function Sources({ citations, onExpand }: { citations: AssistantCitation[]; onEx
         </View>
       </Pressable>
       {expanded ? (
-        <ScrollView horizontal style={{ height: 148, marginHorizontal: -space[4] }} showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space[2], paddingLeft: space[4] }} testID="assistant-sources-carousel">
+        <ScrollView horizontal style={{ height: 148, marginHorizontal: -space[4] }} showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space[2], paddingHorizontal: space[4] }} testID="assistant-sources-carousel">
           {citations.map((citation) => (
             <Pressable
               key={citation.messageId}
@@ -172,7 +172,7 @@ function AssistantHomeSection({ title, children }: { title: string; children: Re
 
 function AskRecommendationRail({ onSelect }: { onSelect: (prompt: string) => void }) {
   return (
-    <ScrollView horizontal style={{ marginHorizontal: -space[4] }} showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space[3], paddingLeft: space[4] }} testID="assistant-recommendations">
+    <ScrollView horizontal style={{ marginHorizontal: -space[4] }} showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space[3], paddingHorizontal: space[4] }} testID="assistant-recommendations">
       {HOME_RECOMMENDATIONS.map((recommendation) => {
         const Icon = recommendation.icon;
         return (
