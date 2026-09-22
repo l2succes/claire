@@ -46,7 +46,6 @@ function useOpenLoopCount() {
 
 export default function TabLayout() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  const user = useAuthStore((state) => state.user);
   const openLoopCount = useOpenLoopCount();
   // The desktop shell already provides a navigation rail. Leaving the floating
   // tab bar mounted would give the same six destinations twice, and it would
@@ -58,7 +57,7 @@ export default function TabLayout() {
   }
 
   if (TAB_BAR_STYLE === 'liquid-glass' && Platform.OS === 'ios') {
-    return <LiquidGlassTabs loopCount={openLoopCount} profileAvatarUrl={user?.avatar_url} />;
+    return <LiquidGlassTabs loopCount={openLoopCount} />;
   }
 
   return (

@@ -1,8 +1,9 @@
-import { Pressable, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { BellOff, Check, CheckCheck, Clock, Pin, Reply, UserRound, UsersRound } from 'lucide-react-native';
 import { colors, mobileType, space } from '@claire/design-system';
 import { useState } from 'react';
+import { FeedbackPressable } from './mobile/pressable-feedback';
 import { PlatformBadge } from './PlatformIcon';
 import { Platform } from '../types/platform';
 import { formatInboxTimestamp } from '../utils/messageTimestamp';
@@ -46,7 +47,7 @@ export function MessageCard({ message, variant = 'default', onPress, onLongPress
           : null;
 
   return (
-    <Pressable
+    <FeedbackPressable
       onPress={onPress}
       onLongPress={onLongPress}
       accessibilityRole="button"
@@ -104,6 +105,6 @@ export function MessageCard({ message, variant = 'default', onPress, onLongPress
           </View>
         ) : null}
       </View>
-    </Pressable>
+    </FeedbackPressable>
   );
 }

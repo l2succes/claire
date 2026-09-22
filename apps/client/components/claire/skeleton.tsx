@@ -205,3 +205,16 @@ export function ConnectionsSkeleton() {
     </View>
   );
 }
+
+export function SettingsSkeleton({ testID }: { testID?: string }) {
+  return (
+    <View testID={testID} style={{ paddingHorizontal: space[4], paddingTop: space[3], gap: space[4] }}>
+      <Bone width="42%" height={12} />
+      <Bone width="100%" height={104} radius={radius.card} delay={50} />
+      <Bone width="34%" height={12} delay={100} />
+      {Array.from({ length: 3 }, (_, index) => (
+        <Bone key={index} width="100%" height={64} radius={radius.control} delay={140 + index * 60} />
+      ))}
+    </View>
+  );
+}

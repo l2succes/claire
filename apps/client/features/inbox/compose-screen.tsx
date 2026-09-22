@@ -5,7 +5,8 @@ import { Stack, router } from 'expo-router';
 import { colors, mobileType, space } from '@claire/design-system';
 import { supabase, type DbRow } from '../../services/supabase';
 import { useAuthStore } from '../../stores/authStore';
-import { MobileAvatar, MobileIconButton, MobileState, SectionLabel } from '../../components/mobile/claire-mobile';
+import { MobileAvatar, MobileState, SectionLabel } from '../../components/mobile/claire-mobile';
+import { FeedbackPressable } from '../../components/mobile/pressable-feedback';
 import { PeopleSkeleton } from '../../components/claire/skeleton';
 import { platformLabel } from '../../types/platform';
 import { formatInboxTimestamp } from '../../utils/messageTimestamp';
@@ -30,7 +31,7 @@ function RecipientRow({ recipient, onPress }: { recipient: ComposeRecipient; onP
     .join(' · ');
 
   return (
-    <Pressable
+    <FeedbackPressable
       testID={`compose-recipient-${recipient.id}`}
       accessibilityRole="button"
       accessibilityLabel={`${recipient.name}. ${detail}`}
@@ -45,17 +46,46 @@ function RecipientRow({ recipient, onPress }: { recipient: ComposeRecipient; onP
         </View>
         <ChevronRight size={18} color={colors.neutral[400]} />
       </View>
+    </FeedbackPressable>
+  );
+}
+
+export function ComposeCloseButton() {
+  const [pressed, setPressed] = useState(false);
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Close"
+      hitSlop={8}
+      testID="compose-close"
+      onPress={() => router.back()}
+      onPressIn={() => setPressed(true)}
+      onPressOut={() => setPressed(false)}
+      style={{
+        width: 32,
+        height: 32,
+        alignItems: 'center',
+        justifyContent: 'center',
+        opacity: pressed ? 0.55 : 1,
+      }}
+    >
+      <X size={21} strokeWidth={2} color={colors.ink} />
     </Pressable>
   );
 }
 
-function ComposeCloseButton() {
-  return (
-    <MobileIconButton label="Close" testID="compose-close" onPress={() => router.back()}>
-      <X size={18} color={colors.ink} />
-    </MobileIconButton>
-  );
-}
+export const composeHeaderOptions = {
+  headerShown: true,
+  title: 'New message',
+  headerTitleAlign: 'center' as const,
+  headerShadowVisible: false,
+  headerBackVisible: false,
+  headerStyle: { backgroundColor: colors.paper },
+  headerTintColor: colors.ink,
+  headerTitleStyle: { fontFamily: mobileType.sectionTitle.fontFamily, fontSize: 17, fontWeight: '700' as const, color: colors.ink },
+  headerLeft: () => <ComposeCloseButton />,
+};
 
 export function ComposeScreen() {
   const user = useAuthStore(state => state.user);
@@ -121,18 +151,7 @@ export function ComposeScreen() {
   return (
     <>
       <Stack.Screen
-        options={{
-          headerShown: true,
-          title: 'New message',
-          headerTitleAlign: 'center',
-          headerShadowVisible: false,
-          headerBackVisible: false,
-          headerStyle: { backgroundColor: colors.paper },
-          headerTintColor: colors.ink,
-          headerTitleStyle: { fontFamily: mobileType.sectionTitle.fontFamily, fontSize: 17, fontWeight: '700', color: colors.ink },
-          headerLeft: () => <ComposeCloseButton />,
-          headerRight: () => <View style={{ width: 40 }} />,
-        }}
+        options={composeHeaderOptions}
       />
       <View testID="compose-screen" style={{ flex: 1, backgroundColor: colors.paper }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[3], marginHorizontal: space[4], paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: colors.neutral[200] }}>

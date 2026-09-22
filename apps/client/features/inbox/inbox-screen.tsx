@@ -1,11 +1,12 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FlatList, Modal, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { FlatList, InteractionManager, Modal, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { BellOff, Check, CheckCircle2, Clock3, PenSquare, Pin, Search, X } from 'lucide-react-native';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { colors, mobileType, radius, space, useIsDesktopLayout } from '@claire/design-system';
 import { MobileChip, MobileHeader, MobileIconButton, MobileSearchField, MobileState, SectionLabel } from '../../components/mobile/claire-mobile';
+import { FeedbackPressable } from '../../components/mobile/pressable-feedback';
 import {
   inboxQueryPrefix,
   markInboxConversationRead,
@@ -13,7 +14,7 @@ import {
   useInboxMessages,
   type InboxMessage,
 } from '../../hooks/useInboxMessages';
-import { chatTimelineOptions, warmChatTimelines } from '../../hooks/useChatTimeline';
+import { warmChatTimelines } from '../../hooks/useChatTimeline';
 import { useAuthStore } from '../../stores/authStore';
 import { usePlatformStore } from '../../stores/platformStore';
 import { supabase, type DbRow } from '../../services/supabase';
@@ -322,12 +323,13 @@ export function InboxScreen() {
   }), [inbox.messages, locallySnoozed]);
 
   const openChat = useCallback((message: InboxMessage) => {
-    markInboxConversationRead(queryClient, user?.id, message.chat_id, message.platform);
     router.push({
       pathname: '/chat/[chatId]',
       params: { chatId: message.chat_id, contact_name: message.contact_name || '', chat_name: message.chat_name || '', platform: message.platform || '', is_group: message.is_group ? '1' : '0' },
     });
-  }, [queryClient, user?.id]);
+    // The chat route marks this conversation read on mount. Mutating every
+    // cached inbox variant here held up the navigation on the same JS turn.
+  }, []);
 
   const markRead = useCallback(async (message: InboxMessage) => {
     markInboxConversationRead(queryClient, user?.id, message.chat_id, message.platform);
@@ -342,13 +344,6 @@ export function InboxScreen() {
     }
   }, [connectedSessions, queryClient, user?.id]);
 
-  // Touch-down to navigation commit is a couple of hundred milliseconds of
-  // animation that were previously doing nothing. prefetchQuery honours
-  // staleTime, so a repeat press or an already-warm chat costs nothing.
-  const warmChat = useCallback((message: InboxMessage) => {
-    void queryClient.prefetchQuery(chatTimelineOptions(queryClient, user?.id, message.chat_id));
-  }, [queryClient, user?.id]);
-
   // Hold the most recent conversations warm so even a first-ever open has
   // something to paint. Keyed on the first page's identity rather than on every
   // feed update, so scrolling and realtime patches do not re-trigger it.
@@ -358,7 +353,10 @@ export function InboxScreen() {
   );
   useEffect(() => {
     if (!user?.id || !firstPageKey) return;
-    void warmChatTimelines(queryClient, user.id, firstPageKey.split(','));
+    const task = InteractionManager.runAfterInteractions(() => {
+      void warmChatTimelines(queryClient, user.id, firstPageKey.split(','));
+    });
+    return () => task.cancel();
   }, [queryClient, user?.id, firstPageKey]);
 
   const snooze = async (minutes: number) => {
@@ -457,14 +455,13 @@ export function InboxScreen() {
       <InboxConversationRow
         message={item}
         onPress={() => openChat(item)}
-        onPressIn={() => warmChat(item)}
         onLongPress={() => setSnoozeTarget(item)}
         onMarkRead={item.unread_count ? () => void markRead(item) : undefined}
         onTogglePin={() => void togglePin(item)}
         onSnooze={() => setSnoozeTarget(item)}
       />
     ),
-    [markRead, openChat, warmChat],
+    [markRead, openChat],
   );
 
   const refresh = useCallback(async () => {
@@ -538,7 +535,7 @@ export function InboxScreen() {
           button is the reachable one; on desktop it would just be a second
           control for the same thing, sitting over the conversation list. */}
       {isDesktop ? null : (
-      <Pressable
+      <FeedbackPressable
         testID="inbox-floating-compose"
         accessibilityRole="button"
         accessibilityLabel="New message"
@@ -562,17 +559,17 @@ export function InboxScreen() {
         })}
       >
         <PenSquare size={24} color={colors.paper} />
-      </Pressable>
+      </FeedbackPressable>
       )}
 
       <Modal visible={!!snoozeTarget} transparent animationType="fade" onRequestClose={() => setSnoozeTarget(null)} testID="snooze-modal">
         <Pressable testID="snooze-modal-overlay" onPress={() => setSnoozeTarget(null)} style={{ flex: 1, backgroundColor: 'rgba(16,18,15,0.35)', justifyContent: 'flex-end' }}>
           <Pressable style={{ backgroundColor: colors.paper, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: space[5], paddingBottom: 36, gap: space[2] }}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}><Text selectable style={{ ...mobileType.sectionTitle, flex: 1, color: colors.ink }}>Conversation actions</Text><MobileIconButton label="Close" onPress={() => setSnoozeTarget(null)}><X size={19} color={colors.ink} /></MobileIconButton></View>
-            <Pressable testID="inbox-toggle-pin" onPress={() => void togglePin()} style={({ pressed }) => ({ minHeight: 48, paddingHorizontal: space[4], flexDirection: 'row', alignItems: 'center', gap: space[3], borderRadius: radius.control, backgroundColor: pressed ? colors.sky : colors.cream })}><Pin size={17} color={colors.ink} /><Text style={{ ...mobileType.body, color: colors.ink }}>{snoozeTarget?.is_pinned ? 'Unpin from top' : 'Pin to top'}</Text></Pressable>
+            <FeedbackPressable testID="inbox-toggle-pin" onPress={() => void togglePin()} style={({ pressed }) => ({ minHeight: 48, paddingHorizontal: space[4], flexDirection: 'row', alignItems: 'center', gap: space[3], borderRadius: radius.control, backgroundColor: pressed ? colors.sky : colors.cream })}><Pin size={17} color={colors.ink} /><Text style={{ ...mobileType.body, color: colors.ink }}>{snoozeTarget?.is_pinned ? 'Unpin from top' : 'Pin to top'}</Text></FeedbackPressable>
             <Text style={{ ...mobileType.monoLabel, color: colors.neutral[400], paddingHorizontal: space[2], paddingTop: space[2] }}>SNOOZE</Text>
             {[{ label: 'Later today', minutes: 180, id: 'snooze-option-3h' }, { label: 'Tomorrow morning', minutes: 24 * 60, id: 'snooze-option-tomorrow' }, { label: 'Next week', minutes: 7 * 24 * 60, id: 'snooze-option-week' }].map(option => (
-              <Pressable key={option.id} testID={option.id} onPress={() => void snooze(option.minutes)} style={({ pressed }) => ({ minHeight: 48, paddingHorizontal: space[4], justifyContent: 'center', borderRadius: radius.control, backgroundColor: pressed ? colors.neutral[100] : colors.cream })}><Text style={{ ...mobileType.body, color: colors.ink }}>{option.label}</Text></Pressable>
+              <FeedbackPressable key={option.id} testID={option.id} onPress={() => void snooze(option.minutes)} style={({ pressed }) => ({ minHeight: 48, paddingHorizontal: space[4], justifyContent: 'center', borderRadius: radius.control, backgroundColor: pressed ? colors.neutral[100] : colors.cream })}><Text style={{ ...mobileType.body, color: colors.ink }}>{option.label}</Text></FeedbackPressable>
             ))}
             <Pressable testID="snooze-cancel" onPress={() => setSnoozeTarget(null)} style={{ minHeight: 48, alignItems: 'center', justifyContent: 'center' }}><Text style={{ ...mobileType.body, color: colors.neutral[600] }}>Cancel</Text></Pressable>
           </Pressable>
