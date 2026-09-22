@@ -19,7 +19,7 @@ function PlatformTile({ item, index, progress, drift }: {
     return {
       opacity: interpolate(p, [0, 0.8, 1, 2], [1, 0.5, 0.4, 0.35], clamp),
       transform: [
-        { translateX: interpolate(p, [0, 1, 2], [item.x, (index - 1.5) * 64, (index - 1.5) * 64], clamp) },
+        { translateX: interpolate(p, [0, 1, 2], [item.x, (index - (WELCOME_PLATFORMS.length - 1) / 2) * 64, (index - (WELCOME_PLATFORMS.length - 1) / 2) * 64], clamp) },
         { translateY: interpolate(p, [0, 1, 2], [item.y + float, -92, -92], clamp) },
         { rotate: `${interpolate(p, [0, 1], [item.tilt + float / 2, 0], clamp)}deg` },
         { scale: interpolate(p, [0, 1], [1, 0.64], clamp) },

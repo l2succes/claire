@@ -8,7 +8,7 @@ import { WELCOME_SCENES } from './welcome-scenes';
 
 function PageDot({ selected, index, onPress }: { selected: boolean; index: number; onPress: () => void }) {
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={`Show ${WELCOME_SCENES[index].title}`} accessibilityState={{ selected }} onPress={onPress} style={{ minWidth: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
+    <Pressable accessibilityRole="button" accessibilityLabel={`Show ${WELCOME_SCENES[index].accessibilityLabel}`} accessibilityState={{ selected }} onPress={onPress} style={{ minWidth: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
       <View style={{ height: 6, width: selected ? 22 : 6, borderRadius: 3, backgroundColor: colors.ink, opacity: selected ? 1 : 0.25 }} />
     </Pressable>
   );
@@ -58,9 +58,9 @@ export function WelcomeCarousel({ progress, animate, reduceMotion }: {
         }}
       >
         {width > 0 && WELCOME_SCENES.map((scene, index) => (
-          <View key={scene.title} style={{ width, paddingTop: 270, paddingHorizontal: 20, gap: 8 }} aria-hidden={page !== index} accessibilityElementsHidden={page !== index} importantForAccessibility={page === index ? 'auto' : 'no-hide-descendants'}>
-            <Text style={{ ...mobileType.sectionTitle, textAlign: 'center', color: colors.ink }}>{scene.title}</Text>
-            <Text style={{ ...mobileType.body, textAlign: 'center', color: colors.neutral[600] }}>{scene.description}</Text>
+          <View key={scene.id} style={{ width, paddingTop: 270, paddingHorizontal: 20, gap: 8 }} aria-hidden={page !== index} accessibilityElementsHidden={page !== index} importantForAccessibility={page === index ? 'auto' : 'no-hide-descendants'}>
+            {scene.title ? <Text style={{ ...mobileType.sectionTitle, textAlign: 'center', color: colors.ink }}>{scene.title}</Text> : null}
+            <Text numberOfLines={scene.compactDescription ? 1 : undefined} adjustsFontSizeToFit={scene.compactDescription} minimumFontScale={0.9} style={{ ...(scene.compactDescription ? mobileType.bodySmall : mobileType.body), textAlign: 'center', color: colors.neutral[600] }}>{scene.description}</Text>
           </View>
         ))}
       </Animated.ScrollView>
@@ -69,7 +69,7 @@ export function WelcomeCarousel({ progress, animate, reduceMotion }: {
           <ArrowLeft size={17} color={colors.ink} />
         </Pressable>
         <View style={{ flexDirection: 'row' }}>
-          {WELCOME_SCENES.map((scene, index) => <PageDot key={scene.title} index={index} selected={page === index} onPress={() => select(index)} />)}
+          {WELCOME_SCENES.map((scene, index) => <PageDot key={scene.id} index={index} selected={page === index} onPress={() => select(index)} />)}
         </View>
         <Pressable testID="welcome-next" accessibilityRole="button" accessibilityLabel="Next introduction" disabled={page === 2} accessibilityState={{ disabled: page === 2 }} onPress={() => select(page + 1)} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center', opacity: page === 2 ? 0.2 : 1 }}>
           <ArrowRight size={17} color={colors.ink} />
