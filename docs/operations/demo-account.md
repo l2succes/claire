@@ -98,6 +98,24 @@ bun run demo:seed -- --email you+demo@example.com --api https://your-api-host --
 Seeding is idempotent without `--reset`: platform message identifiers are
 deterministic, and ingestion de-duplicates on them.
 
+To set the name the app greets you with, pass `--name "First Last"`. The name
+lives in two places — the Home greeting reads the auth session's
+`user_metadata.name`, other screens read `public.users.name` — and `--name` sets
+both. Omit it on later runs and the existing name is left alone.
+
+### Reseed right before recording
+
+The account **ages**. Every timestamp is resolved once, at seed time, so a week
+later the whole inbox is a week old. That matters more than it sounds, because
+parts of Home only show recent activity: the Recent conversations section lists
+incoming messages from the **last 48 hours** and hides itself entirely when
+there are none, and loop due dates drift into the past.
+
+So run a `--reset` reseed shortly before each recording session, then give loop
+detection a couple of minutes to settle. A reseed also restores the unread
+badges that opening chats clears. Messages newer than the reseed — anything you
+sent while testing — are removed by it.
+
 Loop detection and the Ask Claire index finish in the background. Give it a
 minute, then check readiness:
 
