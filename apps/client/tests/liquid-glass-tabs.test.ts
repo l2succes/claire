@@ -8,9 +8,13 @@ describe('Liquid Glass tab icons', () => {
     expect(tabsSource).toContain("default: require('../../assets/claire-tab-icon-v2.png')");
     expect(tabsSource).toContain("selected: require('../../assets/claire-tab-icon-selected-v2.png')");
 
+    const defaultArtwork = readFileSync(resolve(__dirname, '../assets/claire-tab-icon-v2.svg'), 'utf8');
     const selectedArtwork = readFileSync(resolve(__dirname, '../assets/claire-tab-icon-selected-v2.svg'), 'utf8');
-    expect(selectedArtwork).toContain('Selected state closes the inner loop');
-    expect(selectedArtwork).toContain('fill="#10120F"');
+    const closedBubblePath = 'M33 52c-10 0-17-6-17-14 0-7 5-12 12-12 6 0 10 4 10 9 0 6-4 10-10 10Z';
+    expect(defaultArtwork).toContain(closedBubblePath);
+    expect(defaultArtwork).toContain('fill="none"');
+    expect(selectedArtwork).toContain(closedBubblePath);
+    expect(selectedArtwork).toContain('fill="#10120F" stroke="#10120F"');
   });
 
   it('uses native profile symbols so its optical size matches the other tabs', () => {
