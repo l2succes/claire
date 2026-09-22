@@ -34,16 +34,9 @@ export function WelcomeScreen() {
           <OnboardingReveal delay={60} style={{ paddingTop: 18 }}>
             <Text
               accessibilityRole="header"
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.88}
-              style={{
-                ...(isDesktop ? type.display : { ...mobileType.display, fontSize: 36, lineHeight: 40, letterSpacing: -1.1 }),
-                textAlign: 'center',
-                color: colors.ink,
-              }}
+              style={{ ...(isDesktop ? type.display : mobileType.display), textAlign: 'center', color: colors.ink }}
             >
-              Chats + AI Assistant
+              All your chats,{'\n'}one AI.
             </Text>
           </OnboardingReveal>
           <OnboardingReveal delay={120} style={{ paddingBottom: 8 }}>
