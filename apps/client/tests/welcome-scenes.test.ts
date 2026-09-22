@@ -12,8 +12,8 @@ describe('welcome introduction', () => {
     expect(WELCOME_HEADLINE).toBe('Your chats.\nOne AI.');
   });
 
-  it('advances every six seconds and loops to the first scene', () => {
-    expect(WELCOME_AUTO_ADVANCE_MS).toBe(6_000);
+  it('advances every three seconds and loops to the first scene', () => {
+    expect(WELCOME_AUTO_ADVANCE_MS).toBe(3_000);
     expect(nextWelcomeScene(0)).toBe(1);
     expect(nextWelcomeScene(1)).toBe(2);
     expect(nextWelcomeScene(2)).toBe(0);

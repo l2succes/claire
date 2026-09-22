@@ -49,7 +49,7 @@ export function WelcomeScreen() {
         </View>
         <OnboardingReveal delay={180} style={{ width: isDesktop ? 400 : '100%', justifyContent: 'center', paddingHorizontal: isDesktop ? 32 : space[5], paddingTop: 16, gap: 10 }}>
           <GoogleSignInButton mode="signin" variant="welcome" />
-          <Pressable testID="signin-use-email" accessibilityRole="button" onPress={() => router.push('/(auth)/email')} style={{ minHeight: 52, borderRadius: 22, borderWidth: 1, borderColor: colors.ink, backgroundColor: colors.paper, paddingHorizontal: 16, paddingVertical: 12, alignItems: 'center', justifyContent: 'center' }}>
+          <Pressable testID="signin-use-email" accessibilityRole="button" onPress={() => router.push('/(auth)/email')} style={{ minHeight: 52, borderRadius: 22, borderWidth: 1, borderColor: colors.ink, backgroundColor: 'transparent', paddingHorizontal: 16, paddingVertical: 12, alignItems: 'center', justifyContent: 'center' }}>
             <Text style={{ ...mobileType.body, fontWeight: '700', color: colors.ink, textAlign: 'center' }}>Continue with email</Text>
           </Pressable>
           <LegalConsent style={{ paddingTop: 4, paddingHorizontal: 12 }} />
