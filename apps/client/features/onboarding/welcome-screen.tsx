@@ -9,7 +9,7 @@ import { GoogleSignInButton } from '../../components/GoogleSignInButton';
 import { OnboardingReveal } from './onboarding-reveal';
 import { useOnboardingMotion } from './use-onboarding-motion';
 import { WelcomeCarousel } from './welcome-carousel';
-import { WELCOME_SCENES } from './welcome-scenes';
+import { WELCOME_HEADLINE, WELCOME_SCENES } from './welcome-scenes';
 import { LegalConsent } from '../legal/legal-consent';
 
 export function WelcomeScreen() {
@@ -34,9 +34,13 @@ export function WelcomeScreen() {
           <OnboardingReveal delay={60} style={{ paddingTop: 18 }}>
             <Text
               accessibilityRole="header"
-              style={{ ...(isDesktop ? type.display : mobileType.display), textAlign: 'center', color: colors.ink }}
+              style={{
+                ...(isDesktop ? type.display : { ...mobileType.display, fontSize: 38, lineHeight: 40, letterSpacing: -1.2 }),
+                textAlign: 'center',
+                color: colors.ink,
+              }}
             >
-              All your chats,{'\n'}one AI.
+              {WELCOME_HEADLINE}
             </Text>
           </OnboardingReveal>
           <OnboardingReveal delay={120} style={{ paddingBottom: 8 }}>

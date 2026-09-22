@@ -1,7 +1,11 @@
 import { Platform } from '../types/platform';
-import { WELCOME_PLATFORMS, WELCOME_SCENES } from '../features/onboarding/welcome-scenes';
+import { WELCOME_HEADLINE, WELCOME_PLATFORMS, WELCOME_SCENES } from '../features/onboarding/welcome-scenes';
 
 describe('welcome introduction', () => {
+  it('uses the selected two-line headline', () => {
+    expect(WELCOME_HEADLINE).toBe('Your chats.\nOne AI.');
+  });
+
   it('keeps the first scene title and platform copy in the shared slide layout', () => {
     expect(WELCOME_SCENES[0]).toEqual(expect.objectContaining({
       title: 'Chats + AI Assistant',

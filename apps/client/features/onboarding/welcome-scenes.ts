@@ -1,6 +1,8 @@
 import { colors } from '@claire/design-system';
 import { Platform } from '../../types/platform';
 
+export const WELCOME_HEADLINE = 'Your chats.\nOne AI.';
+
 export const WELCOME_SCENES = [
   { id: 'connected', accessibilityLabel: 'Chats and AI assistant', title: 'Chats + AI Assistant', description: 'WhatsApp, Telegram, Instagram and iMessage.', compactDescription: false, color: colors.sky },
   { id: 'catch-up', accessibilityLabel: 'Catch up in a moment', title: 'Catch up in a moment.', description: 'Let Claire find the plans and details\nburied in your conversations.', compactDescription: false, color: colors.mint },
