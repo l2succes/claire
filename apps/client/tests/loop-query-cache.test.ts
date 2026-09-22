@@ -1,5 +1,6 @@
 import { QueryClient } from '@tanstack/react-query';
 import {
+  invalidateLoopQueries,
   patchLoopQueries,
   removeLoopFromQueries,
   restoreLoopQueries,
@@ -51,5 +52,13 @@ describe('loop query cache reconciliation', () => {
     expect(queryClient.getQueryData<LoopItem[]>(['mobile-home-loops', 'user-1'])).toEqual([]);
     expect(queryClient.getQueryData<LoopItem[]>(['mobile-loops', 'user-1'])).toEqual([]);
     expect(queryClient.getQueryData(['loop-detail', loop.id])).toBeUndefined();
+  });
+
+  it('invalidates the inbox loop marker when a loop changes state', async () => {
+    queryClient.setQueryData(['inbox-open-loops', 'user-1'], new Set(['chat-1']));
+
+    await invalidateLoopQueries(queryClient, 'user-1', loop.id);
+
+    expect(queryClient.getQueryState(['inbox-open-loops', 'user-1'])?.isInvalidated).toBe(true);
   });
 });

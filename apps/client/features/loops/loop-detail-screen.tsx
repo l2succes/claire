@@ -428,7 +428,7 @@ export function LoopDetailScreen() {
               <View style={{ flex: 1 }}>
                 <ActionButton
                   testID="loop-close-suggestion-accept"
-                  label="Clear loop"
+                  label="Mark as closed"
                   icon={Check}
                   tone="primary"
                   disabled={review.isPending}
@@ -465,7 +465,7 @@ export function LoopDetailScreen() {
           <View style={{ flex: 1, minWidth: 140 }}>
             <ActionButton
               testID="loop-detail-toggle"
-              label={done ? 'Reopen' : 'Mark done'}
+              label={done ? 'Reopen' : 'Mark as closed'}
               icon={done ? RotateCcw : Check}
               tone="primary"
               disabled={patch.isPending}

@@ -1,41 +1,24 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
-import { AlertCircle, Bell, CheckCircle2, MessageCircle, Settings } from 'lucide-react-native';
+import { AlertCircle, MessageCircle } from 'lucide-react-native';
 import { router } from 'expo-router';
 
 import { colors, mobileType, radius, space } from '@claire/design-system';
-import { MobileAvatar, MobileHeader, MobileIconButton, MobileState, SectionLabel } from '../../components/mobile/claire-mobile';
+import { MobileAvatar, MobileHeader, SectionLabel } from '../../components/mobile/claire-mobile';
 import { FeedbackPressable } from '../../components/mobile/pressable-feedback';
 import { PlatformIcon } from '../../components/PlatformIcon';
 import { useAuthStore } from '../../stores/authStore';
 import { useInboxMessages } from '../../hooks/useInboxMessages';
 import { supabase } from '../../services/supabase';
-import { API_BASE_URL } from '../../services/platforms';
 import { resolvePlatform, platformLabel } from '../../types/platform';
 import { formatInboxTimestamp } from '../../utils/messageTimestamp';
 import { computeUrgencyScore } from '../../utils/urgency';
 import { HomeSkeleton } from '../../components/claire/skeleton';
 import { loopTitle, type LoopItem } from '../../services/loops';
-import { cachedLoops, readQuerySnapshot, writeQuerySnapshot } from '../../services/mobile-cache';
+import { cachedLoops } from '../../services/mobile-cache';
 import { useLocalFirstQuery } from '../../hooks/useLocalFirstQuery';
 import { useScreenLoadMark } from '../../hooks/useScreenLoadMark';
 import { belongsInHomeLoops } from '../../services/loop-query-cache';
-
-interface UrgentMessage {
-  id: string;
-  chat_id: string;
-  contact_name?: string;
-  chat_name?: string;
-  content: string;
-  timestamp: string;
-  platform?: string;
-  is_group: boolean;
-}
-
-interface MorningBriefData {
-  brief_text: string;
-  urgent_messages: UrgentMessage[];
-}
 
 const HOME_LOOP_SELECT = 'id, content, title, state_summary, deadline, chat_id, status, from_me, owner, priority_score, chat:chats!loops_chat_id_fkey(name, platform, is_group)';
 
@@ -44,16 +27,6 @@ async function fetchHomeLoops(userId: string): Promise<LoopItem[]> {
     .in('status', ['open', 'waiting']).order('priority_score', { ascending: false, nullsFirst: false }).order('last_evidence_at', { ascending: false, nullsFirst: false }).limit(20);
   if (error) throw error;
   return (data ?? []) as LoopItem[];
-}
-
-async function authJson<T>(path: string): Promise<T> {
-  const { data: { session } } = await supabase.auth.getSession();
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
-  });
-  const body = await response.json().catch(() => ({})) as { data?: T; error?: string };
-  if (!response.ok) throw new Error(body.error || `Request failed (${response.status})`);
-  return body.data as T;
 }
 
 function greeting() {
@@ -67,20 +40,6 @@ export function HomeScreen() {
   const user = useAuthStore(state => state.user);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const inbox = useInboxMessages(user?.id);
-  // The brief is a generated summary rather than a synced entity, so it is
-  // kept as an opaque keyed snapshot: last time's answer is a far better first
-  // frame than a skeleton, and it is replaced as soon as the new one arrives.
-  const brief = useLocalFirstQuery({
-    queryKey: ['mobile-home-brief', user?.id],
-    enabled: !!user?.id,
-    staleTime: 60_000,
-    queryFn: () => authJson<MorningBriefData>('/ai/morning-brief'),
-    local: {
-      enabled: !!user?.id,
-      read: async () => (user?.id ? (await readQuerySnapshot<MorningBriefData>(user.id, 'home-brief'))?.data ?? null : null),
-      write: async (data) => { if (user?.id) await writeQuerySnapshot(user.id, 'home-brief', data); },
-    },
-  });
   const loops = useLocalFirstQuery({
     queryKey: ['mobile-home-loops', user?.id],
     enabled: !!user?.id,
@@ -95,14 +54,18 @@ export function HomeScreen() {
   });
 
   useScreenLoadMark('home', {
-    hasData: !(brief.isCold && inbox.isCold && loops.isCold),
-    isFetching: brief.isFetching || loops.isFetching || inbox.isFetching,
-    source: (brief.isFetching || loops.isFetching) ? 'cache' : 'network',
+    hasData: !(inbox.isCold && loops.isCold),
+    isFetching: loops.isFetching || inbox.isFetching,
+    source: loops.isFetching ? 'cache' : 'network',
   });
 
-  const firstName = user?.name?.trim().split(/\s+/)[0] || user?.email?.split('@')[0] || 'there';
+  const firstName = user?.name?.trim().split(/\s+/)[0];
+  const greetingTitle = firstName ? `${greeting()}, ${firstName}` : greeting();
   const inboxUrgent = useMemo(() => inbox.messages
-    .filter(message => !message.from_me)
+    // A read badge is not evidence that a conversation still needs attention:
+    // provider-side reads can arrive later than the message itself. Keep this
+    // section recent and let the Inbox own the exact unread state.
+    .filter(message => !message.from_me && Date.now() - new Date(message.timestamp).getTime() < 48 * 60 * 60 * 1000)
     .map(message => ({
       id: message.id,
       chat_id: message.chat_id,
@@ -112,34 +75,23 @@ export function HomeScreen() {
       timestamp: message.timestamp,
       platform: message.platform,
       is_group: message.is_group,
-      score: (message.unread_count || 0) > 0
-        ? 100
-        : computeUrgencyScore({ timestamp: message.timestamp, from_me: message.from_me, content: message.content }),
+      score: computeUrgencyScore({ timestamp: message.timestamp, from_me: message.from_me, content: message.content }),
     }))
     .filter(message => message.score >= 30)
     .sort((a, b) => b.score - a.score || new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
     .slice(0, 5), [inbox.messages]);
-  // The server brief is a useful ranking enhancement, but the synced inbox is
-  // canonical on-device. Falling back here keeps Home useful during a deploy,
-  // while offline after cached data loads, or when AI is unavailable.
-  const urgent = brief.data?.urgent_messages?.length ? brief.data.urgent_messages : inboxUrgent;
-  const unreadNotifications = useMemo(
-    () => inbox.messages.reduce((total, message) => total + Math.max(0, message.unread_count || 0), 0),
-    [inbox.messages],
-  );
+  // Live inbox data is the source for rows; an opaque AI snapshot may still
+  // refer to a chat that was read on another device.
+  const urgent = inboxUrgent;
   // Memoised: these were recomputed on every render, including every render
   // caused by a realtime message patch.
-  const openLoops = useMemo(() => loops.data ?? [], [loops.data]);
+  const openLoops = useMemo(() => (loops.data ?? []).filter(belongsInHomeLoops), [loops.data]);
   const focusLoops = useMemo(
     () => openLoops.filter(loop => (loop.priority_score ?? 0) >= 55).slice(0, 5),
     [openLoops],
   );
-  const actionCount = urgent.length + openLoops.length;
-  const defaultBrief = actionCount
-    ? `${actionCount} item${actionCount === 1 ? '' : 's'} need${actionCount === 1 ? 's' : ''} your attention${urgent[0] ? ` — starting with ${urgent[0].contact_name || urgent[0].chat_name || 'a conversation'}.` : '.'}`
-    : 'Your priorities will settle here as conversations sync.';
-  const dayItems = useMemo(() => [
-    ...urgent.slice(0, 3).map(message => {
+  const dayItems = useMemo(() =>
+    urgent.slice(0, 3).map(message => {
       const person = message.contact_name || message.chat_name || 'Someone';
       const content = message.content?.trim() || '';
       return {
@@ -148,7 +100,6 @@ export function HomeScreen() {
       subtitle: `${platformLabel(message.platform, 'Message')} · ${person}`,
       platform: resolvePlatform(message.platform),
       time: formatInboxTimestamp(message.timestamp),
-      kind: 'message' as const,
       urgent: 'score' in message && typeof message.score === 'number' && message.score >= 70,
       // No highlightMessageId: these rows are always a conversation's newest
       // message, so it is already the last bubble. Ringing it in focus blue
@@ -156,27 +107,16 @@ export function HomeScreen() {
       // for search results and assistant citations, where the message is buried
       // in history and the reader needs to be told which one they were sent to.
       onPress: () => router.push({ pathname: '/chat/[chatId]', params: { chatId: message.chat_id, contact_name: message.contact_name || '', chat_name: message.chat_name || '', platform: message.platform || '', is_group: message.is_group ? '1' : '0' } }),
-    }; }),
-    ...openLoops.slice(0, Math.max(0, 4 - Math.min(urgent.length, 3))).map(loop => ({
-      key: `loop-${loop.id}`,
-      title: loopTitle(loop),
-      subtitle: `${loop.owner === 'them' ? 'Waiting on them' : loop.owner === 'me' ? 'You owe this' : 'Loop'} · ${loop.deadline ? `due ${new Date(loop.deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}` : 'open'}`,
-      platform: undefined,
-      time: loop.deadline ? formatInboxTimestamp(loop.deadline) : 'Now',
-      kind: 'loop' as const,
-      urgent: false,
-      onPress: () => router.push({ pathname: '/loops/[id]', params: { id: loop.id } }),
-    })),
-  ].slice(0, 3), [openLoops, urgent]);
+    }; }), [urgent]);
 
   const refresh = useCallback(async () => {
     setIsRefreshing(true);
     try {
-      await Promise.all([brief.refetch(), loops.refetch(), inbox.fetchMessages()]);
+      await Promise.all([loops.refetch(), inbox.fetchMessages()]);
     } finally {
       setIsRefreshing(false);
     }
-  }, [brief, inbox, loops]);
+  }, [inbox, loops]);
 
   return (
     <ScrollView
@@ -187,52 +127,34 @@ export function HomeScreen() {
       refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => void refresh()} tintColor={colors.ink} />}
     >
       <MobileHeader
-        title={`${greeting()},\n${firstName}.`}
-        safeArea
+        title={greetingTitle}
+        titleNumberOfLines={1}
+        titleStyle={{ fontSize: 26, lineHeight: 30, letterSpacing: -0.6 }}
         profile={
-          <Pressable accessibilityRole="button" accessibilityLabel="Open settings" onPress={() => router.push('/settings')}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Open profile" onPress={() => router.navigate('/(tabs)/settings')}>
             <MobileAvatar name={user?.name || user?.email || 'You'} uri={user?.avatar_url} size={44} badge={<View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: colors.lime, borderWidth: 2, borderColor: colors.cream }} />} />
           </Pressable>
         }
       />
 
       <View style={{ paddingHorizontal: space[4], gap: space[4] }}>
-        {brief.isCold && inbox.isCold && loops.isCold ? (
+        {inbox.isCold && loops.isCold ? (
           <HomeSkeleton />
         ) : (
           <>
-        <FeedbackPressable
-          testID="home-needs-reply"
-          accessibilityRole="button"
-          onPress={() => router.push({ pathname: '/(tabs)/messages', params: { filter: 'unread' } })}
-          style={({ pressed }) => ({ width: '100%', opacity: pressed ? 0.78 : 1 })}
-        >
-          <View style={{ width: '100%', minHeight: 82, flexDirection: 'row', alignItems: 'center', gap: space[3], paddingHorizontal: space[4], paddingVertical: space[3], borderRadius: radius.card, borderCurve: 'continuous', borderWidth: 1, borderColor: colors.ink, backgroundColor: colors.lime }}>
-            <View style={{ width: 42, height: 42, borderRadius: 13, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' }}><Bell size={21} color={colors.paper} /></View>
-            <View style={{ flex: 1, justifyContent: 'center', gap: 2 }}>
-              <Text selectable style={{ ...mobileType.monoLabel, color: colors.ink }}>NOTIFICATIONS</Text>
-              <Text selectable style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>{unreadNotifications ? `${unreadNotifications} unread message${unreadNotifications === 1 ? '' : 's'}` : 'You’re all caught up'}</Text>
-            </View>
-            <Text style={{ ...mobileType.label, color: colors.ink }}>View</Text>
-          </View>
-        </FeedbackPressable>
-
-
         <View style={{ padding: space[4], backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.neutral[200], borderRadius: radius.card, gap: space[3] }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}><Text style={{ ...mobileType.monoLabel, color: colors.ink }}>FOCUS</Text><Text style={{ ...mobileType.bodySmall, flex: 1, color: colors.neutral[600] }}>{focusLoops.length} loop{focusLoops.length === 1 ? '' : 's'} worth attention</Text><Pressable onPress={() => router.push('/(tabs)/loops')}><Text style={{ ...mobileType.bodySmall, fontWeight: '700', color: colors.ink }}>All loops</Text></Pressable></View>
           {focusLoops.length ? focusLoops.slice(0, 3).map(loop => <Pressable key={loop.id} onPress={() => router.push({ pathname: '/loops/[id]', params: { id: loop.id } })} style={{ paddingTop: space[3], borderTopWidth: 1, borderTopColor: colors.neutral[200], flexDirection: 'row', gap: space[3] }}><View style={{ width: 28, height: 28, borderRadius: 14, borderWidth: 1, borderColor: (loop.priority_score ?? 0) >= 80 ? colors.danger : colors.ink, backgroundColor: (loop.priority_score ?? 0) >= 80 ? colors.blush : colors.paper }} /><View style={{ flex: 1, minWidth: 0 }}><Text numberOfLines={1} style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>{loopTitle(loop)}</Text><Text numberOfLines={1} style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{loop.owner === 'them' ? 'Waiting on them' : 'You owe this'}{loop.deadline ? ` · ${new Date(loop.deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}` : ''}</Text></View><Text style={{ ...mobileType.monoLabel, color: (loop.priority_score ?? 0) >= 80 ? colors.danger : colors.neutral[600] }}>{(loop.priority_score ?? 0) >= 80 ? 'ACT NOW' : ''}</Text></Pressable>) : <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>Your loops are quiet right now.</Text>}
         </View>
 
-        <SectionLabel title="Your day" detail={`${dayItems.length} items`} />
-        {dayItems.length === 0 ? (
-          <MobileState title="A calm day" message="New messages and open loops that need attention will appear here." />
-        ) : (
+        {dayItems.length > 0 ? <>
+          <SectionLabel title="Recent conversations" detail={`${dayItems.length} recent`} />
           <View>
             {dayItems.map(item => (
               <FeedbackPressable key={item.key} onPress={item.onPress} style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1 })}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[3], minHeight: 82, paddingVertical: space[3], borderBottomWidth: 1, borderBottomColor: colors.neutral[200] }}>
-                  <View style={{ width: 48, height: 48, flexShrink: 0, borderRadius: 16, backgroundColor: item.kind === 'loop' ? colors.sky : item.urgent ? colors.blush : colors.sky, alignItems: 'center', justifyContent: 'center' }}>
-                    {item.kind === 'loop' ? <CheckCircle2 size={23} color={colors.ink} /> : item.urgent ? <AlertCircle size={23} color={colors.ink} /> : <MessageCircle size={22} color={colors.ink} />}
+                  <View style={{ width: 48, height: 48, flexShrink: 0, borderRadius: 16, backgroundColor: item.urgent ? colors.blush : colors.sky, alignItems: 'center', justifyContent: 'center' }}>
+                    {item.urgent ? <AlertCircle size={23} color={colors.ink} /> : <MessageCircle size={22} color={colors.ink} />}
                   </View>
                   <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
                     <Text selectable numberOfLines={1} style={{ ...mobileType.body, fontWeight: '800', color: colors.ink }}>{item.title}</Text>
@@ -246,16 +168,17 @@ export function HomeScreen() {
               </FeedbackPressable>
             ))}
           </View>
-        )}
+        </> : null}
 
-        <View style={{ flexDirection: 'row', gap: space[3], padding: space[4], backgroundColor: colors.sky, borderRadius: radius.card, borderCurve: 'continuous' }}>
-          <MessageCircle size={21} color={colors.ink} />
-          <View style={{ flex: 1, gap: 3 }}>
-            <Text selectable style={{ ...mobileType.monoLabel, color: colors.ink }}>CLAIRE'S TAKE</Text>
-            <Text selectable style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>{brief.data?.brief_text || defaultBrief}</Text>
+        <FeedbackPressable accessibilityRole="button" accessibilityLabel="Ask Claire what needs attention next" onPress={() => router.push('/(tabs)/ask-claire')} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
+          <View style={{ flexDirection: 'row', gap: space[3], padding: space[4], backgroundColor: colors.sky, borderRadius: radius.card, borderCurve: 'continuous' }}>
+            <MessageCircle size={21} color={colors.ink} />
+            <View style={{ flex: 1, gap: 3 }}>
+              <Text style={{ ...mobileType.monoLabel, color: colors.ink }}>ASK CLAIRE</Text>
+              <Text style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>What deserves my attention next?</Text>
+            </View>
           </View>
-          <MobileIconButton label="Open settings" onPress={() => router.push('/settings')}><Settings size={18} color={colors.ink} /></MobileIconButton>
-        </View>
+        </FeedbackPressable>
           </>
         )}
       </View>
