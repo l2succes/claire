@@ -5,12 +5,13 @@
  * Persists to /preferences on the server.
  */
 
-import { View, Text, ScrollView, ActivityIndicator, Alert, Linking, Platform, Pressable } from 'react-native';
+import { View, Text, ScrollView, Alert, Linking, Platform, Pressable } from 'react-native';
 import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { router } from 'expo-router';
 import { BellRing, ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { colors, mobileType, radius, space } from '@claire/design-system';
 import { MobileHeader, MobileIconButton, SectionLabel } from '../../components/mobile/claire-mobile';
+import { SettingsSkeleton } from '../../components/claire/skeleton';
 import { supabase } from '../../services/supabase';
 import { API_BASE_URL } from '../../services/platforms';
 import { useAuthStore } from '../../stores/authStore';
@@ -112,26 +113,13 @@ function SettingsSection({ title, detail, children }: { title: string; detail?: 
   );
 }
 
-function ClaireSwitch({ label, value, onValueChange, testID, disabled }: {
-  label: string;
-  value: boolean;
-  onValueChange: (value: boolean) => void;
-  testID?: string;
-  disabled?: boolean;
-}) {
+function ClaireSwitchTrack({ value, disabled }: { value: boolean; disabled?: boolean }) {
   return (
-    <Pressable
-      accessibilityRole="switch"
-      accessibilityState={{ checked: value, disabled }}
-      accessibilityLabel={label}
-      disabled={disabled}
-      hitSlop={8}
-      onPress={() => onValueChange(!value)}
-      testID={testID}
+    <View
       style={{ width: 48, height: 28, flexShrink: 0, justifyContent: 'center', padding: 2, borderRadius: radius.pill, backgroundColor: value ? colors.lime : colors.neutral[200], opacity: disabled ? 0.45 : 1 }}
     >
       <View style={{ width: 24, height: 24, alignSelf: value ? 'flex-end' : 'flex-start', borderRadius: radius.pill, backgroundColor: colors.ink }} />
-    </Pressable>
+    </View>
   );
 }
 
@@ -152,8 +140,19 @@ function ToggleRow({
   disabled?: boolean;
   divided?: boolean;
 }) {
+  const [pressed, setPressed] = useState(false);
   return (
-    <View style={{ minHeight: 68, flexDirection: 'row', alignItems: 'center', gap: space[3], paddingHorizontal: space[4], paddingVertical: space[3], borderTopWidth: divided ? 1 : 0, borderTopColor: colors.neutral[200] }}>
+    <Pressable
+      testID={testID}
+      accessibilityRole="switch"
+      accessibilityLabel={label}
+      accessibilityState={{ checked: value, disabled }}
+      disabled={disabled}
+      onPress={() => onValueChange(!value)}
+      onPressIn={() => setPressed(true)}
+      onPressOut={() => setPressed(false)}
+      style={{ minHeight: 68, flexDirection: 'row', alignItems: 'center', gap: space[3], paddingHorizontal: space[4], paddingVertical: space[3], borderTopWidth: divided ? 1 : 0, borderTopColor: colors.neutral[200], backgroundColor: pressed ? colors.sky : colors.paper }}
+    >
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={{ ...mobileType.body, fontWeight: '700', color: disabled ? colors.neutral[400] : colors.ink }}>
           {label}
@@ -162,14 +161,8 @@ function ToggleRow({
           <Text style={{ ...mobileType.bodySmall, color: disabled ? colors.neutral[400] : colors.neutral[600], marginTop: 2 }}>{description}</Text>
         ) : null}
       </View>
-      <ClaireSwitch
-        label={label}
-        value={value}
-        onValueChange={onValueChange}
-        disabled={disabled}
-        testID={testID}
-      />
-    </View>
+      <ClaireSwitchTrack value={value} disabled={disabled} />
+    </Pressable>
   );
 }
 
@@ -283,6 +276,7 @@ export default function NotificationsSettingsScreen() {
           const userId = useAuthStore.getState().user?.id;
           if (userId) void writeQuerySnapshot(userId, 'preferences:notifications', loaded).catch(() => undefined);
         }
+        setLoading(false);
         setSystemPermission(await getNativeNotificationPermission());
       } catch {
         // silently use defaults
@@ -339,14 +333,6 @@ export default function NotificationsSettingsScreen() {
     setSystemPermission(await getNativeNotificationPermission());
   };
 
-  if (loading) {
-    return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.cream }}>
-        <ActivityIndicator size="large" color={colors.ink} />
-      </View>
-    );
-  }
-
   const dndActive = !prefs.notification_enabled;
 
   return (
@@ -362,6 +348,7 @@ export default function NotificationsSettingsScreen() {
         subtitle="Alerts, reminders, and quiet hours."
         leading={<MobileIconButton label="Back to Settings" testID="notifications-settings-back" onPress={() => router.back()}><ChevronLeft size={20} color={colors.ink} /></MobileIconButton>}
       />
+      {loading ? <SettingsSkeleton testID="notifications-settings-loading" /> : (
       <View style={{ paddingHorizontal: space[4], gap: space[5] }}>
         <SettingsSection title="Delivery">
           <ToggleRow
@@ -461,6 +448,7 @@ export default function NotificationsSettingsScreen() {
           {saveFailed ? 'Changes could not be saved.' : saving ? 'Saving changes…' : 'Changes save automatically.'}
         </Text>
       </View>
+      )}
     </ScrollView>
   );
 }

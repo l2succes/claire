@@ -5,6 +5,7 @@ import { router } from 'expo-router';
 
 import { colors, mobileType, radius, space } from '@claire/design-system';
 import { MobileAvatar, MobileHeader, MobileIconButton, MobileState, SectionLabel } from '../../components/mobile/claire-mobile';
+import { FeedbackPressable } from '../../components/mobile/pressable-feedback';
 import { PlatformIcon } from '../../components/PlatformIcon';
 import { useAuthStore } from '../../stores/authStore';
 import { useInboxMessages } from '../../hooks/useInboxMessages';
@@ -200,7 +201,7 @@ export function HomeScreen() {
           <HomeSkeleton />
         ) : (
           <>
-        <Pressable
+        <FeedbackPressable
           testID="home-needs-reply"
           accessibilityRole="button"
           onPress={() => router.push({ pathname: '/(tabs)/messages', params: { filter: 'unread' } })}
@@ -214,7 +215,7 @@ export function HomeScreen() {
             </View>
             <Text style={{ ...mobileType.label, color: colors.ink }}>View</Text>
           </View>
-        </Pressable>
+        </FeedbackPressable>
 
 
         <View style={{ padding: space[4], backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.neutral[200], borderRadius: radius.card, gap: space[3] }}>
@@ -228,7 +229,7 @@ export function HomeScreen() {
         ) : (
           <View>
             {dayItems.map(item => (
-              <Pressable key={item.key} onPress={item.onPress} style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1 })}>
+              <FeedbackPressable key={item.key} onPress={item.onPress} style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1 })}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[3], minHeight: 82, paddingVertical: space[3], borderBottomWidth: 1, borderBottomColor: colors.neutral[200] }}>
                   <View style={{ width: 48, height: 48, flexShrink: 0, borderRadius: 16, backgroundColor: item.kind === 'loop' ? colors.sky : item.urgent ? colors.blush : colors.sky, alignItems: 'center', justifyContent: 'center' }}>
                     {item.kind === 'loop' ? <CheckCircle2 size={23} color={colors.ink} /> : item.urgent ? <AlertCircle size={23} color={colors.ink} /> : <MessageCircle size={22} color={colors.ink} />}
@@ -242,7 +243,7 @@ export function HomeScreen() {
                   </View>
                   <Text selectable numberOfLines={1} style={{ width: 42, textAlign: 'right', ...mobileType.monoLabel, color: colors.neutral[600] }}>{item.time}</Text>
                 </View>
-              </Pressable>
+              </FeedbackPressable>
             ))}
           </View>
         )}

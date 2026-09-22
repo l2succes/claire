@@ -58,6 +58,7 @@ import { host } from '@claire/host';
 import { DesktopInboxWorkspace } from '../../features/desktop/desktop-inbox-workspace';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { MobileAvatar, MobileIconButton } from '../../components/mobile/claire-mobile';
+import { FeedbackPressable } from '../../components/mobile/pressable-feedback';
 import { cacheTimeline } from '../../services/mobile-cache';
 import {
   inboxQueryPrefix,
@@ -312,7 +313,7 @@ function MediaVideoSurface({ uri, messageId }: { uri: string; messageId: string 
   const [started, setStarted] = useState(false);
   if (!started) {
     return (
-      <Pressable
+      <FeedbackPressable
         testID={`media-video-play-${messageId}`}
         accessibilityRole="button"
         accessibilityLabel="Play video"
@@ -336,7 +337,7 @@ function MediaVideoSurface({ uri, messageId }: { uri: string; messageId: string 
         >
           <Play size={22} color={colors.ink} fill={colors.ink} />
         </View>
-      </Pressable>
+      </FeedbackPressable>
     );
   }
   return <MediaVideoPlayer uri={uri} messageId={messageId} />;
@@ -1263,7 +1264,7 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
       );
       if (!documentUri) return <View testID={`media-document-${item.id}`}>{body}</View>;
       return (
-        <Pressable
+        <FeedbackPressable
           testID={`media-document-${item.id}`}
           accessibilityRole="button"
           accessibilityLabel={`Open ${label}`}
@@ -1273,7 +1274,7 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
           style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
         >
           {body}
-        </Pressable>
+        </FeedbackPressable>
       );
     }
 
@@ -1602,7 +1603,7 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
               <X size={17} color={colors.neutral[600]} />
             </Pressable>
           ) : null}
-          <Pressable
+          <FeedbackPressable
             testID="ask-claire-button"
             onPress={() =>
               needsRelationshipContext && !quickContext
@@ -1628,7 +1629,7 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
             <Text maxFontSizeMultiplier={1} style={{ ...mobileType.label, color: colors.ink }}>
               {needsRelationshipContext && !quickContext ? 'Set up' : 'Ask Claire'}
             </Text>
-          </Pressable>
+          </FeedbackPressable>
         </View>
       ) : showGroupAiBanner ? (
         <GroupAiBanner

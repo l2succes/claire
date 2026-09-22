@@ -4,9 +4,9 @@ import type { ChatMessage } from './types';
 
 /**
  * A conversation's rendered state: the transcript plus the reactions decorating
- * it. They are one value because they are one cache entry — a screen that
- * painted messages first and reactions a round trip later charged every chat
- * open an extra serial request before it could show anything.
+ * it. They share one cache entry so realtime and optimistic updates can patch
+ * the same conversation. The client may paint messages first and attach
+ * reactions after their separate request resolves.
  */
 export interface ChatTimeline {
   messages: ChatMessage[];

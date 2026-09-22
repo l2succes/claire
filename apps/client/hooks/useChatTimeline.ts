@@ -3,6 +3,7 @@ import { useLocalSeed } from './useLocalFirstQuery';
 import {
   EMPTY_TIMELINE,
   groupReactionsByMessage,
+  keepPendingReactions,
   mergeRealtimeMessage,
   mergeServerTimeline,
   type ChatMessage,
@@ -90,20 +91,57 @@ async function fetchChatTimeline(
     (left, right) => Date.parse(left.timestamp) - Date.parse(right.timestamp),
   );
 
-  let reactions = {};
-  const messageIds = messages.map((message) => message.id).filter(Boolean);
-  if (messageIds.length) {
-    const { data: reactionRows, error: reactionsError } = await supabase
-      .from('message_reactions')
-      .select('id, message_id, emoji, from_me, reactor_id, reactor_name, reacted_at')
-      .in('message_id', messageIds);
-    // A client can ship slightly before the database migration. Reactions
-    // should be unavailable in that state, never prevent the chat loading.
-    if (reactionsError) console.warn('Failed to fetch message reactions:', reactionsError);
-    else reactions = groupReactionsByMessage((reactionRows || []) as ReactionRow[]);
-  }
+  return { messages, reactions: {} };
+}
 
-  return { messages, reactions };
+async function fetchChatReactions(messageIds: string[]): Promise<ChatTimeline['reactions'] | null> {
+  if (!messageIds.length) return {};
+  const { data: reactionRows, error } = await supabase
+    .from('message_reactions')
+    .select('id, message_id, emoji, from_me, reactor_id, reactor_name, reacted_at')
+    .in('message_id', messageIds);
+  // An older database may not have the reactions migration yet. It must not
+  // prevent the transcript from appearing or clear reactions already visible.
+  if (error) {
+    console.warn('Failed to fetch message reactions:', error);
+    return null;
+  }
+  return groupReactionsByMessage((reactionRows || []) as ReactionRow[]);
+}
+
+// A late response from an earlier refetch must not replace a newer reactions
+// snapshot for the same conversation.
+const reactionRequests = new Map<string, symbol>();
+
+function loadReactionsAfterMessages(
+  queryClient: QueryClient,
+  queryKey: ReturnType<typeof chatTimelineKey>,
+  messages: ChatMessage[],
+): void {
+  const messageIds = messages.map((message) => message.id).filter(Boolean);
+  if (!messageIds.length) return;
+  const key = JSON.stringify(queryKey);
+  const request = Symbol(key);
+  reactionRequests.set(key, request);
+  // A timer lets React Query publish the message page first. The extra request
+  // then decorates an already interactive transcript instead of holding it at
+  // a full-screen skeleton while reactions load.
+  setTimeout(() => {
+    const baseline = queryClient.getQueryData<ChatTimeline>(queryKey)?.reactions;
+    void fetchChatReactions(messageIds).then((reactions) => {
+      if (!reactions || reactionRequests.get(key) !== request) return;
+      queryClient.setQueryData<ChatTimeline>(queryKey, (current) => {
+        if (!current) return current;
+        // Realtime may have changed reactions while this request was in flight.
+        // In that case the live cache wins over this older snapshot.
+        if (current.reactions !== baseline) return current;
+        return { ...current, reactions: keepPendingReactions(reactions, current.reactions) };
+      });
+    }).catch((error) => console.warn('Failed to fetch message reactions:', error))
+      .finally(() => {
+        if (reactionRequests.get(key) === request) reactionRequests.delete(key);
+      });
+  }, 0);
 }
 
 export function chatTimelineOptions(
@@ -136,7 +174,12 @@ export function chatTimelineOptions(
           // orphans without it.
           server.messages.map((message) => ({ ...message, chat_id: chatId! })),
         ).catch(() => undefined);
-      return mergeServerTimeline(previous, server);
+      const timeline = mergeServerTimeline(previous, {
+        ...server,
+        reactions: previous?.reactions ?? server.reactions,
+      });
+      loadReactionsAfterMessages(queryClient, queryKey, server.messages);
+      return timeline;
     },
   });
 }

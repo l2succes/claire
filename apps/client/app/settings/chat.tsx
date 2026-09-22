@@ -1,9 +1,10 @@
 import { useEffect } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 import { Check, ChevronLeft, ListChecks, MessageCircle } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { colors, mobileType, radius, space } from '@claire/design-system';
 import { MobileHeader, MobileIconButton, SectionLabel } from '../../components/mobile/claire-mobile';
+import { FeedbackPressable } from '../../components/mobile/pressable-feedback';
 import { useChatPreferencesStore, type ChatPlusDefault } from '../../stores/chatPreferencesStore';
 
 const options: { value: ChatPlusDefault; title: string; detail: string }[] = [
@@ -31,7 +32,7 @@ export default function ChatSettingsScreen() {
           {options.map(option => {
             const selected = plusDefault === option.value;
             return (
-              <Pressable
+              <FeedbackPressable
                 key={option.value}
                 testID={`chat-plus-default-${option.value}`}
                 accessibilityRole="button"
@@ -57,7 +58,7 @@ export default function ChatSettingsScreen() {
                   <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{option.detail}</Text>
                 </View>
                 {selected ? <Check size={18} color={colors.ink} /> : null}
-              </Pressable>
+              </FeedbackPressable>
             );
           })}
         </View>

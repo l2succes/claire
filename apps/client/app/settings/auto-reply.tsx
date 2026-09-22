@@ -9,8 +9,6 @@ import {
   View,
   Text,
   ScrollView,
-  TouchableOpacity,
-  Switch,
   ActivityIndicator,
   Alert,
   TextInput,
@@ -19,9 +17,11 @@ import {
 } from 'react-native';
 import { useState, useEffect, useCallback } from 'react';
 import { router } from 'expo-router';
-import { ChevronLeft, Plus, Trash2, Zap } from 'lucide-react-native';
-import { colors, mobileType, radius } from '@claire/design-system';
-import { MobileHeader, MobileIconButton } from '../../components/mobile/claire-mobile';
+import { Check, ChevronLeft, Plus, Trash2, Zap } from 'lucide-react-native';
+import { colors, mobileType, radius, space } from '@claire/design-system';
+import { MobileHeader, MobileIconButton, SectionLabel } from '../../components/mobile/claire-mobile';
+import { FeedbackPressable } from '../../components/mobile/pressable-feedback';
+import { SettingsSkeleton } from '../../components/claire/skeleton';
 import { supabase } from '../../services/supabase';
 import { API_BASE_URL } from '../../services/platforms';
 
@@ -152,49 +152,26 @@ function RuleCard({
       : null;
 
   return (
-    <View
-      className="bg-white dark:bg-gray-800 rounded-lg px-4 py-3 mb-3"
-      testID={`auto-reply-rule-${rule.id}`}
-    >
-      <View className="flex-row items-center mb-1">
-        <View className="flex-1 mr-2">
-          <Text
-            className="font-semibold text-gray-900 dark:text-white"
-            testID={`auto-reply-rule-name-${rule.id}`}
-          >
-            {rule.name}
-          </Text>
-          <Text className="text-xs text-green-600 dark:text-green-400 mt-0.5">
-            {triggerLabel}
-          </Text>
-          {keywordSummary ? (
-            <Text className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-              Keywords: {keywordSummary}
-            </Text>
-          ) : null}
+    <View testID={`auto-reply-rule-${rule.id}`} style={{ padding: space[4], gap: space[3], borderRadius: radius.card, borderWidth: 1, borderColor: colors.neutral[200], backgroundColor: colors.paper }}>
+      <FeedbackPressable
+        testID={`auto-reply-toggle-${rule.id}`}
+        accessibilityRole="switch"
+        accessibilityState={{ checked: rule.enabled }}
+        onPress={() => onToggle(rule.id, !rule.enabled)}
+        style={({ pressed }) => ({ minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: space[3], opacity: pressed ? 0.7 : 1 })}
+      >
+        <View style={{ width: 40, height: 40, borderRadius: 13, backgroundColor: colors.lime, alignItems: 'center', justifyContent: 'center' }}><Zap size={20} color={colors.ink} /></View>
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text testID={`auto-reply-rule-name-${rule.id}`} style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>{rule.name}</Text>
+          <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{triggerLabel}{keywordSummary ? ` · ${keywordSummary}` : ''}</Text>
         </View>
-        <Switch
-          value={rule.enabled}
-          onValueChange={(v) => onToggle(rule.id, v)}
-          trackColor={{ false: '#d1d5db', true: '#10b981' }}
-          thumbColor={rule.enabled ? '#fff' : '#f9fafb'}
-          testID={`auto-reply-toggle-${rule.id}`}
-        />
-      </View>
-      <View className="flex-row items-start mt-2">
-        <Text
-          className="text-sm text-gray-600 dark:text-gray-300 flex-1 italic"
-          numberOfLines={2}
-        >
-          "{rule.reply_template}"
-        </Text>
-        <TouchableOpacity
-          onPress={() => onDelete(rule.id)}
-          className="ml-3 p-1"
-          testID={`auto-reply-delete-${rule.id}`}
-        >
-          <Trash2 size={16} color="#ef4444" />
-        </TouchableOpacity>
+        <View style={{ width: 49, height: 29, borderRadius: radius.pill, padding: 3, alignItems: rule.enabled ? 'flex-end' : 'flex-start', backgroundColor: rule.enabled ? colors.lime : colors.neutral[300] }}>
+          <View style={{ width: 23, height: 23, borderRadius: radius.pill, backgroundColor: colors.paper }} />
+        </View>
+      </FeedbackPressable>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[3], paddingTop: space[3], borderTopWidth: 1, borderColor: colors.neutral[200] }}>
+        <Text numberOfLines={2} style={{ ...mobileType.bodySmall, flex: 1, color: colors.neutral[600] }}>“{rule.reply_template}”</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel={`Delete ${rule.name}`} onPress={() => onDelete(rule.id)} testID={`auto-reply-delete-${rule.id}`} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}><Trash2 size={18} color={colors.ink} /></Pressable>
       </View>
     </View>
   );
@@ -208,7 +185,7 @@ function CreateRuleModal({
 }: {
   visible: boolean;
   onClose: () => void;
-  onSave: (form: NewRuleForm) => void;
+  onSave: (form: NewRuleForm) => Promise<boolean>;
   saving: boolean;
 }) {
   const [form, setForm] = useState<NewRuleForm>(DEFAULT_FORM);
@@ -216,7 +193,7 @@ function CreateRuleModal({
   const update = (patch: Partial<NewRuleForm>) =>
     setForm((f) => ({ ...f, ...patch }));
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.name.trim()) {
       Alert.alert('Validation', 'Rule name is required.');
       return;
@@ -232,8 +209,7 @@ function CreateRuleModal({
       Alert.alert('Validation', 'At least one keyword is required for keyword rules.');
       return;
     }
-    onSave(form);
-    setForm(DEFAULT_FORM);
+    if (await onSave(form)) setForm(DEFAULT_FORM);
   };
 
   const TRIGGER_OPTIONS: TriggerType[] = ['keyword', 'birthday', 'thanks'];
@@ -247,11 +223,12 @@ function CreateRuleModal({
       testID="auto-reply-create-modal"
     >
       <ScrollView
-        className="flex-1 bg-gray-50 dark:bg-gray-900"
+        style={{ flex: 1, backgroundColor: colors.cream }}
         keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ paddingBottom: 80 }}
       >
         <MobileHeader
-          title="New Rule"
+          title="New rule"
           subtitle="Claire can answer for you when a message matches."
           leading={<MobileIconButton label="Close" testID="auto-reply-modal-close" onPress={onClose}><ChevronLeft size={20} color={colors.ink} /></MobileIconButton>}
           actions={
@@ -260,81 +237,67 @@ function CreateRuleModal({
             </Pressable>
           }
         />
-        <View className="p-4">
-
-          {/* Rule name */}
-          <Text className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
-            Rule name
-          </Text>
+        <View style={{ paddingHorizontal: space[4], gap: space[4] }}>
+          <View style={{ gap: space[2] }}>
+          <SectionLabel title="Rule name" />
           <TextInput
             value={form.name}
             onChangeText={(v) => update({ name: v })}
             placeholder="e.g. Out of office"
-            placeholderTextColor="#9ca3af"
-            className="bg-white dark:bg-gray-800 rounded-lg px-4 py-3 mb-4 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700"
+            placeholderTextColor={colors.neutral[400]}
+            style={{ minHeight: 52, paddingHorizontal: space[4], borderWidth: 1, borderColor: colors.neutral[200], borderRadius: radius.control, backgroundColor: colors.paper, ...mobileType.body, color: colors.ink }}
             testID="auto-reply-name-input"
           />
+          </View>
 
-          {/* Trigger type */}
-          <Text className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-            Trigger
-          </Text>
-          <View className="mb-4">
+          <View style={{ gap: space[2] }}>
+          <SectionLabel title="Trigger" />
             {TRIGGER_OPTIONS.map((t) => (
-              <TouchableOpacity
+              <FeedbackPressable
                 key={t}
                 onPress={() => update({ trigger_type: t })}
-                className={`flex-row items-center bg-white dark:bg-gray-800 rounded-lg px-4 py-3 mb-2 ${
-                  form.trigger_type === t
-                    ? 'border-2 border-green-500'
-                    : 'border border-gray-200 dark:border-gray-700'
-                }`}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: form.trigger_type === t }}
+                style={({ pressed }) => ({ minHeight: 54, flexDirection: 'row', alignItems: 'center', paddingHorizontal: space[4], borderRadius: radius.control, borderWidth: form.trigger_type === t ? 1.5 : 1, borderColor: form.trigger_type === t ? colors.ink : colors.neutral[200], backgroundColor: pressed ? colors.sky : colors.paper })}
                 testID={`auto-reply-trigger-${t}`}
               >
-                <Text className="flex-1 font-medium text-gray-900 dark:text-white">
-                  {TRIGGER_LABELS[t]}
-                </Text>
-                {form.trigger_type === t && (
-                  <View className="w-4 h-4 rounded-full bg-green-500" />
-                )}
-              </TouchableOpacity>
+                <Text style={{ ...mobileType.body, flex: 1, fontWeight: '700', color: colors.ink }}>{TRIGGER_LABELS[t]}</Text>
+                <View style={{ width: 28, height: 28, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: form.trigger_type === t ? colors.lime : colors.neutral[100] }}>{form.trigger_type === t ? <Check size={16} color={colors.ink} /> : null}</View>
+              </FeedbackPressable>
             ))}
           </View>
 
-          {/* Keywords (only for keyword trigger) */}
           {form.trigger_type === 'keyword' && (
-            <>
-              <Text className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                Keywords (comma-separated)
-              </Text>
+            <View style={{ gap: space[2] }}>
+              <SectionLabel title="Keywords" />
+              <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>Separate multiple keywords with commas.</Text>
               <TextInput
                 value={form.keywords}
                 onChangeText={(v) => update({ keywords: v })}
                 placeholder="e.g. vacation, away, OOO"
-                placeholderTextColor="#9ca3af"
-                className="bg-white dark:bg-gray-800 rounded-lg px-4 py-3 mb-4 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700"
+                placeholderTextColor={colors.neutral[400]}
+                style={{ minHeight: 52, paddingHorizontal: space[4], borderWidth: 1, borderColor: colors.neutral[200], borderRadius: radius.control, backgroundColor: colors.paper, ...mobileType.body, color: colors.ink }}
                 testID="auto-reply-keywords-input"
                 autoCapitalize="none"
               />
-            </>
+            </View>
           )}
 
-          {/* Reply template */}
-          <Text className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
-            Reply message
-          </Text>
+          <View style={{ gap: space[2] }}>
+          <SectionLabel title="Reply message" />
           <TextInput
             value={form.reply_template}
             onChangeText={(v) => update({ reply_template: v })}
             placeholder="e.g. I'm currently out of office and will reply soon."
-            placeholderTextColor="#9ca3af"
-            className="bg-white dark:bg-gray-800 rounded-lg px-4 py-3 mb-4 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700"
+            placeholderTextColor={colors.neutral[400]}
+            style={{ minHeight: 100, padding: space[4], textAlignVertical: 'top', borderWidth: 1, borderColor: colors.neutral[200], borderRadius: radius.control, backgroundColor: colors.paper, ...mobileType.body, color: colors.ink }}
             multiline
             numberOfLines={3}
             testID="auto-reply-template-input"
           />
+          </View>
 
-          <Text className="text-xs text-gray-400 dark:text-gray-500 text-center mt-2">
+          <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>
             Rules are limited to 5 replies/hour and 20 replies/day by default.
           </Text>
         </View>
@@ -350,6 +313,7 @@ function CreateRuleModal({
 export default function AutoReplySettingsScreen() {
   const [loading, setLoading] = useState(true);
   const [rules, setRules] = useState<AutoReplyRule[]>([]);
+  const [loadError, setLoadError] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -361,13 +325,14 @@ export default function AutoReplySettingsScreen() {
   };
 
   const loadRules = useCallback(async () => {
+    setLoadError(false);
     try {
       const token = await getToken();
-      if (!token) return;
+      if (!token) throw new Error('Not authenticated');
       const data = await fetchRules(token);
       setRules(data);
     } catch {
-      // silently show empty list
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -426,66 +391,66 @@ export default function AutoReplySettingsScreen() {
       const rule = await createRule(token, form);
       setRules((prev) => [...prev, rule]);
       setShowModal(false);
+      return true;
     } catch {
       Alert.alert('Error', 'Failed to create rule. Please try again.');
+      return false;
     } finally {
       setSaving(false);
     }
   };
 
-  if (loading) {
-    return (
-      <View className="flex-1 items-center justify-center bg-gray-50 dark:bg-gray-900">
-        <ActivityIndicator size="large" color="#10b981" />
-      </View>
-    );
-  }
-
   return (
     <ScrollView
-      className="flex-1 bg-gray-50 dark:bg-gray-900"
+      style={{ flex: 1, backgroundColor: colors.cream }}
+      contentInsetAdjustmentBehavior="never"
+      contentContainerStyle={{ paddingBottom: 112 }}
       testID="auto-reply-settings-screen"
     >
       <MobileHeader
-        title="Auto-Reply Rules"
-        subtitle="Review automation and safety limits."
+        safeArea
+        title="Auto-reply rules"
+        subtitle="Review automation and safety limits"
         leading={<MobileIconButton label="Back to Settings" testID="auto-reply-back" onPress={() => router.back()}><ChevronLeft size={20} color={colors.ink} /></MobileIconButton>}
         actions={
-          <Pressable testID="auto-reply-add-rule" onPress={() => setShowModal(true)} style={{ width: 40, height: 40, borderRadius: 13, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' }}>
+          <Pressable testID="auto-reply-add-rule" accessibilityRole="button" accessibilityLabel="Add auto-reply rule" onPress={() => setShowModal(true)} style={{ width: 44, height: 44, borderRadius: 13, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' }}>
             <Plus size={20} color={colors.paper} />
           </Pressable>
         }
       />
-      <View className="p-4">
-
-        {/* Empty state */}
-        {rules.length === 0 ? (
+      {loading ? <SettingsSkeleton testID="auto-reply-loading" /> : (
+      <View style={{ paddingHorizontal: space[4], gap: space[4] }}>
+        {loadError ? (
+          <View style={{ padding: space[5], gap: space[3], alignItems: 'center', borderRadius: radius.card, borderWidth: 1, borderColor: colors.neutral[200], backgroundColor: colors.paper }}>
+            <Text style={{ ...mobileType.sectionTitle, color: colors.ink }}>Could not load rules</Text>
+            <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600], textAlign: 'center' }}>Your rules are unchanged. Try again when the connection is ready.</Text>
+            <Pressable accessibilityRole="button" onPress={() => void loadRules()} style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: space[4], borderRadius: radius.pill, backgroundColor: colors.ink }}><Text style={{ ...mobileType.label, color: colors.paper }}>Try again</Text></Pressable>
+          </View>
+        ) : rules.length === 0 ? (
           <View
-            className="bg-white dark:bg-gray-800 rounded-xl p-8 items-center"
+            style={{ padding: space[5], alignItems: 'center', gap: space[3], borderRadius: radius.card, borderWidth: 1, borderColor: colors.neutral[200], backgroundColor: colors.paper }}
             testID="auto-reply-empty"
           >
-            <Zap size={40} color="#10b981" />
-            <Text className="text-gray-900 dark:text-white font-semibold text-lg mt-4">
-              No rules yet
-            </Text>
-            <Text className="text-gray-500 dark:text-gray-400 text-sm text-center mt-2 mb-5">
-              Create a rule to automatically reply to messages that match specific triggers.
-            </Text>
-            <TouchableOpacity
+            <View style={{ width: 54, height: 54, borderRadius: 17, backgroundColor: colors.lime, alignItems: 'center', justifyContent: 'center' }}><Zap size={26} color={colors.ink} /></View>
+            <Text style={{ ...mobileType.sectionTitle, color: colors.ink }}>No rules yet</Text>
+            <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600], textAlign: 'center' }}>Create a rule to automatically reply to messages that match specific triggers.</Text>
+            <Pressable
               onPress={() => setShowModal(true)}
-              className="bg-green-500 px-5 py-2.5 rounded-full"
+              accessibilityRole="button"
+              style={{ minHeight: 44, paddingHorizontal: space[4], borderRadius: radius.pill, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' }}
               testID="auto-reply-create-first"
             >
-              <Text className="text-white font-semibold">Create Rule</Text>
-            </TouchableOpacity>
+              <Text style={{ ...mobileType.label, color: colors.paper }}>Create rule</Text>
+            </Pressable>
           </View>
         ) : (
           <>
-            <Text className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+            <SectionLabel title="Your rules" />
+            <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>
               {rules.filter((r) => r.enabled).length} of {rules.length} rule
               {rules.length !== 1 ? 's' : ''} active
             </Text>
-            <View testID="auto-reply-rules-list">
+            <View testID="auto-reply-rules-list" style={{ gap: space[3] }}>
               {rules.map((rule) => (
                 <RuleCard
                   key={rule.id}
@@ -498,10 +463,11 @@ export default function AutoReplySettingsScreen() {
           </>
         )}
 
-        <Text className="text-xs text-gray-400 dark:text-gray-500 text-center mt-6">
+        <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>
           Auto-replies are rate-limited to protect your conversations.
         </Text>
       </View>
+      )}
 
       <CreateRuleModal
         visible={showModal}

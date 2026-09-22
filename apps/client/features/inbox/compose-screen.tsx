@@ -6,6 +6,7 @@ import { colors, mobileType, space } from '@claire/design-system';
 import { supabase, type DbRow } from '../../services/supabase';
 import { useAuthStore } from '../../stores/authStore';
 import { MobileAvatar, MobileState, SectionLabel } from '../../components/mobile/claire-mobile';
+import { FeedbackPressable } from '../../components/mobile/pressable-feedback';
 import { PeopleSkeleton } from '../../components/claire/skeleton';
 import { platformLabel } from '../../types/platform';
 import { formatInboxTimestamp } from '../../utils/messageTimestamp';
@@ -30,7 +31,7 @@ function RecipientRow({ recipient, onPress }: { recipient: ComposeRecipient; onP
     .join(' · ');
 
   return (
-    <Pressable
+    <FeedbackPressable
       testID={`compose-recipient-${recipient.id}`}
       accessibilityRole="button"
       accessibilityLabel={`${recipient.name}. ${detail}`}
@@ -45,7 +46,7 @@ function RecipientRow({ recipient, onPress }: { recipient: ComposeRecipient; onP
         </View>
         <ChevronRight size={18} color={colors.neutral[400]} />
       </View>
-    </Pressable>
+    </FeedbackPressable>
   );
 }
 
