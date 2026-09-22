@@ -65,7 +65,6 @@ export function LoopRow({
   const overdue = isOverdue(item);
   const due = dueLabel(item, overdue);
   const ownership = ownerLabel(item);
-  const needsAttention = (item.priority_score ?? 0) >= 80;
 
   const row = (
     <Pressable
@@ -110,10 +109,20 @@ export function LoopRow({
         </View>
       </View>
 
-      <View style={{ width: 54, alignItems: 'flex-end', gap: 4, paddingTop: 1 }}>
-        {needsAttention ? <Text style={{ ...mobileType.monoLabel, color: colors.danger }}>ACT NOW</Text> : null}
-        {due ? <><Clock3 size={15} color={due.urgent ? colors.danger : colors.neutral[400]} /><Text style={{ ...mobileType.monoLabel, color: due.urgent ? colors.danger : colors.neutral[600], textAlign: 'right' }}>{due.kicker ? `${due.kicker}\n${due.date}` : due.date}</Text></> : null}
-      </View>
+      {due ? (
+        <View
+          testID={`loop-due-${item.id}`}
+          style={{ width: 58, flexShrink: 0, alignItems: 'flex-end', gap: 4, paddingTop: 1 }}
+        >
+          <Clock3 size={15} color={due.urgent ? colors.danger : colors.neutral[400]} />
+          <Text
+            numberOfLines={2}
+            style={{ ...mobileType.monoLabel, color: due.urgent ? colors.danger : colors.neutral[600], textAlign: 'right' }}
+          >
+            {due.kicker ? `${due.kicker}\n${due.date}` : due.date}
+          </Text>
+        </View>
+      ) : null}
     </Pressable>
   );
 
