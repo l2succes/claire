@@ -85,11 +85,26 @@ export default function SettingsScreen() {
   const logout = useAuthStore(state => state.logout);
   const resetPlatforms = usePlatformStore(state => state.reset);
   const connected = usePlatformStore(state => state.connectedSessions).filter(session => session.status === PlatformStatus.CONNECTED).length;
-  const hydrate = useChatPreferencesStore(state => state.hydrate);
   const loopDetection = useChatPreferencesStore(state => state.loopDetection);
+  const loopDetectionSource = useChatPreferencesStore(state => state.loopDetectionSource);
+  const loopDetectionLoading = useChatPreferencesStore(state => state.loopDetectionLoading);
+  const loadLoopDetection = useChatPreferencesStore(state => state.loadLoopDetection);
   const setLoopDetection = useChatPreferencesStore(state => state.setLoopDetection);
 
-  useEffect(() => { void hydrate(); }, [hydrate]);
+  // Refetch on every visit: the value lives on the server and can change from
+  // another device, so the cache only paints until this resolves.
+  useEffect(() => { void loadLoopDetection(); }, [loadLoopDetection]);
+
+  const loopDetectionKnown = loopDetectionSource !== 'none';
+  const toggleLoopDetection = () => {
+    if (!loopDetectionKnown) {
+      if (!loopDetectionLoading) void loadLoopDetection();
+      return;
+    }
+    setLoopDetection(!loopDetection).catch(() => {
+      Alert.alert('Loop detection not updated', 'Claire could not save this setting. Check your connection and try again.');
+    });
+  };
 
   const signOut = () => Alert.alert('Sign out?', 'Your synced messages stay in Claire. You can sign in again at any time.', [
     { text: 'Cancel', style: 'cancel' },
@@ -104,16 +119,19 @@ export default function SettingsScreen() {
     { title: 'Relationships', detail: 'People, categories, and prompts', icon: Smile, href: '/(tabs)/contacts', testID: 'settings-relationships', iconBackground: colors.blush },
     {
       title: 'Loop detection',
-      detail: 'Automatically suggest tracking',
+      detail: loopDetectionKnown
+        ? 'Automatically suggest tracking'
+        : loopDetectionLoading ? 'Checking…' : 'Couldn’t load. Tap to retry.',
       icon: Check,
       testID: 'settings-loop-detection-row',
       iconBackground: colors.mint,
-      onPress: () => void setLoopDetection(!loopDetection),
+      onPress: toggleLoopDetection,
       checked: loopDetection,
       accessory: (
         <View
           testID="settings-loop-detection"
           style={{
+            opacity: loopDetectionKnown ? 1 : 0.4,
             width: 48,
             height: 28,
             borderRadius: 99,
