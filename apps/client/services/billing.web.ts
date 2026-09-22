@@ -1,4 +1,8 @@
-import type { BillingPackage, StoreBillingSnapshot } from './billing-types';
+import type {
+  BillingPackage,
+  StoreBillingSnapshot,
+  WebPurchaseRedemptionStatus,
+} from './billing-types';
 
 const unavailable: StoreBillingSnapshot = {
   configured: false,
@@ -24,4 +28,10 @@ export async function purchaseBillingPackage(_identifier: string): Promise<Store
 }
 export async function restoreBillingPurchases(): Promise<StoreBillingSnapshot> {
   throw new Error('Purchase restore is available in the Claire mobile app.');
+}
+export async function presentBillingOfferCode(): Promise<void> {
+  throw new Error('Offer codes are available in the Claire mobile app.');
+}
+export async function redeemWebPurchaseLink(_url: string): Promise<WebPurchaseRedemptionStatus> {
+  return { kind: 'ignored' };
 }

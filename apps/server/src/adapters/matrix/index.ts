@@ -293,12 +293,32 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     );
     if (displayName) message.senderName = displayName;
 
+    if (identity.avatarUrl) {
+      message.senderAvatarUrl =
+        this.matrixMediaProxyUrl(identity.avatarUrl) || identity.avatarUrl;
+    }
+
     const phoneNumber = phoneNumberFromBridgeIdentifiers([identity.phoneNumber]);
     if (phoneNumber) {
       message.platformMetadata = {
         ...message.platformMetadata,
         contactPhone: phoneNumber,
       };
+    }
+  }
+
+  /** Attach notification-ready sender and conversation artwork to live events. */
+  private enrichMessageAvatars(message: UnifiedMessage, room: Room): void {
+    const senderAvatar = room.getMember(message.senderId)?.getMxcAvatarUrl();
+    if (senderAvatar) {
+      message.senderAvatarUrl =
+        this.matrixMediaProxyUrl(senderAvatar) || senderAvatar;
+    }
+
+    const chatAvatar = room.getMxcAvatarUrl();
+    if (chatAvatar) {
+      message.chatAvatarUrl =
+        this.matrixMediaProxyUrl(chatAvatar) || chatAvatar;
     }
   }
 
@@ -593,6 +613,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
         selfGhostIds,
         matrixUserId
       );
+      this.enrichMessageAvatars(unifiedMessage, room);
       await this.enrichRemoteMessageContact(unifiedMessage, session);
 
       // Matrix receives bridged provider events after mautrix has translated
@@ -1585,6 +1606,10 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
         userId: session.userId,
         name: room.name,
         isGroup: room.getJoinedMemberCount() > 2,
+        avatarUrl: (() => {
+          const avatar = room.getMxcAvatarUrl();
+          return avatar ? this.matrixMediaProxyUrl(avatar) || avatar : undefined;
+        })(),
         lastMessageAt: room.getLastActiveTimestamp()
           ? new Date(room.getLastActiveTimestamp())
           : undefined,

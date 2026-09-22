@@ -126,6 +126,14 @@ export function newOutgoingMessage(content: string): ChatMessage {
   return { id, content, timestamp: new Date().toISOString(), from_me: true, metadata: { clientRequestId: id } };
 }
 
+/** Retry one visible failed send without clearing failures elsewhere in the chat. */
+export async function retryFailedChatEvent(userId: string, id: string) {
+  const queue = getChatOutbox(userId);
+  if (!queue.entries.some((entry) => entry.id === id && entry.error)) return;
+  await queue.retryEntry(id);
+  requestConnectionRecovery();
+}
+
 /** Failed events can be edited/discarded without holding later sends hostage. */
 export async function removeFailedChatEvent(userId: string, id: string) {
   const queue = getChatOutbox(userId);

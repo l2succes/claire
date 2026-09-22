@@ -79,12 +79,16 @@ export interface UnifiedMessage {
   // Participants
   senderId: string;
   senderName?: string;
+  /** Publicly fetchable profile image for the incoming sender, when known. */
+  senderAvatarUrl?: string;
   receiverId?: string;
 
   // Chat context
   chatId: string;
   chatType: 'individual' | 'group';
   chatName?: string;
+  /** Publicly fetchable conversation image (normally the group avatar). */
+  chatAvatarUrl?: string;
 
   // Message metadata
   timestamp: Date;

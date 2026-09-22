@@ -89,7 +89,10 @@
     "experiments": {
       "typedRoutes": true
     },
-    "scheme": "claire",
+    "scheme": [
+      "claire",
+      "rc-682e02411e"
+    ],
     "extra": {
       "router": {},
       "eas": {

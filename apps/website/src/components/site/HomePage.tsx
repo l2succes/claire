@@ -765,46 +765,28 @@ export function HomePage() {
             <div>
               <div className="kicker">ONE ACCOUNT. CLEAR COSTS.</div>
               <h2>
-                Three plans.
+                One plan.
                 <br />
                 <span className="claire-underline">One Loop.</span>
               </h2>
             </div>
             <p>
               Claire’s Loop reads every connected conversation and tells you what is still open. Your
-              plan decides how often it runs.
+              Claire includes the full product and runs it every morning.
             </p>
           </div>
           <div className="pricing-teaser-grid">
-            <article className="pricing-teaser-card">
-              <small>FREE</small>
-              <strong>$0</strong>
-              <b>
-                <HeroIcon name="check-circle" />1 Loop run per week
-              </b>
-              <p>Up to five networks in one inbox, with search and reminders.</p>
-            </article>
             <article className="pricing-teaser-card is-featured">
-              <div className="pricing-teaser-flag">MOST POPULAR</div>
-              <small>PLUS</small>
-              <strong>
-                $10<em>/mo</em>
-              </strong>
-              <b>
-                <HeroIcon name="check-circle" />
-                Up to 3 Loop runs per day
-              </b>
-              <p>Every network, the full AI, and a monthly Claire AI credit allowance.</p>
-            </article>
-            <article className="pricing-teaser-card">
-              <small>PRO</small>
+              <div className="pricing-teaser-flag">EVERYTHING INCLUDED</div>
+              <small>CLAIRE</small>
               <strong>
                 $20<em>/mo</em>
               </strong>
               <b>
-                <HeroIcon name="check-circle" />A Loop every morning
+                <HeroIcon name="check-circle" />
+                A fresh Loop every morning
               </b>
-              <p>Claire runs the Loop for you, on the best model tier, without being asked.</p>
+              <p>Every network, the full AI, 2,000 monthly credits, and the best model tier.</p>
             </article>
             <article className="pricing-teaser-card is-business">
               <small>ULTIMATE</small>
@@ -818,12 +800,17 @@ export function HomePage() {
           </div>
           <div className="pricing-teaser-foot">
             <p>
-              AI use is metered separately from the subscription, with a visible balance and a hard
-              cap, so model costs stay predictable.
+              Subscribe securely on the web, then open Claire to connect the purchase to your
+              account. In-app purchase stays available when you prefer Apple billing.
             </p>
-            <Link className="button button-dark" href="/pricing">
-              Compare all plans <HeroIcon name="arrow-right" />
-            </Link>
+            <div className="pricing-teaser-actions">
+              <Link className="button button-dark" href="/subscribe">
+                Subscribe on web <HeroIcon name="arrow-right" />
+              </Link>
+              <Link className="text-link" href="/pricing">
+                See pricing
+              </Link>
+            </div>
           </div>
         </section>
 

@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Modal, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import Animated, { FadeIn, LinearTransition } from 'react-native-reanimated';
 import { BellOff, Check, CheckCircle2, Clock3, PenSquare, Pin, Search, X } from 'lucide-react-native';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -32,6 +33,8 @@ type InboxFilter = 'dms' | 'all' | 'groups' | 'unread' | 'needs_reply';
 type PlatformFilter = 'all' | Platform;
 
 const avatarTones = [colors.sky, colors.mint, colors.lavender, colors.blush] as const;
+const inboxRowLayout = LinearTransition.duration(180);
+const inboxContentUpdate = FadeIn.duration(160);
 
 const MEDIA_PREVIEW_LABELS: Record<string, string> = {
   image: 'sent a picture',
@@ -168,7 +171,11 @@ function InboxConversationRowInner({
           <Text maxFontSizeMultiplier={1} selectable style={{ fontFamily: mobileType.monoLabel.fontFamily, fontSize: desktop ? 9 : 11, lineHeight: desktop ? 12 : 14, letterSpacing: 0.4, color: colors.neutral[400] }}>{formatInboxTimestamp(message.timestamp)}</Text>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Animated.View
+            key={`${message.id}:${message.timestamp}:${preview.label}`}
+            entering={inboxContentUpdate}
+            style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 6 }}
+          >
             {preview.thumbnailUri && !thumbFailed ? (
               <Image
                 source={{ uri: preview.thumbnailUri }}
@@ -180,7 +187,7 @@ function InboxConversationRowInner({
               />
             ) : null}
             <Text maxFontSizeMultiplier={1} selectable numberOfLines={1} style={{ flex: 1, fontFamily: mobileType.body.fontFamily, fontSize: desktop ? 12 : 14, lineHeight: desktop ? 15 : 19, color: colors.neutral[600], fontWeight: message.unread_count ? '500' : '400' }}>{preview.label}</Text>
-          </View>
+          </Animated.View>
           {(message.is_muted || message.has_open_loop || message.unread_count) ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             {message.is_muted ? <View testID={`inbox-muted-${message.chat_id}`} accessibilityLabel="Notifications muted"><BellOff size={desktop ? 13 : 15} color={colors.neutral[600]} strokeWidth={1.8} /></View> : null}
             {message.has_open_loop ? <View accessibilityLabel="Open loop in this conversation" style={{ width: desktop ? 18 : 22, height: desktop ? 18 : 22, borderRadius: 11, backgroundColor: colors.blush, alignItems: 'center', justifyContent: 'center' }}><CheckCircle2 size={desktop ? 12 : 15} color={colors.ink} strokeWidth={2.2} /></View> : null}
@@ -252,6 +259,54 @@ function HighlightCard({ message, onPress }: { message: InboxMessage; onPress: (
         </View>
       </View>
     </Pressable>
+  );
+}
+
+function InboxControls({
+  query,
+  onQueryChange,
+  filters,
+  filter,
+  onFilterChange,
+  platformFilters,
+  platform,
+  onPlatformChange,
+  safeArea = false,
+}: {
+  query: string;
+  onQueryChange: (value: string) => void;
+  filters: Array<{ value: InboxFilter; label: string; count?: number }>;
+  filter: InboxFilter;
+  onFilterChange: (value: InboxFilter) => void;
+  platformFilters: Array<{ value: PlatformFilter; label: string }>;
+  platform: PlatformFilter;
+  onPlatformChange: (value: PlatformFilter) => void;
+  safeArea?: boolean;
+}) {
+  return (
+    <>
+      <MobileHeader
+        title="Inbox"
+        safeArea={safeArea}
+        actions={<MobileIconButton label="New message" testID="inbox-compose" onPress={() => router.push('/compose' as never)}><PenSquare size={20} color={colors.ink} /></MobileIconButton>}
+      />
+      <View style={{ paddingHorizontal: space[4], gap: space[3], paddingBottom: space[3], borderBottomWidth: 1, borderBottomColor: colors.neutral[200] }}>
+        <MobileSearchField style={{ minHeight: 46, borderRadius: 13, paddingHorizontal: space[4], backgroundColor: colors.neutral[100] }} inputStyle={{ fontSize: 15, lineHeight: 20 }} icon={<Search size={24} strokeWidth={1.7} color={colors.neutral[600]} />} value={query} onChangeText={onQueryChange} placeholder="Search conversations" returnKeyType="search" testID="messages-search-input" />
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingRight: space[4] }}>
+          {filters.map(item => <MobileChip key={item.value} label={item.label} count={item.count} active={filter === item.value} onPress={() => onFilterChange(item.value)} testID={`inbox-filter-${item.value}`} />)}
+          {platformFilters.map(item => (
+            <MobileChip
+              key={item.value}
+              label={item.label}
+              icon={item.value === 'all' ? undefined : <PlatformBadge platform={item.value} size={14} />}
+              active={platform === item.value}
+              onPress={() => onPlatformChange(platform === item.value ? 'all' : item.value)}
+              testID={`inbox-platform-${item.value}`}
+            />
+          ))}
+        </ScrollView>
+      </View>
+    </>
   );
 }
 
@@ -454,15 +509,17 @@ export function InboxScreen() {
   const displayedMessages = inboxRows;
   const renderConversation = useCallback(
     ({ item }: { item: InboxMessage }) => (
-      <InboxConversationRow
-        message={item}
-        onPress={() => openChat(item)}
-        onPressIn={() => warmChat(item)}
-        onLongPress={() => setSnoozeTarget(item)}
-        onMarkRead={item.unread_count ? () => void markRead(item) : undefined}
-        onTogglePin={() => void togglePin(item)}
-        onSnooze={() => setSnoozeTarget(item)}
-      />
+      <Animated.View entering={inboxContentUpdate}>
+        <InboxConversationRow
+          message={item}
+          onPress={() => openChat(item)}
+          onPressIn={() => warmChat(item)}
+          onLongPress={() => setSnoozeTarget(item)}
+          onMarkRead={item.unread_count ? () => void markRead(item) : undefined}
+          onTogglePin={() => void togglePin(item)}
+          onSnooze={() => setSnoozeTarget(item)}
+        />
+      </Animated.View>
     ),
     [markRead, openChat, warmChat],
   );
@@ -477,39 +534,32 @@ export function InboxScreen() {
   }, [inbox.fetchMessages, loopChats]);
 
   return (
-    <View testID="messages-screen" style={{ flex: 1, backgroundColor: colors.paper }}>
-      <MobileHeader
-        title="Inbox"
-        safeArea
-        // The header carried a second magnifying glass beside the search field
-        // directly below it — two controls, one obvious meaning, different
-        // destinations.
-        actions={<MobileIconButton label="New message" testID="inbox-compose" onPress={() => router.push('/compose' as never)}><PenSquare size={20} color={colors.ink} /></MobileIconButton>}
-      />
-      <View style={{ paddingHorizontal: space[4], gap: space[3], paddingBottom: space[3], borderBottomWidth: 1, borderBottomColor: colors.neutral[200] }}>
-        <MobileSearchField style={{ minHeight: 46, borderRadius: 13, paddingHorizontal: space[4], backgroundColor: colors.neutral[100] }} inputStyle={{ fontSize: 15, lineHeight: 20 }} icon={<Search size={24} strokeWidth={1.7} color={colors.neutral[600]} />} value={query} onChangeText={setQuery} placeholder="Search conversations" returnKeyType="search" testID="messages-search-input" />
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingRight: space[4] }}>
-          {filters.map(item => <MobileChip key={item.value} label={item.label} count={item.count} active={filter === item.value} onPress={() => setFilter(item.value)} testID={`inbox-filter-${item.value}`} />)}
-          {platformFilters.map(item => (
-            <MobileChip
-              key={item.value}
-              label={item.label}
-              icon={item.value === 'all' ? undefined : <PlatformBadge platform={item.value} size={14} />}
-              active={platform === item.value}
-              onPress={() => setPlatform(platform === item.value ? 'all' : item.value)}
-              testID={`inbox-platform-${item.value}`}
-            />
-          ))}
-        </ScrollView>
-      </View>
-
-      {inbox.isCold ? <InboxSkeleton testID="messages-loading" /> : (
-      <FlatList
+    <View
+      testID="messages-screen"
+      collapsable={false}
+      style={{ flex: 1, backgroundColor: colors.paper }}
+    >
+      {inbox.isCold ? <>
+        <InboxControls
+          query={query}
+          onQueryChange={setQuery}
+          filters={filters}
+          filter={filter}
+          onFilterChange={setFilter}
+          platformFilters={platformFilters}
+          platform={platform}
+          onPlatformChange={setPlatform}
+          safeArea
+        />
+        <InboxSkeleton testID="messages-loading" />
+      </> : (
+      <Animated.FlatList
         ref={listRef}
         testID="messages-list"
         data={displayedMessages}
         keyExtractor={item => item.conversation_key}
         renderItem={renderConversation}
+        itemLayoutAnimation={inboxRowLayout}
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{ paddingBottom: 156 }}
         onEndReached={() => {
@@ -521,6 +571,19 @@ export function InboxScreen() {
         onEndReachedThreshold={0.4}
         refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => void refresh()} tintColor={colors.ink} />}
         ListHeaderComponent={<>
+          {/* Keeping the vertical list on the screen's first native-descendant
+              chain lets iOS 26 drive the Liquid Glass tab minimization from
+              this scroll gesture. */}
+          <InboxControls
+            query={query}
+            onQueryChange={setQuery}
+            filters={filters}
+            filter={filter}
+            onFilterChange={setFilter}
+            platformFilters={platformFilters}
+            platform={platform}
+            onPlatformChange={setPlatform}
+          />
           {highlights.length ? <>
             <View style={{ paddingHorizontal: space[4], paddingTop: space[3], paddingBottom: space[2] }}><SectionLabel title="Highlights" detail="Claire's picks" /></View>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: space[4], gap: space[3], paddingBottom: space[1] }}>

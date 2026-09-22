@@ -16,6 +16,7 @@
     "verify:schema": "bun run src/scripts/verify-schema.ts",
     "demo:seed": "bun run src/scripts/seed-demo.ts",
     "eval:loops": "bun run scripts/eval-loops.ts",
+    "eval:jev": "bun run scripts/eval-jev.ts",
     "eval:loops:gates": "bun run scripts/eval-loops.ts --gates --seed 42 --per 6"
   },
   "dependencies": {

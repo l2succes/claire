@@ -30,6 +30,7 @@
     "@gsap/react": "^2.1.2",
     "@heroicons/react": "^2.2.0",
     "@react-email/render": "^2.1.0",
+    "@revenuecat/purchases-js": "^1.63.1",
     "@supabase/supabase-js": "^2.39.1",
     "ai": "^7.0.66",
     "class-variance-authority": "^0.7.1",

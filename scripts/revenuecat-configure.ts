@@ -7,48 +7,21 @@ type CatalogProduct = {
   storeId: string;
   displayName: string;
   title: string;
-  duration: 'P1M' | 'P1Y';
+  duration: 'P1M';
   usd: string;
-  plan: 'plus' | 'pro';
+  plan: 'pro';
   packageKey: string;
 };
 
 const catalog: CatalogProduct[] = [
   {
-    storeId: 'claire_plus_monthly',
-    displayName: 'Plus Monthly',
-    title: 'Claire Plus Monthly',
-    duration: 'P1M',
-    usd: '9.99',
-    plan: 'plus',
-    packageKey: 'plus_monthly',
-  },
-  {
-    storeId: 'claire_plus_annual',
-    displayName: 'Plus Annual',
-    title: 'Claire Plus Annual',
-    duration: 'P1Y',
-    usd: '99.99',
-    plan: 'plus',
-    packageKey: 'plus_annual',
-  },
-  {
     storeId: 'claire_pro_monthly',
-    displayName: 'Pro Monthly',
-    title: 'Claire Pro Monthly',
+    displayName: 'Claire Monthly',
+    title: 'Claire Monthly',
     duration: 'P1M',
     usd: '19.99',
     plan: 'pro',
     packageKey: 'pro_monthly',
-  },
-  {
-    storeId: 'claire_pro_annual',
-    displayName: 'Pro Annual',
-    title: 'Claire Pro Annual',
-    duration: 'P1Y',
-    usd: '199.99',
-    plan: 'pro',
-    packageKey: 'pro_annual',
   },
 ];
 
@@ -216,7 +189,7 @@ async function ensureEntitlement(
 
 async function ensureOffering(project: string): Promise<RcItem> {
   const offerings = await list(['offerings', 'list', '--project-id', project]);
-  let offering = findBy(offerings, 'lookup_key', 'default');
+  let offering = findBy(offerings, 'lookup_key', 'claire');
   if (!offering) {
     offering = data<RcItem>(
       await rc([
@@ -225,12 +198,12 @@ async function ensureOffering(project: string): Promise<RcItem> {
         '--project-id',
         project,
         '--lookup-key',
-        'default',
+        'claire',
         '--display-name',
-        'Claire Plans',
+        'Claire',
       ])
     );
-    console.log('Created the default Claire offering.');
+    console.log('Created the single-plan Claire offering.');
   }
   if (offering.is_current !== true) {
     await rc(['offerings', 'set-current', offering.id, '--project-id', project, '--yes']);
@@ -245,7 +218,10 @@ async function ensurePackage(
   product: RcItem,
   existing: RcItem[]
 ): Promise<void> {
-  let item = findBy(existing, 'lookup_key', desired.packageKey);
+  let item = existing.find(
+    (candidate) =>
+      candidate.lookup_key === desired.packageKey && candidate.offering_id === offering.id
+  );
   if (!item) {
     item = data<RcItem>(
       await rc([
@@ -260,6 +236,7 @@ async function ensurePackage(
         desired.displayName,
       ])
     );
+    item = { ...item, offering_id: offering.id };
     existing.push(item);
     console.log(`Created the ${desired.packageKey} package.`);
   }
@@ -301,19 +278,65 @@ async function syncClientKeys(project: string, testStore: RcItem, iosApp: RcItem
   console.log('Synced the Test Store and iOS public keys to apps/client/.env.local.');
 }
 
-async function verify(project: string, offering: RcItem): Promise<void> {
-  const result = data<{ packages?: unknown[]; issues?: string[] }>(
+type VerifiedPackage = {
+  package?: { lookup_key?: string };
+  products?: Array<{
+    product?: { app_id?: string; subscription?: { duration?: string | null } };
+  }>;
+};
+
+async function verify(
+  project: string,
+  offering: RcItem,
+  testStore: RcItem,
+  iosApp: RcItem
+): Promise<void> {
+  const result = data<{ packages?: VerifiedPackage[]; issues?: string[] }>(
     await rc(['offerings', 'verify', offering.id, '--project-id', project])
   );
   const blockingIssues = (result.issues || []).filter(
     (issue) => issue !== 'offering has no attached paywall'
   );
-  if (result.packages?.length !== catalog.length || blockingIssues.length) {
+
+  if (!result.packages?.some((item) => item.package?.lookup_key === 'pro_monthly'))
+    blockingIssues.push('current offering does not contain the Claire monthly package');
+  for (const desired of catalog) {
+    const item = result.packages?.find(
+      (candidate) => candidate.package?.lookup_key === desired.packageKey
+    );
+    const appIds = new Set(item?.products?.map((product) => product.product?.app_id));
+    if (!appIds.has(testStore.id))
+      blockingIssues.push(`${desired.packageKey} is missing its Test Store product`);
+    if (!appIds.has(iosApp.id))
+      blockingIssues.push(`${desired.packageKey} is missing its App Store product`);
+    const iosProduct = item?.products?.find(
+      (product) => product.product?.app_id === iosApp.id
+    )?.product;
+    if (iosProduct && iosProduct.subscription?.duration !== desired.duration)
+      blockingIssues.push(`${desired.storeId} has not been synced from App Store Connect`);
+  }
+
+  const apple = iosApp.app_store as
+    | {
+        app_store_connect_api_key_configured?: boolean;
+        subscription_key_configured?: boolean;
+      }
+    | undefined;
+  if (!apple?.app_store_connect_api_key_configured)
+    blockingIssues.push(
+      'the iOS app has no App Store Connect API key (run `bun run revenuecat:apple`)'
+    );
+  if (!apple?.subscription_key_configured)
+    blockingIssues.push(
+      'the iOS app has no in-app purchase key (run `bun run revenuecat:apple`)'
+    );
+
+  if (blockingIssues.length) {
     throw new Error(
-      `RevenueCat offering verification failed: ${blockingIssues.join(', ') || 'expected four packages'}`
+      `RevenueCat production readiness failed:\n- ${blockingIssues.join('\n- ')}`
     );
   }
-  console.log('Verified the current offering with four Claire packages.');
+  console.log('Verified the current Claire monthly offering and Apple credentials.');
 }
 
 async function main() {
@@ -331,7 +354,7 @@ async function main() {
 
   const offering = await ensureOffering(project);
   if (process.argv.includes('--verify-only')) {
-    await verify(project, offering);
+    await verify(project, offering, testStore, iosApp);
     return;
   }
 
@@ -348,7 +371,7 @@ async function main() {
     productByStoreId.set(desired.storeId, storeProducts);
   }
 
-  for (const lookupKey of ['plus', 'pro'] as const) {
+  for (const lookupKey of ['pro'] as const) {
     const entitlement = await ensureEntitlement(project, lookupKey, entitlements);
     const attached = catalog
       .filter((item) => item.plan === lookupKey)
@@ -366,7 +389,7 @@ async function main() {
     }
   }
 
-  await verify(project, offering);
+  await verify(project, offering, testStore, iosApp);
   if (!process.argv.includes('--no-sync-client-env'))
     await syncClientKeys(project, testStore, iosApp);
   console.log(`RevenueCat Test Store and iOS catalogs are ready for project ${project}.`);

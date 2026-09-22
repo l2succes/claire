@@ -12,7 +12,6 @@ const subnav = [
   { href: '#plans', label: 'Plans' },
   { href: '#ai', label: 'AI credits' },
   { href: '#ultimate', label: 'Ultimate' },
-  { href: '#compare', label: 'Compare' },
   { href: '#questions', label: 'Questions' },
 ] as const;
 
@@ -45,71 +44,34 @@ const loopSteps = [
 
 const tiers = [
   {
-    id: 'preview',
-    name: 'PREVIEW',
-    title: 'Try Claire with your real inbox.',
-    price: '$0',
-    unit: 'for 7 days',
-    body: 'Connect your conversations, run your first Loop, and see whether Claire gives you meaningful time back.',
-    loop: 'First Loop + 50 AI credits',
-    features: [
-      '50 AI credits included',
-      'Seven days to try the full workflow',
-      'Unified inbox and cross-network search',
-      'Promises and deadline reminders',
-    ],
-    cta: { href: '/#start', label: 'Get the app' },
-    note: 'No card required · one preview per account',
-    featured: false,
-    flag: null,
-  },
-  {
-    id: 'plus',
-    name: 'PLUS',
-    title: 'The full AI, on demand.',
-    price: '$10',
-    unit: 'USD / month',
-    body: 'Everything Claire’s AI can do, with Loop runs whenever the inbox gets busy.',
-    loop: 'Up to 3 Loop runs per day',
-    features: [
-      'Every supported network, 3 accounts each',
-      'Ask Claire across your whole inbox',
-      'Drafts, summaries, and smart cards',
-      'Monthly Claire AI credit allowance',
-      'Bring your own provider key',
-    ],
-    cta: { href: 'mailto:hello@claire.app?subject=Claire%20Plus', label: 'Get Claire Plus' },
-    note: 'Monthly billing · hard credit cap · no automatic overage',
-    featured: true,
-    flag: 'MOST POPULAR',
-  },
-  {
-    id: 'pro',
-    name: 'PRO',
+    id: 'claire',
+    name: 'CLAIRE',
     title: 'Claire runs the Loop for you.',
     price: '$20',
     unit: 'USD / month',
     body: 'A Loop lands every morning without you asking, plus on-demand runs whenever you want another pass.',
     loop: 'Automatic daily Loop + on-demand runs',
     features: [
-      'Everything in Plus',
+      'Every supported network',
       'Unlimited accounts per network',
       'Scheduled Loop with morning delivery',
       'Larger AI credit allowance, best model tier',
+      'Ask Claire, drafts, summaries, and smart cards',
+      'Bring your own provider key',
       'Early access to plugin actions',
     ],
-    cta: { href: 'mailto:hello@claire.app?subject=Claire%20Pro', label: 'Get Claire Pro' },
-    note: 'Monthly billing · personal account · cancel anytime',
-    featured: false,
-    flag: null,
+    cta: { href: '/subscribe', label: 'Subscribe on web' },
+    note: 'Secure Stripe checkout · unlocks in the Claire app · cancel anytime',
+    featured: true,
+    flag: 'EVERYTHING INCLUDED',
   },
 ] as const;
 
 const cadenceFacts = [
-  ['AI STARTER CREDITS', 'Preview 50 · Plus 500/month · Pro 2,000/month'],
-  ['NETWORKS', 'Preview all · Plus all · Pro all'],
-  ['PREVIEW WINDOW', '7 days · no card required'],
-  ['SPEND CAP', 'Hard cap on every plan'],
+  ['PRICE', '$20 / month'],
+  ['AI CREDITS', '2,000 / month'],
+  ['NETWORKS', 'Every supported network'],
+  ['SPEND CAP', 'Hard cap · no surprise overage'],
 ] as const;
 
 const agentFlow = [
@@ -213,67 +175,6 @@ const riskLadder = [
   { level: 'destructive', approval: 'Always asks', body: 'Cannot be undone. Needs an explicit yes.' },
 ] as const;
 
-const planColumns = ['Preview', 'Plus', 'Pro', 'Ultimate'] as const;
-
-const matrixGroups = [
-  {
-    group: 'The Loop',
-    rows: [
-      ['Loop runs', 'First Loop', '3 / day', 'Daily, automatic', 'Continuous, per workspace'],
-      ['Open loops surfaced across every chat', 'yes', 'yes', 'yes', 'yes'],
-      ['Proposed next action on each loop', 'yes', 'yes', 'yes', 'yes'],
-      ['Scheduled delivery', '—', '—', 'yes', 'yes'],
-      ['Loop history', '—', '30 days', '12 months', 'Custom retention'],
-    ],
-  },
-  {
-    group: 'Networks & accounts',
-    rows: [
-      ['Connected networks', 'All supported', 'All supported', 'All supported', 'All supported'],
-      ['Accounts per network', 'During preview', '3', 'Unlimited', 'Unlimited'],
-      ['Unified inbox and cross-network search', 'yes', 'yes', 'yes', 'yes'],
-      ['Mobile, desktop, and web', 'yes', 'yes', 'yes', 'yes'],
-    ],
-  },
-  {
-    group: 'AI',
-    rows: [
-      ['Ask Claire across the inbox', 'During preview', 'yes', 'yes', 'yes'],
-      ['Drafts, summaries, and smart cards', 'During preview', 'yes', 'yes', 'yes'],
-      ['Claire AI credits', '50 once', '500 / month', '2,000 / month', 'Pooled workspace allowance'],
-      ['Model tier', 'Balanced', 'Balanced', 'Best available', 'Best available + policy'],
-      ['Bring your own provider key', '—', 'yes', 'yes', 'yes'],
-      ['Hard cap, no surprise overage', 'yes', 'yes', 'yes', 'yes'],
-    ],
-  },
-  {
-    group: 'Automation & plugins',
-    rows: [
-      ['Promises and deadline reminders', 'yes', 'yes', 'yes', 'yes'],
-      ['Plugin actions from a conversation', '—', '—', 'Early access', 'Full catalog'],
-      ['Agents that act on detected intent', '—', '—', '—', 'yes'],
-      ['Signed webhooks and private MCP', '—', '—', '—', 'yes'],
-    ],
-  },
-  {
-    group: 'Team & governance',
-    rows: [
-      ['Shared inbox, assignment, routing', '—', '—', '—', 'yes'],
-      ['Approval inbox and action receipts', '—', '—', '—', 'yes'],
-      ['SSO, roles, and audit log', '—', '—', '—', 'yes'],
-      ['Knowledge boundaries and citations', '—', '—', '—', 'yes'],
-    ],
-  },
-  {
-    group: 'Hosting & support',
-    rows: [
-      ['Claire Cloud', 'yes', 'yes', 'yes', 'yes'],
-      ['Self-host the whole stack', 'yes', 'yes', 'yes', 'yes'],
-      ['Support', 'Community', 'Email', 'Priority email', 'Dedicated contact'],
-    ],
-  },
-] as const;
-
 const questions = [
   [
     'What exactly is a Loop run?',
@@ -281,19 +182,19 @@ const questions = [
   ],
   [
     'What happens when I use up my Loop runs?',
-    'Messaging, search, connections, promises, and reminders all keep working. The next Loop waits for your allowance to reset, or you move up a plan. Claire does not bill you automatically for another run.',
+    'Messaging, search, connections, promises, and reminders all keep working. The next Loop waits for your allowance to reset. Claire does not bill you automatically for another run.',
   ],
   [
     'Can I bring my own OpenAI or Anthropic key?',
-    'Yes, on Plus and above. Your provider credential stays behind an encrypted secret boundary and is used only for your account. You pay that provider directly and your Claire AI credits are not deducted.',
+    'Yes. Your provider credential stays behind an encrypted secret boundary and is used only for your account. You pay that provider directly and your Claire AI credits are not deducted.',
   ],
   [
     'Do unused Claire AI credits roll over?',
     'No. The allowance resets each month. Credits settle against real model usage rather than a made-up “one request” unit, and you can always see the balance, the warnings, and the cap.',
   ],
   [
-    'Is Pro priced per person?',
-    'Preview, Plus, and Pro are personal plans—one price for one Claire account. Ultimate is the workspace plan and is priced on seats plus usage.',
+    'Is Claire priced per person?',
+    'Claire is a personal plan—one price for one account. Ultimate is the workspace plan and is priced on seats plus usage.',
   ],
   [
     'Can I self-host and skip billing entirely?',
@@ -304,7 +205,7 @@ const questions = [
 export const metadata: Metadata = {
   title: 'Pricing',
   description:
-    'Claire pricing: a seven-day preview with 50 AI credits, Plus at $10/month, and Pro at $20/month, plus Ultimate for businesses.',
+    'Claire pricing: one personal plan at $20/month, plus Ultimate for businesses.',
 };
 
 export default function PricingPage() {
@@ -321,9 +222,9 @@ export default function PricingPage() {
               </a>
             ))}
           </div>
-          <a className="pr-subnav-cta" href="#plans">
-            Compare plans <HeroIcon name="arrow-right" />
-          </a>
+          <Link className="pr-subnav-cta" href="/subscribe">
+            Subscribe <HeroIcon name="arrow-right" />
+          </Link>
         </div>
       </nav>
       <main>
@@ -338,13 +239,13 @@ export default function PricingPage() {
             <span className="claire-underline">Priced by how often Claire looks.</span>
           </h1>
           <p className="hero-copy">
-            Claire’s Loop reads every connected conversation and tells you what is still open. The
-            preview includes your first Loop. Plus runs it on demand. Pro runs it every morning.
+            Claire’s Loop reads every connected conversation and tells you what is still open. One
+            plan gives you the full product, including a fresh Loop every morning.
           </p>
           <div className="hero-actions">
-            <a className="button button-dark" href="#plans">
-              See the plans <HeroIcon name="arrow-right" />
-            </a>
+            <Link className="button button-dark" href="/subscribe">
+              Subscribe on web <HeroIcon name="arrow-right" />
+            </Link>
             <a className="text-link" href="#ultimate">
               Claire for business <HeroIcon name="arrow-right" />
             </a>
@@ -414,16 +315,16 @@ export default function PricingPage() {
         <section className="pr-tiers shell" id="plans">
           <header className="section-heading">
             <div>
-              <div className="kicker">PERSONAL PLANS</div>
+              <div className="kicker">ONE PERSONAL PLAN</div>
               <h2>
-                Three plans.
+                Everything included.
                 <br />
-                One question: how often?
+                One clear price.
               </h2>
             </div>
             <p>
-              The product is the same on every plan. What changes is how much of the AI you get and
-              how often the Loop runs.
+              No feature grid to decode and no cheaper tier designed to make you upgrade later.
+              Claire is $20 a month.
             </p>
           </header>
           <div className="pr-tier-grid">
@@ -520,8 +421,8 @@ export default function PricingPage() {
               </span>
               <h4>Bring your own key</h4>
               <p>
-                Add an OpenAI, Anthropic, or compatible provider key on Plus and above. Claire Cloud
-                still runs the product; your provider bills model usage directly.
+                Add an OpenAI, Anthropic, or compatible provider key. Claire Cloud still runs the
+                product; your provider bills model usage directly.
               </p>
               <small>Your Claire AI credit balance is not used.</small>
             </article>
@@ -631,7 +532,7 @@ export default function PricingPage() {
             <aside className="pr-ultimate-card">
               <div>
                 <small>ULTIMATE · WORKSPACE PLAN</small>
-                <h3>Everything in Pro, for the whole team.</h3>
+                <h3>Everything in Claire, for the whole team.</h3>
                 <ul>
                   <li>
                     <HeroIcon name="check-circle" />
@@ -665,68 +566,6 @@ export default function PricingPage() {
           </div>
         </section>
 
-        <section className="pr-matrix shell" id="compare">
-          <header className="section-heading">
-            <div>
-              <div className="kicker">EVERY LINE, SIDE BY SIDE</div>
-              <h2>
-                What each plan
-                <br />
-                actually includes.
-              </h2>
-            </div>
-            <p>
-              Preview, Plus, and Pro are personal accounts. Ultimate is the workspace plan for teams
-              running customer conversations.
-            </p>
-          </header>
-          <div className="pr-matrix-scroll">
-            <table>
-              <caption className="sr-only">Claire plan comparison</caption>
-              <thead>
-                <tr>
-                  <th scope="col">Feature</th>
-                  {planColumns.map((column) => (
-                    <th key={column} scope="col" className={column === 'Plus' ? 'is-featured' : undefined}>
-                      {column}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              {matrixGroups.map((group) => (
-                <tbody key={group.group}>
-                  <tr className="pr-matrix-group">
-                    <th scope="colgroup" colSpan={5}>
-                      {group.group}
-                    </th>
-                  </tr>
-                  {group.rows.map(([label, ...values]) => (
-                    <tr key={label}>
-                      <th scope="row">{label}</th>
-                      {values.map((value, index) => (
-                        <td
-                          key={planColumns[index]}
-                          data-label={planColumns[index]}
-                          className={planColumns[index] === 'Plus' ? 'is-featured' : undefined}
-                        >
-                          {value === 'yes' ? (
-                            <>
-                              <HeroIcon name="check-circle" />
-                              <span className="sr-only">Included</span>
-                            </>
-                          ) : (
-                            value
-                          )}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              ))}
-            </table>
-          </div>
-        </section>
-
         <section className="pr-questions shell" id="questions">
           <header className="section-heading">
             <div>
@@ -757,9 +596,9 @@ export default function PricingPage() {
               <br />
               you forgot you opened.
             </h2>
-            <p>Start free, run the Loop weekly, and move up only when you want it more often.</p>
-            <Link className="button button-dark" href="#plans">
-              Choose a plan <HeroIcon name="arrow-right" />
+            <p>One plan, the full product, and a fresh Loop every morning.</p>
+            <Link className="button button-dark" href="/subscribe">
+              Get Claire <HeroIcon name="arrow-right" />
             </Link>
           </div>
         </section>

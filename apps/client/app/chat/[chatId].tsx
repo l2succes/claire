@@ -89,10 +89,11 @@ import {
   type ReactionRow,
 } from '@claire/chat-core';
 import { VoiceMessageBubble } from '../../features/chat/voice-message-bubble';
-import { enqueueChatEvent, newOutgoingMessage, useChatOutbox, getChatOutbox, removeFailedChatEvent } from '../../services/chat-outbox';
+import { enqueueChatEvent, newOutgoingMessage, useChatOutbox, removeFailedChatEvent, retryFailedChatEvent } from '../../services/chat-outbox';
 import { requestConnectionRecovery } from '../../services/connection-recovery-signal';
 import { pendingReactions } from '../../features/chat/pending-reactions';
 import { ChatDeliveryStatus } from '../../features/chat/chat-delivery-status';
+import { MessageSendFailure } from '../../features/chat/message-send-failure';
 import { StandaloneEmojiMessage } from '../../features/chat/standalone-emoji-message';
 import { MessageTextWithLinks } from '../../features/chat/message-link-card';
 import { userFacingErrorMessage } from '../../services/api-errors';
@@ -402,8 +403,11 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
   const outboxEntries = useChatOutbox((state) => state.entries);
   const attentionPlatforms = useChatOutbox((state) => state.attentionPlatforms);
   const chatOutbox = outboxEntries.filter((entry) => entry.userId === user?.id && entry.chatId === chatId);
-  const failedOutboxEvent = chatOutbox.find((entry) => entry.error);
-  const outboxError = failedOutboxEvent?.error;
+  const textOutboxByMessageId = useMemo(
+    () => new Map(chatOutbox.filter((entry) => entry.kind === 'text').map((entry) => [entry.message.id, entry])),
+    [chatOutbox],
+  );
+  const failedReactionEvent = chatOutbox.find((entry) => entry.kind === 'reaction' && entry.error);
   const availablePlatforms = usePlatformStore((state) => state.availablePlatforms);
   // Selectors, not a bare destructure: subscribing to the whole store re-rendered
   // this screen on every settings mutation for every conversation. Only this
@@ -462,6 +466,7 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
   } | null>(null);
   const platformChatIdRef = useRef<string | null>(null);
   const listRef = useRef<FlatList>(null);
+  const [bottomPositionedChatId, setBottomPositionedChatId] = useState<string | null>(null);
   const composerRef = useRef<import('react-native').TextInput>(null);
   const hasScrolledToHighlight = useRef(false);
   // State updates do not disable the send control synchronously. This ref
@@ -824,6 +829,16 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
     }
     return { listData: reversed, lastInbound: inbound, latestInjectedId: injected };
   }, [messages]);
+
+  const handleTimelineContentSizeChange = useCallback(() => {
+    // An inverted list already considers offset zero its bottom. While a warm
+    // cache is being reconciled with unread server rows, keep that opening
+    // position pinned without the native autoscroll animation. Highlight opens
+    // are the exception: their explicit scroll below owns the destination.
+    if (!chatId || highlightMessageId || bottomPositionedChatId === chatId) return;
+    listRef.current?.scrollToOffset({ offset: 0, animated: false });
+    if (!timeline.isFetching) setBottomPositionedChatId(chatId);
+  }, [bottomPositionedChatId, chatId, highlightMessageId, timeline.isFetching]);
 
   // Start the local/server read transition on mount. This used to wait for the
   // push animation and its cleanup cancelled the work when the user went back
@@ -1328,6 +1343,7 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
     const hasActionsOpen = messageActionTarget?.id === item.id;
     const replySender = replySource?.from_me ? 'You' : replySource?.contact_name || displayName;
     const reactionChips = groupReactions(reactionsByMessage[item.id] || []);
+    const failedSend = isMe ? textOutboxByMessageId.get(item.id) : undefined;
     const plainText = parseMediaCaption(item.content, { dropSelfLinks: false });
     const standaloneEmoji =
       (item.content_type || 'text') === 'text' &&
@@ -1349,6 +1365,17 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
         }}
         testID={`message-row-${item.id}-${isMe ? 'outgoing' : 'incoming'}`}
       >
+        {failedSend?.error ? (
+          <MessageSendFailure
+            messageId={item.id}
+            onRetry={() => {
+              if (!user?.id) return;
+              void retryFailedChatEvent(user.id, failedSend.id).catch((error) => {
+                console.warn('Could not retry failed message:', error);
+              });
+            }}
+          />
+        ) : null}
         <Pressable
           style={
             standaloneEmoji
@@ -1667,7 +1694,10 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
             style={{ flex: 1, minHeight: 0 }}
             contentContainerStyle={{ paddingVertical: space[3] }}
             keyboardShouldPersistTaps="handled"
-            maintainVisibleContentPosition={{ minIndexForVisible: 0, autoscrollToTopThreshold: 80 }}
+            onContentSizeChange={handleTimelineContentSizeChange}
+            maintainVisibleContentPosition={bottomPositionedChatId === chatId
+              ? { minIndexForVisible: 0, autoscrollToTopThreshold: 80 }
+              : { minIndexForVisible: 0 }}
             // A chat opens to the newest messages, so rendering the whole
             // hundred-message page before the push animation finishes is work
             // nobody sees. Left as FlatList on purpose: inverted plus
@@ -1740,25 +1770,22 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
           <ChatDeliveryStatus
             // Connection recovery runs silently. The composer is still usable
             // while it happens, and a persistent “Reconnecting” line above it
-            // added alarm without an action. Keep delivery errors and queued
-            // work visible, where the person can actually resolve them.
-            visible={connectionNeedsAttention || chatOutbox.length > 0 || !!outboxError}
+            // added alarm without an action. Text delivery failures live on
+            // their message bubbles; this area is reserved for connection-wide
+            // problems and reaction failures, which have no bubble of their own.
+            visible={connectionNeedsAttention || !!failedReactionEvent}
             needsAttention={connectionNeedsAttention}
-            count={chatOutbox.length}
-            error={outboxError}
+            count={0}
+            error={failedReactionEvent?.error}
             onPress={() => {
               if (connectionNeedsAttention) router.push('/connections');
-              else if (outboxError && user?.id) void getChatOutbox(user.id).retry(chatId).then(requestConnectionRecovery).catch(() => setSendError('Could not retry. Please try again.'));
+              else if (failedReactionEvent && user?.id) void retryFailedChatEvent(user.id, failedReactionEvent.id).catch(() => setSendError('Could not retry. Please try again.'));
               else requestConnectionRecovery();
             }}
-            restoreLabel={failedOutboxEvent?.kind === 'text' ? 'Move back to draft' : 'Discard failed reaction'}
-            onRestore={failedOutboxEvent && user?.id ? () => {
-              void removeFailedChatEvent(user.id, failedOutboxEvent.id).then((event) => {
-                if (event?.kind === 'text') {
-                  setInputText((current) => current ? `${current}\n${event.message.content}` : event.message.content);
-                  setReplyTarget(event.target || null);
-                }
-              }).catch(() => setSendError('Could not update the queue. Please try again.'));
+            restoreLabel="Discard failed reaction"
+            onRestore={failedReactionEvent && user?.id ? () => {
+              void removeFailedChatEvent(user.id, failedReactionEvent.id)
+                .catch(() => setSendError('Could not update the queue. Please try again.'));
             } : undefined}
           />
           <ChatComposer

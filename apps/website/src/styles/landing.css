@@ -2377,7 +2377,7 @@ code {
 /* Home only shows the ladder; /pricing carries the detail. */
 .pricing-teaser-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: stretch;
   gap: 14px;
 }
@@ -2482,6 +2482,12 @@ code {
   color: var(--neutral-600);
   font-size: 13px;
   line-height: 1.55;
+}
+.pricing-teaser-actions {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex: 0 0 auto;
 }
 @media (max-width: 1000px) {
   .pricing-teaser-grid {

@@ -96,7 +96,7 @@
 /* Cadence dial: the ladder in one glance, directly under the hero claim. */
 .pr-dial {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
   text-align: left;
 }
@@ -277,7 +277,8 @@
 
 .pr-tier-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 560px);
+  justify-content: center;
   align-items: stretch;
   gap: 14px;
 }

@@ -5,54 +5,86 @@ class NotificationService: UNNotificationServiceExtension {
     private var contentHandler: ((UNNotificationContent) -> Void)?
     private var bestAttemptContent: UNMutableNotificationContent?
     private var downloadTask: URLSessionDataTask?
+    private let finishLock = NSLock()
 
     override func didReceive(_ request: UNNotificationRequest, withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void) {
         self.contentHandler = contentHandler
         bestAttemptContent = (request.content.mutableCopy() as? UNMutableNotificationContent)
 
-        guard
-            let content = bestAttemptContent,
-            let avatar = content.userInfo["avatarUrl"] as? String,
-            let avatarURL = URL(string: avatar),
-            avatarURL.scheme == "https"
-        else {
-            finish()
-            return
-        }
-
-        downloadTask = URLSession.shared.dataTask(with: avatarURL) { [weak self] data, _, _ in
-            guard let self else { return }
-            guard let data, !data.isEmpty, data.count <= 10 * 1_024 * 1_024 else {
-                self.finish()
-                return
-            }
-            self.applyCommunicationAvatar(data: data)
-        }
-        downloadTask?.resume()
-    }
-
-    private func applyCommunicationAvatar(data: Data) {
         guard let content = bestAttemptContent else {
             finish()
             return
         }
 
-        let senderName = (content.userInfo["contactName"] as? String)
-            ?? (content.userInfo["chatName"] as? String)
-            ?? content.title
-        let chatID = (content.userInfo["chatId"] as? String) ?? UUID().uuidString
-        let senderID = (content.userInfo["senderId"] as? String) ?? senderName
+        guard
+            let avatar = stringValue("avatarUrl", in: content),
+            let avatarURL = URL(string: avatar),
+            avatarURL.scheme?.lowercased() == "https"
+        else {
+            applyCommunicationContent(avatarData: nil)
+            return
+        }
+
+        downloadTask = URLSession.shared.dataTask(with: avatarURL) { [weak self] data, response, _ in
+            guard let self else { return }
+            let httpResponse = response as? HTTPURLResponse
+            let isSuccessful = httpResponse.map { (200..<300).contains($0.statusCode) } ?? false
+            let isImage = httpResponse?.mimeType?.lowercased().hasPrefix("image/") == true
+            let validData = data.flatMap {
+                isSuccessful && isImage && !$0.isEmpty && $0.count <= 5 * 1_024 * 1_024
+                    ? $0
+                    : nil
+            }
+            // A failed or slow image must not cost the sender/group metadata.
+            self.applyCommunicationContent(avatarData: validData)
+        }
+        downloadTask?.resume()
+    }
+
+    private func stringValue(_ key: String, in content: UNNotificationContent) -> String? {
+        guard let value = content.userInfo[key] as? String else { return nil }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private func boolValue(_ key: String, in content: UNNotificationContent) -> Bool {
+        if let value = content.userInfo[key] as? Bool { return value }
+        if let value = content.userInfo[key] as? NSNumber { return value.boolValue }
+        if let value = content.userInfo[key] as? String {
+            return ["true", "1", "yes"].contains(value.lowercased())
+        }
+        return false
+    }
+
+    private func applyCommunicationContent(avatarData: Data?, donate: Bool = true) {
+        guard let content = bestAttemptContent else {
+            finish()
+            return
+        }
+
+        // The alert title is already the sender. Never replace it with the
+        // conversation name for groups; iOS renders the group as a subtitle.
+        let senderName = stringValue("senderName", in: content)
+            ?? (!content.title.isEmpty ? content.title : nil)
+            ?? stringValue("contactName", in: content)
+            ?? stringValue("chatName", in: content)
+            ?? "New message"
+        let chatID = stringValue("chatId", in: content) ?? UUID().uuidString
+        let senderID = stringValue("senderId", in: content) ?? senderName
+        let isGroup = boolValue("isGroup", in: content)
+        let avatarType = stringValue("avatarType", in: content)
+        let avatarImage = avatarData.map(INImage.init(imageData:))
         let handle = INPersonHandle(value: senderID, type: .unknown)
         let sender = INPerson(
             personHandle: handle,
             nameComponents: nil,
             displayName: senderName,
-            image: INImage(imageData: data),
+            image: !isGroup || avatarType == "sender" ? avatarImage : nil,
             contactIdentifier: nil,
             customIdentifier: senderID
         )
-        let groupName: INSpeakableString? = (content.userInfo["isGroup"] as? Bool) == true
-            ? INSpeakableString(spokenPhrase: (content.userInfo["chatName"] as? String) ?? senderName)
+        let groupName: INSpeakableString? = isGroup
+            ? INSpeakableString(spokenPhrase: stringValue("chatName", in: content) ?? "Group chat")
             : nil
         let intent = INSendMessageIntent(
             recipients: nil,
@@ -65,14 +97,29 @@ class NotificationService: UNNotificationServiceExtension {
             attachments: nil
         )
 
-        if groupName != nil {
-            intent.setImage(INImage(imageData: data), forParameterNamed: \INSendMessageIntent.speakableGroupName)
+        if isGroup, avatarType == "group", let avatarImage {
+            intent.setImage(avatarImage, forParameterNamed: \INSendMessageIntent.speakableGroupName)
         }
 
         let interaction = INInteraction(intent: intent, response: nil)
         interaction.direction = .incoming
-        interaction.donate(completion: nil)
 
+        if donate {
+            // Apple recommends completing the incoming interaction donation
+            // before asking the system to specialize the notification.
+            interaction.donate { [weak self] _ in
+                self?.finishUpdatedContent(using: intent)
+            }
+        } else {
+            finishUpdatedContent(using: intent)
+        }
+    }
+
+    private func finishUpdatedContent(using intent: INSendMessageIntent) {
+        guard let content = bestAttemptContent else {
+            finish()
+            return
+        }
         do {
             let updated = try content.updating(from: intent)
             finish(with: updated)
@@ -84,13 +131,19 @@ class NotificationService: UNNotificationServiceExtension {
     }
 
     private func finish(with content: UNNotificationContent? = nil) {
-        guard let handler = contentHandler else { return }
+        finishLock.lock()
+        guard let handler = contentHandler else {
+            finishLock.unlock()
+            return
+        }
         contentHandler = nil
+        finishLock.unlock()
         handler(content ?? bestAttemptContent ?? UNNotificationContent())
     }
 
     override func serviceExtensionTimeWillExpire() {
         downloadTask?.cancel()
-        finish()
+        // Preserve messaging semantics even when the remote image timed out.
+        applyCommunicationContent(avatarData: nil, donate: false)
     }
 }

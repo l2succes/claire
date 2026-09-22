@@ -74,6 +74,11 @@ interface NotificationOptions {
 export const MESSAGE_NOTIFICATION_CATEGORY = 'claire_message';
 export const LOOP_NOTIFICATION_CATEGORY = 'claire_loop';
 
+interface MessageNotificationArtwork {
+  senderAvatarUrl?: string;
+  chatAvatarUrl?: string;
+}
+
 /** Remote notification media must be directly downloadable by APNs/FCM. */
 export function notificationImageUrl(value: unknown): string | undefined {
   if (typeof value !== 'string' || value.length > 2_048) return undefined;
@@ -83,6 +88,50 @@ export function notificationImageUrl(value: unknown): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+/** Build one stable messaging payload for every provider/device. */
+export function buildIncomingMessageNotification(
+  event: IncomingNotificationEvent,
+  badge: number,
+  artwork: MessageNotificationArtwork = {},
+): NotificationPayload {
+  const isGroup = event.isGroup === true;
+  const senderName = event.senderName?.trim()
+    || (!isGroup ? event.chatName?.trim() : undefined)
+    || 'New message';
+  const chatName = event.chatName?.trim() || (isGroup ? 'Group chat' : senderName);
+  const groupAvatarUrl = isGroup ? notificationImageUrl(artwork.chatAvatarUrl) : undefined;
+  const senderAvatarUrl = notificationImageUrl(artwork.senderAvatarUrl);
+  const avatarUrl = groupAvatarUrl || senderAvatarUrl;
+  const avatarType = groupAvatarUrl ? 'group' : avatarUrl ? 'sender' : undefined;
+
+  return {
+    title: senderName,
+    body: event.content.trim().slice(0, 160) || 'Sent you an update',
+    badge,
+    collapseId: event.messageId,
+    categoryId: MESSAGE_NOTIFICATION_CATEGORY,
+    // Communication styling (sender, group name, avatar) is applied by the
+    // iOS Notification Service Extension even when no artwork is available.
+    mutableContent: true,
+    threadId: `chat:${event.chatId}`,
+    tag: `chat:${event.chatId}`,
+    data: {
+      version: 1,
+      type: 'new_message',
+      messageId: event.messageId,
+      chatId: event.chatId,
+      platform: event.platform,
+      senderId: event.senderContactId || `${event.platform}:${senderName}`,
+      senderName,
+      chatName,
+      ...(!isGroup ? { contactName: senderName } : {}),
+      isGroup,
+      ...(avatarUrl ? { avatarUrl, avatarType: avatarType! } : {}),
+      url: `claire://chat/${event.chatId}?messageId=${event.messageId}`,
+    },
+  };
 }
 
 export function shouldNotifyLoops(notificationEnabled: boolean | null | undefined, options: NotificationOptions): boolean {
@@ -175,7 +224,7 @@ export class NotificationDeliveryService {
     const [{ data: preferences, error: preferenceError }, { data: devices, error: deviceError }, { data: chat, error: chatError }, { data: contactRow, error: contactError }] = await Promise.all([
       supabase.from('user_preferences').select('notification_enabled,preferences').eq('user_id', event.userId).maybeSingle(),
       supabase.from('notification_devices').select('id,user_id,device_id,platform,provider,token,enabled,timezone').eq('user_id', event.userId).eq('enabled', true),
-      supabase.from('chats').select('is_muted,contact:contacts!chats_contact_id_fkey(avatar_url)').eq('id', event.chatId).eq('user_id', event.userId).maybeSingle(),
+      supabase.from('chats').select('is_muted,avatar_url,contact:contacts!chats_contact_id_fkey(avatar_url)').eq('id', event.chatId).eq('user_id', event.userId).maybeSingle(),
       senderContact,
     ]);
     if (preferenceError) throw preferenceError;
@@ -188,7 +237,8 @@ export class NotificationDeliveryService {
     const { data: chats } = await supabase.from('chats').select('unread_count').eq('user_id', event.userId);
     const badge = (chats || []).reduce((sum: number, chat: { unread_count?: number }) => sum + Math.max(0, chat.unread_count || 0), 0);
     const contact = Array.isArray(chat?.contact) ? chat.contact[0] : chat?.contact;
-    const avatarUrl = notificationImageUrl(contactRow?.avatar_url || contact?.avatar_url);
+    const senderAvatarUrl = notificationImageUrl(contactRow?.avatar_url || contact?.avatar_url);
+    const chatAvatarUrl = notificationImageUrl(chat?.avatar_url);
     let queued = 0;
     for (const device of (devices || []) as NotificationDevice[]) {
       let suppression: string | null = null;
@@ -207,32 +257,10 @@ export class NotificationDeliveryService {
       if (error) throw error;
       if (suppression || !delivery) continue;
 
-      const payload: NotificationPayload = {
-        title: event.senderName || 'New message',
-        body: event.content.trim().slice(0, 160) || 'Sent you an update',
-        badge,
-        collapseId: event.messageId,
-        categoryId: MESSAGE_NOTIFICATION_CATEGORY,
-        mutableContent: Boolean(avatarUrl),
-        threadId: `chat:${event.chatId}`,
-        tag: `chat:${event.chatId}`,
-        ...(avatarUrl ? { richContent: { image: avatarUrl } } : {}),
-        data: {
-          version: 1,
-          type: 'new_message',
-          messageId: event.messageId,
-          chatId: event.chatId,
-          platform: event.platform,
-          senderId: event.senderContactId || `${event.platform}:${event.senderName || event.chatId}`,
-          ...(event.chatName ? { chatName: event.chatName } : {}),
-          ...(!event.isGroup && (event.chatName || event.senderName)
-            ? { contactName: event.chatName || event.senderName! }
-            : {}),
-          isGroup: event.isGroup === true,
-          ...(avatarUrl ? { avatarUrl } : {}),
-          url: `claire://chat/${event.chatId}?messageId=${event.messageId}`,
-        },
-      };
+      const payload = buildIncomingMessageNotification(event, badge, {
+        senderAvatarUrl,
+        chatAvatarUrl,
+      });
       await this.queue!.add({
         kind: 'delivery',
         deliveryId: delivery.id,

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, mobileType, space } from '@claire/design-system';
@@ -8,21 +8,24 @@ import {
   billingIsConfigured,
   getBillingPackages,
   initializeBilling,
+  presentBillingOfferCode,
   purchaseBillingPackage,
   restoreBillingPurchases,
 } from '../../services/billing';
-import { getServerBillingSummary, refreshServerBillingSummary } from '../../services/billing-api';
-import type { BillingPackage, ServerBillingSummary } from '../../services/billing-types';
+import { refreshServerBillingSummary } from '../../services/billing-api';
+import type { BillingPackage } from '../../services/billing-types';
 import { userFacingErrorMessage } from '../../services/api-errors';
 import {
   CadenceSelector,
+  OfferCodeButton,
   PaywallHeader,
+  PaywallHero,
   PlanOption,
-  PreviewStatusCard,
   PurchaseButton,
   RestoreButton,
   SharedBenefitsCard,
   StoreUnavailable,
+  TrialTimeline,
 } from './paywall-components';
 import {
   availableCadences,
@@ -44,25 +47,24 @@ export function PaywallScreen() {
   const { source } = useLocalSearchParams<{ source?: string }>();
   const userId = useAuthStore((state) => state.user?.id);
   const [packages, setPackages] = useState<BillingPackage[]>([]);
-  const [summary, setSummary] = useState<ServerBillingSummary | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
-  const [cadence, setCadence] = useState<BillingCadence>('annual');
+  const [cadence, setCadence] = useState<BillingCadence>('monthly');
   const [loading, setLoading] = useState(true);
   const [purchasing, setPurchasing] = useState(false);
+  const sourceValue = Array.isArray(source) ? source[0] : source;
 
   useEffect(() => {
-    if (!userId) return;
+    if (!userId) {
+      setLoading(false);
+      return;
+    }
     let active = true;
     void (async () => {
       try {
         await initializeBilling(userId);
-        const [available, serverSummary] = await Promise.all([
-          getBillingPackages(),
-          getServerBillingSummary().catch(() => null),
-        ]);
+        const available = await getBillingPackages();
         if (!active) return;
         setPackages(available);
-        setSummary(serverSummary);
         const initial = defaultPackage(available);
         setSelected(initial?.identifier || null);
         if (initial) setCadence(cadenceForPackage(initial));
@@ -87,8 +89,6 @@ export function PaywallScreen() {
   );
   const cadences = useMemo(() => availableCadences(packages), [packages]);
   const visiblePackages = useMemo(() => packagesForCadence(packages, cadence), [packages, cadence]);
-  const previewCredits = summary?.credits.available ?? 50;
-  const sourceValue = Array.isArray(source) ? source[0] : source;
 
   const selectCadence = (nextCadence: BillingCadence) => {
     setCadence(nextCadence);
@@ -135,6 +135,14 @@ export function PaywallScreen() {
     }
   };
 
+  const redeemCode = async () => {
+    try {
+      await presentBillingOfferCode();
+    } catch (error) {
+      Alert.alert('Could not open offer codes', userFacingErrorMessage(error, 'Please try again.'));
+    }
+  };
+
   return (
     <View testID="billing-paywall" style={{ flex: 1, backgroundColor: colors.cream }}>
       <ScrollView
@@ -144,29 +152,15 @@ export function PaywallScreen() {
           alignItems: 'center',
           paddingTop: space[3],
           paddingHorizontal: space[4],
-          paddingBottom: Math.max(insets.bottom + 132, 164),
+          paddingBottom: Math.max(insets.bottom + 190, 222),
         }}
       >
-        <View style={{ width: '100%', maxWidth: 520, gap: space[6] }}>
+        <View style={{ width: '100%', maxWidth: 520, gap: space[5] }}>
           <PaywallHeader onClose={() => finish(source)} />
+          <PaywallHero hasTrial={chosen?.trialDays === 3} />
+          <SharedBenefitsCard />
 
-          <View style={{ gap: space[3] }}>
-            <Text style={{ ...mobileType.monoLabel, color: colors.neutral[600] }}>
-              ONE CALM PLACE FOR EVERY CONVERSATION
-            </Text>
-            <Text selectable style={{ ...mobileType.display, color: colors.ink, maxWidth: 430 }}>
-              Stay present without starting from zero.
-            </Text>
-            <Text
-              selectable
-              style={{ ...mobileType.body, color: colors.neutral[600], maxWidth: 450 }}
-            >
-              Claire catches you up, finds what is still open, and helps write the next reply across
-              every connected conversation.
-            </Text>
-          </View>
-
-          <PreviewStatusCard credits={previewCredits} isOnboarding={sourceValue === 'onboarding'} />
+          {chosen?.trialDays === 3 ? <TrialTimeline item={chosen} /> : null}
 
           <View accessibilityRole="radiogroup" style={{ gap: space[3] }}>
             <View style={{ gap: space[2] }}>
@@ -178,11 +172,7 @@ export function PaywallScreen() {
                 }}
               >
                 <Text style={{ ...mobileType.monoLabel, color: colors.ink }}>CHOOSE YOUR PLAN</Text>
-                {visiblePackages.length ? (
-                  <Text style={{ ...mobileType.monoLabel, color: colors.neutral[400] }}>
-                    {visiblePackages.length} OPTION{visiblePackages.length === 1 ? '' : 'S'}
-                  </Text>
-                ) : null}
+                <Text style={{ ...mobileType.monoLabel, color: colors.neutral[400] }}>CANCEL ANYTIME</Text>
               </View>
               <CadenceSelector cadences={cadences} selected={cadence} onSelect={selectCadence} />
             </View>
@@ -201,6 +191,8 @@ export function PaywallScreen() {
                   Loading plans…
                 </Text>
               </View>
+            ) : !userId ? (
+              <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>Sign in to see plans available in your store.</Text>
             ) : visiblePackages.length ? (
               visiblePackages.map((item) => (
                 <PlanOption
@@ -215,8 +207,6 @@ export function PaywallScreen() {
             )}
           </View>
 
-          <SharedBenefitsCard />
-
           <Text
             selectable
             style={{
@@ -226,9 +216,16 @@ export function PaywallScreen() {
               textAlign: 'center',
             }}
           >
-            Payment is charged to your store account. Your subscription renews automatically unless
-            canceled before the renewal date.
+            {chosen?.trialDays === 3
+              ? `Free for 3 days, then ${chosen.priceString} billed monthly until canceled. Cancel before the trial ends to avoid a charge.`
+              : chosen
+                ? `${chosen.priceString} billed monthly until canceled. Payment is charged to your store account.`
+                : 'Payment is charged to your store account. Subscriptions renew automatically unless canceled.'}
           </Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'center', gap: space[5] }}>
+            <Pressable accessibilityRole="link" onPress={() => void Linking.openURL('https://useclaire.co/legal/terms').catch(() => undefined)} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ ...mobileType.bodySmall, color: colors.neutral[600], textDecorationLine: 'underline' }}>Terms</Text></Pressable>
+            <Pressable accessibilityRole="link" onPress={() => void Linking.openURL('https://useclaire.co/legal/privacy').catch(() => undefined)} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ ...mobileType.bodySmall, color: colors.neutral[600], textDecorationLine: 'underline' }}>Privacy</Text></Pressable>
+          </View>
         </View>
       </ScrollView>
 
@@ -248,25 +245,20 @@ export function PaywallScreen() {
         }}
       >
         <View style={{ width: '100%', maxWidth: 520, gap: 2 }}>
-          <PurchaseButton item={chosen} purchasing={purchasing} onPress={() => void purchase()} />
+          {chosen ? <Text selectable style={{ ...mobileType.body, fontWeight: '700', color: colors.ink, textAlign: 'center', paddingBottom: space[2] }}>{chosen.trialDays === 3 ? `3 days free · then ${chosen.priceString} / month` : `Monthly plan · ${chosen.priceString} / month`}</Text> : null}
+          {sourceValue === 'onboarding' && !chosen ? (
+            <Pressable accessibilityRole="button" onPress={() => finish(source)} style={{ minHeight: 56, borderRadius: 16, backgroundColor: colors.lime, alignItems: 'center', justifyContent: 'center' }}><Text style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>Continue to Claire</Text></Pressable>
+          ) : <PurchaseButton item={chosen} purchasing={purchasing} onPress={() => void purchase()} />}
+          {chosen ? <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600], textAlign: 'center', paddingTop: space[2] }}>Auto-renews unless canceled. Cancel anytime.</Text> : null}
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            {sourceValue === 'onboarding' && previewCredits > 0 ? (
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => finish(source)}
-                style={{ minHeight: 44, flex: 1, alignItems: 'center', justifyContent: 'center' }}
-              >
-                <Text style={{ ...mobileType.bodySmall, fontWeight: '700', color: colors.ink }}>
-                  Use {previewCredits} free credits first
-                </Text>
-              </Pressable>
-            ) : null}
-            {sourceValue === 'onboarding' && previewCredits > 0 ? (
-              <View style={{ width: 1, height: 18, backgroundColor: colors.neutral[200] }} />
-            ) : null}
             <RestoreButton
               disabled={purchasing || !billingIsConfigured()}
               onPress={() => void restore()}
+            />
+            <View style={{ width: 1, height: 18, backgroundColor: colors.neutral[200] }} />
+            <OfferCodeButton
+              disabled={purchasing || !billingIsConfigured()}
+              onPress={() => void redeemCode()}
             />
           </View>
         </View>
