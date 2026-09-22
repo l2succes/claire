@@ -144,4 +144,17 @@ describe('loop snapshot write-through', () => {
     expect(loopWrites).toHaveLength(2);
     expect(db.runAsync.mock.calls.some((call) => call[1] === 'loops_snapshot_at')).toBe(true);
   });
+
+  it('writes a successful loop mutation into the local replica', async () => {
+    const { db } = mockNativeSqlite();
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const cache = require('../services/mobile-cache.native') as typeof import('../services/mobile-cache.native');
+
+    await cache.cacheLoop('user-1', { id: 'loop-1', content: 'Send the deck', status: 'done' });
+
+    expect(db.runAsync.mock.calls.some((call) => (
+      String(call[0]).includes('INSERT INTO cache_loops')
+      && String(call[2]).includes('"status":"done"')
+    ))).toBe(true);
+  });
 });

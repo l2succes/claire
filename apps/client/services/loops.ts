@@ -6,17 +6,15 @@
  * module, one set of types.
  */
 
-import { supabase } from './supabase';
 import { API_BASE_URL } from './platforms';
+import { authenticatedFetch } from './authenticated-fetch';
 import type { LoopAgentResult, LoopDetail, LoopItem, LoopReviewInput } from './loop-types';
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const { data: { session } } = await supabase.auth.getSession();
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await authenticatedFetch(`${API_BASE_URL}${path}`, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
-      ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
       ...init.headers,
     },
   });

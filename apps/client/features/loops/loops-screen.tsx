@@ -7,7 +7,7 @@ import Animated, { FadeInRight, FadeOutLeft } from 'react-native-reanimated';
 import { colors, mobileType, radius, space } from '@claire/design-system';
 import { MobileChip, MobileHeader, MobileIconButton, MobileState } from '../../components/mobile/claire-mobile';
 import type { LoopItem } from '../../services/loop-types';
-import { cachedLoops, replaceCachedLoops } from '../../services/mobile-cache';
+import { cacheLoop, cachedLoops, replaceCachedLoops } from '../../services/mobile-cache';
 import { useLocalFirstQuery } from '../../hooks/useLocalFirstQuery';
 import { useScreenLoadMark } from '../../hooks/useScreenLoadMark';
 import { useAuthStore } from '../../stores/authStore';
@@ -19,6 +19,12 @@ import { BottomSheet } from '../../components/mobile/bottom-sheet';
 import { isLoopDeferred } from '../../services/loop-display';
 import { loopNeedsReview } from '../../services/loop-review';
 import { userFacingErrorMessage } from '../../services/api-errors';
+import {
+  invalidateLoopQueries,
+  patchLoopQueries,
+  restoreLoopQueries,
+  snapshotLoopQueries,
+} from '../../services/loop-query-cache';
 
 type LoopFilter = 'for_you' | 'done' | 'waiting' | 'all';
 
@@ -123,55 +129,78 @@ export function LoopsScreen() {
     mutationFn: ({ id, ...next }: { id: string; status: LoopItem['status']; owner?: LoopItem['owner'] }) =>
       updateLoop(id, next),
     onMutate: async ({ id, ...next }) => {
-      await queryClient.cancelQueries({ queryKey: loopsQueryKey });
-      const previous = queryClient.getQueryData<LoopItem[]>(loopsQueryKey);
-      queryClient.setQueryData<LoopItem[]>(loopsQueryKey, (items) =>
-        items?.map((item) => item.id === id ? { ...item, ...next } : item));
-      return { previous };
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: loopsQueryKey }),
+        queryClient.cancelQueries({ queryKey: ['mobile-home-loops', user?.id] }),
+      ]);
+      const snapshot = snapshotLoopQueries(queryClient, user?.id, id);
+      patchLoopQueries(queryClient, user?.id, id, next);
+      return { snapshot };
     },
     onError: (_error, _variables, context) => {
-      if (context?.previous) queryClient.setQueryData(loopsQueryKey, context.previous);
+      if (context?.snapshot) restoreLoopQueries(queryClient, user?.id, _variables.id, context.snapshot);
     },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: loopsQueryKey }),
+    onSuccess: async (updated) => {
+      patchLoopQueries(queryClient, user?.id, updated.id, updated);
+      if (user?.id) await cacheLoop(user.id, updated as unknown as Record<string, unknown>);
+    },
+    onSettled: (_data, _error, variables) => invalidateLoopQueries(queryClient, user?.id, variables.id),
   });
   const snooze = useMutation({
     mutationFn: ({ id, until }: { id: string; until: string }) => snoozeLoop(id, until),
     onMutate: async ({ id, until }) => {
-      await queryClient.cancelQueries({ queryKey: loopsQueryKey });
-      const previous = queryClient.getQueryData<LoopItem[]>(loopsQueryKey);
-      queryClient.setQueryData<LoopItem[]>(loopsQueryKey, (items) =>
-        items?.map((item) => item.id === id ? { ...item, status: 'snoozed', snoozed_until: until } : item));
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: loopsQueryKey }),
+        queryClient.cancelQueries({ queryKey: ['mobile-home-loops', user?.id] }),
+      ]);
+      const snapshot = snapshotLoopQueries(queryClient, user?.id, id);
+      patchLoopQueries(queryClient, user?.id, id, { status: 'snoozed', snoozed_until: until });
       setSnoozeTarget(null);
-      return { previous };
+      return { snapshot };
     },
-    onError: (_error, _variables, context) => {
-      if (context?.previous) queryClient.setQueryData(loopsQueryKey, context.previous);
+    onError: (_error, variables, context) => {
+      if (context?.snapshot) restoreLoopQueries(queryClient, user?.id, variables.id, context.snapshot);
     },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: loopsQueryKey }),
+    onSuccess: async (updated) => {
+      patchLoopQueries(queryClient, user?.id, updated.id, updated);
+      if (user?.id) await cacheLoop(user.id, updated as unknown as Record<string, unknown>);
+    },
+    onSettled: (_data, _error, variables) => invalidateLoopQueries(queryClient, user?.id, variables.id),
   });
   const create = useMutation({
     mutationFn: createLoop,
-    onSuccess: () => { setNewLoop(''); setShowCreate(false); queryClient.invalidateQueries({ queryKey: ['mobile-loops', user?.id] }); },
+    onSuccess: () => {
+      setNewLoop('');
+      setShowCreate(false);
+      void queryClient.invalidateQueries({ queryKey: ['mobile-loops', user?.id] });
+      void queryClient.invalidateQueries({ queryKey: ['mobile-home-loops', user?.id] });
+    },
   });
 
   const review = useMutation({
     mutationFn: ({ id, ...input }: { id: string } & Parameters<typeof reviewLoop>[1]) => reviewLoop(id, input),
     onMutate: async ({ id, action }) => {
-      await queryClient.cancelQueries({ queryKey: loopsQueryKey });
-      const previous = queryClient.getQueryData<LoopItem[]>(loopsQueryKey);
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: loopsQueryKey }),
+        queryClient.cancelQueries({ queryKey: ['mobile-home-loops', user?.id] }),
+      ]);
+      const snapshot = snapshotLoopQueries(queryClient, user?.id, id);
       const reviewedAt = new Date().toISOString();
-      queryClient.setQueryData<LoopItem[]>(loopsQueryKey, (items) => items?.map((item) => {
-        if (item.id !== id) return item;
-        if (action === 'done') return { ...item, status: 'done', thread_state: 'resolved', reviewed_at: reviewedAt };
-        if (action === 'dismiss') return { ...item, status: 'dropped', thread_state: 'resolved', reviewed_at: reviewedAt };
-        return { ...item, reviewed_at: reviewedAt };
-      }));
-      return { previous };
+      patchLoopQueries(queryClient, user?.id, id, action === 'done'
+        ? { status: 'done', thread_state: 'resolved', reviewed_at: reviewedAt }
+        : action === 'dismiss'
+          ? { status: 'dropped', thread_state: 'resolved', reviewed_at: reviewedAt }
+          : { reviewed_at: reviewedAt });
+      return { snapshot };
     },
-    onError: (_error, _variables, context) => {
-      if (context?.previous) queryClient.setQueryData(loopsQueryKey, context.previous);
+    onError: (_error, variables, context) => {
+      if (context?.snapshot) restoreLoopQueries(queryClient, user?.id, variables.id, context.snapshot);
     },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: loopsQueryKey }),
+    onSuccess: async (updated) => {
+      patchLoopQueries(queryClient, user?.id, updated.id, updated);
+      if (user?.id) await cacheLoop(user.id, updated as unknown as Record<string, unknown>);
+    },
+    onSettled: (_data, _error, variables) => invalidateLoopQueries(queryClient, user?.id, variables.id),
   });
 
   // One pass, memoised. These were six chained filters recomputed on every

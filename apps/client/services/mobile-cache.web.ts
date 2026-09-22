@@ -98,6 +98,25 @@ export async function replaceCachedLoops(
   await persist(userId, { ...snapshot, loops, lastSyncAt: new Date().toISOString() });
 }
 
+export async function cacheLoop(userId: string, loop: Record<string, unknown>): Promise<void> {
+  if (typeof loop.id !== 'string') return;
+  const snapshot = await load(userId);
+  await persist(userId, {
+    ...snapshot,
+    loops: [...snapshot.loops.filter((item) => item.id !== loop.id), loop],
+    lastSyncAt: new Date().toISOString(),
+  });
+}
+
+export async function deleteCachedLoop(userId: string, loopId: string): Promise<void> {
+  const snapshot = await load(userId);
+  await persist(userId, {
+    ...snapshot,
+    loops: snapshot.loops.filter((item) => item.id !== loopId),
+    lastSyncAt: new Date().toISOString(),
+  });
+}
+
 export async function cachedLoop(userId: string, loopId: string): Promise<Record<string, unknown> | null> {
   const loops = (await load(userId)).loops || [];
   return (loops as Array<Record<string, unknown>>).find((loop) => loop.id === loopId) ?? null;

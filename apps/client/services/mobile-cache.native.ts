@@ -266,6 +266,23 @@ export async function replaceCachedLoops(
   invalidateSnapshot(userId);
 }
 
+/** Persist one successful loop mutation without waiting for the next sync. */
+export async function cacheLoop(userId: string, loop: Record<string, unknown>): Promise<void> {
+  if (!isNativeMobile || typeof loop.id !== 'string') return;
+  const db = await database(userId);
+  if (!db) return;
+  await upsert(userId, db, 'cache_loops', loop);
+  invalidateSnapshot(userId);
+}
+
+export async function deleteCachedLoop(userId: string, loopId: string): Promise<void> {
+  if (!isNativeMobile) return;
+  const db = await database(userId);
+  if (!db) return;
+  await db.runAsync('DELETE FROM cache_loops WHERE id = ?', loopId);
+  invalidateSnapshot(userId);
+}
+
 export async function cachedLoop(userId: string, loopId: string): Promise<Record<string, unknown> | null> {
   if (!isNativeMobile) return null;
   const db = await database(userId);

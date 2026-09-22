@@ -18,6 +18,7 @@ import { loopTitle, type LoopItem } from '../../services/loops';
 import { cachedLoops, readQuerySnapshot, writeQuerySnapshot } from '../../services/mobile-cache';
 import { useLocalFirstQuery } from '../../hooks/useLocalFirstQuery';
 import { useScreenLoadMark } from '../../hooks/useScreenLoadMark';
+import { belongsInHomeLoops } from '../../services/loop-query-cache';
 
 interface UrgentMessage {
   id: string;
@@ -86,7 +87,9 @@ export function HomeScreen() {
     queryFn: () => fetchHomeLoops(user!.id),
     local: {
       enabled: !!user?.id,
-      read: async () => (user?.id ? (await cachedLoops(user.id)) as unknown as LoopItem[] : null),
+      read: async () => user?.id
+        ? ((await cachedLoops(user.id)) as unknown as LoopItem[]).filter(belongsInHomeLoops)
+        : null,
     },
   });
 
