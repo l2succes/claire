@@ -11,7 +11,8 @@
       "env": {
         "APP_VARIANT": "development",
         "EXPO_PUBLIC_ENV": "development",
-        "EXPO_PUBLIC_API_URL": "http://localhost:3001"
+        "EXPO_PUBLIC_API_URL": "http://localhost:3001",
+        "EXPO_PUBLIC_REVENUECAT_STORE": "test"
       },
       "channel": "development"
     },
@@ -20,7 +21,8 @@
       "environment": "preview",
       "env": {
         "APP_VARIANT": "staging",
-        "EXPO_PUBLIC_ENV": "staging"
+        "EXPO_PUBLIC_ENV": "staging",
+        "EXPO_PUBLIC_REVENUECAT_STORE": "test"
       },
       "channel": "staging"
     },
@@ -33,7 +35,8 @@
       "environment": "production",
       "env": {
         "APP_VARIANT": "production",
-        "EXPO_PUBLIC_ENV": "production"
+        "EXPO_PUBLIC_ENV": "production",
+        "EXPO_PUBLIC_REVENUECAT_STORE": "platform"
       },
       "channel": "production"
     },

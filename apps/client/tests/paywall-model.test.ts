@@ -5,6 +5,7 @@ import {
   packageForCadence,
   packagePrice,
   packagesForCadence,
+  publicBillingPackages,
 } from '../features/billing/paywall-model';
 
 function billingPackage(
@@ -34,16 +35,17 @@ const packages = [
 ];
 
 describe('paywall model', () => {
-  it('defaults to annual Plus and exposes only store-backed cadences', () => {
-    expect(defaultPackage(packages)?.identifier).toBe('plus_annual');
-    expect(availableCadences(packages)).toEqual(['monthly', 'annual']);
+  it('publishes only the $20 monthly plan even when legacy packages remain in RevenueCat', () => {
+    expect(publicBillingPackages(packages).map((item) => item.identifier)).toEqual(['pro_monthly']);
+    expect(defaultPackage(packages)?.identifier).toBe('pro_monthly');
+    expect(availableCadences(packages)).toEqual(['monthly']);
   });
 
-  it('orders plan choices consistently within a cadence', () => {
+  it('never shows the $10 or annual packages as purchase choices', () => {
     expect(packagesForCadence(packages, 'monthly').map((item) => item.identifier)).toEqual([
-      'plus_monthly',
       'pro_monthly',
     ]);
+    expect(packagesForCadence(packages, 'annual')).toEqual([]);
   });
 
   it('keeps the selected plan when cadence changes', () => {

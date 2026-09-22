@@ -3,6 +3,8 @@ import type { BillingPackage, BillingPlan } from '../../services/billing-types';
 export type BillingCadence = 'monthly' | 'annual';
 export type PaidBillingPlan = Exclude<BillingPlan, 'preview'>;
 
+const PUBLIC_PRODUCT_ID = 'claire_pro_monthly';
+
 export const PLAN_DETAILS: Record<
   PaidBillingPlan,
   {
@@ -21,22 +23,32 @@ export const PLAN_DETAILS: Record<
     features: ['Up to 3 Loop runs a day', 'Bring your own provider key'],
   },
   pro: {
-    name: 'Claire Pro',
-    eyebrow: 'DAILY LOOP',
+    name: 'Claire',
+    eyebrow: 'ONE SIMPLE PLAN',
     description: 'A fresh Loop every morning, plus more room for AI.',
     credits: '2,000 AI credits / month',
     features: ['Automatic morning Loop', 'Best available model tier'],
   },
 };
 
+/**
+ * Plus and annual products remain valid for existing customers, but the
+ * acquisition surface deliberately sells one plan. Keeping the filter here
+ * prevents a stale RevenueCat offering from quietly reintroducing choices.
+ */
+export function publicBillingPackages(packages: BillingPackage[]): BillingPackage[] {
+  return packages.filter((item) => item.productIdentifier === PUBLIC_PRODUCT_ID);
+}
+
 export function cadenceForPackage(item: BillingPackage): BillingCadence {
   return item.subscriptionPeriod === 'P1Y' ? 'annual' : 'monthly';
 }
 
 export function availableCadences(packages: BillingPackage[]): BillingCadence[] {
+  const publicPackages = publicBillingPackages(packages);
   const result: BillingCadence[] = [];
-  if (packages.some((item) => cadenceForPackage(item) === 'monthly')) result.push('monthly');
-  if (packages.some((item) => cadenceForPackage(item) === 'annual')) result.push('annual');
+  if (publicPackages.some((item) => cadenceForPackage(item) === 'monthly')) result.push('monthly');
+  if (publicPackages.some((item) => cadenceForPackage(item) === 'annual')) result.push('annual');
   return result;
 }
 
@@ -45,18 +57,13 @@ export function packagesForCadence(
   cadence: BillingCadence
 ): BillingPackage[] {
   const order: Record<PaidBillingPlan, number> = { plus: 0, pro: 1 };
-  return packages
+  return publicBillingPackages(packages)
     .filter((item) => cadenceForPackage(item) === cadence)
     .sort((left, right) => order[left.plan] - order[right.plan]);
 }
 
 export function defaultPackage(packages: BillingPackage[]): BillingPackage | null {
-  return (
-    packages.find((item) => item.plan === 'plus' && cadenceForPackage(item) === 'annual') ||
-    packages.find((item) => item.plan === 'plus') ||
-    packages[0] ||
-    null
-  );
+  return publicBillingPackages(packages)[0] || null;
 }
 
 export function packageForCadence(

@@ -8,6 +8,8 @@ export type BillingPackage = {
   priceString: string;
   pricePerMonthString: string | null;
   subscriptionPeriod: string | null;
+  /** Only set when the store confirms this customer can use its free trial. */
+  trialDays?: number;
   plan: Exclude<BillingPlan, 'preview'>;
 };
 
@@ -17,6 +19,14 @@ export type StoreBillingSnapshot = {
   activeEntitlements: string[];
   managementUrl: string | null;
 };
+
+export type WebPurchaseRedemptionStatus =
+  | { kind: 'ignored' }
+  | { kind: 'success'; snapshot: StoreBillingSnapshot }
+  | { kind: 'expired'; obfuscatedEmail: string }
+  | { kind: 'invalid' }
+  | { kind: 'other_user' }
+  | { kind: 'error'; message: string };
 
 export type ServerBillingSummary = {
   plan: BillingPlan;
