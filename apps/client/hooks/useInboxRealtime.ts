@@ -1,5 +1,6 @@
 import { requestConnectionRecovery } from '../services/connection-recovery-signal';
 import { useEffect } from 'react';
+import { AppState } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../services/supabase';
 import { notifyWebMessageUpdate } from '../services/notifications';
@@ -60,6 +61,12 @@ export function useInboxRealtime(userId?: string) {
     };
 
     startFallback(60_000);
+    // Realtime is suspended while iOS backgrounds the app. Invalidate on
+    // return so an own-device read receipt can clear a cached unread badge
+    // without waiting for the next polling interval.
+    const appState = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void queryClient.invalidateQueries({ queryKey: inboxQueryPrefix(userId) });
+    });
     dropInboxChannels(userId);
 
     const topic = `inbox-feed:${userId}:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 8)}`;
@@ -114,6 +121,7 @@ export function useInboxRealtime(userId?: string) {
 
     return () => {
       cancelled = true;
+      appState.remove();
       if (fallbackTimer) clearInterval(fallbackTimer);
       void reportClientState('disconnected');
       void supabase.removeChannel(channel);

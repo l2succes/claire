@@ -75,7 +75,7 @@ export function LoopRow({
       onPressIn={() => setPressed(true)}
       onPressOut={() => setPressed(false)}
       accessibilityActions={[
-        { name: 'toggle', label: item.status === 'done' ? 'Reopen' : 'Mark done' },
+        { name: 'toggle', label: item.status === 'done' ? 'Reopen' : 'Mark as closed' },
         ...(onWait ? [{ name: 'wait', label: 'Move to waiting' }] : []),
         ...(onSnooze ? [{ name: 'snooze', label: 'Postpone' }] : []),
       ]}
@@ -90,7 +90,7 @@ export function LoopRow({
         testID={`loop-toggle-${item.id}`}
         accessibilityRole="checkbox"
         accessibilityState={{ checked: item.status === 'done' }}
-        accessibilityLabel={`${item.status === 'done' ? 'Reopen' : 'Complete'} ${title}`}
+        accessibilityLabel={`${item.status === 'done' ? 'Reopen' : 'Mark as closed'} ${title}`}
         onPress={onToggle}
         style={{ width: 28, height: 28, marginTop: 1, borderRadius: 14, borderWidth: 1.5, borderColor: overdue ? colors.danger : colors.ink, backgroundColor: item.status === 'done' ? colors.lime : overdue ? colors.blush : colors.paper, alignItems: 'center', justifyContent: 'center' }}
       >
@@ -132,7 +132,7 @@ export function LoopRow({
       contentBackgroundColor={colors.cream}
       leftActions={[{
         id: `toggle-loop-${item.id}`,
-        label: item.status === 'done' ? 'Reopen' : 'Done',
+        label: item.status === 'done' ? 'Reopen' : 'Close',
         icon: item.status === 'done'
           ? <RotateCcw size={20} color={colors.ink} />
           : <Check size={21} color={colors.ink} />,

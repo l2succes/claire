@@ -424,7 +424,7 @@ export function InboxScreen() {
     return options;
   }, [connectedSessions]);
   const inboxRows = useMemo(
-    () => visibleMessages.map(message => ({ ...message, has_open_loop: loopChats.data?.has(message.chat_id) || message.has_open_loop })),
+    () => visibleMessages.map(message => ({ ...message, has_open_loop: loopChats.data ? loopChats.data.has(message.chat_id) : message.has_open_loop })),
     [loopChats.data, visibleMessages],
   );
   // Staged startup sync waits on this: the heavy cold-start work belongs

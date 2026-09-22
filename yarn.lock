@@ -1454,6 +1454,7 @@
     clsx "^2.1.0"
     date-fns "^4.1.0"
     expo "~55.0.0"
+    expo-application "~55.0.17"
     expo-audio "~55.0.16"
     expo-auth-session "~55.0.10"
     expo-blur "~55.0.16"
