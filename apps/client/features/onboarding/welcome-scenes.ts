@@ -2,6 +2,7 @@ import { colors } from '@claire/design-system';
 import { Platform } from '../../types/platform';
 
 export const WELCOME_HEADLINE = 'Your chats.\nOne AI.';
+export const WELCOME_AUTO_ADVANCE_MS = 6_000;
 
 export const WELCOME_SCENES = [
   { id: 'connected', accessibilityLabel: 'Chats and AI assistant', title: 'Chats + AI Assistant', description: 'WhatsApp, Telegram, Instagram and iMessage.', compactDescription: false, color: colors.sky },
@@ -15,3 +16,7 @@ export const WELCOME_PLATFORMS = [
   { platform: Platform.INSTAGRAM, x: -91, y: 66, tilt: -8 },
   { platform: Platform.IMESSAGE, x: 108, y: 59, tilt: 12 },
 ] as const;
+
+export function nextWelcomeScene(index: number) {
+  return (index + 1) % WELCOME_SCENES.length;
+}
