@@ -10,8 +10,9 @@ import {
   type ViewStyle,
 } from 'react-native';
 import Animated, {
-  FadeInDown,
-  FadeOutUp,
+  Easing,
+  FadeInUp,
+  FadeOutDown,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
@@ -82,8 +83,8 @@ type ComposerAction = {
 function ComposerMenu({ items, testID }: { items: ComposerAction[]; testID?: string }) {
   return (
     <Animated.View
-      entering={FadeInDown.duration(180).springify().damping(18)}
-      exiting={FadeOutUp.duration(120)}
+      entering={FadeInUp.duration(220).easing(Easing.out(Easing.cubic))}
+      exiting={FadeOutDown.duration(150).easing(Easing.in(Easing.cubic))}
       testID={testID}
       style={{
         marginBottom: space[2],
@@ -203,22 +204,23 @@ function ComposerBar({
   style?: StyleProp<ViewStyle>;
 }) {
   const armed = Boolean(value?.toString().trim()) && !sending;
+  const controlSize = variant === 'ask' ? 32 : CONTROL;
   return (
     <View style={style}>
       {chips}
-      {menu}
+      {variant === 'chat' ? menu : null}
       {voiceReview}
       <View
         style={{
-          minHeight: 48,
+          minHeight: variant === 'ask' ? 42 : 48,
           flexDirection: 'row',
           alignItems: 'center',
           gap: 8,
-          paddingVertical: 6,
+          paddingVertical: variant === 'ask' ? 4 : 6,
           paddingHorizontal: 8,
           borderWidth: 1,
           borderColor: colors.neutral[200],
-          borderRadius: 18,
+          borderRadius: variant === 'ask' ? 16 : 18,
           backgroundColor: colors.paper,
           boxShadow: '0 5px 15px rgba(16,18,15,0.08)',
         }}
@@ -230,10 +232,11 @@ function ComposerBar({
           onPress={onAddPress}
           onLongPress={onAddLongPress}
           delayLongPress={320}
+          hitSlop={variant === 'ask' ? 6 : undefined}
           testID={addTestID}
           style={{
-            width: CONTROL,
-            height: CONTROL,
+            width: controlSize,
+            height: controlSize,
             borderRadius: 12,
             backgroundColor: addActive ? colors.lime : colors.neutral[100],
             alignItems: 'center',
@@ -249,7 +252,7 @@ function ComposerBar({
           onChangeText={onChangeText}
           placeholder={
             inputProps.placeholder ||
-            (variant === 'ask' ? 'Ask about a message, plan, or @person…' : 'Write a message…')
+            (variant === 'ask' ? 'Ask Claire…' : 'Write a message…')
           }
           placeholderTextColor={colors.neutral[400]}
           multiline
@@ -258,11 +261,11 @@ function ComposerBar({
           testID={inputTestID}
           style={{
             flex: 1,
-            minHeight: CONTROL,
-            maxHeight: 110,
+            minHeight: controlSize,
+            maxHeight: variant === 'ask' ? 88 : 110,
             paddingHorizontal: space[1],
-            paddingTop: 8,
-            paddingBottom: 8,
+            paddingTop: variant === 'ask' ? 5 : 8,
+            paddingBottom: variant === 'ask' ? 5 : 8,
             ...mobileType.body,
             color: colors.ink,
           }}
@@ -273,10 +276,11 @@ function ComposerBar({
           accessibilityLabel={variant === 'ask' ? 'Ask Claire' : 'Send message'}
           disabled={!armed}
           onPress={onSend}
+          hitSlop={variant === 'ask' ? 6 : undefined}
           testID={sendTestID}
           style={{
-            width: CONTROL,
-            height: CONTROL,
+            width: controlSize,
+            height: controlSize,
             borderRadius: 12,
             alignItems: 'center',
             justifyContent: 'center',
@@ -286,6 +290,11 @@ function ComposerBar({
           {sending ? <ActivityIndicator size="small" color={colors.lime} /> : sendIcon}
         </Pressable>
       </View>
+      {variant === 'ask' && menu ? (
+        <View style={{ position: 'absolute', bottom: '100%', left: 0, right: 0 }}>
+          {menu}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -452,6 +461,8 @@ export function AskComposer({
   onChangeText,
   onSend,
   sending,
+  menuOpen,
+  onMenuOpenChange,
   onTagPerson,
   onFilterPlatform,
   onFocusChat,
@@ -466,6 +477,8 @@ export function AskComposer({
 }: Omit<TextInputProps, 'style'> & {
   onSend: () => void;
   sending?: boolean;
+  menuOpen: boolean;
+  onMenuOpenChange: (open: boolean) => void;
   onTagPerson?: () => void;
   onFilterPlatform?: () => void;
   onFocusChat?: () => void;
@@ -477,9 +490,8 @@ export function AskComposer({
   chips?: ReactNode;
   style?: StyleProp<ViewStyle>;
 }) {
-  const [menuOpen, setMenuOpen] = useState(false);
   const close = (action?: () => void) => {
-    setMenuOpen(false);
+    onMenuOpenChange(false);
     action?.();
   };
   const actions: ComposerAction[] = [
@@ -558,11 +570,11 @@ export function AskComposer({
       value={value}
       onChangeText={onChangeText}
       onSend={() => {
-        setMenuOpen(false);
+        onMenuOpenChange(false);
         onSend();
       }}
       sending={sending}
-      onAddPress={() => setMenuOpen((open) => !open)}
+      onAddPress={() => onMenuOpenChange(!menuOpen)}
       addIcon={<PlusToggle open={menuOpen} />}
       sendIcon={
         <SendHorizonal

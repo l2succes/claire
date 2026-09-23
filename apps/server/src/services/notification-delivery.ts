@@ -112,6 +112,8 @@ export function buildIncomingMessageNotification(
     badge,
     collapseId: event.messageId,
     categoryId: MESSAGE_NOTIFICATION_CATEGORY,
+    // Communication styling (sender, group name, avatar) is applied by the
+    // iOS Notification Service Extension even when no artwork is available.
     mutableContent: true,
     threadId: `chat:${event.chatId}`,
     tag: `chat:${event.chatId}`,

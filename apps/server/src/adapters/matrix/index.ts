@@ -295,7 +295,8 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     if (displayName) message.senderName = displayName;
 
     if (identity.avatarUrl) {
-      message.senderAvatarUrl = this.matrixMediaProxyUrl(identity.avatarUrl) || identity.avatarUrl;
+      message.senderAvatarUrl =
+        this.matrixMediaProxyUrl(identity.avatarUrl) || identity.avatarUrl;
     }
 
     const phoneNumber = phoneNumberFromBridgeIdentifiers([identity.phoneNumber]);
@@ -317,12 +318,14 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
   private enrichMessageAvatars(message: UnifiedMessage, room: Room): void {
     const senderAvatar = room.getMember(message.senderId)?.getMxcAvatarUrl();
     if (senderAvatar) {
-      message.senderAvatarUrl = this.matrixMediaProxyUrl(senderAvatar) || senderAvatar;
+      message.senderAvatarUrl =
+        this.matrixMediaProxyUrl(senderAvatar) || senderAvatar;
     }
 
     const chatAvatar = room.getMxcAvatarUrl();
     if (chatAvatar) {
-      message.chatAvatarUrl = this.matrixMediaProxyUrl(chatAvatar) || chatAvatar;
+      message.chatAvatarUrl =
+        this.matrixMediaProxyUrl(chatAvatar) || chatAvatar;
     }
   }
 

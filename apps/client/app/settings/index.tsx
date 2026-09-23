@@ -116,7 +116,7 @@ export default function SettingsScreen() {
 
   const claireRows: SettingsRow[] = [
     { title: 'AI behavior', detail: 'Suggestions, summaries, and memory', icon: Bot, href: '/settings/ai', testID: 'settings-ai-settings', iconBackground: colors.lavender },
-    { title: 'Relationships', detail: 'People, categories, and prompts', icon: Smile, href: '/(tabs)/contacts', testID: 'settings-relationships', iconBackground: colors.blush },
+    { title: 'Relationships', detail: 'People, categories, and prompts', icon: Smile, href: '/people', testID: 'settings-relationships', iconBackground: colors.blush },
     {
       title: 'Loop detection',
       detail: loopDetectionKnown
@@ -163,7 +163,7 @@ export default function SettingsScreen() {
   };
 
   const appRows: SettingsRow[] = [
-    { title: 'Connected accounts', detail: `${connected} platform${connected === 1 ? '' : 's'} active`, icon: Link2, href: '/(tabs)/connections', testID: 'settings-connections', iconBackground: colors.lavender },
+    { title: 'Connected accounts', detail: `${connected} platform${connected === 1 ? '' : 's'} active`, icon: Link2, href: '/connections?from=settings', testID: 'settings-connections', iconBackground: colors.lavender },
     { title: 'Notifications', detail: 'Priority people and quiet hours', icon: Bell, href: '/settings/notifications', testID: 'settings-notifications', iconBackground: colors.sky },
     { title: 'Chat', detail: 'Plus button and reply options', icon: MessageCircle, href: '/settings/chat', testID: 'settings-chat', iconBackground: colors.neutral[100] },
     { title: 'Privacy & data', detail: 'Export, retention, and delete', icon: DatabaseZap, href: '/settings/privacy', testID: 'settings-privacy-data', iconBackground: colors.neutral[100] },

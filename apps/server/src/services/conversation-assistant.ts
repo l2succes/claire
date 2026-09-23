@@ -138,7 +138,9 @@ class ConversationAssistantService {
 
   async listThreads(userId: string): Promise<AssistantThread[]> {
     const { data, error } = await supabase.from('conversation_assistant_threads')
-      .select('id, title, chat_id, created_at, updated_at')
+      // A thread only belongs in Recent once someone has actually asked Claire.
+      // The empty inner embed filters older empty threads without returning turns.
+      .select('id, title, chat_id, created_at, updated_at, conversation_assistant_turns!inner()')
       .eq('user_id', userId).is('chat_id', null).order('updated_at', { ascending: false });
     if (error) throw error;
     return (data || []) as AssistantThread[];

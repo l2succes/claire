@@ -45,6 +45,11 @@ export class OutgoingQueue<T extends QueueEntry> {
     const { error: _, ...pending } = entry;
     return pending as T;
   })); }
+  async retryEntry(id: string) { await this.update((entries) => entries.map((entry) => {
+    if (entry.id !== id) return entry;
+    const { error: _, ...pending } = entry;
+    return pending as T;
+  })); }
   async flush() {
     if (this.flushing) return;
     this.flushing = true;

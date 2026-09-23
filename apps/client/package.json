@@ -12,7 +12,7 @@
     "start:prod:local": "NODE_ENV=production APP_VARIANT=production bunx expo start",
     "dev": "APP_VARIANT=development bunx expo start",
     "android": "expo run:android",
-    "ios": "bunx expo run:ios",
+    "ios": "APP_VARIANT=development bunx expo run:ios",
     "prebuild:ios:staging": "bun run env:pull:staging && APP_VARIANT=staging bunx expo prebuild --clean --platform ios",
     "prebuild:ios:prod": "bun run env:pull:prod && APP_VARIANT=production bunx expo prebuild --clean --platform ios",
     "ios:prod": "bun run prebuild:ios:prod && APP_VARIANT=production bunx expo run:ios",

@@ -9,6 +9,7 @@ import '@/styles/pricing.css';
 const subnav = [
   { href: '#plans', label: 'Plans' },
   { href: '#compare', label: 'Compare' },
+  { href: '#ai', label: 'AI credits' },
   { href: '#ultimate', label: 'Ultimate' },
   { href: '#questions', label: 'Questions' },
 ] as const;
@@ -62,16 +63,79 @@ const tiers = [
     body: 'A Loop lands every morning without you asking, plus on-demand runs whenever you want another pass.',
     loop: 'Automatic daily Loop + on-demand runs',
     features: [
-      'Everything in Plus',
+      'Every supported network',
       'Unlimited accounts per network',
       'Scheduled Loop with morning delivery',
       'Larger AI credit allowance, best model tier',
+      'Ask Claire, drafts, summaries, and smart cards',
+      'Bring your own provider key',
       'Early access to plugin actions',
     ],
-    cta: { href: 'mailto:hello@claire.app?subject=Claire%20Pro', label: 'Get Claire Pro' },
-    note: 'Monthly billing · personal account · cancel anytime',
+    cta: { href: '/subscribe', label: 'Subscribe on web' },
+    note: 'Secure Stripe checkout · unlocks in the Claire app · cancel anytime',
     featured: false,
-    flag: null,
+    flag: 'DAILY LOOP',
+  },
+] as const;
+
+const planColumns = ['Preview', 'Plus', 'Pro', 'Ultimate'] as const;
+
+const matrixGroups = [
+  {
+    group: 'The Loop',
+    rows: [
+      ['Loop runs', 'First Loop', '3 / day', 'Daily, automatic', 'Continuous, per workspace'],
+      ['Open loops surfaced across every chat', 'yes', 'yes', 'yes', 'yes'],
+      ['Proposed next action on each loop', 'yes', 'yes', 'yes', 'yes'],
+      ['Scheduled delivery', '—', '—', 'yes', 'yes'],
+      ['Loop history', '—', '30 days', '12 months', 'Custom retention'],
+    ],
+  },
+  {
+    group: 'Networks & accounts',
+    rows: [
+      ['Connected networks', 'All supported', 'All supported', 'All supported', 'All supported'],
+      ['Accounts per network', 'During preview', '3', 'Unlimited', 'Unlimited'],
+      ['Unified inbox and cross-network search', 'yes', 'yes', 'yes', 'yes'],
+      ['Mobile, desktop, and web', 'yes', 'yes', 'yes', 'yes'],
+    ],
+  },
+  {
+    group: 'AI',
+    rows: [
+      ['Ask Claire across the inbox', 'During preview', 'yes', 'yes', 'yes'],
+      ['Drafts, summaries, and smart cards', 'During preview', 'yes', 'yes', 'yes'],
+      ['Claire AI credits', '50 once', '500 / month', '2,000 / month', 'Pooled workspace allowance'],
+      ['Model tier', 'Balanced', 'Balanced', 'Best available', 'Best available + policy'],
+      ['Bring your own provider key', '—', 'yes', 'yes', 'yes'],
+      ['Hard cap, no surprise overage', 'yes', 'yes', 'yes', 'yes'],
+    ],
+  },
+  {
+    group: 'Automation & plugins',
+    rows: [
+      ['Promises and deadline reminders', 'yes', 'yes', 'yes', 'yes'],
+      ['Plugin actions from a conversation', '—', '—', 'Early access', 'Full catalog'],
+      ['Agents that act on detected intent', '—', '—', '—', 'yes'],
+      ['Signed webhooks and private MCP', '—', '—', '—', 'yes'],
+    ],
+  },
+  {
+    group: 'Team & governance',
+    rows: [
+      ['Shared inbox, assignment, routing', '—', '—', '—', 'yes'],
+      ['Approval inbox and action receipts', '—', '—', '—', 'yes'],
+      ['SSO, roles, and audit log', '—', '—', '—', 'yes'],
+      ['Knowledge boundaries and citations', '—', '—', '—', 'yes'],
+    ],
+  },
+  {
+    group: 'Hosting & support',
+    rows: [
+      ['Claire Cloud', 'yes', 'yes', 'yes', 'yes'],
+      ['Self-host the whole stack', 'yes', 'yes', 'yes', 'yes'],
+      ['Support', 'Community', 'Email', 'Priority email', 'Dedicated contact'],
+    ],
   },
 ] as const;
 
@@ -174,67 +238,6 @@ const riskLadder = [
     body: 'Touches a third-party system a customer can see.',
   },
   { level: 'destructive', approval: 'Always asks', body: 'Cannot be undone. Needs an explicit yes.' },
-] as const;
-
-const planColumns = ['Preview', 'Plus', 'Pro', 'Ultimate'] as const;
-
-const matrixGroups = [
-  {
-    group: 'The Loop',
-    rows: [
-      ['Loop runs', 'First Loop', '3 / day', 'Daily, automatic', 'Continuous, per workspace'],
-      ['Open loops surfaced across every chat', 'yes', 'yes', 'yes', 'yes'],
-      ['Proposed next action on each loop', 'yes', 'yes', 'yes', 'yes'],
-      ['Scheduled delivery', '—', '—', 'yes', 'yes'],
-      ['Loop history', '—', '30 days', '12 months', 'Custom retention'],
-    ],
-  },
-  {
-    group: 'Networks & accounts',
-    rows: [
-      ['Connected networks', 'All supported', 'All supported', 'All supported', 'All supported'],
-      ['Accounts per network', 'During preview', '3', 'Unlimited', 'Unlimited'],
-      ['Unified inbox and cross-network search', 'yes', 'yes', 'yes', 'yes'],
-      ['Mobile, desktop, and web', 'yes', 'yes', 'yes', 'yes'],
-    ],
-  },
-  {
-    group: 'AI',
-    rows: [
-      ['Ask Claire across the inbox', 'During preview', 'yes', 'yes', 'yes'],
-      ['Drafts, summaries, and smart cards', 'During preview', 'yes', 'yes', 'yes'],
-      ['Claire AI credits', '50 once', '500 / month', '2,000 / month', 'Pooled workspace allowance'],
-      ['Model tier', 'Balanced', 'Balanced', 'Best available', 'Best available + policy'],
-      ['Bring your own provider key', '—', 'yes', 'yes', 'yes'],
-      ['Hard cap, no surprise overage', 'yes', 'yes', 'yes', 'yes'],
-    ],
-  },
-  {
-    group: 'Automation & plugins',
-    rows: [
-      ['Promises and deadline reminders', 'yes', 'yes', 'yes', 'yes'],
-      ['Plugin actions from a conversation', '—', '—', 'Early access', 'Full catalog'],
-      ['Agents that act on detected intent', '—', '—', '—', 'yes'],
-      ['Signed webhooks and private MCP', '—', '—', '—', 'yes'],
-    ],
-  },
-  {
-    group: 'Team & governance',
-    rows: [
-      ['Shared inbox, assignment, routing', '—', '—', '—', 'yes'],
-      ['Approval inbox and action receipts', '—', '—', '—', 'yes'],
-      ['SSO, roles, and audit log', '—', '—', '—', 'yes'],
-      ['Knowledge boundaries and citations', '—', '—', '—', 'yes'],
-    ],
-  },
-  {
-    group: 'Hosting & support',
-    rows: [
-      ['Claire Cloud', 'yes', 'yes', 'yes', 'yes'],
-      ['Self-host the whole stack', 'yes', 'yes', 'yes', 'yes'],
-      ['Support', 'Community', 'Email', 'Priority email', 'Dedicated contact'],
-    ],
-  },
 ] as const;
 
 const questions = [
@@ -440,6 +443,66 @@ export default function PricingPage() {
           </div>
         </section>
 
+        <section className="pr-usage shell" id="ai">
+          <header className="section-heading">
+            <div>
+              <div className="kicker">HOW AI IS BILLED</div>
+              <h2>
+                Choose who pays
+                <br />
+                <span className="claire-underline">for the model.</span>
+              </h2>
+            </div>
+            <p>
+              Loop runs and AI credits are metered separately from the subscription, so you can track
+              model costs separately from your plan.
+            </p>
+          </header>
+          <div className="usage-grid">
+            <article className="usage-card usage-managed">
+              <span className="usage-icon">
+                <HeroIcon name="check-circle" />
+              </span>
+              <h4>Claire AI credits</h4>
+              <p>
+                Use Claire-managed models for Loop runs, replies, Ask Claire, summaries, and search.
+                Every account gets a visible balance, warnings, and a hard cap.
+              </p>
+              <div className="credit-meter" aria-hidden="true">
+                <div className="credit-bar">
+                  <span style={{ width: '62%' }} />
+                </div>
+                <div className="credit-legend">
+                  <b>62% used</b>
+                  <span>hard cap · no overage</span>
+                </div>
+              </div>
+              <small>Credits reflect actual model usage, not a flat “one request” unit.</small>
+            </article>
+            <article className="usage-card">
+              <span className="usage-icon">
+                <HeroIcon name="server" />
+              </span>
+              <h4>Bring your own key</h4>
+              <p>
+                Add an OpenAI, Anthropic, or compatible provider key. Claire Cloud still runs the
+                product; your provider bills model usage directly.
+              </p>
+              <small>Your Claire AI credit balance is not used.</small>
+            </article>
+            <article className="usage-card">
+              <span className="usage-icon">
+                <HeroIcon name="desktop" />
+              </span>
+              <h4>Run models yourself</h4>
+              <p>
+                Self-hosted accounts can point Claire at Ollama, LM Studio, or another compatible
+                endpoint on infrastructure they control.
+              </p>
+              <small>Available only when the model host stays reachable.</small>
+            </article>
+          </div>
+        </section>
         <PlanComparison />
 
         <section className="pr-ultimate" id="ultimate">
@@ -534,7 +597,7 @@ export default function PricingPage() {
             <aside className="pr-ultimate-card">
               <div>
                 <small>ULTIMATE · WORKSPACE PLAN</small>
-                <h3>Everything in Pro, for the whole team.</h3>
+                <h3>Everything in Claire, for the whole team.</h3>
                 <ul>
                   <li>
                     <HeroIcon name="check-circle" />

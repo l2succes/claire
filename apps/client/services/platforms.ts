@@ -135,7 +135,7 @@ export const platformsApi = {
   async getPlatformDefinitions(): Promise<PlatformDefinition[]> {
     try {
       const response = await api.get<{ success: boolean; platforms: PlatformDefinition[] }>('/platforms/definitions');
-      return response.data.platforms;
+      return Array.isArray(response.data?.platforms) ? response.data.platforms : FALLBACK_PLATFORM_DEFINITIONS;
     } catch (error) {
       if (isMissingRoute(error)) return FALLBACK_PLATFORM_DEFINITIONS;
       throw error;
@@ -145,7 +145,7 @@ export const platformsApi = {
   async getPlatformInterests(): Promise<string[]> {
     try {
       const response = await api.get<{ success: boolean; platformIds: string[] }>('/platforms/interests');
-      return response.data.platformIds;
+      return Array.isArray(response.data?.platformIds) ? response.data.platformIds : [];
     } catch (error) {
       if (isMissingRoute(error)) return [];
       throw error;

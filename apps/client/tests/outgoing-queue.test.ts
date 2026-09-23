@@ -67,6 +67,19 @@ describe('outgoing queue', () => {
     await queue.flush();
     expect(harness.disk()).toEqual([]);
   });
+  it('retries only the failed message selected by the user', async () => {
+    const harness = setup([
+      { id: 'first', chatId: 'a', error: 'Could not send' },
+      { id: 'second', chatId: 'a', error: 'Also failed' },
+    ]);
+    const queue = harness.create();
+    await queue.hydrate();
+    await queue.retryEntry('second');
+    expect(harness.disk()).toEqual([
+      { id: 'first', chatId: 'a', error: 'Could not send' },
+      { id: 'second', chatId: 'a' },
+    ]);
+  });
   it('does not accept a message when durable storage fails', async () => {
     const harness = setup();
     harness.write.mockRejectedValueOnce(new Error('disk full'));

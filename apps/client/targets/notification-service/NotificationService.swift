@@ -35,6 +35,7 @@ class NotificationService: UNNotificationServiceExtension {
                     ? $0
                     : nil
             }
+            // A failed or slow image must not cost the sender/group metadata.
             self.applyCommunicationContent(avatarData: validData)
         }
         downloadTask?.resume()
@@ -61,6 +62,8 @@ class NotificationService: UNNotificationServiceExtension {
             return
         }
 
+        // The alert title is already the sender. Never replace it with the
+        // conversation name for groups; iOS renders the group as a subtitle.
         let senderName = stringValue("senderName", in: content)
             ?? (!content.title.isEmpty ? content.title : nil)
             ?? stringValue("contactName", in: content)
@@ -100,7 +103,10 @@ class NotificationService: UNNotificationServiceExtension {
 
         let interaction = INInteraction(intent: intent, response: nil)
         interaction.direction = .incoming
+
         if donate {
+            // Apple recommends completing the incoming interaction donation
+            // before asking the system to specialize the notification.
             interaction.donate { [weak self] _ in
                 self?.finishUpdatedContent(using: intent)
             }
@@ -137,6 +143,7 @@ class NotificationService: UNNotificationServiceExtension {
 
     override func serviceExtensionTimeWillExpire() {
         downloadTask?.cancel()
+        // Preserve messaging semantics even when the remote image timed out.
         applyCommunicationContent(avatarData: nil, donate: false)
     }
 }

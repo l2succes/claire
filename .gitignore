@@ -111,3 +111,6 @@ Thumbs.db
 
 # Tamagui compiler cache
 .tamagui/
+
+# Generated artifacts (marketing renders, audit dumps). Never committed.
+output/

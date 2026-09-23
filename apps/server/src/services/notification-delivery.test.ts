@@ -22,7 +22,7 @@ describe('notification eligibility', () => {
     expect(notificationImageUrl('not a url')).toBeUndefined();
   });
 
-  it('keeps sender and group identity separate without an avatar', () => {
+  it('keeps sender and group identity separate even when no avatar is available', () => {
     const payload = buildIncomingMessageNotification({
       userId: 'user-1', chatId: 'chat-1', platform: 'whatsapp',
       senderContactId: 'contact-1', senderName: 'Jare CDMX',
