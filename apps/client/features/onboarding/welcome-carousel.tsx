@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
-import { ArrowLeft, ArrowRight } from 'lucide-react-native';
 import Animated, {
   cancelAnimation,
   Easing,
@@ -130,16 +129,8 @@ export function WelcomeCarousel({ progress, animate, reduceMotion }: {
           </View>
         ))}
       </Animated.ScrollView>
-      <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 14, marginTop: 10 }}>
-        <Pressable testID="welcome-previous" accessibilityRole="button" accessibilityLabel="Previous introduction" disabled={page === 0} accessibilityState={{ disabled: page === 0 }} onPress={() => select(page - 1)} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center', opacity: page === 0 ? 0.2 : 1 }}>
-          <ArrowLeft size={17} color={colors.ink} />
-        </Pressable>
-        <View style={{ flexDirection: 'row' }}>
-          {WELCOME_SCENES.map((scene, index) => <PageDot key={scene.id} index={index} selected={page === index} autoplay={autoplay} cycle={cycle} onPress={() => select(index)} />)}
-        </View>
-        <Pressable testID="welcome-next" accessibilityRole="button" accessibilityLabel="Next introduction" disabled={page === 2} accessibilityState={{ disabled: page === 2 }} onPress={() => select(page + 1)} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center', opacity: page === 2 ? 0.2 : 1 }}>
-          <ArrowRight size={17} color={colors.ink} />
-        </Pressable>
+      <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 10 }}>
+        {WELCOME_SCENES.map((scene, index) => <PageDot key={scene.id} index={index} selected={page === index} autoplay={autoplay} cycle={cycle} onPress={() => select(index)} />)}
       </View>
     </View>
   );

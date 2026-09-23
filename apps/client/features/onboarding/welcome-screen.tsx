@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -12,7 +13,7 @@ import { WelcomeCarousel } from './welcome-carousel';
 import { WELCOME_HEADLINE, WELCOME_SCENES } from './welcome-scenes';
 import { LegalConsent } from '../legal/legal-consent';
 
-export function WelcomeScreen() {
+export function WelcomeScreenView({ googleButton, onContinueWithEmail }: { googleButton: ReactNode; onContinueWithEmail: () => void }) {
   const insets = useSafeAreaInsets();
   // Remount the scroll content when Dynamic Type changes so native text is remeasured.
   const { fontScale } = useWindowDimensions();
@@ -48,8 +49,8 @@ export function WelcomeScreen() {
           </OnboardingReveal>
         </View>
         <OnboardingReveal delay={180} style={{ width: isDesktop ? 400 : '100%', justifyContent: 'center', paddingHorizontal: isDesktop ? 32 : space[5], paddingTop: 16, gap: 10 }}>
-          <GoogleSignInButton mode="signin" variant="welcome" />
-          <Pressable testID="signin-use-email" accessibilityRole="button" onPress={() => router.push('/(auth)/email')} style={{ minHeight: 52, borderRadius: 22, borderWidth: 1, borderColor: colors.ink, backgroundColor: 'transparent', paddingHorizontal: 16, paddingVertical: 12, alignItems: 'center', justifyContent: 'center' }}>
+          {googleButton}
+          <Pressable testID="signin-use-email" accessibilityRole="button" onPress={onContinueWithEmail} style={{ minHeight: 52, borderRadius: 22, borderWidth: 1, borderColor: colors.ink, backgroundColor: 'transparent', paddingHorizontal: 16, paddingVertical: 12, alignItems: 'center', justifyContent: 'center' }}>
             <Text style={{ ...mobileType.body, fontWeight: '700', color: colors.ink, textAlign: 'center' }}>Continue with email</Text>
           </Pressable>
           <LegalConsent style={{ paddingTop: 4, paddingHorizontal: 12 }} />
@@ -57,4 +58,8 @@ export function WelcomeScreen() {
       </ScrollView>
     </Animated.View>
   );
+}
+
+export function WelcomeScreen() {
+  return <WelcomeScreenView googleButton={<GoogleSignInButton mode="signin" variant="welcome" />} onContinueWithEmail={() => router.push('/(auth)/email')} />;
 }

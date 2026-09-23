@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Animated, { Easing, FadeIn, FadeOut, interpolate, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as Crypto from 'expo-crypto';
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CheckCircle2, MessageCircle, Plus, Search, Send, Smile, X } from 'lucide-react-native';
+import { ArrowUpRight, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, MoreHorizontal, Plus, Search, Send, X } from 'lucide-react-native';
 import { colors, mobileType, radius, space, useIsDesktopLayout } from '@claire/design-system';
 import { MobileIconButton, SectionLabel } from '../components/mobile/claire-mobile';
 import { AskComposer, AskToolGrid } from '../components/claire/composer';
@@ -17,6 +17,7 @@ import { useChromeStore } from '../stores/chromeStore';
 import { useAuthStore } from '../stores/authStore';
 import { readQuerySnapshot, writeQuerySnapshot } from '../services/mobile-cache';
 import { useAssistantStream } from '../hooks/useAssistantStream';
+import { GLOBAL_ASK_ACTIONS } from '../features/assistant/ask-actions';
 import { userFacingErrorMessage } from '../services/api-errors';
 import {
   AssistantCitation,
@@ -165,6 +166,7 @@ export function AssistantScreen({ inTab = false }: { inTab?: boolean }) {
   const [activeThread, setActiveThread] = useState<AssistantThread | null>(null);
   const [turns, setTurns] = useState<AssistantTurn[]>([]);
   const [question, setQuestion] = useState('');
+  const [findMode, setFindMode] = useState(false);
   const [composerMenuOpen, setComposerMenuOpen] = useState(false);
   const [indexStatus, setIndexStatus] = useState<AssistantIndexStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -175,6 +177,7 @@ export function AssistantScreen({ inTab = false }: { inTab?: boolean }) {
   const [mentionCandidates, setMentionCandidates] = useState<AssistantMentionCandidate[]>([]);
   const openedThreadId = useRef<string | null>(null);
   const conversationScrollRef = useRef<ScrollView>(null);
+  const askInputRef = useRef<TextInput>(null);
   const interactiveRequestEpoch = useRef(0);
   const navigationEpoch = useRef(0);
   const threadScrollY = useSharedValue(0);
@@ -220,13 +223,17 @@ export function AssistantScreen({ inTab = false }: { inTab?: boolean }) {
 
   const selectMention = (candidate: AssistantMentionCandidate) => {
     setMentions((current) => current.some((item) => item.id === candidate.id) ? current : [...current, candidate]);
-    setQuestion((current) => current.replace(/@([^\s@]{1,40})$/, ''));
+    setQuestion((current) => current.replace(/@([^\s@]{0,40})$/, ''));
     setMentionCandidates([]);
   };
 
   const loadThread = useCallback(async (thread: AssistantThread) => {
     const epoch = ++navigationEpoch.current;
     setComposerMenuOpen(false);
+    setFindMode(false);
+    setQuestion('');
+    setMentions([]);
+    setMentionCandidates([]);
     setActiveThread(thread);
     setTurns([]);
     threadScrollY.value = 0;
@@ -249,11 +256,13 @@ export function AssistantScreen({ inTab = false }: { inTab?: boolean }) {
 
   const goHome = () => {
     navigationEpoch.current += 1;
+    Keyboard.dismiss();
     setComposerMenuOpen(false);
     setActiveThread(null);
     threadScrollY.value = 0;
     setTurns([]);
     setQuestion('');
+    setFindMode(false);
     setMentions([]);
     setMentionCandidates([]);
     setError(null);
@@ -315,15 +324,25 @@ export function AssistantScreen({ inTab = false }: { inTab?: boolean }) {
     });
     setTurns([]);
     setQuestion('');
+    setFindMode(false);
     setMentions([]);
     setMentionCandidates([]);
     setError(null);
     threadScrollY.value = 0;
   };
 
+  const beginFind = () => {
+    createThread();
+    setFindMode(true);
+    requestAnimationFrame(() => askInputRef.current?.focus());
+  };
+
   const ask = async (prompt = question) => {
-    const text = prompt.trim();
-    if (!text || asking) return;
+    const typedQuestion = prompt.trim();
+    const text = findMode && prompt === question && typedQuestion
+      ? `Find messages or plans ${mentions.length ? 'in the selected conversations' : 'across my connected conversations'} matching this description: ${typedQuestion}. Cite the exact messages you used.`
+      : typedQuestion;
+    if (!text || typedQuestion === '@' || asking) return;
     interactiveRequestEpoch.current += 1;
     setError(null);
     const viewEpoch = navigationEpoch.current;
@@ -363,6 +382,7 @@ export function AssistantScreen({ inTab = false }: { inTab?: boolean }) {
       };
       setTurns((current) => isNewThread ? [optimistic, streamingTurn] : [...current, optimistic, streamingTurn]);
       setQuestion('');
+      setFindMode(false);
       setMentionCandidates([]);
       const result = await startStream(
         isNewThread
@@ -417,6 +437,18 @@ export function AssistantScreen({ inTab = false }: { inTab?: boolean }) {
     }
   };
 
+  const showThreadOptions = () => Alert.alert('Ask Claire thread', undefined, [
+    { text: 'Cancel', style: 'cancel' },
+    {
+      text: 'Delete thread',
+      style: 'destructive',
+      onPress: () => Alert.alert('Delete this thread?', 'This removes it from Recent. This cannot be undone.', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: () => void deleteActiveThread() },
+      ]),
+    },
+  ]);
+
   const close = () => {
     if (inTab) goHome();
     else router.back();
@@ -433,6 +465,18 @@ export function AssistantScreen({ inTab = false }: { inTab?: boolean }) {
       ))}
     </ScrollView>
   ) : null;
+
+  const scopeLabel = mentions.length === 0
+    ? 'All conversations'
+    : mentions.length === 1
+      ? `Only ${mentions[0].name}`
+      : `${mentions.length} selected conversations`;
+
+  const scopeChip = (
+    <View testID="assistant-scope" style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: space[1], paddingHorizontal: 10, paddingVertical: 5, marginBottom: space[2], borderRadius: radius.pill, borderWidth: 1, borderColor: colors.neutral[300], backgroundColor: colors.paper }}>
+      <Text style={{ ...mobileType.label, color: colors.ink }}>{scopeLabel}</Text>
+    </View>
+  );
 
   const mentionMenu = mentionCandidates.length ? (
     <View testID="assistant-mention-candidates" style={{ marginBottom: space[2], overflow: 'hidden', borderRadius: radius.card, borderWidth: 1, borderColor: colors.ink, backgroundColor: colors.paper }}>
@@ -454,7 +498,7 @@ export function AssistantScreen({ inTab = false }: { inTab?: boolean }) {
         <>
           <Animated.Text maxFontSizeMultiplier={1} numberOfLines={1} ellipsizeMode="tail" style={[{ ...mobileType.screenTitle, color: colors.ink }, threadTitleStyle]}>{activeThread?.title || 'New conversation'}</Animated.Text>
           <Animated.View style={[{ overflow: 'hidden' }, threadSubtitleStyle]}>
-            <Text maxFontSizeMultiplier={1} numberOfLines={1} style={{ ...mobileType.body, color: colors.neutral[600] }}>Use @ to focus on a person or chat</Text>
+            <Text maxFontSizeMultiplier={1} numberOfLines={1} style={{ ...mobileType.body, color: colors.neutral[600] }}>Ask across chats or choose a person with @</Text>
           </Animated.View>
         </>
       ) : (
@@ -464,7 +508,7 @@ export function AssistantScreen({ inTab = false }: { inTab?: boolean }) {
         </>
       )}
     </View>
-    {inThread ? null : <MobileIconButton selected label="New Ask Claire thread" onPress={createThread} testID="assistant-new-thread"><Plus size={21} color={colors.ink} /></MobileIconButton>}
+    {inThread ? (isUnsavedThread(activeThread) ? null : <MobileIconButton label="Ask Claire thread options" onPress={showThreadOptions} testID="assistant-thread-options"><MoreHorizontal size={21} color={colors.ink} /></MobileIconButton>) : <MobileIconButton selected label="New Ask Claire thread" onPress={createThread} testID="assistant-new-thread"><Plus size={21} color={colors.ink} /></MobileIconButton>}
     {inTab ? null : <MobileIconButton label="Close Ask Claire" onPress={close}><X size={21} color={colors.ink} /></MobileIconButton>}
   </>;
 
@@ -487,6 +531,9 @@ export function AssistantScreen({ inTab = false }: { inTab?: boolean }) {
       onCreate={createThread}
       onSelect={(thread) => void loadThread(thread)}
       onAsk={(prompt?: string) => void ask(prompt)}
+      onFind={beginFind}
+      findMode={findMode}
+      inputRef={askInputRef}
     />;
   }
 
@@ -536,13 +583,13 @@ export function AssistantScreen({ inTab = false }: { inTab?: boolean }) {
               menuOpen={composerMenuOpen}
               onMenuOpenChange={setComposerMenuOpen}
               onFocus={() => setComposerMenuOpen(false)}
-              onTagPerson={() => onQuestionChange(`${question}${question.endsWith('@') || question.endsWith('@ ') ? '' : question ? ' @' : '@'}`)}
-              onFocusChat={() => onQuestionChange(`${question}${question.includes('@') ? '' : ' @'}`)}
-              onFindLoops={() => void ask('What commitments, questions, or plans are still unresolved?')}
-              onCheckTone={() => void ask('What patterns do you notice in the tone of my recent conversations? Distinguish observations from inference.')}
-              onFindSomething={() => onQuestionChange('Find ')}
-              onDelete={() => void deleteActiveThread()}
-              chips={<>{mentionChips}{mentionMenu}</>}
+              onTagPerson={() => {
+                onQuestionChange(`${question}${question.endsWith('@') ? '' : question ? ' @' : '@'}`);
+                requestAnimationFrame(() => askInputRef.current?.focus());
+              }}
+              inputRef={askInputRef}
+              placeholder={findMode ? 'Describe what you’re looking for…' : 'Ask Claire…'}
+              chips={<>{scopeChip}{mentionChips}{mentionMenu}</>}
             />
           </View>
         </KeyboardAvoidingView>
@@ -552,7 +599,7 @@ export function AssistantScreen({ inTab = false }: { inTab?: boolean }) {
           <IndexStatusBanner status={indexStatus} />
           {error ? <Text testID="assistant-error" style={{ ...mobileType.bodySmall, color: colors.danger }}>{error}</Text> : null}
           <AssistantHomeSection title="What can I help with?">
-            <AskToolGrid onSelect={(prompt) => void ask(prompt)} />
+            <AskToolGrid onAsk={(prompt) => void ask(prompt)} onFind={beginFind} />
           </AssistantHomeSection>
           <AssistantHomeSection title="Recent">
             {threads.length ? threads.slice(0, 4).map((thread) => (
@@ -581,7 +628,7 @@ export function AssistantScreen({ inTab = false }: { inTab?: boolean }) {
   );
 }
 
-function DesktopAssistantWorkspace({ threads, activeThread, turns, loading, question, asking, error, onQuestionChange, onCreate, onSelect, onAsk }: {
+function DesktopAssistantWorkspace({ threads, activeThread, turns, loading, question, asking, error, onQuestionChange, onCreate, onSelect, onAsk, onFind, findMode, inputRef }: {
   threads: AssistantThread[];
   activeThread: AssistantThread | null;
   turns: AssistantTurn[];
@@ -593,22 +640,28 @@ function DesktopAssistantWorkspace({ threads, activeThread, turns, loading, ques
   onCreate: () => void;
   onSelect: (thread: AssistantThread) => void;
   onAsk: (prompt?: string) => void;
+  onFind: () => void;
+  findMode: boolean;
+  inputRef: React.RefObject<TextInput | null>;
 }) {
   if (loading) return <DesktopAskClaireSkeleton />;
 
   const shownTurns = turns.slice(-2);
   return <View style={{ flex: 1, minHeight: 0, flexDirection: 'row', backgroundColor: '#FAF9F5' }} testID="desktop-assistant-screen">
     <View style={{ width: 210, flexShrink: 0, padding: space[3], backgroundColor: '#F4F2EC', borderRightWidth: 1, borderColor: colors.neutral[200] }}><View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 16 }}><ClaireMark size={16} /><Text style={{ ...mobileType.monoLabel, color: colors.ink }}>ASK CLAIRE</Text><Pressable onPress={onCreate} style={{ marginLeft: 'auto' }}><View style={{ width: 26, height: 26, borderRadius: 8, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' }}><Plus size={15} color={colors.paper} /></View></Pressable></View>{threads.map((thread, index) => <Pressable key={thread.id} onPress={() => onSelect(thread)}><View style={{ padding: 10, borderRadius: 11, borderWidth: activeThread?.id === thread.id || (!activeThread && index === 0) ? 1 : 0, borderColor: colors.ink, backgroundColor: activeThread?.id === thread.id || (!activeThread && index === 0) ? colors.lime : 'transparent', marginBottom: 5 }}><Text numberOfLines={1} style={{ ...mobileType.bodySmall, fontWeight: '700', color: colors.ink }}>{thread.title || 'Untitled'}</Text><Text numberOfLines={1} style={{ ...mobileType.label, color: colors.neutral[600] }}>Conversation context · {formatThreadTime(thread.updated_at || thread.created_at)}</Text></View></Pressable>)}{!threads.length ? <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>Start a private question about your conversations.</Text> : null}<View style={{ marginTop: 'auto', paddingTop: 14, borderTopWidth: 1, borderColor: colors.neutral[200] }}><Text style={{ ...mobileType.monoLabel, color: colors.neutral[600] }}>PRIVATE BY DEFAULT</Text><Text style={{ ...mobileType.label, color: colors.neutral[600], marginTop: 5 }}>Claire cites connected messages and never sends from this workspace.</Text></View></View>
-    <View style={{ flex: 1, minWidth: 0, padding: 30, paddingBottom: 18 }}><View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 16 }}><View><Text style={{ ...mobileType.monoLabel, color: colors.neutral[600] }}>CONNECTED CONTEXT</Text><Text style={{ ...mobileType.screenTitle, color: colors.ink, marginTop: 4 }}>Ask Claire</Text><Text style={{ ...mobileType.bodySmall, color: colors.neutral[600], marginTop: 3 }}>Use conversations, relationship context, and open loops to make the next move easier.</Text></View><View style={{ alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 6, borderRadius: 99, backgroundColor: colors.sky }}><Text style={{ ...mobileType.monoLabel, color: colors.ink }}>READ ONLY</Text></View></View>
-      {shownTurns.length ? <ScrollView style={{ flex: 1, marginTop: 20 }} contentContainerStyle={{ gap: 10, paddingBottom: 14 }}>{shownTurns.map((turn) => <View key={turn.id} style={{ alignSelf: turn.role === 'user' ? 'flex-end' : 'stretch', maxWidth: turn.role === 'user' ? '76%' : undefined, padding: 15, borderRadius: 15, borderWidth: turn.role === 'assistant' ? 1 : 0, borderColor: colors.ink, backgroundColor: turn.role === 'user' ? colors.ink : colors.sky }}>{turn.role === 'assistant' ? <AssistantRichText content={turn.content} style={{ ...mobileType.body, color: colors.ink, textAlign: 'left' }} /> : <Text style={{ ...mobileType.body, color: colors.paper, textAlign: 'left' }}>{turn.content}</Text>}</View>)}</ScrollView> : <><View style={{ flexDirection: 'row', gap: 12, marginTop: 22, padding: 16, borderWidth: 1, borderColor: colors.ink, borderRadius: 16, backgroundColor: colors.sky }}><View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' }}><ClaireMark size={18} color={colors.paper} dot={colors.lime} /></View><View style={{ flex: 1 }}><Text style={{ ...mobileType.monoLabel, color: colors.ink }}>SUGGESTED REPLY · WARM + DIRECT</Text><Text style={{ ...mobileType.body, color: colors.ink, marginTop: 7 }}>“I can help pull together the context, find what is still open, and draft a reply you can review.”</Text><View style={{ flexDirection: 'row', gap: 7, marginTop: 12 }}><DesktopAskButton label="Use reply" primary onPress={() => onAsk('Draft a warm, direct reply using the relevant conversation context.')} /><DesktopAskButton label="Make shorter" onPress={() => onAsk('Give me a concise version of the next reply.')} /><DesktopAskButton label="Try again" onPress={() => onAsk('Offer another thoughtful reply option.')} /></View></View></View><Text style={{ ...mobileType.monoLabel, color: colors.neutral[600], marginTop: 22, marginBottom: 9 }}>MORE WAYS I CAN HELP</Text><View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{[[MessageCircle, 'Catch me up', 'Summarize this conversation.'], [CheckCircle2, 'Find open loops', 'Commitments and unanswered questions.'], [Smile, 'Check the tone', 'Warm, direct, or playful.'], [Search, 'Find something', 'Search this chat or every chat.']].map(([Icon, label, detail]) => { const ToolIcon = Icon as typeof MessageCircle; return <Pressable key={label as string} onPress={() => onAsk(detail as string)}><View style={{ width: 184, minHeight: 78, padding: 11, borderRadius: 13, borderWidth: 1, borderColor: colors.neutral[200], backgroundColor: colors.paper }}><ToolIcon size={17} color={colors.ink} /><Text style={{ ...mobileType.bodySmall, fontWeight: '700', color: colors.ink, marginTop: 5 }}>{label as string}</Text><Text style={{ ...mobileType.label, color: colors.neutral[600] }}>{detail as string}</Text></View></Pressable>})}</View></>}
+    <View style={{ flex: 1, minWidth: 0, padding: 30, paddingBottom: 18 }}><View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 16 }}><View><Text style={{ ...mobileType.monoLabel, color: colors.neutral[600] }}>ALL CONVERSATIONS</Text><Text style={{ ...mobileType.screenTitle, color: colors.ink, marginTop: 4 }}>Ask Claire</Text><Text style={{ ...mobileType.bodySmall, color: colors.neutral[600], marginTop: 3 }}>Find what needs attention or ask about your connected conversations.</Text></View><View style={{ alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 6, borderRadius: 99, backgroundColor: colors.sky }}><Text style={{ ...mobileType.monoLabel, color: colors.ink }}>READ ONLY</Text></View></View>
+      {shownTurns.length ? <ScrollView style={{ flex: 1, marginTop: 20 }} contentContainerStyle={{ gap: 10, paddingBottom: 14 }}>{shownTurns.map((turn) => <View key={turn.id} style={{ alignSelf: turn.role === 'user' ? 'flex-end' : 'stretch', maxWidth: turn.role === 'user' ? '76%' : undefined, padding: 15, borderRadius: 15, borderWidth: turn.role === 'assistant' ? 1 : 0, borderColor: colors.ink, backgroundColor: turn.role === 'user' ? colors.ink : colors.sky }}>{turn.role === 'assistant' ? <AssistantRichText content={turn.content} style={{ ...mobileType.body, color: colors.ink, textAlign: 'left' }} /> : <Text style={{ ...mobileType.body, color: colors.paper, textAlign: 'left' }}>{turn.content}</Text>}</View>)}</ScrollView> : <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 24 }}>{GLOBAL_ASK_ACTIONS.map((action) => <DesktopGlobalActionCard key={action.id} action={action} onPress={() => action.prompt ? onAsk(action.prompt) : onFind()} />)}</View>}
       {error ? <Text style={{ ...mobileType.bodySmall, color: colors.danger, marginTop: 8 }}>{error}</Text> : null}
-      <View style={{ minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 9, marginTop: 16, paddingLeft: 13, paddingRight: 8, borderRadius: 14, borderWidth: 1, borderColor: colors.ink, backgroundColor: colors.paper }}><ClaireMark size={17} /><TextInput value={question} onChangeText={onQuestionChange} onSubmitEditing={() => onAsk()} placeholder="Ask about a conversation, person, or open loop…" placeholderTextColor={colors.neutral[400]} style={{ flex: 1, minWidth: 0, color: colors.ink, fontSize: 14, outlineStyle: 'none' } as never} /><View style={{ paddingHorizontal: 6, paddingVertical: 4, borderRadius: 6, backgroundColor: colors.neutral[100] }}><Text style={{ ...mobileType.monoLabel, color: colors.neutral[600] }}>⌥⌘A</Text></View><Pressable onPress={() => onAsk()} disabled={asking}><View style={{ width: 31, height: 31, borderRadius: 10, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center', opacity: asking ? 0.55 : 1 }}><Send size={16} color={colors.paper} /></View></Pressable></View>
+      <View style={{ minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 9, marginTop: 16, paddingLeft: 13, paddingRight: 8, borderRadius: 14, borderWidth: 1, borderColor: colors.ink, backgroundColor: colors.paper }}><ClaireMark size={17} /><TextInput ref={inputRef} value={question} onChangeText={onQuestionChange} onSubmitEditing={() => onAsk()} placeholder={findMode ? 'Describe what you’re looking for…' : 'Ask about a conversation, person, or open loop…'} placeholderTextColor={colors.neutral[400]} style={{ flex: 1, minWidth: 0, color: colors.ink, fontSize: 14, outlineStyle: 'none' } as never} /><View style={{ paddingHorizontal: 6, paddingVertical: 4, borderRadius: 6, backgroundColor: colors.neutral[100] }}><Text style={{ ...mobileType.monoLabel, color: colors.neutral[600] }}>⌥⌘A</Text></View><Pressable onPress={() => onAsk()} disabled={asking}><View style={{ width: 31, height: 31, borderRadius: 10, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center', opacity: asking ? 0.55 : 1 }}><Send size={16} color={colors.paper} /></View></Pressable></View>
     </View>
     <View style={{ width: 235, flexShrink: 0, padding: space[3], borderLeftWidth: 1, borderColor: colors.neutral[200], backgroundColor: '#F4F2EC' }}><Text style={{ ...mobileType.monoLabel, color: colors.neutral[600] }}>CLAIRE’S CONTEXT</Text><DesktopEvidence label="RELATIONSHIP" title="Context-aware" detail="Claire uses the conversation and the relationship memory you’ve chosen." /><DesktopEvidence label="OPEN LOOPS" title="Find open loops" detail="Open loops and unresolved plans are available to ask about." /><View style={{ marginTop: 12, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#DFCA7E', backgroundColor: '#FFF8DD' }}><Text style={{ ...mobileType.monoLabel, color: colors.ink }}>AVAILABLE SOURCES</Text><Text style={{ ...mobileType.bodySmall, fontWeight: '700', color: colors.ink, marginTop: 5 }}>Connected messages</Text><Text style={{ ...mobileType.label, color: colors.neutral[600], marginTop: 3 }}>Claire shows the messages behind any answer.</Text></View></View>
   </View>;
 }
 
-function DesktopAskButton({ label, primary = false, onPress }: { label: string; primary?: boolean; onPress: () => void }) { return <Pressable onPress={onPress}><View style={{ paddingHorizontal: 8, paddingVertical: 6, borderRadius: 99, borderWidth: 1, borderColor: primary ? colors.ink : colors.neutral[200], backgroundColor: primary ? colors.ink : colors.paper }}><Text style={{ ...mobileType.label, color: primary ? colors.paper : colors.ink }}>{label}</Text></View></Pressable>; }
+function DesktopGlobalActionCard({ action, onPress }: { action: typeof GLOBAL_ASK_ACTIONS[number]; onPress: () => void }) {
+  const Icon = action.id === 'find' ? Search : ArrowUpRight;
+  return <Pressable accessibilityRole="button" onPress={onPress} testID={`desktop-claire-tool-${action.id}`} style={{ width: 220, minHeight: 116, gap: 10, padding: 15, borderRadius: 16, borderWidth: 1, borderColor: colors.neutral[200], backgroundColor: colors.paper }}><Icon size={19} color={colors.ink} /><Text style={{ ...mobileType.bodySmall, fontWeight: '700', color: colors.ink }}>{action.label}</Text><Text style={{ ...mobileType.label, color: colors.neutral[600] }}>{action.description}</Text></Pressable>;
+}
 function DesktopEvidence({ label, title, detail }: { label: string; title: string; detail: string }) { return <View style={{ marginTop: 12, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: colors.neutral[200], backgroundColor: colors.paper }}><Text style={{ ...mobileType.monoLabel, color: colors.neutral[600] }}>{label}</Text><Text style={{ ...mobileType.bodySmall, fontWeight: '700', color: colors.ink, marginTop: 5 }}>{title}</Text><Text style={{ ...mobileType.label, color: colors.neutral[600], marginTop: 3 }}>{detail}</Text></View>; }
 
 export default AssistantScreen;

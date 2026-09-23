@@ -33,6 +33,7 @@ import { CONNECTION_PLATFORM_CONFIG } from './connection-platform-config';
 import { formatPairingCodeForDisplay } from './connection-formatters';
 import { ConnectionPlatformMark } from './connection-platform-mark';
 import { useConnectionFlow } from './use-connection-flow';
+import { OnboardingProgress, type OnboardingProgressVariant } from '../onboarding/onboarding-progress';
 
 const isAndroid = process.env.EXPO_OS === 'android';
 
@@ -125,7 +126,7 @@ export function ConnectionFlowScreen({ platform, source }: { platform: Platform;
   return (
     <View style={{ flex: 1, backgroundColor: colors.cream }} testID={`connection-flow-${platform}`}>
       <StatusBar style="dark" />
-      <FlowHeader title={connection.success ? `${config.name} connection` : `Connect ${config.name}`} topInset={insets.top} onBack={connection.goBack} />
+      <FlowHeader title={connection.success ? `${config.name} connection` : `Connect ${config.name}`} topInset={insets.top} onBack={connection.goBack} progressVariant={source === 'onboarding' ? 'bar' : undefined} />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={process.env.EXPO_OS === 'ios' ? 'padding' : 'height'}>
         <ScrollView
           style={{ flex: 1 }}
@@ -155,20 +156,26 @@ export function ConnectionFlowScreen({ platform, source }: { platform: Platform;
   );
 }
 
-function FlowHeader({ title, topInset, onBack }: { title: string; topInset: number; onBack: () => void }) {
+function FlowHeader({ title, topInset, onBack, progressVariant }: { title: string; topInset: number; onBack: () => void; progressVariant?: OnboardingProgressVariant }) {
   return (
-    <View style={{ paddingTop: Math.max(topInset, space[2]), paddingHorizontal: space[4], minHeight: 58 + topInset, flexDirection: 'row', alignItems: 'center', gap: space[2] }}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Back to accounts"
-        testID="connection-flow-back"
-        onPress={onBack}
-        style={{ width: 42, height: 42, borderRadius: 13, borderCurve: 'continuous', borderWidth: 1, borderColor: colors.neutral[200], backgroundColor: colors.paper, alignItems: 'center', justifyContent: 'center' }}
-      >
-        <ChevronLeft size={20} color={colors.ink} />
-      </Pressable>
-      <Text numberOfLines={1} style={{ flex: 1, textAlign: 'center', ...mobileType.body, fontWeight: '700', color: colors.ink }}>{title}</Text>
-      <View style={{ width: 42 }} />
+    <View>
+      <View style={{ paddingTop: Math.max(topInset, space[2]), paddingHorizontal: space[4], minHeight: 58 + topInset, flexDirection: 'row', alignItems: 'center', gap: space[2] }}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Back to accounts"
+          testID="connection-flow-back"
+          onPress={onBack}
+          style={{ width: 42, height: 42, borderRadius: 13, borderCurve: 'continuous', borderWidth: 1, borderColor: colors.neutral[200], backgroundColor: colors.paper, alignItems: 'center', justifyContent: 'center' }}
+        >
+          <ChevronLeft size={20} color={colors.ink} />
+        </Pressable>
+        <View style={{ flex: 1, alignItems: 'center', gap: 4 }}>
+          <Text numberOfLines={1} style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>{title}</Text>
+          {progressVariant === 'dots' ? <OnboardingProgress stage="connections" variant="dots" /> : null}
+        </View>
+        <View style={{ width: 42 }} />
+      </View>
+      {progressVariant === 'bar' ? <View style={{ paddingHorizontal: space[4], paddingVertical: space[2] }}><OnboardingProgress stage="connections" /></View> : null}
     </View>
   );
 }
@@ -431,11 +438,13 @@ export type ConnectionFlowPreviewState =
 export function ConnectionFlowPreview({
   platform,
   state,
+  progressVariant = 'bar',
   onBack,
   onAdvance,
 }: {
   platform: Platform;
   state: ConnectionFlowPreviewState;
+  progressVariant?: OnboardingProgressVariant;
   onBack: () => void;
   onAdvance: () => void;
 }) {
@@ -470,7 +479,7 @@ export function ConnectionFlowPreview({
   return (
     <View style={{ flex: 1, backgroundColor: colors.cream }} testID={`connection-preview-${platform}-${state}`}>
       <StatusBar style="dark" />
-      <FlowHeader title={state === 'success' ? `${config.name} connection` : `Connect ${config.name}`} topInset={insets.top} onBack={onBack} />
+      <FlowHeader title={state === 'success' ? `${config.name} connection` : `Connect ${config.name}`} topInset={insets.top} onBack={onBack} progressVariant={progressVariant} />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={process.env.EXPO_OS === 'ios' ? 'padding' : 'height'}>
         <ScrollView style={{ flex: 1 }} contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled" contentContainerStyle={{ flexGrow: 1, paddingHorizontal: space[4], paddingTop: space[4], paddingBottom: space[5] }}>
           {body}

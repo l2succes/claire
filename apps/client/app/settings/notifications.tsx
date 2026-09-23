@@ -16,7 +16,7 @@ import { supabase } from '../../services/supabase';
 import { API_BASE_URL } from '../../services/platforms';
 import { useAuthStore } from '../../stores/authStore';
 import { readQuerySnapshot, writeQuerySnapshot } from '../../services/mobile-cache';
-import { getNativeNotificationPermission, registerNotificationDevice, requestWebNotificationPermission, supportsWebNotifications } from '../../services/notifications';
+import { getNativeNotificationPermission, registerNotificationDevice, requestNativeNotificationPermission, requestWebNotificationPermission, supportsWebNotifications } from '../../services/notifications';
 import { createSerialSaveQueue } from '../../features/settings/serial-save-queue';
 
 // ---------------------------------------------------------------------------
@@ -329,7 +329,8 @@ export default function NotificationsSettingsScreen() {
       await Linking.openSettings();
       return;
     }
-    await registerNotificationDevice(session.access_token);
+    const permission = await requestNativeNotificationPermission();
+    if (permission === 'granted') await registerNotificationDevice(session.access_token);
     setSystemPermission(await getNativeNotificationPermission());
   };
 

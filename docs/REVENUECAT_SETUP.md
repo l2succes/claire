@@ -94,19 +94,19 @@ Use one current offering with four custom package lookup keys:
    duplicate webhook. Confirm each RevenueCat customer ID is the user's stable
    Supabase UUID.
 
-## Rollout switches
+## Rollout switch
 
-Keep both switches off during integration testing:
+Keep server enforcement off during integration testing:
 
 ```dotenv
-EXPO_PUBLIC_BILLING_ENFORCED=0
 BILLING_ENFORCED=false
 ```
 
-Turn the server switch on first to enforce credits at AI endpoints. Then ship a
-native build with the client switch set to `1` so onboarding presents the
-paywall. With enforcement enabled, an exhausted account receives HTTP 402 and
-the client opens the paywall automatically.
+Mobile onboarding presents the optional plans screen after notification setup
+even while server enforcement is off. People can continue with their preview
+credits without purchasing. Turn the server switch on only when the catalog,
+webhook, and credits flow are verified. With enforcement enabled, an exhausted
+account receives HTTP 402 and the client opens the paywall automatically.
 
 ## Revenue target
 

@@ -1,9 +1,10 @@
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
-import { Bot, Check, ListChecks, MessagesSquare, RefreshCw, Ticket, X } from 'lucide-react-native';
+import { Bot, Check, ChevronLeft, ListChecks, MessagesSquare, RefreshCw, Ticket, X } from 'lucide-react-native';
 import { colors, mobileType, radius, space } from '@claire/design-system';
 import { ClaireMark } from '../../components/claire/mark';
 import type { BillingPackage } from '../../services/billing-types';
 import { PLAN_DETAILS, packagePrice, type BillingCadence } from './paywall-model';
+import { OnboardingProgress, type OnboardingProgressVariant } from '../onboarding/onboarding-progress';
 
 const sharedBenefits = [
   { title: 'Every chat, together', detail: 'Move between connected conversations without starting over.', icon: MessagesSquare, tone: colors.sky },
@@ -11,59 +12,74 @@ const sharedBenefits = [
   { title: 'An assistant with context', detail: 'Get a quick catch-up or draft a thoughtful reply.', icon: Bot, tone: colors.lavender },
 ] as const;
 
-export function PaywallHeader({ onClose }: { onClose: () => void }) {
+export function PaywallHeader({ mode = 'onboarding', progressVariant = 'bar', onClose }: { mode?: 'onboarding' | 'profile' | 'modal'; progressVariant?: OnboardingProgressVariant; onClose: () => void }) {
+  if (mode === 'profile') {
+    return (
+      <View testID="billing-paywall-header-profile" style={{ minHeight: 48, flexDirection: 'row', alignItems: 'center' }}>
+        <Pressable
+          testID="billing-paywall-back"
+          accessibilityRole="button"
+          accessibilityLabel="Back to Profile"
+          hitSlop={8}
+          onPress={onClose}
+          style={{ width: 44, height: 44, borderRadius: 14, borderCurve: 'continuous', borderWidth: 1, borderColor: colors.neutral[200], backgroundColor: colors.paper, alignItems: 'center', justifyContent: 'center' }}
+        >
+          <ChevronLeft size={20} color={colors.ink} strokeWidth={2} />
+        </Pressable>
+        <Text accessibilityRole="header" style={{ flex: 1, textAlign: 'center', ...mobileType.body, fontWeight: '700', color: colors.ink }}>Subscriptions</Text>
+        <View style={{ width: 44 }} />
+      </View>
+    );
+  }
+
   return (
-    <View
-      style={{
-        minHeight: 48,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-      }}
-    >
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}>
-        <View
-          accessibilityElementsHidden
+    <View style={{ gap: mode === 'onboarding' ? space[2] : 0 }}>
+      <View style={{ minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}>
+          <View
+            accessibilityElementsHidden
+            style={{
+              width: 42,
+              height: 42,
+              borderRadius: 13,
+              borderCurve: 'continuous',
+              borderWidth: 1,
+              borderColor: colors.ink,
+              backgroundColor: colors.lime,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <ClaireMark size={25} color={colors.ink} dot={colors.paper} />
+          </View>
+          <View>
+            <Text style={{ ...mobileType.monoLabel, color: colors.ink }}>CLAIRE</Text>
+            <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>
+              Plans & AI credits
+            </Text>
+          </View>
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Close plans"
+          hitSlop={8}
+          onPress={onClose}
           style={{
-            width: 42,
-            height: 42,
-            borderRadius: 13,
+            width: 44,
+            height: 44,
+            borderRadius: 14,
             borderCurve: 'continuous',
             borderWidth: 1,
-            borderColor: colors.ink,
-            backgroundColor: colors.lime,
+            borderColor: colors.neutral[200],
+            backgroundColor: colors.paper,
             alignItems: 'center',
             justifyContent: 'center',
           }}
         >
-          <ClaireMark size={25} color={colors.ink} dot={colors.paper} />
-        </View>
-        <View>
-          <Text style={{ ...mobileType.monoLabel, color: colors.ink }}>CLAIRE</Text>
-          <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>
-            Plans & AI credits
-          </Text>
-        </View>
+          <X size={19} color={colors.ink} strokeWidth={2} />
+        </Pressable>
       </View>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Close plans"
-        hitSlop={8}
-        onPress={onClose}
-        style={{
-          width: 44,
-          height: 44,
-          borderRadius: 14,
-          borderCurve: 'continuous',
-          borderWidth: 1,
-          borderColor: colors.neutral[200],
-          backgroundColor: colors.paper,
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <X size={19} color={colors.ink} strokeWidth={2} />
-      </Pressable>
+      {mode === 'onboarding' ? <OnboardingProgress stage="plans" variant={progressVariant} /> : null}
     </View>
   );
 }

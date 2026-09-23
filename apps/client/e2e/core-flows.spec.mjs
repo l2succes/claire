@@ -44,6 +44,11 @@ test.describe('Core loop — mock backend', () => {
     await page.goto('/signin');
 
     await expect(page.getByTestId('signin-screen')).toBeVisible();
+    await expect(page.getByTestId('welcome-previous')).toHaveCount(0);
+    await expect(page.getByTestId('welcome-next')).toHaveCount(0);
+    await expect(page.getByTestId('welcome-indicator-0')).toBeVisible();
+    await expect(page.getByTestId('welcome-indicator-1')).toBeVisible();
+    await expect(page.getByTestId('welcome-indicator-2')).toBeVisible();
     await expect(page.getByTestId('google-sign-in-signin')).toBeVisible();
     await page.getByTestId('signin-use-email').click();
     await expect(page.getByTestId('signin-email-input')).toBeVisible();
@@ -302,14 +307,32 @@ test.describe('Core loop — mock backend', () => {
     );
   });
 
-  test('Ask Claire explains the conversation without sending a message', async ({ page }) => {
+  test('conversation Ask Claire keeps actions scoped to one chat', async ({ page }) => {
     await signIn(page);
-    await page.locator('[data-testid^="message-card-"]').first().click();
-    await expect(page.getByTestId('chat-screen')).toBeVisible({ timeout: 10_000 });
-
-    await page.getByTestId('ask-claire-button').click();
-    await expect(page.getByTestId('conversation-explanation')).toContainText('Alice is confirming the report timeline.');
-    await expect(page.getByTestId('chat-input')).toHaveValue('');
+    const scopedRequests = [];
+    await page.route(/\/ai\/assistant\/conversations\/mock-chat-wa-alice(?:\/messages)?(?:\?|$)/, async (route) => {
+      const request = route.request();
+      if (request.method() === 'GET') {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data: { thread: null, turns: [] } }) });
+        return;
+      }
+      const body = JSON.parse(request.postData() || '{}');
+      scopedRequests.push(body);
+      const answer = 'Alice is confirming the report timeline.';
+      const result = { answer, citations: [], actions: [], indexing: { status: 'ready', indexedCount: 1, totalCount: 1 }, assistantTurn: { id: 'scoped-answer', role: 'assistant', content: answer, citations: [], actions: [], status: 'completed', created_at: new Date().toISOString() } };
+      await route.fulfill({ status: 200, contentType: 'text/event-stream', body: `data: ${JSON.stringify({ type: 'data-claire-result', data: result })}\n\n` });
+    });
+    await page.goto('/chat/assistant/mock-chat-wa-alice?name=Alice%20(WA)');
+    await expect(page.getByTestId('conversation-assistant-screen')).toBeVisible();
+    await expect(page.getByTestId('conversation-assistant-scope')).toContainText('Only Alice (WA)');
+    await expect(page.getByTestId('conversation-assistant-catch-me-up')).toBeVisible();
+    await expect(page.getByTestId('conversation-assistant-open-loops')).toBeVisible();
+    await expect(page.getByTestId('conversation-assistant-tone')).toBeVisible();
+    await expect(page.getByTestId('conversation-assistant-find')).toHaveCount(0);
+    await page.getByTestId('conversation-assistant-catch-me-up').click();
+    await expect(page.getByTestId('conversation-assistant-screen')).toContainText('Alice is confirming the report timeline.');
+    expect(scopedRequests).toHaveLength(1);
+    expect(scopedRequests[0].question).toContain('this conversation');
   });
 
   test('global Ask Claire searches messages and opens a cited source', async ({ page }) => {
@@ -333,11 +356,14 @@ test.describe('Core loop — mock backend', () => {
   });
 
   test('an untouched Ask Claire draft never appears in Recent', async ({ page }) => {
-    await page.setViewportSize({ width: 390, height: 540 });
+    await page.setViewportSize({ width: 390, height: 320 });
     await signIn(page);
     await page.goto('/ask-claire');
     await expect(page.getByTestId('assistant-home')).toBeVisible();
-    await expect(page.getByTestId('claire-tool-catch-me-up')).toHaveCount(1);
+    await expect(page.getByTestId('claire-tool-attention')).toHaveCount(1);
+    await expect(page.getByTestId('claire-tool-find')).toHaveCount(1);
+    await expect(page.getByTestId('claire-tool-catch-me-up')).toHaveCount(0);
+    await expect(page.getByTestId('claire-tool-tone')).toHaveCount(0);
     await expect(page.getByTestId('assistant-recommendations')).toHaveCount(0);
     const homeScroll = page.getByTestId('assistant-home');
     await homeScroll.evaluate((element) => { element.scrollTop = 200; });
@@ -394,10 +420,35 @@ test.describe('Core loop — mock backend', () => {
   test('an Ask Claire home tool starts and saves a conversation', async ({ page }) => {
     await signIn(page);
     await page.goto('/ask-claire');
-    await page.getByTestId('claire-tool-catch-me-up').click();
+    await page.getByTestId('claire-tool-attention').click();
     await expect(page.getByTestId('assistant-answer-bubble')).toContainText('You discussed meeting Alice');
     await page.getByRole('button', { name: 'Back to Ask Claire' }).click();
     await expect(page.locator('[data-testid^="assistant-thread-"]')).toHaveCount(1);
+  });
+
+  test('global Find opens a draft and sends an evidence-seeking question only after submission', async ({ page }) => {
+    await signIn(page);
+    await page.goto('/ask-claire');
+    await expect(page.getByTestId('assistant-home')).toBeVisible();
+
+    const questions = [];
+    page.on('request', (request) => {
+      if (request.method() === 'POST' && new URL(request.url()).pathname.endsWith('/ai/assistant/messages')) {
+        questions.push(JSON.parse(request.postData() || '{}'));
+      }
+    });
+    await page.getByTestId('claire-tool-find').click();
+    await expect(page.getByTestId('assistant-scope')).toContainText('All conversations');
+    await expect(page.getByTestId('assistant-input')).toHaveAttribute('placeholder', 'Describe what you’re looking for…');
+    expect(questions).toHaveLength(0);
+
+    await page.getByTestId('assistant-input').fill('the plan to meet Alice');
+    await page.getByTestId('assistant-send').click();
+    await expect(page.getByTestId('assistant-answer-bubble')).toContainText('You discussed meeting Alice');
+    expect(questions).toHaveLength(1);
+    expect(questions[0].question).toContain('the plan to meet Alice');
+    expect(questions[0].question).toContain('Cite the exact messages');
+    expect(questions[0].chatIds).toEqual([]);
   });
 
   test('Ask Claire @ targeting sends the selected conversation scope', async ({ page }) => {
@@ -410,6 +461,8 @@ test.describe('Core loop — mock backend', () => {
     await expect(page.getByTestId('assistant-mention-candidate-mock-chat-wa-alice')).toBeVisible({ timeout: 5_000 });
     await page.getByTestId('assistant-mention-candidate-mock-chat-wa-alice').click();
     await expect(page.getByTestId('assistant-mention-mock-chat-wa-alice')).toBeVisible();
+    await expect(page.getByTestId('assistant-scope')).toContainText('Only Alice (WA)');
+    await expect(page.getByTestId('assistant-input')).toHaveValue('');
 
     await page.getByTestId('assistant-input').fill('What did we decide?');
     await page.getByTestId('assistant-send').click();

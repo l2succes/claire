@@ -70,21 +70,13 @@ export async function setupNotifications(devicePushToken?: Notifications.DeviceP
 
   await setupNotificationCategories();
 
+  const { status: existingStatus } = await Notifications.getPermissionsAsync();
+  // Registration runs during authenticated startup and retries in the
+  // background. Only an explicit onboarding/settings action may show the OS
+  // permission prompt.
+  if (existingStatus !== 'granted') return null;
   if (!Device.isDevice) {
     console.log('Push notifications only work on physical devices');
-    return null;
-  }
-
-  const { status: existingStatus } = await Notifications.getPermissionsAsync();
-  let finalStatus = existingStatus;
-
-  if (existingStatus !== 'granted') {
-    const { status } = await Notifications.requestPermissionsAsync();
-    finalStatus = status;
-  }
-
-  if (finalStatus !== 'granted') {
-    console.log('Failed to get push token for notifications');
     return null;
   }
 
@@ -173,6 +165,14 @@ export async function getNativeNotificationPermission(): Promise<string> {
   if (!platformCapabilities.supportsNativeNotifications) return 'unsupported';
   const permission = await Notifications.getPermissionsAsync();
   return permission.status;
+}
+
+export async function requestNativeNotificationPermission(): Promise<string> {
+  if (!platformCapabilities.supportsNativeNotifications) return 'unsupported';
+  const existing = await Notifications.getPermissionsAsync();
+  if (existing.status !== 'undetermined') return existing.status;
+  const requested = await Notifications.requestPermissionsAsync();
+  return requested.status;
 }
 
 async function getDeviceId(): Promise<string> {

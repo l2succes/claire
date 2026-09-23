@@ -15,6 +15,8 @@ import {
 import { refreshServerBillingSummary } from '../../services/billing-api';
 import type { BillingPackage } from '../../services/billing-types';
 import { userFacingErrorMessage } from '../../services/api-errors';
+import { completeOnboardingPaywall } from '../onboarding/onboarding-flow';
+import { paywallExitAction, paywallHeaderMode } from './paywall-navigation';
 import {
   CadenceSelector,
   OfferCodeButton,
@@ -36,10 +38,14 @@ import {
   type BillingCadence,
 } from './paywall-model';
 
-function finish(source: string | string[] | undefined) {
+async function finish(source: string | string[] | undefined, userId?: string) {
   const sourceValue = Array.isArray(source) ? source[0] : source;
-  if (sourceValue === 'settings' && router.canGoBack()) router.back();
-  else router.replace('/(tabs)/dashboard');
+  if (sourceValue === 'onboarding' && userId) {
+    await completeOnboardingPaywall(userId).catch((error) => console.warn('Could not save onboarding progress:', error));
+  }
+  const exitAction = paywallExitAction(source, router.canGoBack());
+  if (exitAction === 'back') router.back();
+  else router.replace(exitAction);
 }
 
 export function PaywallScreen() {
@@ -105,7 +111,7 @@ export function PaywallScreen() {
           'The purchase completed, but access is still syncing. Try Restore Purchases in a moment.'
         );
       await refreshServerBillingSummary().catch(() => null);
-      finish(source);
+      await finish(source, userId);
     } catch (error) {
       const purchaseError = error as { userCancelled?: boolean; message?: string };
       if (!purchaseError.userCancelled)
@@ -126,7 +132,7 @@ export function PaywallScreen() {
         );
       else {
         await refreshServerBillingSummary().catch(() => null);
-        finish(source);
+        await finish(source, userId);
       }
     } catch (error) {
       Alert.alert('Restore failed', userFacingErrorMessage(error, 'Please try again.'));
@@ -156,7 +162,7 @@ export function PaywallScreen() {
         }}
       >
         <View style={{ width: '100%', maxWidth: 520, gap: space[5] }}>
-          <PaywallHeader onClose={() => finish(source)} />
+          <PaywallHeader mode={paywallHeaderMode(source)} onClose={() => void finish(source, userId)} />
           <PaywallHero hasTrial={chosen?.trialDays === 3} />
           <SharedBenefitsCard />
 
@@ -247,8 +253,13 @@ export function PaywallScreen() {
         <View style={{ width: '100%', maxWidth: 520, gap: 2 }}>
           {chosen ? <Text selectable style={{ ...mobileType.body, fontWeight: '700', color: colors.ink, textAlign: 'center', paddingBottom: space[2] }}>{chosen.trialDays === 3 ? `3 days free · then ${chosen.priceString} / month` : `Monthly plan · ${chosen.priceString} / month`}</Text> : null}
           {sourceValue === 'onboarding' && !chosen ? (
-            <Pressable accessibilityRole="button" onPress={() => finish(source)} style={{ minHeight: 56, borderRadius: 16, backgroundColor: colors.lime, alignItems: 'center', justifyContent: 'center' }}><Text style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>Continue to Claire</Text></Pressable>
+            <Pressable testID="billing-onboarding-continue" accessibilityRole="button" onPress={() => void finish(source, userId)} style={{ minHeight: 56, borderRadius: 16, backgroundColor: colors.lime, alignItems: 'center', justifyContent: 'center' }}><Text style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>Continue to Claire</Text></Pressable>
           ) : <PurchaseButton item={chosen} purchasing={purchasing} onPress={() => void purchase()} />}
+          {sourceValue === 'onboarding' && chosen ? (
+            <Pressable testID="billing-onboarding-preview" accessibilityRole="button" onPress={() => void finish(source, userId)} style={{ minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={{ ...mobileType.bodySmall, fontWeight: '700', color: colors.ink }}>Use 50 free credits first</Text>
+            </Pressable>
+          ) : null}
           {chosen ? <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600], textAlign: 'center', paddingTop: space[2] }}>Auto-renews unless canceled. Cancel anytime.</Text> : null}
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <RestoreButton

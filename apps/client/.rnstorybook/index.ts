@@ -11,8 +11,8 @@ import { view } from './storybook.requires';
  * with application decorators/providers (theme, i18n, state, navigation, etc).
  */
 const StorybookUIRoot = view.getStorybookUI({
-  initialSelection: 'onboarding-flow--complete-walkthrough',
-  shouldPersistSelection: true,
+  initialSelection: process.env.EXPO_PUBLIC_STORYBOOK_STORY ?? 'onboarding-flow--complete-walkthrough',
+  shouldPersistSelection: false,
   storage: {
     getItem: AsyncStorage.getItem,
     setItem: AsyncStorage.setItem,
