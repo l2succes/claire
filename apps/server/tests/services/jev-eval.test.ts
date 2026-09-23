@@ -65,10 +65,12 @@ describe('Jev evaluation boundaries', () => {
       .rejects.toThrow('TYPESAFE_HTTP_429');
   });
 
-  it('can recover a Spanish regex miss without treating an API failure as a negative', () => {
-    expect(baseline(item()).run).toBe(false);
+  it('routes a Spanish semantic candidate without treating an API failure as a negative', () => {
+    expect(baseline(item()).run).toBe(true);
+    expect(baseline(item()).reasons).toContain('semantic_candidate');
     expect(route(item(), answer()).extract).toBe(true);
     expect(route(item(), null).reason).toBe('fallback_to_baseline');
+    expect(route(item(), null).extract).toBe(true);
     const english = { ...item(), messages: [{ ...item().messages[0], content: 'Can you send the invoice?' }] };
     expect(route(english, null).extract).toBe(true);
   });
