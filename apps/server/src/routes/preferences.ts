@@ -122,17 +122,7 @@ router.put(
       return res.status(500).json({ error: 'Failed to update preferences' });
     }
 
-    // Notification eligibility is an input to the loop plan. Re-evaluate live
-    // loops when the master or loop-specific switch changes so enabling alerts
-    // does not require editing every existing loop by hand.
-    if (notification_enabled !== undefined || preferences?.notify_loops !== undefined) {
-      const { error: reminderError } = await supabase
-        .from('loops')
-        .update({ reminder_plan_state: 'pending', next_reminder_at: null })
-        .eq('user_id', userId)
-        .in('status', ['open', 'waiting', 'snoozed']);
-      if (reminderError) logger.warn('Could not refresh loop reminder plans', { userId, error: reminderError.message });
-    }
+    // The preference transaction invalidates unsent reminder episodes in SQL.
 
     return res.json({ success: true, data });
   }

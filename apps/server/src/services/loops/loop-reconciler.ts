@@ -20,9 +20,8 @@ import { decideRelevance, type RelevanceDecision, type SelfIdentity, type Window
 import type { LoopOp, LoopCreateOp, LoopUpdateOp, LoopCloseOp } from './loop-prompts';
 
 /**
- * Confidence a close must clear before it is applied without asking.
- * Below this the close is recorded and surfaced as "Claire thinks this is
- * done" rather than applied.
+ * Legacy threshold retained to label low-confidence closure proposals.
+ * Every closure requires user review, including proposals above this value.
  */
 export const AUTO_CLOSE_MIN_CONFIDENCE = 0.75;
 
@@ -36,11 +35,11 @@ export type CreateOutcome =
 
 export type UpdateOutcome =
   | { action: 'update' }
-  | { action: 'skip'; reason: 'low_confidence' | 'unknown_loop' };
+  | { action: 'skip'; reason: 'low_confidence' | 'unknown_loop' | 'terminal_state' | 'no_evidence' | 'invalid_deadline' };
 
 export type CloseOutcome =
   | { action: 'close' }
-  | { action: 'suggest_close'; reason: 'low_confidence' | 'auto_close_disabled' }
+  | { action: 'suggest_close'; reason: 'low_confidence' | 'auto_close_disabled' | 'review_required' }
   | { action: 'skip'; reason: 'unknown_loop' | 'no_evidence' };
 
 export interface ReconcileSettings {
@@ -77,13 +76,13 @@ export function computeDedupeKey(title: string, participants: string[]): string 
 
   const tokens = title
     .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
     .split(/\s+/)
     .filter((token) => token.length > 1 && !STOPWORDS.has(token))
     .sort();
 
   const people = [...participants]
-    .map((p) => p.toLowerCase().replace(/[^a-z0-9]/g, ''))
+    .map((p) => p.toLowerCase().replace(/[^\p{L}\p{N}]/gu, ''))
     .filter(Boolean)
     .sort();
 
@@ -93,7 +92,7 @@ export function computeDedupeKey(title: string, participants: string[]): string 
 /** Resolve evidence refs ("m4") back to real messages. */
 export function resolveEvidence(refs: string[], window: WindowMessage[]): WindowMessage[] {
   const byRef = new Map(window.map((m) => [m.ref, m]));
-  return refs.map((ref) => byRef.get(ref)).filter((m): m is WindowMessage => !!m);
+  return [...new Set(refs)].map((ref) => byRef.get(ref)).filter((m): m is WindowMessage => !!m).sort((a, b) => a.at.localeCompare(b.at) || a.id.localeCompare(b.id));
 }
 
 /**
@@ -104,11 +103,13 @@ export function resolveEvidence(refs: string[], window: WindowMessage[]): Window
  * Open count and triggers no plugin. This is what keeps the list trustworthy.
  */
 export function isActionable(threadState: string): boolean {
-  return threadState === 'agreed' || threadState === 'resolved';
+  return threadState === 'agreed';
 }
 
 export function decideCreate(op: LoopCreateOp, context: ReconcileContext): CreateOutcome {
+  if (op.state === 'resolved') return { action: 'skip', reason: 'not_actionable' };
   const evidence = resolveEvidence(op.evidence_refs, context.window);
+  if (evidence.length !== new Set(op.evidence_refs).size || !evidence.length) return { action: 'skip', reason: 'not_actionable' };
   const minConfidence = context.settings.minConfidence ?? DEFAULT_MIN_CONFIDENCE;
 
   if (op.confidence < minConfidence) {
@@ -152,6 +153,9 @@ export function decideCreate(op: LoopCreateOp, context: ReconcileContext): Creat
 }
 
 export function decideUpdate(op: LoopUpdateOp, context: ReconcileContext): UpdateOutcome {
+  if (op.state === 'resolved') return { action: 'skip', reason: 'terminal_state' };
+  if (op.deadline_action === 'set' && (!op.deadline || Number.isNaN(Date.parse(op.deadline)))) return { action: 'skip', reason: 'invalid_deadline' };
+  if (!op.evidence_refs.length || resolveEvidence(op.evidence_refs, context.window).length !== new Set(op.evidence_refs).size) return { action: 'skip', reason: 'no_evidence' };
   if (!context.liveLoopIds.has(op.loop_id)) {
     return { action: 'skip', reason: 'unknown_loop' };
   }
@@ -171,7 +175,7 @@ export function decideClose(op: LoopCloseOp, context: ReconcileContext): CloseOu
 
   // "Silence is never resolution." A close with no citation is not a close.
   const evidence = resolveEvidence(op.evidence_refs, context.window);
-  if (!evidence.length) {
+  if (!evidence.length || evidence.length !== new Set(op.evidence_refs).size) {
     return { action: 'skip', reason: 'no_evidence' };
   }
 
@@ -183,7 +187,7 @@ export function decideClose(op: LoopCloseOp, context: ReconcileContext): CloseOu
     return { action: 'suggest_close', reason: 'low_confidence' };
   }
 
-  return { action: 'close' };
+  return { action: 'suggest_close', reason: 'review_required' };
 }
 
 export interface OpsPlan {
@@ -202,8 +206,13 @@ export interface OpsPlan {
 export function planOps(ops: LoopOp[], context: ReconcileContext): OpsPlan {
   const plan: OpsPlan = { creates: [], updates: [], closes: [] };
   const seenKeys = new Set<string>();
+  const targets = new Set<string>();
 
   for (const op of ops) {
+    if (op.op !== 'create') {
+      if (targets.has(op.loop_id)) continue;
+      targets.add(op.loop_id);
+    }
     if (op.op === 'create') {
       const outcome = decideCreate(op, context);
       if (outcome.action === 'create') {

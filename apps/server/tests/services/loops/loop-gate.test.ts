@@ -68,18 +68,18 @@ describe('loop gate — hard skips', () => {
     expect(result.skipReason).toBe('detection_disabled');
   });
 
-  it('skips a window too short to contain a commitment', () => {
-    const result = gate({ delta: [msg('ok')] });
+  it('skips an empty message', () => {
+    const result = gate({ delta: [msg('')] });
     expect(result.run).toBe(false);
     expect(result.skipReason).toBe('window_too_short');
   });
 
-  it('skips ambient chatter with no intent signal', () => {
+  it('lets the model resolve ambiguous human language', () => {
     const result = gate({
       delta: [msg('haha that is hilarious'), msg('right?? so good')],
     });
-    expect(result.run).toBe(false);
-    expect(result.skipReason).toBe('no_signal');
+    expect(result.run).toBe(true);
+    expect(result.reasons).toContain('semantic_candidate');
   });
 });
 
@@ -115,11 +115,11 @@ describe('loop gate — signals that must fire', () => {
 });
 
 describe('loop gate — resolution and open loops', () => {
-  it('runs when a loop is open even with an empty delta', () => {
+  it('does not repeat paid extraction without new evidence', () => {
     // Without this the pipeline could open loops but never close them.
     const result = gate({ delta: [], openLoopCount: 2 });
-    expect(result.run).toBe(true);
-    expect(result.reasons).toContain('open_loops_present');
+    expect(result.run).toBe(false);
+    expect(result.skipReason).toBe('window_empty');
   });
 
   it('runs on bare resolution language when a loop is open', () => {
@@ -129,12 +129,12 @@ describe('loop gate — resolution and open loops', () => {
 });
 
 describe('loop gate — backoff', () => {
-  it('requires more signal from a chat that keeps producing nothing', () => {
+  it('does not discard new intent after earlier empty windows', () => {
     // A date alone, and nothing else — exactly one signal.
     const oneSignal = { delta: [msg('the meeting is on Tuesday')], consecutiveEmpty: 6 };
     expect(gate(oneSignal).reasons).toEqual(['temporal']);
-    expect(gate(oneSignal).run).toBe(false);
-    expect(gate(oneSignal).skipReason).toBe('backoff');
+    expect(gate(oneSignal).run).toBe(true);
+    expect(gate(oneSignal).skipReason).toBeNull();
 
     // The same window in a chat that has been productive still runs.
     expect(gate({ ...oneSignal, consecutiveEmpty: 0 }).run).toBe(true);

@@ -229,7 +229,7 @@ export function LoopDetailScreen() {
   };
 
   const patch = useMutation({
-    mutationFn: (next: Parameters<typeof updateLoop>[1]) => updateLoop(loopId, next),
+    mutationFn: (next: Parameters<typeof updateLoop>[1]) => updateLoop(loopId, next, query.data?.row_version),
     onMutate: beginOptimisticPatch,
     onSuccess: persistSuccessfulMutation,
     onError: (_error, _variables, context) => {
@@ -308,13 +308,13 @@ export function LoopDetailScreen() {
   }
 
   const overdue = isOverdue(loop);
-  const done = loop.status === 'done';
+  const done = ['done', 'dropped', 'superseded'].includes(loop.status);
   const chatName = conversationName(loop);
   const group = !!loop.chat?.is_group;
   const due = formatDeadline(loop.deadline, loop.deadline_precision);
   const snoozedUntil = formatDeadline(loop.snoozed_until, 'exact');
   const nextReminder = formatDeadline(loop.next_reminder_at, 'exact');
-  const closeSuggestion = pendingCloseSuggestion(loop.events ?? []);
+  const closeSuggestion = pendingCloseSuggestion(loop.events ?? [], loop.row_version, loop.chat_generation);
 
   const tomorrow = () => {
     const date = new Date();
@@ -336,7 +336,7 @@ export function LoopDetailScreen() {
           style={{
             padding: space[4],
             borderRadius: radius.card,
-            backgroundColor: done ? colors.lime : overdue ? colors.blush : colors.paper,
+            backgroundColor: loop.status === 'done' ? colors.lime : overdue ? colors.blush : colors.paper,
             borderWidth: 1,
             borderColor: colors.neutral[200],
             gap: space[3],
@@ -529,7 +529,7 @@ export function LoopDetailScreen() {
 
         {!done ? (
           <Section title="Claire">
-            <LoopAgentPanel loopId={String(id)} />
+            <LoopAgentPanel loop={loop} />
           </Section>
         ) : null}
 

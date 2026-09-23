@@ -14,9 +14,12 @@ const mockQuery: any = {
   single: mock(),
 };
 
+const mockRpc = mock(async (_name: string, _args: any) => mockQuery.single());
+
 mock.module('../../src/services/supabase', () => ({
   supabase: {
     from: mock(() => mockQuery),
+    rpc: mockRpc,
   },
   authHelpers: {
     verifyToken: mock(async () => ({
@@ -39,6 +42,8 @@ app.use('/loops', loopRoutes);
 const VALID_UUID = '00000000-0000-0000-0000-000000000001';
 
 function resetMocks() {
+  mockRpc.mockReset();
+  mockRpc.mockImplementation(async () => mockQuery.single());
   Object.values(mockQuery).forEach((fn: any) => fn.mockReset());
   // Re-apply chaining defaults
   mockQuery.select.mockReturnThis();
@@ -98,7 +103,6 @@ describe('POST /loops', () => {
       requester: 'me',
       thread_state: 'agreed',
       source: 'user',
-      user_edited: true,
     });
   });
 });
@@ -119,7 +123,7 @@ describe('GET /loops/:id', () => {
   });
 
   it('returns 200 with loop data when found', async () => {
-    const mockLoop = { id: VALID_UUID, user_id: 'user-123', content: 'call tomorrow', status: 'open' };
+    const mockLoop = { id: VALID_UUID, user_id: 'user-123', content: 'call tomorrow', row_version: 1, status: 'open' };
     mockQuery.single.mockResolvedValueOnce({ data: mockLoop, error: null });
     const res = await request(app).get(`/loops/${VALID_UUID}`);
     expect(res.status).toBe(200);
@@ -129,7 +133,7 @@ describe('GET /loops/:id', () => {
 
 // ---------------------------------------------------------------------------
 describe('PATCH /loops/:id', () => {
-  const mockLoop = { id: VALID_UUID, user_id: 'user-123', content: 'call tomorrow', status: 'open', completed_at: null };
+  const mockLoop = { id: VALID_UUID, user_id: 'user-123', content: 'call tomorrow', row_version: 1, status: 'open', completed_at: null };
 
   beforeEach(resetMocks);
 
@@ -165,13 +169,9 @@ describe('PATCH /loops/:id', () => {
       .send({ owner: 'them', status: 'waiting' });
 
     expect(res.status).toBe(200);
-    expect(mockQuery.update.mock.calls.at(-1)?.[0]).toEqual({
+    expect(mockRpc.mock.calls.at(-1)?.[1].p_patch).toEqual({
       owner: 'them',
       status: 'waiting',
-      user_edited: true,
-      completed_at: null,
-      resolved_at: null,
-      resolution: null,
     });
   });
 
@@ -188,11 +188,10 @@ describe('PATCH /loops/:id', () => {
     });
 
     expect(res.status).toBe(200);
-    expect(mockQuery.update.mock.calls.at(-1)?.[0]).toMatchObject({
+    expect(mockRpc.mock.calls.at(-1)?.[1].p_patch).toMatchObject({
       title: 'Send revised deck',
       deadline: null,
       deadline_precision: 'none',
-      user_edited: true,
     });
   });
 
@@ -205,7 +204,7 @@ describe('PATCH /loops/:id', () => {
 
 // ---------------------------------------------------------------------------
 describe('POST /loops/:id/review', () => {
-  const mockLoop = { id: VALID_UUID, user_id: 'user-123', content: 'call tomorrow', status: 'open', completed_at: null };
+  const mockLoop = { id: VALID_UUID, user_id: 'user-123', content: 'call tomorrow', row_version: 1, status: 'open', completed_at: null };
 
   beforeEach(resetMocks);
 
@@ -217,15 +216,14 @@ describe('POST /loops/:id/review', () => {
     const res = await request(app).post(`/loops/${VALID_UUID}/review`).send({ action: 'keep_open' });
 
     expect(res.status).toBe(200);
-    expect(mockQuery.update.mock.calls.at(-1)?.[0]).toMatchObject({
-      user_edited: true,
+    expect(mockRpc.mock.calls.at(-1)?.[1].p_patch).toMatchObject({
       reviewed_at: expect.any(String),
     });
-    expect(mockQuery.insert.mock.calls.at(-1)?.[0]).toMatchObject({
-      loop_id: VALID_UUID,
-      actor: 'user',
-      kind: 'user_edit',
-      payload: { action: 'keep_open', resolution: null },
+    expect(mockRpc.mock.calls.at(-1)?.[1]).toMatchObject({
+      p_loop_id: VALID_UUID,
+      p_actor: 'user',
+      p_kind: 'user_edit',
+      p_payload: { action: 'keep_open', resolution: null },
     });
   });
 
@@ -242,14 +240,14 @@ describe('POST /loops/:id/review', () => {
     });
 
     expect(res.status).toBe(200);
-    expect(mockQuery.update.mock.calls.at(-1)?.[0]).toMatchObject({
+    expect(mockRpc.mock.calls.at(-1)?.[1].p_patch).toMatchObject({
       status: 'done',
       thread_state: 'resolved',
       resolution: 'cancelled',
     });
-    expect(mockQuery.insert.mock.calls.at(-1)?.[0]).toMatchObject({
-      kind: 'resolved',
-      payload: {
+    expect(mockRpc.mock.calls.at(-1)?.[1]).toMatchObject({
+      p_kind: 'resolved',
+      p_payload: {
         action: 'done',
         resolution: 'cancelled',
         reviewedSuggestionEventId: suggestionId,
@@ -260,7 +258,7 @@ describe('POST /loops/:id/review', () => {
 
 // ---------------------------------------------------------------------------
 describe('POST /loops/:id/snooze', () => {
-  const mockLoop = { id: VALID_UUID, user_id: 'user-123', content: 'call tomorrow', status: 'open' };
+  const mockLoop = { id: VALID_UUID, user_id: 'user-123', content: 'call tomorrow', row_version: 1, status: 'open' };
   const snoozeUntil = new Date(Date.now() + 86400000).toISOString();
 
   beforeEach(resetMocks);
@@ -305,7 +303,7 @@ describe('POST /loops/:id/snooze', () => {
 
     await request(app).post(`/loops/${VALID_UUID}/snooze`).send({ snooze_until: snoozeUntil });
 
-    const updatePayload = mockQuery.update.mock.calls.at(-1)?.[0];
+    const updatePayload = mockRpc.mock.calls.at(-1)?.[1].p_patch;
     expect(updatePayload).toEqual({ snoozed_until: snoozeUntil, status: 'snoozed' });
     expect(updatePayload).not.toHaveProperty('deadline');
   });
@@ -313,7 +311,7 @@ describe('POST /loops/:id/snooze', () => {
 
 // ---------------------------------------------------------------------------
 describe('DELETE /loops/:id', () => {
-  const mockLoop = { id: VALID_UUID, user_id: 'user-123', content: 'call tomorrow', status: 'open' };
+  const mockLoop = { id: VALID_UUID, user_id: 'user-123', content: 'call tomorrow', row_version: 1, status: 'open' };
 
   beforeEach(resetMocks);
 
@@ -326,6 +324,7 @@ describe('DELETE /loops/:id', () => {
   it('returns 204 on successful soft-delete', async () => {
     // getOwnedLoop uses: .select().eq(×2).single()
     mockQuery.single.mockResolvedValueOnce({ data: mockLoop, error: null });
+    mockRpc.mockResolvedValueOnce({ data: { ...mockLoop, status: 'dropped' }, error: null });
     // delete uses: .update().eq(×2) — awaited on the whole chain
     // Track call count: calls 1-2 from getOwnedLoop, calls 3-4 from the delete update
     let eqCallCount = 0;

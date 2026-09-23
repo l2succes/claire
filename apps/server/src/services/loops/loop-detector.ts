@@ -12,6 +12,7 @@
  * See /docs/plans/loops-revamp §5.
  */
 
+import { transitionLoop } from './loop-transition';
 import { logger } from '../../utils/logger';
 import { NoProviderError, callStructuredList } from '../ai/structured';
 import { buildLoopContext, type LoopContext } from './loop-context';
@@ -25,7 +26,6 @@ import {
 import {
   planOps,
   resolveEvidence,
-  isActionable,
   type ReconcileContext,
 } from './loop-reconciler';
 import {
@@ -63,6 +63,7 @@ export interface DetectionResult {
 }
 
 export interface DetectionRunOptions {
+  maxIngestSeq?: number;
   /** A bounded historical slice selected by a backfill runner. */
   messageIds?: string[];
   /** Historical slices must not move the live cursor until the scan finishes. */
@@ -86,7 +87,7 @@ const EMPTY_RESULT: DetectionResult = {
 /**
  * Run detection for one chat.
  *
- * Never throws: a detection failure must not take down message ingestion. The
+ * Failures throw to the worker and remain durable retryable work. The
  * cursor is only advanced on a pass that actually completed, so a transient
  * model outage means the window is retried rather than skipped.
  */
@@ -103,6 +104,7 @@ export async function detectLoopsForChat(
   try {
     context = await buildLoopContext(userId, chatId, {
       messageIds: options.messageIds,
+      maxIngestSeq: options.maxIngestSeq,
       treatWindowAsDelta: !!options.messageIds,
     });
   } catch (error) {
@@ -110,10 +112,10 @@ export async function detectLoopsForChat(
       chatId,
       error: error instanceof Error ? error.message : String(error),
     });
-    return { ...EMPTY_RESULT, skipReason: 'context_error' };
+    throw error;
   }
 
-  if (!context) return { ...EMPTY_RESULT, skipReason: 'no_context' };
+  if (!context) throw new Error('Loop context unavailable');
 
   const gate = evaluateGate({
     platform: context.platform,
@@ -129,8 +131,8 @@ export async function detectLoopsForChat(
   if (!gate.run) {
     // Still advance the cursor: these messages have been considered and must not
     // be re-read forever. `producedOps: false` feeds the backoff.
-    if (options.advanceCursor !== false) {
-      await advanceCursor(userId, chatId, context.cursorTimestamp, context.cursorMessageId, false, gate.skipReason ?? 'skip');
+    if (options.advanceCursor !== false && !['detection_disabled','ai_disabled','sensitivity_off'].includes(gate.skipReason ?? '')) {
+      await advanceCursor(userId, chatId, context.cursorTimestamp, context.cursorMessageId, false, gate.skipReason ?? 'skip', context.cursorIngestSeq);
     }
     return { ...EMPTY_RESULT, gate, skipReason: gate.skipReason };
   }
@@ -173,6 +175,7 @@ export async function detectLoopsForChat(
       maxOutputTokens: 3_500,
     });
 
+    if (response.dropped.length) throw new Error('Invalid loop operations; retry before advancing the cursor');
     ops = response.items.filter((op) => {
       if (op.op !== 'create') return true;
       const title = normalizeLoopText(op.title);
@@ -185,15 +188,13 @@ export async function detectLoopsForChat(
     outputTokens = response.outputTokens;
     provider = response.provider;
   } catch (error) {
-    if (error instanceof NoProviderError) {
-      return { ...EMPTY_RESULT, gate, skipReason: 'no_ai_provider' };
-    }
+    if (error instanceof NoProviderError) throw error;
     logger.warn('[loops] extraction failed', {
       chatId,
       error: error instanceof Error ? error.message : String(error),
     });
     // Do NOT advance the cursor: retry this window on the next pass.
-    return { ...EMPTY_RESULT, gate, skipReason: 'extraction_failed' };
+    throw error;
   }
 
   const reconcileContext: ReconcileContext = {
@@ -229,7 +230,7 @@ export async function detectLoopsForChat(
     const newest = evidence[evidence.length - 1];
     const priority = calculateLoopPriority({
       status: outcome.status,
-      visibility: outcome.visibility,
+      visibility: process.env.LOOP_DETECTION_SHADOW === 'true' ? 'shadow' : outcome.visibility,
       owner: op.owner,
       state: op.state,
       deadline: normalizeDeadline(op.deadline),
@@ -263,7 +264,7 @@ export async function detectLoopsForChat(
         hardPass: outcome.relevance.hardPass,
         addressed: outcome.relevance.addressed,
       },
-      visibility: outcome.visibility,
+      visibility: process.env.LOOP_DETECTION_SHADOW === 'true' ? 'shadow' : outcome.visibility,
       suppressedReason: outcome.relevance.suppressedReason,
       dedupeKey: outcome.dedupeKey,
       confidence: op.confidence,
@@ -272,31 +273,24 @@ export async function detectLoopsForChat(
       priorityBreakdown: priority.breakdown,
     });
 
-    if (!stored) continue;
+    if (!stored || stored.terminal || !stored.created && process.env.LOOP_DETECTION_SHADOW === 'true') continue;
 
     if (stored.created) {
-      await recordEvent({
-        loopId: stored.id,
-        userId,
-        kind: outcome.visibility === 'suppressed' ? 'suppressed' : 'created',
-        summary: op.state_summary || op.title,
-        confidence: op.confidence,
-        payload: {
-          threadState: op.state,
-          actionable: isActionable(op.state),
-          relevance: outcome.relevance.score,
-          suppressedReason: outcome.relevance.suppressedReason,
-        },
-      });
-
       await upsertLoopParticipants(
         stored.id,
         userId,
         buildParticipants(op.participants, context, op.owner, op.owner_name ?? null),
       );
-    } else {
-      // Lost a race, or the same intent restated: fold it into the live loop.
+    } else if (process.env.LOOP_DETECTION_SHADOW !== 'true') {
+      // Only change an existing loop the model actually saw at this version.
+      const snapshot = context.openLoops.find(loop => loop.id === stored.id);
+      if (!snapshot?.rowVersion) {
+        await attachEvidence(stored.id, userId, evidence.map(m => ({ id: m.id, at: m.at, content: m.content })));
+        continue;
+      }
       await updateLoop({
+        expectedVersion: snapshot.rowVersion,
+        visibility: outcome.visibility,
         loopId: stored.id,
         userId,
         stateSummary: op.state_summary,
@@ -305,6 +299,7 @@ export async function detectLoopsForChat(
         requester: op.requester,
         deadline: normalizeDeadline(op.deadline),
         deadlinePrecision: op.deadline_precision,
+        evidenceGeneration: Math.max(0, ...evidence.map(m => m.ingestSeq ?? 0)),
         latestMessageId: newest?.id ?? null,
         lastEvidenceAt: newest?.at ?? null,
         confidence: op.confidence,
@@ -325,7 +320,7 @@ export async function detectLoopsForChat(
   }
 
   for (const { op, outcome } of plan.updates) {
-    if (outcome.action !== 'update') continue;
+    if (outcome.action !== 'update' || process.env.LOOP_DETECTION_SHADOW === 'true') continue;
 
     const evidence = resolveEvidence(op.evidence_refs, context.window);
     const newest = evidence[evidence.length - 1];
@@ -333,28 +328,21 @@ export async function detectLoopsForChat(
     const applied = await updateLoop({
       loopId: op.loop_id,
       userId,
+      evidenceGeneration: Math.max(0, ...evidence.map(m => m.ingestSeq ?? 0)),
+      expectedVersion: context.openLoops.find(l => l.id === op.loop_id)?.rowVersion,
       stateSummary: op.state_summary,
       threadState: op.state ?? null,
       status: op.status ?? null,
       owner: op.owner ?? null,
       requester: op.requester ?? null,
-      deadline: op.deadline === undefined ? undefined : normalizeDeadline(op.deadline),
-      deadlinePrecision: op.deadline_precision ?? null,
+      deadline: op.deadline_action === 'clear' ? null : op.deadline_action === 'set' ? normalizeDeadline(op.deadline) : undefined,
+      deadlinePrecision: op.deadline_action === 'clear' ? 'none' : op.deadline_action === 'set' ? op.deadline_precision : null,
       latestMessageId: newest?.id ?? null,
       lastEvidenceAt: newest?.at ?? null,
       confidence: op.confidence,
     });
 
-    if (!applied) continue;
-
-    await recordEvent({
-      loopId: op.loop_id,
-      userId,
-      kind: 'state_change',
-      summary: op.change_reason,
-      confidence: op.confidence,
-      payload: { threadState: op.state, status: op.status },
-    });
+    if (!applied) throw new Error('Loop changed while applying detection');
 
     if (evidence.length) {
       await attachEvidence(op.loop_id, userId, evidence.map((m) => ({ id: m.id, at: m.at, content: m.content })));
@@ -363,18 +351,19 @@ export async function detectLoopsForChat(
   }
 
   for (const { op, outcome } of plan.closes) {
-    if (outcome.action === 'skip') continue;
+    if (outcome.action === 'skip' || process.env.LOOP_DETECTION_SHADOW === 'true' || options.messageIds?.length) continue;
 
     if (outcome.action === 'suggest_close') {
       // Recorded but not applied: the details page surfaces this as a confirm
       // chip. A wrongly-closed loop is the worst failure this system has.
-      await recordEvent({
-        loopId: op.loop_id,
-        userId,
-        kind: 'agent_note',
-        summary: `Claire thinks this is done: ${op.change_reason}`,
-        confidence: op.confidence,
-        payload: { suggestedResolution: op.resolution, reason: outcome.reason },
+      const version = context.openLoops.find(l => l.id === op.loop_id)?.rowVersion;
+      if (version === undefined) throw new Error('Missing loop version for proposal');
+      const evidence = resolveEvidence(op.evidence_refs, context.window);
+      await transitionLoop({
+        loopId: op.loop_id, userId, expectedVersion: version, patch: {}, actor: 'detector', kind: 'agent_note',
+        summary: `Claire suggests ${op.resolution}: ${op.change_reason}`,
+        payload: { suggestedResolution: op.resolution, reason: outcome.reason, expectedVersion: version, expectedChatGeneration: context.cursorIngestSeq, evidenceIds: evidence.map(m => m.id) },
+        operationKey: `close-proposal:${op.loop_id}:${version}:${context.cursorIngestSeq}:${op.resolution}`,
       });
       result.suggestedCloses += 1;
       continue;
@@ -397,7 +386,7 @@ export async function detectLoopsForChat(
 
   const producedOps = result.created + result.updated + result.closed + result.suppressed > 0;
   if (options.advanceCursor !== false) {
-    await advanceCursor(userId, chatId, context.cursorTimestamp, context.cursorMessageId, producedOps, 'ran');
+    await advanceCursor(userId, chatId, context.cursorTimestamp, context.cursorMessageId, producedOps, 'ran', context.cursorIngestSeq);
   }
 
   logger.info('[loops] detection pass', {
