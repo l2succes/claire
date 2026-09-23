@@ -6,8 +6,9 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import Animated, { FadeInRight, FadeOutLeft } from 'react-native-reanimated';
 import { colors, mobileType, radius, space } from '@claire/design-system';
 import { MobileChip, MobileHeader, MobileIconButton, MobileState } from '../../components/mobile/claire-mobile';
+import { FeedbackPressable } from '../../components/mobile/pressable-feedback';
 import type { LoopItem } from '../../services/loop-types';
-import { cachedLoops, replaceCachedLoops } from '../../services/mobile-cache';
+import { cacheLoop, cachedLoops, replaceCachedLoops } from '../../services/mobile-cache';
 import { useLocalFirstQuery } from '../../hooks/useLocalFirstQuery';
 import { useScreenLoadMark } from '../../hooks/useScreenLoadMark';
 import { useAuthStore } from '../../stores/authStore';
@@ -19,6 +20,12 @@ import { BottomSheet } from '../../components/mobile/bottom-sheet';
 import { isLoopDeferred } from '../../services/loop-display';
 import { loopNeedsReview } from '../../services/loop-review';
 import { userFacingErrorMessage } from '../../services/api-errors';
+import {
+  invalidateLoopQueries,
+  patchLoopQueries,
+  restoreLoopQueries,
+  snapshotLoopQueries,
+} from '../../services/loop-query-cache';
 
 type LoopFilter = 'for_you' | 'done' | 'waiting' | 'all';
 
@@ -123,55 +130,78 @@ export function LoopsScreen() {
     mutationFn: ({ id, ...next }: { id: string; status: LoopItem['status']; owner?: LoopItem['owner'] }) =>
       updateLoop(id, next),
     onMutate: async ({ id, ...next }) => {
-      await queryClient.cancelQueries({ queryKey: loopsQueryKey });
-      const previous = queryClient.getQueryData<LoopItem[]>(loopsQueryKey);
-      queryClient.setQueryData<LoopItem[]>(loopsQueryKey, (items) =>
-        items?.map((item) => item.id === id ? { ...item, ...next } : item));
-      return { previous };
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: loopsQueryKey }),
+        queryClient.cancelQueries({ queryKey: ['mobile-home-loops', user?.id] }),
+      ]);
+      const snapshot = snapshotLoopQueries(queryClient, user?.id, id);
+      patchLoopQueries(queryClient, user?.id, id, next);
+      return { snapshot };
     },
     onError: (_error, _variables, context) => {
-      if (context?.previous) queryClient.setQueryData(loopsQueryKey, context.previous);
+      if (context?.snapshot) restoreLoopQueries(queryClient, user?.id, _variables.id, context.snapshot);
     },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: loopsQueryKey }),
+    onSuccess: async (updated) => {
+      patchLoopQueries(queryClient, user?.id, updated.id, updated);
+      if (user?.id) await cacheLoop(user.id, updated as unknown as Record<string, unknown>);
+    },
+    onSettled: (_data, _error, variables) => invalidateLoopQueries(queryClient, user?.id, variables.id),
   });
   const snooze = useMutation({
     mutationFn: ({ id, until }: { id: string; until: string }) => snoozeLoop(id, until),
     onMutate: async ({ id, until }) => {
-      await queryClient.cancelQueries({ queryKey: loopsQueryKey });
-      const previous = queryClient.getQueryData<LoopItem[]>(loopsQueryKey);
-      queryClient.setQueryData<LoopItem[]>(loopsQueryKey, (items) =>
-        items?.map((item) => item.id === id ? { ...item, status: 'snoozed', snoozed_until: until } : item));
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: loopsQueryKey }),
+        queryClient.cancelQueries({ queryKey: ['mobile-home-loops', user?.id] }),
+      ]);
+      const snapshot = snapshotLoopQueries(queryClient, user?.id, id);
+      patchLoopQueries(queryClient, user?.id, id, { status: 'snoozed', snoozed_until: until });
       setSnoozeTarget(null);
-      return { previous };
+      return { snapshot };
     },
-    onError: (_error, _variables, context) => {
-      if (context?.previous) queryClient.setQueryData(loopsQueryKey, context.previous);
+    onError: (_error, variables, context) => {
+      if (context?.snapshot) restoreLoopQueries(queryClient, user?.id, variables.id, context.snapshot);
     },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: loopsQueryKey }),
+    onSuccess: async (updated) => {
+      patchLoopQueries(queryClient, user?.id, updated.id, updated);
+      if (user?.id) await cacheLoop(user.id, updated as unknown as Record<string, unknown>);
+    },
+    onSettled: (_data, _error, variables) => invalidateLoopQueries(queryClient, user?.id, variables.id),
   });
   const create = useMutation({
     mutationFn: createLoop,
-    onSuccess: () => { setNewLoop(''); setShowCreate(false); queryClient.invalidateQueries({ queryKey: ['mobile-loops', user?.id] }); },
+    onSuccess: () => {
+      setNewLoop('');
+      setShowCreate(false);
+      void queryClient.invalidateQueries({ queryKey: ['mobile-loops', user?.id] });
+      void queryClient.invalidateQueries({ queryKey: ['mobile-home-loops', user?.id] });
+    },
   });
 
   const review = useMutation({
     mutationFn: ({ id, ...input }: { id: string } & Parameters<typeof reviewLoop>[1]) => reviewLoop(id, input),
     onMutate: async ({ id, action }) => {
-      await queryClient.cancelQueries({ queryKey: loopsQueryKey });
-      const previous = queryClient.getQueryData<LoopItem[]>(loopsQueryKey);
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: loopsQueryKey }),
+        queryClient.cancelQueries({ queryKey: ['mobile-home-loops', user?.id] }),
+      ]);
+      const snapshot = snapshotLoopQueries(queryClient, user?.id, id);
       const reviewedAt = new Date().toISOString();
-      queryClient.setQueryData<LoopItem[]>(loopsQueryKey, (items) => items?.map((item) => {
-        if (item.id !== id) return item;
-        if (action === 'done') return { ...item, status: 'done', thread_state: 'resolved', reviewed_at: reviewedAt };
-        if (action === 'dismiss') return { ...item, status: 'dropped', thread_state: 'resolved', reviewed_at: reviewedAt };
-        return { ...item, reviewed_at: reviewedAt };
-      }));
-      return { previous };
+      patchLoopQueries(queryClient, user?.id, id, action === 'done'
+        ? { status: 'done', thread_state: 'resolved', reviewed_at: reviewedAt }
+        : action === 'dismiss'
+          ? { status: 'dropped', thread_state: 'resolved', reviewed_at: reviewedAt }
+          : { reviewed_at: reviewedAt });
+      return { snapshot };
     },
-    onError: (_error, _variables, context) => {
-      if (context?.previous) queryClient.setQueryData(loopsQueryKey, context.previous);
+    onError: (_error, variables, context) => {
+      if (context?.snapshot) restoreLoopQueries(queryClient, user?.id, variables.id, context.snapshot);
     },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: loopsQueryKey }),
+    onSuccess: async (updated) => {
+      patchLoopQueries(queryClient, user?.id, updated.id, updated);
+      if (user?.id) await cacheLoop(user.id, updated as unknown as Record<string, unknown>);
+    },
+    onSettled: (_data, _error, variables) => invalidateLoopQueries(queryClient, user?.id, variables.id),
   });
 
   // One pass, memoised. These were six chained filters recomputed on every
@@ -226,7 +256,7 @@ export function LoopsScreen() {
         </View>
         <View style={{ flexDirection: 'row', gap: space[2] }}>
           <MobileChip label="For you" active={filter === 'for_you'} count={forYou.length} onPress={() => setFilter('for_you')} testID="loops-tab-open" />
-          <MobileChip label="Completed" active={filter === 'done'} onPress={() => setFilter('done')} testID="loops-tab-done" />
+          <MobileChip label="Closed" active={filter === 'done'} onPress={() => setFilter('done')} testID="loops-tab-done" />
           <MobileChip label="I'm waiting" active={filter === 'waiting'} count={waiting.length} onPress={() => setFilter('waiting')} testID="loops-tab-waiting" />
           <MobileChip label="All" active={filter === 'all'} count={open.length} onPress={() => setFilter('all')} testID="loops-tab-all" />
         </View>
@@ -262,7 +292,7 @@ export function LoopsScreen() {
         ) : null}
       </View>
       {query.isCold ? <LoopsSkeleton /> : (
-        <FlatList testID="loops-list" data={visible} renderItem={({ item }) => <LoopRow item={item} onOpen={() => router.push({ pathname: '/loops/[id]', params: { id: item.id } })} onToggle={() => patch.mutate({ id: item.id, status: item.status === 'done' ? 'open' : 'done' })} onWait={item.status === 'done' ? undefined : () => patch.mutate({ id: item.id, owner: item.owner === 'them' ? 'me' : 'them', status: item.owner === 'them' ? 'open' : 'waiting' })} onSnooze={item.status === 'done' ? undefined : () => setSnoozeTarget(item)} />} keyExtractor={item => item.id} contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ paddingHorizontal: space[4], paddingBottom: 112 }} refreshControl={<RefreshControl refreshing={query.isRefetching} onRefresh={() => void query.refetch()} tintColor={colors.ink} />} ListEmptyComponent={<MobileState title={filter === 'done' ? 'Nothing completed yet' : filter === 'waiting' ? "You're not waiting on anyone" : 'No open loops'} message="Claire will surface commitments from your conversations here." />} />
+        <FlatList testID="loops-list" data={visible} renderItem={({ item }) => <LoopRow item={item} onOpen={() => router.push({ pathname: '/loops/[id]', params: { id: item.id } })} onToggle={() => patch.mutate({ id: item.id, status: item.status === 'done' ? 'open' : 'done' })} onWait={item.status === 'done' ? undefined : () => patch.mutate({ id: item.id, owner: item.owner === 'them' ? 'me' : 'them', status: item.owner === 'them' ? 'open' : 'waiting' })} onSnooze={item.status === 'done' ? undefined : () => setSnoozeTarget(item)} />} keyExtractor={item => item.id} contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ paddingHorizontal: space[4], paddingBottom: 112 }} refreshControl={<RefreshControl refreshing={query.isRefetching} onRefresh={() => void query.refetch()} tintColor={colors.ink} />} ListEmptyComponent={<MobileState title={filter === 'done' ? 'Nothing closed yet' : filter === 'waiting' ? "You're not waiting on anyone" : 'No open loops'} message="Claire will surface commitments from your conversations here." />} />
       )}
 
       <BottomSheet
@@ -320,12 +350,12 @@ export function LoopsScreen() {
                 </Text>
               ) : null}
               <Text style={{ ...mobileType.label, color: colors.neutral[600] }}>
-                Claire will keep this open unless you choose Done or Dismiss.
+                Claire will keep this open unless you choose Close or Dismiss.
               </Text>
             </Animated.View>
             <ReviewButton
               testID="loop-review-done"
-              label="Done"
+              label="Mark as closed"
               icon={Check}
               tone="primary"
               disabled={review.isPending}
@@ -367,7 +397,7 @@ export function LoopsScreen() {
             <View style={{ flexDirection: 'row', alignItems: 'center' }}><Text style={{ ...mobileType.sectionTitle, flex: 1, color: colors.ink }}>Add a loop</Text><MobileIconButton label="Close" onPress={() => setShowCreate(false)}><X size={19} color={colors.ink} /></MobileIconButton></View>
             <TextInput autoFocus multiline value={newLoop} onChangeText={setNewLoop} placeholder="What do you want to remember?" placeholderTextColor={colors.neutral[400]} style={{ minHeight: 110, textAlignVertical: 'top', padding: space[4], borderRadius: radius.card, borderWidth: 1, borderColor: colors.neutral[200], backgroundColor: colors.cream, ...mobileType.body, color: colors.ink }} />
             {create.error ? <Text selectable style={{ ...mobileType.bodySmall, color: colors.danger }}>{userFacingErrorMessage(create.error)}</Text> : null}
-            <Pressable disabled={!newLoop.trim() || create.isPending} onPress={() => create.mutate(newLoop.trim())} style={({ pressed }) => ({ minHeight: 50, borderRadius: radius.control, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center', opacity: !newLoop.trim() || create.isPending ? 0.42 : pressed ? 0.78 : 1 })}><Text style={{ ...mobileType.body, fontWeight: '700', color: colors.paper }}>{create.isPending ? 'Adding…' : 'Add loop'}</Text></Pressable>
+            <FeedbackPressable disabled={!newLoop.trim() || create.isPending} onPress={() => create.mutate(newLoop.trim())} style={({ pressed }) => ({ minHeight: 50, borderRadius: radius.control, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center', opacity: !newLoop.trim() || create.isPending ? 0.42 : pressed ? 0.78 : 1 })}><Text style={{ ...mobileType.body, fontWeight: '700', color: colors.paper }}>{create.isPending ? 'Adding…' : 'Add loop'}</Text></FeedbackPressable>
           </View>
         </View>
       </Modal>

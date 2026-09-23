@@ -176,16 +176,12 @@ export const platformsApi = {
    */
   async getAllSessions(): Promise<PlatformSession[]> {
     const platforms = Object.values(Platform);
-    const sessionsPromises = platforms.map(async (platform) => {
-      try {
-        const sessions = await this.getPlatformStatus(platform);
-        return sessions;
-      } catch {
-        return [];
-      }
-    });
-
-    const allSessions = await Promise.all(sessionsPromises);
+    // A failed status request is not an authoritative empty response. Let the
+    // store preserve its last-known sessions until every platform status can
+    // be reconciled successfully.
+    const allSessions = await Promise.all(
+      platforms.map((platform) => this.getPlatformStatus(platform)),
+    );
     const flat = allSessions.flat();
     // Deduplicate by session ID (in Matrix mode, all platforms share one adapter)
     const seen = new Set<string>();

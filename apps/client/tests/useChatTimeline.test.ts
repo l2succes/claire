@@ -1,5 +1,6 @@
 import { QueryClient, QueryObserver } from '@tanstack/react-query';
 import type { ChatMessage, ChatTimeline } from '@claire/chat-core';
+import { supabase } from '../services/supabase';
 import {
   chatTimelineKey,
   chatTimelineOptions,
@@ -190,5 +191,43 @@ describe('cache-derived seeds', () => {
     seed(qc, { messages: [message({ id: 'a' })], reactions: {} });
     const observer = new QueryObserver(qc, chatTimelineOptions(qc, USER, CHAT));
     expect(observer.getCurrentResult().isStale).toBe(false);
+  });
+});
+
+describe('chat timeline loading', () => {
+  it('publishes messages while a slow reactions request is still pending', async () => {
+    const from = supabase.from as jest.Mock;
+    const originalFrom = from.getMockImplementation();
+    let finishReactions!: (result: { data: unknown[]; error: null }) => void;
+    const reactions = new Promise<{ data: unknown[]; error: null }>((resolve) => {
+      finishReactions = resolve;
+    });
+    from.mockImplementation((table: string) => {
+      const result = table === 'messages'
+        ? Promise.resolve({ data: [message({ id: 'a' })], error: null })
+        : reactions;
+      const query: Record<string, unknown> = {};
+      for (const method of ['select', 'eq', 'order', 'limit', 'in']) {
+        query[method] = jest.fn(() => query);
+      }
+      query.then = (resolve: (value: unknown) => unknown) => result.then(resolve);
+      return query;
+    });
+
+    const qc = client();
+    try {
+      const timeline = await qc.fetchQuery(chatTimelineOptions(qc, USER, CHAT));
+      expect(timeline.messages.map((row) => row.id)).toEqual(['a']);
+      expect(timeline.reactions).toEqual({});
+
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      expect(from).toHaveBeenCalledWith('message_reactions');
+      finishReactions({ data: [{ id: 'reaction-1', message_id: 'a', emoji: '❤️', from_me: false, reactor_id: 'peer' }], error: null });
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      expect(qc.getQueryData<ChatTimeline>(chatTimelineKey(USER, CHAT))?.reactions.a).toHaveLength(1);
+    } finally {
+      qc.clear();
+      if (originalFrom) from.mockImplementation(originalFrom);
+    }
   });
 });

@@ -10,6 +10,7 @@ import { isPendingPlatformStatus, usePlatformStore } from '../../stores/platform
 import { Platform, PlatformStatus, resolvePlatform } from '../../types/platform';
 import { PlatformAuthModal } from '../../features/connections/legacy-platform-auth-modal';
 import { MobileHeader, MobileIconButton, MobileState, SectionLabel } from '../../components/mobile/claire-mobile';
+import { FeedbackPressable } from '../../components/mobile/pressable-feedback';
 import { ConnectionsSkeleton } from '../../components/claire/skeleton';
 import { useAuthStore } from '../../stores/authStore';
 import { readQuerySnapshot, writeQuerySnapshot } from '../../services/mobile-cache';
@@ -148,7 +149,7 @@ export default function ConnectionsScreen() {
     const actionLabel = connected ? 'Connected' : isRequested ? 'Requested' : mobileSetup || desktopConnectable ? 'Connect' : definition.setupSurface === 'desktop' || definition.setupSurface === 'mac' ? 'Claire Desktop' : 'Join waitlist';
     return (
       <View key={definition.id}>
-        <Pressable
+        <FeedbackPressable
           accessibilityRole="button"
           accessibilityLabel={`${definition.name}. ${actionLabel}`}
           onPress={() => void act(definition)}
@@ -166,7 +167,7 @@ export default function ConnectionsScreen() {
             </View>
             <ChevronRight size={18} color={colors.neutral[400]} />
           </View>
-        </Pressable>
+        </FeedbackPressable>
         {isLast ? null : <View style={{ height: 1, backgroundColor: colors.neutral[200] }} />}
       </View>
     );

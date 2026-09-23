@@ -26,6 +26,14 @@ import { LoopAgentPanel } from './loop-agent-panel';
 import { LoopBlocks } from './loop-blocks';
 import { LoopTimeline } from './loop-timeline';
 import { userFacingErrorMessage } from '../../services/api-errors';
+import { cacheLoop, deleteCachedLoop } from '../../services/mobile-cache';
+import {
+  invalidateLoopQueries,
+  patchLoopQueries,
+  removeLoopFromQueries,
+  restoreLoopQueries,
+  snapshotLoopQueries,
+} from '../../services/loop-query-cache';
 
 /**
  * Where a loop is actually resolved.
@@ -202,32 +210,78 @@ export function LoopDetailScreen() {
     initialDataUpdatedAt: listLoop ? 0 : undefined,
   });
 
-  const invalidate = () => {
-    void queryClient.invalidateQueries({ queryKey: ['loop-detail', id] });
-    void queryClient.invalidateQueries({ queryKey: ['mobile-loops', user?.id] });
+  const loopId = String(id);
+  const beginOptimisticPatch = async (next: Partial<LoopItem>) => {
+    await Promise.all([
+      queryClient.cancelQueries({ queryKey: ['loop-detail', loopId] }),
+      queryClient.cancelQueries({ queryKey: ['mobile-loops', user?.id] }),
+      queryClient.cancelQueries({ queryKey: ['mobile-home-loops', user?.id] }),
+    ]);
+    const snapshot = snapshotLoopQueries(queryClient, user?.id, loopId);
+    patchLoopQueries(queryClient, user?.id, loopId, next);
+    return { snapshot };
+  };
+
+  const persistSuccessfulMutation = async (updated: LoopItem) => {
+    patchLoopQueries(queryClient, user?.id, loopId, updated);
+    if (user?.id) await cacheLoop(user.id, updated as unknown as Record<string, unknown>);
+    await invalidateLoopQueries(queryClient, user?.id, loopId);
   };
 
   const patch = useMutation({
-    mutationFn: (next: Parameters<typeof updateLoop>[1]) => updateLoop(String(id), next),
-    onSuccess: invalidate,
+    mutationFn: (next: Parameters<typeof updateLoop>[1]) => updateLoop(loopId, next),
+    onMutate: beginOptimisticPatch,
+    onSuccess: persistSuccessfulMutation,
+    onError: (_error, _variables, context) => {
+      if (context?.snapshot) restoreLoopQueries(queryClient, user?.id, loopId, context.snapshot);
+    },
   });
 
   const snooze = useMutation({
-    mutationFn: (until: string) => snoozeLoop(String(id), until),
-    onSuccess: invalidate,
+    mutationFn: (until: string) => snoozeLoop(loopId, until),
+    onMutate: (until) => beginOptimisticPatch({ status: 'snoozed', snoozed_until: until }),
+    onSuccess: persistSuccessfulMutation,
+    onError: (_error, _variables, context) => {
+      if (context?.snapshot) restoreLoopQueries(queryClient, user?.id, loopId, context.snapshot);
+    },
   });
 
   const remove = useMutation({
-    mutationFn: () => deleteLoop(String(id)),
-    onSuccess: () => {
-      invalidate();
+    mutationFn: () => deleteLoop(loopId),
+    onMutate: async () => {
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: ['loop-detail', loopId] }),
+        queryClient.cancelQueries({ queryKey: ['mobile-loops', user?.id] }),
+        queryClient.cancelQueries({ queryKey: ['mobile-home-loops', user?.id] }),
+      ]);
+      const snapshot = snapshotLoopQueries(queryClient, user?.id, loopId);
+      removeLoopFromQueries(queryClient, user?.id, loopId);
+      return { snapshot };
+    },
+    onSuccess: async () => {
+      if (user?.id) await deleteCachedLoop(user.id, loopId);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['mobile-loops', user?.id] }),
+        queryClient.invalidateQueries({ queryKey: ['mobile-home-loops', user?.id] }),
+      ]);
       router.back();
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.snapshot) restoreLoopQueries(queryClient, user?.id, loopId, context.snapshot);
     },
   });
 
   const review = useMutation({
-    mutationFn: (input: Parameters<typeof reviewLoop>[1]) => reviewLoop(String(id), input),
-    onSuccess: invalidate,
+    mutationFn: (input: Parameters<typeof reviewLoop>[1]) => reviewLoop(loopId, input),
+    onMutate: (input) => beginOptimisticPatch(input.action === 'done'
+      ? { status: 'done', thread_state: 'resolved' }
+      : input.action === 'dismiss'
+        ? { status: 'dropped', thread_state: 'resolved' }
+        : { reviewed_at: new Date().toISOString() }),
+    onSuccess: persistSuccessfulMutation,
+    onError: (_error, _variables, context) => {
+      if (context?.snapshot) restoreLoopQueries(queryClient, user?.id, loopId, context.snapshot);
+    },
   });
 
   const loop = query.data;
@@ -374,7 +428,7 @@ export function LoopDetailScreen() {
               <View style={{ flex: 1 }}>
                 <ActionButton
                   testID="loop-close-suggestion-accept"
-                  label="Clear loop"
+                  label="Mark as closed"
                   icon={Check}
                   tone="primary"
                   disabled={review.isPending}
@@ -411,7 +465,7 @@ export function LoopDetailScreen() {
           <View style={{ flex: 1, minWidth: 140 }}>
             <ActionButton
               testID="loop-detail-toggle"
-              label={done ? 'Reopen' : 'Mark done'}
+              label={done ? 'Reopen' : 'Mark as closed'}
               icon={done ? RotateCcw : Check}
               tone="primary"
               disabled={patch.isPending}
@@ -430,6 +484,12 @@ export function LoopDetailScreen() {
             </View>
           ) : null}
         </View>
+
+        {patch.error || snooze.error || remove.error ? (
+          <Text testID="loop-mutation-error" selectable style={{ ...mobileType.bodySmall, color: colors.danger }}>
+            {userFacingErrorMessage(patch.error || snooze.error || remove.error)}
+          </Text>
+        ) : null}
 
         {loop.chat_id ? (
           <ActionButton

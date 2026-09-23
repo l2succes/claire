@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 'use client';
 
-import { ChatBubbleLeftRightIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import { ChatBubbleLeftEllipsisIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import { useEffect, useRef, useState } from 'react';
 
 type AskResponse = {
@@ -66,7 +66,7 @@ export function AskClaire() {
   return (
     <>
       <button className="docs-ask__trigger" type="button" onClick={open} aria-haspopup="dialog">
-        <ChatBubbleLeftRightIcon aria-hidden="true" />
+        <ChatBubbleLeftEllipsisIcon aria-hidden="true" />
         <span>Ask Claire</span>
         <kbd>⌘J</kbd>
       </button>

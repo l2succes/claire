@@ -1,3 +1,7 @@
+const {
+  withStorybook,
+} = require('@storybook/react-native/withStorybook');
+
 const fs = require('fs');
 const path = require('path');
 const { getDefaultConfig } = require('expo/metro-config');
@@ -80,4 +84,11 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
   return context.resolveRequest(context, moduleName, platform);
 };
 
-module.exports = withNativeWind(config, { input: './global.css' });
+module.exports = withStorybook(withNativeWind(config, { input: './global.css' }), {
+  enabled: process.env.STORYBOOK_ENABLED === 'true',
+  // Keep the review runner JavaScript-only so it works in Claire's existing
+  // development client. The interactive walkthrough is the initial story;
+  // the stock on-device navigator is not compatible with this RN version.
+  liteMode: true,
+  disableUI: true,
+});

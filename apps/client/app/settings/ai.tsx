@@ -5,16 +5,18 @@
  * which are persisted server-side and injected into AI prompt context.
  */
 
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, TextInput, Pressable, Switch } from 'react-native';
+import { View, Text, ScrollView, ActivityIndicator, Alert, TextInput, Pressable } from 'react-native';
 import { useState, useEffect } from 'react';
 import { router } from 'expo-router';
-import { ChevronLeft, Check } from 'lucide-react-native';
-import { colors, mobileType, radius } from '@claire/design-system';
-import { MobileHeader, MobileIconButton } from '../../components/mobile/claire-mobile';
+import { Bot, Check, ChevronLeft, Pencil, RefreshCw } from 'lucide-react-native';
+import { colors, mobileType, radius, space } from '@claire/design-system';
+import { MobileHeader, MobileIconButton, SectionLabel } from '../../components/mobile/claire-mobile';
+import { FeedbackPressable } from '../../components/mobile/pressable-feedback';
 import { supabase } from '../../services/supabase';
 import { API_BASE_URL } from '../../services/platforms';
 import { useAuthStore } from '../../stores/authStore';
 import { readQuerySnapshot, writeQuerySnapshot } from '../../services/mobile-cache';
+import { SettingsSkeleton } from '../../components/claire/skeleton';
 
 const TONES = [
   { value: 'friendly', label: 'Friendly', description: 'Warm and approachable' },
@@ -48,6 +50,119 @@ interface VoiceProfile {
   sourceMessageCount: number;
   pendingMessageCount: number;
   status: 'idle' | 'building' | 'ready' | 'failed' | 'stale';
+}
+
+function ChoiceRow({ label, description, selected, onPress, testID }: {
+  label: string;
+  description: string;
+  selected: boolean;
+  onPress: () => void;
+  testID: string;
+}) {
+  return (
+    <FeedbackPressable
+      testID={testID}
+      accessibilityRole="radio"
+      accessibilityState={{ selected }}
+      accessibilityLabel={`${label}, ${description}`}
+      onPress={onPress}
+      style={({ pressed }) => ({
+        minHeight: 68,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: space[3],
+        paddingHorizontal: space[4],
+        paddingVertical: space[3],
+        borderRadius: radius.control,
+        borderWidth: selected ? 1.5 : 1,
+        borderColor: selected ? colors.ink : colors.neutral[200],
+        backgroundColor: pressed ? colors.sky : colors.paper,
+      })}
+    >
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>{label}</Text>
+        <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{description}</Text>
+      </View>
+      <View style={{ width: 28, height: 28, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: selected ? colors.lime : colors.neutral[100] }}>
+        {selected ? <Check size={16} color={colors.ink} /> : null}
+      </View>
+    </FeedbackPressable>
+  );
+}
+
+function voiceSummary(value: string): string {
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return Object.values(parsed).filter((item): item is string => typeof item === 'string').slice(0, 2).join(' · ') || 'Voice notes are ready.';
+    }
+  } catch {
+    // Manually written voice notes are plain text.
+  }
+  return value || 'Voice notes are ready.';
+}
+
+function VoiceProfileCard({ profile, onSave, onReset }: {
+  profile: VoiceProfile;
+  onSave: (language: string, draft: string) => Promise<void>;
+  onReset: (language: string) => Promise<void>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(profile.profile);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!editing) setDraft(profile.profile);
+  }, [editing, profile.profile]);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await onSave(profile.language, draft);
+      setEditing(false);
+    } catch {
+      Alert.alert('Could not save voice notes', 'Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <View style={{ padding: space[4], gap: space[3], backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.neutral[200], borderRadius: radius.card }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[3] }}>
+        <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: colors.lavender, alignItems: 'center', justifyContent: 'center' }}><Bot size={19} color={colors.ink} /></View>
+        <View style={{ flex: 1 }}>
+          <Text style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>{profile.language.toUpperCase()} voice</Text>
+          <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{profile.sourceMessageCount} messages learned</Text>
+        </View>
+      </View>
+      {editing ? (
+        <>
+          <TextInput
+            testID={`voice-profile-${profile.language}`}
+            value={draft}
+            onChangeText={setDraft}
+            multiline
+            maxLength={1500}
+            textAlignVertical="top"
+            style={{ minHeight: 120, padding: space[3], borderRadius: radius.control, borderWidth: 1, borderColor: colors.neutral[300], backgroundColor: colors.cream, ...mobileType.bodySmall, color: colors.ink }}
+          />
+          <View style={{ flexDirection: 'row', gap: space[2] }}>
+            <Pressable onPress={() => setEditing(false)} style={{ minHeight: 42, paddingHorizontal: space[3], justifyContent: 'center' }}><Text style={{ ...mobileType.label, color: colors.ink }}>Cancel</Text></Pressable>
+            <Pressable disabled={saving} onPress={() => void save()} style={{ minHeight: 42, paddingHorizontal: space[4], borderRadius: radius.pill, justifyContent: 'center', backgroundColor: colors.ink, opacity: saving ? 0.6 : 1 }}><Text style={{ ...mobileType.label, color: colors.paper }}>{saving ? 'Saving…' : 'Save voice notes'}</Text></Pressable>
+          </View>
+        </>
+      ) : (
+        <>
+          <Text numberOfLines={2} style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{voiceSummary(profile.profile)}</Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space[2] }}>
+            <Pressable testID={`voice-profile-edit-${profile.language}`} onPress={() => setEditing(true)} style={{ minHeight: 40, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: space[3], borderRadius: radius.pill, borderWidth: 1, borderColor: colors.neutral[300] }}><Pencil size={14} color={colors.ink} /><Text style={{ ...mobileType.label, color: colors.ink }}>Edit voice notes</Text></Pressable>
+            <Pressable testID={`voice-profile-reset-${profile.language}`} onPress={() => void onReset(profile.language)} style={{ minHeight: 40, justifyContent: 'center', paddingHorizontal: space[3] }}><Text style={{ ...mobileType.label, color: colors.neutral[600] }}>Reset</Text></Pressable>
+          </View>
+        </>
+      )}
+    </View>
+  );
 }
 
 async function fetchPreferences(token: string): Promise<Preferences> {
@@ -99,29 +214,35 @@ export default function AISettingsScreen() {
   }, []);
 
   useEffect(() => {
+    let active = true;
     (async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token;
         if (!token) return;
-        const [prefs, voiceResponse, privacyResponse] = await Promise.all([
-          fetchPreferences(token),
+        const extras = Promise.allSettled([
           fetch(`${API_BASE_URL}/preferences/voice-profiles`, { headers: { Authorization: `Bearer ${token}` } }),
           fetch(`${API_BASE_URL}/preferences/privacy`, { headers: { Authorization: `Bearer ${token}` } }),
         ]);
+        const prefs = await fetchPreferences(token);
+        if (!active) return;
         setTone(prefs.tone as Tone);
         setStyle(prefs.response_style as Style);
         const cacheUserId = useAuthStore.getState().user?.id;
         if (cacheUserId) void writeQuerySnapshot(cacheUserId, 'preferences:ai', { tone: prefs.tone, style: prefs.response_style }).catch(() => undefined);
         setAiEnabled(prefs.preferences?.ai_enabled !== false);
-        if (voiceResponse.ok) setVoiceProfiles((await voiceResponse.json()).data || []);
-        if (privacyResponse.ok) setPrivacyDisclosure((await privacyResponse.json()).data);
+        setLoading(false);
+        const [voiceResult, privacyResult] = await extras;
+        if (!active) return;
+        if (voiceResult.status === 'fulfilled' && voiceResult.value.ok) setVoiceProfiles((await voiceResult.value.json()).data || []);
+        if (privacyResult.status === 'fulfilled' && privacyResult.value.ok) setPrivacyDisclosure((await privacyResult.value.json()).data);
       } catch {
         // silently use defaults
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     })();
+    return () => { active = false; };
   }, []);
 
   const handleSave = async () => {
@@ -154,11 +275,12 @@ export default function AISettingsScreen() {
 
   const saveVoice = async (language: string, profile: string) => {
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.access_token) return;
+    if (!session?.access_token) throw new Error('Not authenticated');
     const response = await fetch(`${API_BASE_URL}/preferences/voice-profiles/${encodeURIComponent(language)}`, {
       method: 'PUT', headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ profile }),
     });
     if (!response.ok) throw new Error('Could not save voice profile');
+    setVoiceProfiles(current => current.map(item => item.language === language ? { ...item, profile } : item));
   };
 
   const resetVoice = async (language: string) => {
@@ -175,108 +297,80 @@ export default function AISettingsScreen() {
     }
   };
 
-  if (loading) {
-    return (
-      <View className="flex-1 items-center justify-center bg-gray-50 dark:bg-gray-900">
-        <ActivityIndicator size="large" color="#10b981" />
-      </View>
-    );
-  }
-
   return (
     <ScrollView
-      className="flex-1 bg-gray-50 dark:bg-gray-900"
       testID="ai-settings-screen"
+      style={{ flex: 1, backgroundColor: colors.cream }}
+      contentInsetAdjustmentBehavior="never"
+      keyboardShouldPersistTaps="handled"
+      contentContainerStyle={{ paddingBottom: 112 }}
     >
       <MobileHeader
-        title="AI Settings"
-        subtitle="How Claire should sound when it drafts a reply."
+        safeArea
+        title="AI behavior"
+        subtitle="How Claire responds across your conversations"
         leading={<MobileIconButton label="Back to Settings" testID="ai-settings-back" onPress={() => router.back()}><ChevronLeft size={20} color={colors.ink} /></MobileIconButton>}
         actions={
-          <Pressable testID="ai-settings-save" onPress={() => void handleSave()} disabled={saving} style={{ minHeight: 36, paddingHorizontal: 14, borderRadius: radius.pill, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center', opacity: saving ? 0.6 : 1 }}>
+          <Pressable testID="ai-settings-save" onPress={() => void handleSave()} disabled={saving || loading} style={{ minHeight: 36, paddingHorizontal: 14, borderRadius: radius.pill, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center', opacity: saving || loading ? 0.6 : 1 }}>
             {saving ? <ActivityIndicator size="small" color={colors.lime} /> : <Text style={{ ...mobileType.label, color: colors.paper }}>Save</Text>}
           </Pressable>
         }
       />
-      <View className="p-4">
-        <View className="mb-6 rounded-lg border border-gray-200 bg-white px-4 py-4 dark:border-gray-700 dark:bg-gray-800">
-          <View className="flex-row items-center gap-3"><View className="flex-1"><Text className="text-lg font-semibold text-gray-900 dark:text-white">Use Claire AI</Text><Text className="mt-1 text-sm text-gray-500 dark:text-gray-400">Turn off suggestions, summaries, Ask Claire, voice learning, and AI promise detection. Messaging continues normally.</Text></View><Switch testID="ai-processing-toggle" value={aiEnabled} onValueChange={setAiEnabled} trackColor={{ true: colors.lime }} /></View>
-          <Text className="mt-3 text-xs text-gray-500 dark:text-gray-400">{privacyDisclosure?.message || 'When enabled, selected conversation context may be sent to Claire’s configured AI provider.'}</Text>
-          <Text className="mt-2 text-xs text-gray-500 dark:text-gray-400">{privacyDisclosure?.operationsTelemetry || 'Operations telemetry never includes message content.'}</Text>
-        </View>
-
-        {/* Tone Section */}
-        <Text className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
-          Response Tone
-        </Text>
-        <Text className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-          How should AI suggestions sound?
-        </Text>
-        <View className="mb-6">
-          {TONES.map((t) => (
-            <TouchableOpacity
-              key={t.value}
-              onPress={() => setTone(t.value)}
-              className={`flex-row items-center bg-white dark:bg-gray-800 rounded-lg px-4 py-3 mb-2 ${
-                tone === t.value ? 'border-2 border-green-500' : 'border border-gray-200 dark:border-gray-700'
-              }`}
-              testID={`tone-option-${t.value}`}
+      {loading ? <SettingsSkeleton testID="ai-settings-loading" /> : (
+        <View style={{ paddingHorizontal: space[4], gap: space[5] }}>
+          <View style={{ padding: space[4], gap: space[3], borderRadius: radius.card, borderWidth: 1, borderColor: colors.neutral[200], backgroundColor: colors.paper }}>
+            <FeedbackPressable
+              testID="ai-processing-toggle"
+              accessibilityRole="switch"
+              accessibilityState={{ checked: aiEnabled }}
+              onPress={() => setAiEnabled(current => !current)}
+              style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: space[3], minHeight: 56, opacity: pressed ? 0.7 : 1 })}
             >
-              <View className="flex-1">
-                <Text className="font-semibold text-gray-900 dark:text-white">{t.label}</Text>
-                <Text className="text-sm text-gray-500 dark:text-gray-400">{t.description}</Text>
+              <View style={{ width: 40, height: 40, borderRadius: 13, backgroundColor: colors.lime, alignItems: 'center', justifyContent: 'center' }}><Bot size={21} color={colors.ink} /></View>
+              <View style={{ flex: 1, gap: 3 }}>
+                <Text style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>Use Claire AI</Text>
+                <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{aiEnabled ? 'On across your conversations' : 'Off — messaging still works'}</Text>
               </View>
-              {tone === t.value && <Check size={20} color="#10b981" />}
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <View className="mb-6">
-          <View className="flex-row items-center mb-2">
-            <View className="flex-1"><Text className="text-lg font-semibold text-gray-900 dark:text-white">Your voice</Text><Text className="text-sm text-gray-500 dark:text-gray-400 mt-1">Claire learns observable writing patterns from messages you sent; it never stores message samples here.</Text></View>
-            <TouchableOpacity onPress={rebuildVoice} disabled={rebuildingVoice} className="bg-indigo-600 px-3 py-2 rounded-full" testID="voice-profile-rebuild">
-              {rebuildingVoice ? <ActivityIndicator size="small" color="#fff" /> : <Text className="text-white font-semibold text-xs">Rebuild</Text>}
-            </TouchableOpacity>
-          </View>
-          {voiceProfiles.length === 0 ? <Text className="text-sm text-gray-400">Rebuild your profile to learn from your sent messages.</Text> : voiceProfiles.map(profile => (
-            <View key={profile.language} className="bg-white dark:bg-gray-800 rounded-lg px-4 py-3 mb-2 border border-gray-200 dark:border-gray-700">
-              <Text className="font-semibold text-gray-900 dark:text-white">{profile.language.toUpperCase()} voice · {profile.sourceMessageCount} messages</Text>
-              <TextInput defaultValue={profile.profile} multiline maxLength={1500} onEndEditing={(event) => void saveVoice(profile.language, event.nativeEvent.text)} testID={`voice-profile-${profile.language}`} className="text-sm text-gray-700 dark:text-gray-200 mt-2" style={{ minHeight: 72, textAlignVertical: 'top' }} />
-              <TouchableOpacity onPress={() => void resetVoice(profile.language)} testID={`voice-profile-reset-${profile.language}`} className="self-start mt-2"><Text className="text-xs font-semibold text-red-600">Reset to manual preferences</Text></TouchableOpacity>
+              <View style={{ width: 49, height: 29, borderRadius: radius.pill, padding: 3, alignItems: aiEnabled ? 'flex-end' : 'flex-start', backgroundColor: aiEnabled ? colors.lime : colors.neutral[300] }}>
+                <View style={{ width: 23, height: 23, borderRadius: radius.pill, backgroundColor: colors.paper }} />
+              </View>
+            </FeedbackPressable>
+            <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>Turning this off stops suggestions, summaries, Ask Claire, voice learning, and AI promise detection.</Text>
+            <View style={{ borderTopWidth: 1, borderColor: colors.neutral[200], paddingTop: space[3], gap: space[2] }}>
+              <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{privacyDisclosure?.message || 'When enabled, selected conversation context may be sent to Claire’s configured AI provider.'}</Text>
+              <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{privacyDisclosure?.operationsTelemetry || 'Operations telemetry never includes message content.'}</Text>
             </View>
-          ))}
-        </View>
+          </View>
 
-        {/* Style Section */}
-        <Text className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
-          Response Style
-        </Text>
-        <Text className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-          How long should AI suggestions be?
-        </Text>
-        <View className="mb-6">
-          {STYLES.map((s) => (
-            <TouchableOpacity
-              key={s.value}
-              onPress={() => setStyle(s.value)}
-              className={`flex-row items-center bg-white dark:bg-gray-800 rounded-lg px-4 py-3 mb-2 ${
-                style === s.value ? 'border-2 border-green-500' : 'border border-gray-200 dark:border-gray-700'
-              }`}
-              testID={`style-option-${s.value}`}
-            >
-              <View className="flex-1">
-                <Text className="font-semibold text-gray-900 dark:text-white">{s.label}</Text>
-                <Text className="text-sm text-gray-500 dark:text-gray-400">{s.description}</Text>
-              </View>
-              {style === s.value && <Check size={20} color="#10b981" />}
-            </TouchableOpacity>
-          ))}
-        </View>
+          <View style={{ gap: space[3] }}>
+            <SectionLabel title="Response tone" />
+            <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>How suggestions should sound</Text>
+            <View style={{ gap: space[2] }}>
+              {TONES.map(option => <ChoiceRow key={option.value} testID={`tone-option-${option.value}`} label={option.label} description={option.description} selected={tone === option.value} onPress={() => setTone(option.value)} />)}
+            </View>
+          </View>
 
-        <Text className="text-xs text-gray-400 dark:text-gray-500 text-center mt-4">
-          These preferences are injected into every AI suggestion prompt.
-        </Text>
-      </View>
+          <View style={{ gap: space[3] }}>
+            <SectionLabel title="Response style" />
+            <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>How much detail Claire should include</Text>
+            <View style={{ gap: space[2] }}>
+              {STYLES.map(option => <ChoiceRow key={option.value} testID={`style-option-${option.value}`} label={option.label} description={option.description} selected={style === option.value} onPress={() => setStyle(option.value)} />)}
+            </View>
+          </View>
+
+          <View style={{ gap: space[3] }}>
+            <SectionLabel title="Your voice" />
+            <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>Claire learns writing patterns from messages you sent. Message samples are not stored in this profile.</Text>
+            <Pressable testID="voice-profile-rebuild" accessibilityRole="button" disabled={rebuildingVoice} onPress={() => void rebuildVoice()} style={{ minHeight: 44, alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: space[2], paddingHorizontal: space[4], borderRadius: radius.pill, backgroundColor: colors.ink, opacity: rebuildingVoice ? 0.6 : 1 }}>
+              {rebuildingVoice ? <ActivityIndicator size="small" color={colors.lime} /> : <RefreshCw size={16} color={colors.paper} />}
+              <Text style={{ ...mobileType.label, color: colors.paper }}>Rebuild voice</Text>
+            </Pressable>
+            {voiceProfiles.length === 0
+              ? <View style={{ padding: space[4], borderRadius: radius.card, borderWidth: 1, borderColor: colors.neutral[200], backgroundColor: colors.paper }}><Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>Rebuild to learn from your sent messages.</Text></View>
+              : voiceProfiles.map(profile => <VoiceProfileCard key={profile.language} profile={profile} onSave={saveVoice} onReset={resetVoice} />)}
+          </View>
+        </View>
+      )}
     </ScrollView>
   );
 }

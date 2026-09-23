@@ -10,7 +10,8 @@ type OperationsAuditAction =
   | 'admin_revoked'
   | 'telemetry_viewed'
   | 'bridges_viewed'
-  | 'bridge_session_retired';
+  | 'bridge_session_retired'
+  | 'users_viewed';
 
 export async function recordOperationsAudit(input: {
   actorUserId: string;

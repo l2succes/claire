@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, Switch, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, ScrollView, Switch, Text, View } from 'react-native';
 import { ChevronLeft, DatabaseZap, ShieldCheck, Trash2 } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { colors, mobileType, radius, space } from '@claire/design-system';
 import { MobileHeader, MobileIconButton, SectionLabel } from '../../components/mobile/claire-mobile';
+import { FeedbackPressable } from '../../components/mobile/pressable-feedback';
 import { clearMobileCache, hydrateMobileCache, setFullHistoryEnabled, usesNativeMobileCache, type MobileCacheSnapshot } from '../../services/mobile-cache';
 import { backfillFullMobileHistory } from '../../services/mobile-sync';
 import { useAuthStore } from '../../stores/authStore';
@@ -75,7 +76,7 @@ export default function PrivacyDataSettingsScreen() {
             <SectionLabel title="On this device" />
             <View style={{ padding: space[4], gap: space[3], borderRadius: radius.card, backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.neutral[200] }}>
               <View style={{ flexDirection: 'row', gap: space[3], alignItems: 'center' }}><Trash2 size={20} color={colors.danger} /><View style={{ flex: 1 }}><Text style={{ ...mobileType.body, fontWeight: '800', color: colors.ink }}>Remove offline copy</Text><Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>Your synced Claire history stays online.</Text></View></View>
-              <Pressable testID="privacy-clear-local-data" onPress={clear} disabled={busy} style={({ pressed }) => ({ minHeight: 46, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space[2], borderRadius: radius.control, backgroundColor: pressed ? colors.blush : '#FFF5F4', borderWidth: 1, borderColor: colors.blush, opacity: busy ? 0.6 : 1 })}><Trash2 size={17} color={colors.danger} /><Text style={{ ...mobileType.label, fontWeight: '800', color: colors.danger }}>Clear local data</Text>{busy ? <ActivityIndicator size="small" color={colors.danger} /> : null}</Pressable>
+              <FeedbackPressable testID="privacy-clear-local-data" onPress={clear} disabled={busy} style={({ pressed }) => ({ minHeight: 46, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space[2], borderRadius: radius.control, backgroundColor: pressed ? colors.blush : '#FFF5F4', borderWidth: 1, borderColor: colors.blush, opacity: busy ? 0.6 : 1 })}><Trash2 size={17} color={colors.danger} /><Text style={{ ...mobileType.label, fontWeight: '800', color: colors.danger }}>Clear local data</Text>{busy ? <ActivityIndicator size="small" color={colors.danger} /> : null}</FeedbackPressable>
             </View>
           </View>
         </>}

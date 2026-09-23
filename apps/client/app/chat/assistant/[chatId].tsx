@@ -10,6 +10,7 @@ import { platformsApi } from '../../../services/platforms';
 import { supabase } from '../../../services/supabase';
 import { useAuthStore } from '../../../stores/authStore';
 import { MobileIconButton, MobileSearchField } from '../../../components/mobile/claire-mobile';
+import { FeedbackPressable } from '../../../components/mobile/pressable-feedback';
 import { AssistantAnswerActions } from '../../../components/claire/assistant-answer-actions';
 import { AssistantRichText } from '../../../components/claire/assistant-rich-text';
 import { useAssistantStream } from '../../../hooks/useAssistantStream';
@@ -131,9 +132,9 @@ export default function ConversationAssistantScreen() {
               <Text style={{ ...mobileType.monoLabel, color: colors.ink, letterSpacing: 1.2 }}>SUGGESTED REPLY · NATURAL + DIRECT</Text>
               {suggestionLoading ? <View style={{ minHeight: 72, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator color={colors.ink} /></View> : <Text selectable style={{ ...mobileType.sectionTitle, color: colors.ink, lineHeight: 28 }}>{suggestion ? `“${suggestion}”` : 'Claire will suggest a reply when there is a recent message to respond to.'}</Text>}
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space[2] }}>
-                <Pressable disabled={!suggestion} onPress={useSuggestion} style={({ pressed }) => ({ minHeight: 42, paddingHorizontal: space[3], alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill, backgroundColor: colors.ink, opacity: !suggestion || pressed ? 0.65 : 1 })}><Text style={{ ...mobileType.label, color: colors.paper }}>Use reply</Text></Pressable>
-                <Pressable onPress={() => void loadSuggestion(true, 'Make it shorter while preserving the same intent, language, and voice.')} style={({ pressed }) => ({ minHeight: 42, paddingHorizontal: space[3], alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill, borderWidth: 1.5, borderColor: colors.ink, opacity: pressed ? 0.65 : 1 })}><Text style={{ ...mobileType.label, color: colors.ink }}>Make shorter</Text></Pressable>
-                <Pressable onPress={() => void loadSuggestion(true)} style={({ pressed }) => ({ minHeight: 42, paddingHorizontal: space[3], alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill, borderWidth: 1.5, borderColor: colors.ink, opacity: pressed ? 0.65 : 1 })}><Text style={{ ...mobileType.label, color: colors.ink }}>Try again</Text></Pressable>
+                <FeedbackPressable disabled={!suggestion} onPress={useSuggestion} style={({ pressed }) => ({ minHeight: 42, paddingHorizontal: space[3], alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill, backgroundColor: colors.ink, opacity: !suggestion || pressed ? 0.65 : 1 })}><Text style={{ ...mobileType.label, color: colors.paper }}>Use reply</Text></FeedbackPressable>
+                <FeedbackPressable onPress={() => void loadSuggestion(true, 'Make it shorter while preserving the same intent, language, and voice.')} style={({ pressed }) => ({ minHeight: 42, paddingHorizontal: space[3], alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill, borderWidth: 1.5, borderColor: colors.ink, opacity: pressed ? 0.65 : 1 })}><Text style={{ ...mobileType.label, color: colors.ink }}>Make shorter</Text></FeedbackPressable>
+                <FeedbackPressable onPress={() => void loadSuggestion(true)} style={({ pressed }) => ({ minHeight: 42, paddingHorizontal: space[3], alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill, borderWidth: 1.5, borderColor: colors.ink, opacity: pressed ? 0.65 : 1 })}><Text style={{ ...mobileType.label, color: colors.ink }}>Try again</Text></FeedbackPressable>
               </View>
             </View>
 
@@ -141,10 +142,10 @@ export default function ConversationAssistantScreen() {
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space[3] }}>
               {quickActions.map(action => {
                 const Icon = action.icon;
-                return <Pressable key={action.label} testID={`conversation-assistant-${action.label.toLowerCase().replace(/\s+/g, '-')}`} onPress={() => action.prompt ? void ask(action.prompt) : setQuestion('Find ')} style={({ pressed }) => ({ width: '47.8%', minHeight: 154, padding: space[3], justifyContent: 'space-between', borderRadius: 24, borderWidth: 1, borderColor: colors.neutral[400], backgroundColor: colors.paper, opacity: pressed ? 0.7 : 1 })}>
+                return <FeedbackPressable key={action.label} testID={`conversation-assistant-${action.label.toLowerCase().replace(/\s+/g, '-')}`} onPress={() => action.prompt ? void ask(action.prompt) : setQuestion('Find ')} style={({ pressed }) => ({ width: '47.8%', minHeight: 154, padding: space[3], justifyContent: 'space-between', borderRadius: 24, borderWidth: 1, borderColor: colors.neutral[400], backgroundColor: colors.paper, opacity: pressed ? 0.7 : 1 })}>
                   <Icon size={25} color={colors.ink} strokeWidth={2.2} />
                   <View style={{ gap: 4 }}><Text style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>{action.label}</Text><Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{action.description}</Text></View>
-                </Pressable>;
+                </FeedbackPressable>;
               })}
             </View>
             {error ? <Text style={{ ...mobileType.bodySmall, color: colors.danger }}>{error}</Text> : null}
@@ -161,7 +162,7 @@ export default function ConversationAssistantScreen() {
               <View style={{ gap: space[2] }}>
                 {item.content.trim() ? <View style={{ alignSelf: 'flex-start', maxWidth: '94%', padding: space[4], borderRadius: radius.card, borderBottomLeftRadius: 6, backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.neutral[300] }}><AssistantRichText content={item.content} style={{ ...mobileType.body, color: colors.ink }} /></View> : null}
                 <AssistantAnswerActions actions={item.actions} />
-                {item.citations?.slice(0, 3).map(citation => <Pressable key={`${item.id}-${citation.messageId}`} onPress={() => openCitation(citation)} style={({ pressed }) => ({ padding: space[3], borderRadius: radius.control, borderWidth: 1, borderColor: colors.neutral[300], backgroundColor: pressed ? colors.paper : 'rgba(255,255,255,0.48)', gap: 3 })}><View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}><Text style={{ ...mobileType.label, color: colors.ink, flex: 1 }}>{citation.senderName} · {new Date(citation.timestamp).toLocaleDateString()}</Text><ExternalLink size={14} color={colors.neutral[600]} /></View><Text numberOfLines={2} style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{citation.excerpt}</Text></Pressable>)}
+                {item.citations?.slice(0, 3).map(citation => <FeedbackPressable key={`${item.id}-${citation.messageId}`} onPress={() => openCitation(citation)} style={({ pressed }) => ({ padding: space[3], borderRadius: radius.control, borderWidth: 1, borderColor: colors.neutral[300], backgroundColor: pressed ? colors.paper : 'rgba(255,255,255,0.48)', gap: 3 })}><View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}><Text style={{ ...mobileType.label, color: colors.ink, flex: 1 }}>{citation.senderName} · {new Date(citation.timestamp).toLocaleDateString()}</Text><ExternalLink size={14} color={colors.neutral[600]} /></View><Text numberOfLines={2} style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{citation.excerpt}</Text></FeedbackPressable>)}
               </View>
             )}
             ListFooterComponent={asking ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2], padding: space[3] }}><MessageCircle size={16} color={colors.focus} /><Text style={{ ...mobileType.bodySmall, color: colors.neutral[600], flex: 1 }}>{streamPhase === 'planning' ? 'Understanding your question…' : streamPhase === 'saving' ? 'Saving the answer…' : 'Reading this conversation…'}</Text><Pressable accessibilityRole="button" accessibilityLabel="Stop Claire" onPress={stopStream} style={{ minWidth: 44, minHeight: 36, alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill, borderWidth: 1, borderColor: colors.neutral[400] }}><Square size={13} color={colors.ink} /></Pressable></View> : null}
@@ -170,7 +171,7 @@ export default function ConversationAssistantScreen() {
         {error && turns.length > 0 ? <Text style={{ ...mobileType.bodySmall, color: colors.danger, paddingHorizontal: space[4], paddingBottom: space[2] }}>{error}</Text> : null}
         <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: space[2], paddingHorizontal: space[4], paddingTop: space[2], paddingBottom: Math.max(insets.bottom, space[3]), borderTopWidth: 1, borderTopColor: 'rgba(16,18,15,0.12)', backgroundColor: colors.sky }}>
           <MobileSearchField value={question} onChangeText={setQuestion} placeholder={`Ask about ${name}…`} multiline style={{ flex: 1, minHeight: 44, backgroundColor: colors.paper, borderColor: colors.neutral[300] }} inputStyle={{ maxHeight: 88, paddingVertical: 9 }} />
-          <Pressable accessibilityRole="button" accessibilityLabel="Ask Claire" disabled={!question.trim() || asking} onPress={() => void ask()} style={({ pressed }) => ({ width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: question.trim() ? colors.ink : colors.neutral[200], opacity: pressed ? 0.75 : 1 })}><SendHorizontal size={18} color={question.trim() ? colors.paper : colors.neutral[400]} /></Pressable>
+          <FeedbackPressable accessibilityRole="button" accessibilityLabel="Ask Claire" disabled={!question.trim() || asking} onPress={() => void ask()} style={({ pressed }) => ({ width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: question.trim() ? colors.ink : colors.neutral[200], opacity: pressed ? 0.75 : 1 })}><SendHorizontal size={18} color={question.trim() ? colors.paper : colors.neutral[400]} /></FeedbackPressable>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>

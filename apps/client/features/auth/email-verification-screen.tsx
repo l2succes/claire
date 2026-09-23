@@ -7,13 +7,42 @@ import {
   AuthScreenShell,
 } from './auth-screen-shell';
 import { OtpCodeInput } from './otp-code-input';
-import { useEmailVerification } from './use-email-verification';
+import { useEmailVerification, type OtpVisualStatus } from './use-email-verification';
 
-export function EmailVerificationScreen() {
-  const params = useLocalSearchParams<{ email?: string | string[] }>();
-  const routeEmail = Array.isArray(params.email) ? (params.email[0] ?? '') : (params.email ?? '');
-  const auth = useEmailVerification(routeEmail);
-  const busy = auth.loading || auth.resending;
+export function EmailVerificationView({
+  email,
+  code,
+  error,
+  message,
+  verificationStatus,
+  loading,
+  resending,
+  focusRequest,
+  canVerify,
+  autoFocusCode = true,
+  onBack,
+  onChangeCode,
+  onVerify,
+  onResend,
+  onChangeEmail,
+}: {
+  email: string;
+  code: string;
+  error: string | null;
+  message: string | null;
+  verificationStatus: OtpVisualStatus;
+  loading: boolean;
+  resending: boolean;
+  focusRequest: number;
+  canVerify: boolean;
+  autoFocusCode?: boolean;
+  onBack: () => void;
+  onChangeCode: (value: string) => void;
+  onVerify: () => void;
+  onResend: () => void;
+  onChangeEmail: () => void;
+}) {
+  const busy = loading || resending;
 
   return (
     <AuthScreenShell
@@ -23,26 +52,26 @@ export function EmailVerificationScreen() {
       description={
         <>
           We sent a code to{' '}
-          <Text style={{ fontWeight: '700', color: colors.ink }}>{auth.email || 'your email'}</Text>.
+          <Text style={{ fontWeight: '700', color: colors.ink }}>{email || 'your email'}</Text>.
           It may take a few seconds to arrive.
         </>
       }
-      onBack={() => router.back()}
+      onBack={onBack}
       footer={
         <>
           <AuthPrimaryButton
             testID="signin-verify-otp"
             label="Verify & continue"
             loadingLabel="Verifying…"
-            loading={auth.loading}
-            disabled={!auth.canVerify}
-            onPress={() => void auth.verify()}
+            loading={loading}
+            disabled={!canVerify}
+            onPress={onVerify}
           />
           <Pressable
             testID="signin-change-email"
             accessibilityRole="button"
             disabled={busy}
-            onPress={auth.changeEmail}
+            onPress={onChangeEmail}
             style={{ minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
           >
             <Text
@@ -59,18 +88,19 @@ export function EmailVerificationScreen() {
           6-DIGIT VERIFICATION CODE
         </Text>
         <OtpCodeInput
-          value={auth.code}
-          onChange={auth.setCode}
-          onSubmit={() => void auth.verify()}
+          value={code}
+          onChange={onChangeCode}
+          onSubmit={onVerify}
           disabled={busy}
-          status={auth.verificationStatus}
-          focusRequest={auth.focusRequest}
+          status={verificationStatus}
+          focusRequest={focusRequest}
+          autoFocus={autoFocusCode}
         />
-        {auth.error ? (
-          <AuthInlineMessage testID="signin-otp-error" tone="error" message={auth.error} />
+        {error ? (
+          <AuthInlineMessage testID="signin-otp-error" tone="error" message={error} />
         ) : null}
-        {auth.message ? (
-          <AuthInlineMessage testID="signin-otp-message" tone="success" message={auth.message} />
+        {message ? (
+          <AuthInlineMessage testID="signin-otp-message" tone="success" message={message} />
         ) : null}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[1] }}>
           <Text selectable style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>
@@ -79,10 +109,10 @@ export function EmailVerificationScreen() {
           <Pressable
             testID="signin-resend-otp"
             accessibilityRole="button"
-            accessibilityState={{ busy: auth.resending, disabled: busy }}
+            accessibilityState={{ busy: resending, disabled: busy }}
             hitSlop={8}
             disabled={busy}
-            onPress={() => void auth.resendCode()}
+            onPress={onResend}
             style={{
               minHeight: 32,
               flexDirection: 'row',
@@ -90,7 +120,7 @@ export function EmailVerificationScreen() {
               gap: space[1],
             }}
           >
-            {auth.resending ? <ActivityIndicator size="small" color={colors.ink} /> : null}
+            {resending ? <ActivityIndicator size="small" color={colors.ink} /> : null}
             <Text
               style={{
                 ...mobileType.bodySmall,
@@ -99,11 +129,36 @@ export function EmailVerificationScreen() {
                 textDecorationLine: 'underline',
               }}
             >
-              {auth.resending ? 'Sending…' : 'Resend code'}
+              {resending ? 'Sending…' : 'Resend code'}
             </Text>
           </Pressable>
         </View>
       </View>
     </AuthScreenShell>
+  );
+}
+
+export function EmailVerificationScreen() {
+  const params = useLocalSearchParams<{ email?: string | string[] }>();
+  const routeEmail = Array.isArray(params.email) ? (params.email[0] ?? '') : (params.email ?? '');
+  const auth = useEmailVerification(routeEmail);
+
+  return (
+    <EmailVerificationView
+      email={auth.email}
+      code={auth.code}
+      error={auth.error}
+      message={auth.message}
+      verificationStatus={auth.verificationStatus}
+      loading={auth.loading}
+      resending={auth.resending}
+      focusRequest={auth.focusRequest}
+      canVerify={auth.canVerify}
+      onBack={() => router.back()}
+      onChangeCode={auth.setCode}
+      onVerify={() => void auth.verify()}
+      onResend={() => void auth.resendCode()}
+      onChangeEmail={auth.changeEmail}
+    />
   );
 }

@@ -37,6 +37,7 @@ import { MatrixConfig, BRIDGE_BOT_LOCALPARTS } from './types';
 import { MatrixRoomMapper } from './room-mapper';
 import { MatrixUserMapper } from './user-mapper';
 import { MatrixEventConverter } from './event-converter';
+import { ownReadReceiptEventIds } from './read-receipts';
 import { BridgeAuthManager, BridgeAuthConfig } from './bridge-auth';
 import {
   fromPersistedMatrixSession,
@@ -303,6 +304,12 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
       message.platformMetadata = {
         ...message.platformMetadata,
         contactPhone: phoneNumber,
+      };
+    }
+    if (identity.avatarUrl) {
+      message.platformMetadata = {
+        ...message.platformMetadata,
+        contactAvatarUrl: this.matrixMediaProxyUrl(identity.avatarUrl) || identity.avatarUrl,
       };
     }
   }
@@ -640,6 +647,41 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
       });
 
       this.emitPlatformEvent('message', chatInfo.sessionId, unifiedMessage);
+    });
+
+    // The WhatsApp bridge can mirror reads performed on the native phone as
+    // Matrix receipts. Only receipts for this account's exact Matrix identity
+    // (or its self ghost) may advance Claire's read cursor. Contact reads and
+    // bridge delivery receipts are deliberately ignored.
+    this.matrixClient.on(RoomEvent.Receipt, async (event, room) => {
+      try {
+        let chatInfo = this.roomMapper.getRoomChatInfo(room.roomId);
+        if (!chatInfo) {
+          await this.tryRegisterRoom(room);
+          chatInfo = this.roomMapper.getRoomChatInfo(room.roomId);
+        }
+        if (!chatInfo) return;
+        const session = this.sessions.get(chatInfo.sessionId);
+        if (!session) return;
+        // The shared bot is not the person. In non-double-puppet mode it can
+        // send delivery receipts, which must not clear the person's unread
+        // state. Only a session-bound real Matrix user qualifies.
+        const ownIds = [
+          this.sessionMatrixUserIds.get(chatInfo.sessionId),
+          ...this.getSelfGhostIds(chatInfo.sessionId, session, chatInfo.platform),
+        ].filter((id): id is string => !!id);
+        for (const eventId of ownReadReceiptEventIds(event.getContent(), ownIds)) {
+          const { error } = await supabase.rpc('reconcile_matrix_read_receipt', {
+            target_user_id: session.userId,
+            target_platform: chatInfo.platform,
+            target_platform_chat_id: chatInfo.chatId,
+            target_matrix_event_id: eventId,
+          });
+          if (error) this.log('warn', 'Could not reconcile Matrix read receipt', { error: error.message });
+        }
+      } catch (error) {
+        this.log('warn', 'Could not process Matrix read receipt', { error: (error as Error).message });
+      }
     });
 
     // Handle room invites
@@ -1539,7 +1581,9 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
             const resolvedPhone = phoneNumberFromBridgeIdentifiers([identity.phoneNumber]);
             if (resolvedPhone) contact.phoneNumber = resolvedPhone;
             if (identity.username) contact.username = identity.username;
-            if (identity.avatarUrl) contact.avatarUrl = identity.avatarUrl;
+            if (identity.avatarUrl) {
+              contact.avatarUrl = this.matrixMediaProxyUrl(identity.avatarUrl) || identity.avatarUrl;
+            }
           }
         }
 

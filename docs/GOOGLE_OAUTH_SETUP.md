@@ -81,6 +81,7 @@ claire-staging://confirm
 claire-app://app/confirm
 http://localhost:8081/confirm
 http://localhost:8083/confirm
+http://localhost:3000/ops/confirm
 ```
 
 Use the real production app origin and the specific development ports in the

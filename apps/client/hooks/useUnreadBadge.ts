@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { AppState } from 'react-native';
 import { host, useBadgeCount } from '@claire/host';
 import { useAuthStore } from '../stores/authStore';
 import { supabase } from '../services/supabase';
@@ -46,6 +47,9 @@ export function useUnreadBadge(): void {
     };
 
     void refresh();
+    const appState = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void refresh();
+    });
 
     // Reuse the realtime stream the inbox already subscribes to rather than
     // polling; the badge only needs to move when a chat row does.
@@ -60,6 +64,7 @@ export function useUnreadBadge(): void {
 
     return () => {
       cancelled = true;
+      appState.remove();
       void supabase.removeChannel(channel);
     };
   }, [enabled, userId]);

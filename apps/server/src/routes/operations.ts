@@ -5,6 +5,7 @@ import { type DbRow, supabase } from '../services/supabase';
 import { recordOperationsAudit } from '../services/operations-audit';
 import { operationsTelemetry } from '../services/operations-telemetry';
 import { getOperationsBridgeSnapshot } from '../services/operations-bridges';
+import { getOperationsUserDirectory } from '../services/operations-users';
 import { pseudonymousOperationsRef } from '../services/operations-privacy';
 
 const router = Router();
@@ -66,6 +67,16 @@ router.get('/bridges', requireAuth, requireOperationsAccess, async (req: Request
     return res.json(bridges);
   } catch {
     return res.status(500).json({ error: 'Could not load platform bridge health' });
+  }
+});
+
+router.get('/users', requireAuth, requireOperationsAccess, requireOperationsOwner, async (req: Request, res: Response) => {
+  try {
+    const directory = await getOperationsUserDirectory();
+    if (req.user?.id) void recordOperationsAudit({ actorUserId: req.user.id, action: 'users_viewed', metadata: { userCount: directory.totals.users } });
+    return res.json(directory);
+  } catch {
+    return res.status(500).json({ error: 'Could not load the user directory' });
   }
 });
 

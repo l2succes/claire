@@ -1,10 +1,11 @@
-import { useEffect, type ComponentType, type ReactNode } from 'react';
+import { useEffect, useState, type ComponentType, type ReactNode } from 'react';
 import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { Bell, Bot, Check, ChevronRight, CreditCard, DatabaseZap, KeyRound, Link2, LogOut, MessageCircle, Smile } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, mobileType, radius, space, useIsDesktopLayout } from '@claire/design-system';
 import { MobileAvatar, SectionLabel } from '../../components/mobile/claire-mobile';
+import { FeedbackPressable } from '../../components/mobile/pressable-feedback';
 import { useAuthStore } from '../../stores/authStore';
 import { useChatPreferencesStore } from '../../stores/chatPreferencesStore';
 import { usePlatformStore } from '../../stores/platformStore';
@@ -15,10 +16,49 @@ type SettingsRow = {
   detail: string;
   icon: ComponentType<{ size?: number; color?: string }>;
   href?: string;
+  onPress?: () => void;
+  checked?: boolean;
   testID: string;
   iconBackground: string;
   accessory?: ReactNode;
 };
+
+function SettingsGroupRow({ row, index, profileStyle }: { row: SettingsRow; index: number; profileStyle: boolean }) {
+  const [pressed, setPressed] = useState(false);
+  const isSwitch = typeof row.checked === 'boolean';
+  return (
+    <Pressable
+      testID={row.testID}
+      accessibilityRole={isSwitch ? 'switch' : 'button'}
+      accessibilityLabel={row.title}
+      accessibilityState={isSwitch ? { checked: row.checked } : undefined}
+      onPress={row.onPress ?? (row.href ? () => router.push(row.href as never) : undefined)}
+      onPressIn={() => setPressed(true)}
+      onPressOut={() => setPressed(false)}
+      style={{ backgroundColor: pressed ? colors.sky : colors.paper }}
+    >
+      <View style={{
+        minHeight: profileStyle ? 62 : 64,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: profileStyle ? 14 : space[3],
+        paddingHorizontal: profileStyle ? space[4] : space[3],
+        paddingVertical: profileStyle ? 10 : space[3],
+        borderTopWidth: index === 0 ? 0 : 1,
+        borderTopColor: colors.neutral[200],
+      }}>
+        <View style={{ width: 32, height: 32, flexShrink: 0, borderRadius: 9, backgroundColor: profileStyle ? 'transparent' : row.iconBackground, alignItems: 'center', justifyContent: 'center' }}>
+          <row.icon size={profileStyle ? 22 : 16} color={colors.ink} />
+        </View>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={{ ...mobileType.body, fontWeight: profileStyle ? '500' : '700', color: colors.ink }}>{row.title}</Text>
+          {!profileStyle ? <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{row.detail}</Text> : null}
+        </View>
+        {row.accessory ?? <ChevronRight size={18} color={colors.neutral[400]} />}
+      </View>
+    </Pressable>
+  );
+}
 
 function SettingsGroup({ title, rows, profileStyle = false }: { title?: string; rows: SettingsRow[]; profileStyle?: boolean }) {
   return (
@@ -32,41 +72,7 @@ function SettingsGroup({ title, rows, profileStyle = false }: { title?: string; 
         overflow: 'hidden',
         marginTop: title ? 6 : 0,
       }}>
-        {rows.map((row, index) => {
-          const content = (
-            <View style={{
-              minHeight: profileStyle ? 62 : 64,
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: profileStyle ? 14 : space[3],
-              paddingHorizontal: profileStyle ? space[4] : space[3],
-              paddingVertical: profileStyle ? 10 : space[3],
-              borderTopWidth: index === 0 ? 0 : 1,
-              borderTopColor: colors.neutral[200],
-            }}>
-              <View style={{ width: 32, height: 32, flexShrink: 0, borderRadius: 9, backgroundColor: profileStyle ? 'transparent' : row.iconBackground, alignItems: 'center', justifyContent: 'center' }}>
-                <row.icon size={profileStyle ? 22 : 16} color={colors.ink} />
-              </View>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={{ ...mobileType.body, fontWeight: profileStyle ? '500' : '700', color: colors.ink }}>{row.title}</Text>
-                {!profileStyle ? <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{row.detail}</Text> : null}
-              </View>
-              {row.accessory ?? <ChevronRight size={18} color={colors.neutral[400]} />}
-            </View>
-          );
-          if (!row.href) return <View key={row.testID}>{content}</View>;
-          return (
-            <Pressable
-              key={row.testID}
-              testID={row.testID}
-              onPress={() => router.push(row.href as never)}
-              accessibilityRole="button"
-              style={{ backgroundColor: colors.paper }}
-            >
-              {content}
-            </Pressable>
-          );
-        })}
+        {rows.map((row, index) => <SettingsGroupRow key={row.testID} row={row} index={index} profileStyle={profileStyle} />)}
       </View>
     </View>
   );
@@ -79,11 +85,26 @@ export default function SettingsScreen() {
   const logout = useAuthStore(state => state.logout);
   const resetPlatforms = usePlatformStore(state => state.reset);
   const connected = usePlatformStore(state => state.connectedSessions).filter(session => session.status === PlatformStatus.CONNECTED).length;
-  const hydrate = useChatPreferencesStore(state => state.hydrate);
   const loopDetection = useChatPreferencesStore(state => state.loopDetection);
+  const loopDetectionSource = useChatPreferencesStore(state => state.loopDetectionSource);
+  const loopDetectionLoading = useChatPreferencesStore(state => state.loopDetectionLoading);
+  const loadLoopDetection = useChatPreferencesStore(state => state.loadLoopDetection);
   const setLoopDetection = useChatPreferencesStore(state => state.setLoopDetection);
 
-  useEffect(() => { void hydrate(); }, [hydrate]);
+  // Refetch on every visit: the value lives on the server and can change from
+  // another device, so the cache only paints until this resolves.
+  useEffect(() => { void loadLoopDetection(); }, [loadLoopDetection]);
+
+  const loopDetectionKnown = loopDetectionSource !== 'none';
+  const toggleLoopDetection = () => {
+    if (!loopDetectionKnown) {
+      if (!loopDetectionLoading) void loadLoopDetection();
+      return;
+    }
+    setLoopDetection(!loopDetection).catch(() => {
+      Alert.alert('Loop detection not updated', 'Claire could not save this setting. Check your connection and try again.');
+    });
+  };
 
   const signOut = () => Alert.alert('Sign out?', 'Your synced messages stay in Claire. You can sign in again at any time.', [
     { text: 'Cancel', style: 'cancel' },
@@ -98,17 +119,19 @@ export default function SettingsScreen() {
     { title: 'Relationships', detail: 'People, categories, and prompts', icon: Smile, href: '/people', testID: 'settings-relationships', iconBackground: colors.blush },
     {
       title: 'Loop detection',
-      detail: 'Automatically suggest tracking',
+      detail: loopDetectionKnown
+        ? 'Automatically suggest tracking'
+        : loopDetectionLoading ? 'Checking…' : 'Couldn’t load. Tap to retry.',
       icon: Check,
       testID: 'settings-loop-detection-row',
       iconBackground: colors.mint,
+      onPress: toggleLoopDetection,
+      checked: loopDetection,
       accessory: (
-        <Pressable
+        <View
           testID="settings-loop-detection"
-          accessibilityRole="switch"
-          accessibilityState={{ checked: loopDetection }}
-          onPress={() => void setLoopDetection(!loopDetection)}
           style={{
+            opacity: loopDetectionKnown ? 1 : 0.4,
             width: 48,
             height: 28,
             borderRadius: 99,
@@ -124,7 +147,7 @@ export default function SettingsScreen() {
             backgroundColor: colors.ink,
             alignSelf: loopDetection ? 'flex-end' : 'flex-start',
           }} />
-        </Pressable>
+        </View>
       ),
     },
     { title: 'Auto-reply rules', detail: 'Review automation and safety limits', icon: Bot, href: '/settings/auto-reply', testID: 'settings-auto-reply', iconBackground: colors.mint },
@@ -191,7 +214,7 @@ export default function SettingsScreen() {
         <SettingsGroup profileStyle rows={claireRows} />
         <SettingsGroup profileStyle rows={[accountRow, ...appRows.slice(2)]} />
 
-        <Pressable
+        <FeedbackPressable
           testID="settings-logout"
           onPress={signOut}
           style={({ pressed }) => ({
@@ -205,7 +228,7 @@ export default function SettingsScreen() {
             <LogOut size={18} color={colors.danger} />
             <Text style={{ ...mobileType.body, fontWeight: '700', color: colors.danger }}>Sign out</Text>
           </View>
-        </Pressable>
+        </FeedbackPressable>
       </View>
     </ScrollView>
   );

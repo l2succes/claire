@@ -65,7 +65,6 @@ export function LoopRow({
   const overdue = isOverdue(item);
   const due = dueLabel(item, overdue);
   const ownership = ownerLabel(item);
-  const needsAttention = (item.priority_score ?? 0) >= 80;
 
   const row = (
     <Pressable
@@ -76,7 +75,7 @@ export function LoopRow({
       onPressIn={() => setPressed(true)}
       onPressOut={() => setPressed(false)}
       accessibilityActions={[
-        { name: 'toggle', label: item.status === 'done' ? 'Reopen' : 'Mark done' },
+        { name: 'toggle', label: item.status === 'done' ? 'Reopen' : 'Mark as closed' },
         ...(onWait ? [{ name: 'wait', label: 'Move to waiting' }] : []),
         ...(onSnooze ? [{ name: 'snooze', label: 'Postpone' }] : []),
       ]}
@@ -91,7 +90,7 @@ export function LoopRow({
         testID={`loop-toggle-${item.id}`}
         accessibilityRole="checkbox"
         accessibilityState={{ checked: item.status === 'done' }}
-        accessibilityLabel={`${item.status === 'done' ? 'Reopen' : 'Complete'} ${title}`}
+        accessibilityLabel={`${item.status === 'done' ? 'Reopen' : 'Mark as closed'} ${title}`}
         onPress={onToggle}
         style={{ width: 28, height: 28, marginTop: 1, borderRadius: 14, borderWidth: 1.5, borderColor: overdue ? colors.danger : colors.ink, backgroundColor: item.status === 'done' ? colors.lime : overdue ? colors.blush : colors.paper, alignItems: 'center', justifyContent: 'center' }}
       >
@@ -110,10 +109,20 @@ export function LoopRow({
         </View>
       </View>
 
-      <View style={{ width: 54, alignItems: 'flex-end', gap: 4, paddingTop: 1 }}>
-        {needsAttention ? <Text style={{ ...mobileType.monoLabel, color: colors.danger }}>ACT NOW</Text> : null}
-        {due ? <><Clock3 size={15} color={due.urgent ? colors.danger : colors.neutral[400]} /><Text style={{ ...mobileType.monoLabel, color: due.urgent ? colors.danger : colors.neutral[600], textAlign: 'right' }}>{due.kicker ? `${due.kicker}\n${due.date}` : due.date}</Text></> : null}
-      </View>
+      {due ? (
+        <View
+          testID={`loop-due-${item.id}`}
+          style={{ width: 58, flexShrink: 0, alignItems: 'flex-end', gap: 4, paddingTop: 1 }}
+        >
+          <Clock3 size={15} color={due.urgent ? colors.danger : colors.neutral[400]} />
+          <Text
+            numberOfLines={2}
+            style={{ ...mobileType.monoLabel, color: due.urgent ? colors.danger : colors.neutral[600], textAlign: 'right' }}
+          >
+            {due.kicker ? `${due.kicker}\n${due.date}` : due.date}
+          </Text>
+        </View>
+      ) : null}
     </Pressable>
   );
 
@@ -123,7 +132,7 @@ export function LoopRow({
       contentBackgroundColor={colors.cream}
       leftActions={[{
         id: `toggle-loop-${item.id}`,
-        label: item.status === 'done' ? 'Reopen' : 'Done',
+        label: item.status === 'done' ? 'Reopen' : 'Close',
         icon: item.status === 'done'
           ? <RotateCcw size={20} color={colors.ink} />
           : <Check size={21} color={colors.ink} />,

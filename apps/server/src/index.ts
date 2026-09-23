@@ -606,6 +606,10 @@ async function initializePlatforms() {
           ? message.platformMetadata.contactPhone
           : undefined,
       ]);
+      const resolvedContactAvatar =
+        typeof message.platformMetadata?.contactAvatarUrl === 'string'
+          ? message.platformMetadata.contactAvatarUrl.trim()
+          : '';
       const chatDisplayName =
         message.chatType === 'group'
           ? message.chatName || message.chatId
@@ -679,7 +683,9 @@ async function initializePlatforms() {
                 whatsapp_id: platformContactId,
                 ...(contactName ? { name: contactName } : {}),
                 ...(contactPhone ? { phone_number: contactPhone } : {}),
-                ...(message.senderAvatarUrl ? { avatar_url: message.senderAvatarUrl } : {}),
+                ...(message.senderAvatarUrl || resolvedContactAvatar
+                  ? { avatar_url: message.senderAvatarUrl || resolvedContactAvatar }
+                  : {}),
               },
               { onConflict: 'user_id,platform,platform_contact_id' }
             )

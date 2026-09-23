@@ -9,6 +9,8 @@ import { aiProcessingDisclosure, isAiProcessingEnabled } from '../services/ai-po
 
 const router = Router();
 
+const PREFERENCE_COLUMNS = 'tone, response_style, language, notification_enabled, loop_detection_enabled, preferences';
+
 const VALID_TONES = ['friendly', 'professional', 'casual', 'formal', 'empathetic'] as const;
 const VALID_STYLES = ['concise', 'detailed', 'balanced'] as const;
 const desktopShortcutSchema = z.record(z.string(), z.string().min(1).max(32)).refine(
@@ -22,6 +24,9 @@ const updatePreferencesSchema = z.object({
     response_style: z.enum(VALID_STYLES).optional(),
     language: z.string().min(2).max(10).optional(),
     notification_enabled: z.boolean().optional(),
+    // A real column, not a `preferences` JSONB key: the loop detector reads it
+    // directly (services/loops/loop-context.ts) to gate detection per user.
+    loop_detection_enabled: z.boolean().optional(),
     preferences: z
       .object({
         personality: z.array(z.string()).optional(),
@@ -53,7 +58,7 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
 
   const { data, error } = await supabase
     .from('user_preferences')
-    .select('tone, response_style, language, notification_enabled, preferences')
+    .select(PREFERENCE_COLUMNS)
     .eq('user_id', userId)
     .single();
 
@@ -70,6 +75,7 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
       response_style: 'concise',
       language: 'en',
       notification_enabled: true,
+      loop_detection_enabled: true,
       preferences: {},
     },
   });
@@ -86,13 +92,14 @@ router.put(
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ error: 'User not authenticated' });
 
-    const { tone, response_style, language, notification_enabled, preferences } = req.body;
+    const { tone, response_style, language, notification_enabled, loop_detection_enabled, preferences } = req.body;
 
     const updates: Record<string, unknown> = { user_id: userId };
     if (tone !== undefined) updates.tone = tone;
     if (response_style !== undefined) updates.response_style = response_style;
     if (language !== undefined) updates.language = language;
     if (notification_enabled !== undefined) updates.notification_enabled = notification_enabled;
+    if (loop_detection_enabled !== undefined) updates.loop_detection_enabled = loop_detection_enabled;
     if (preferences !== undefined) {
       const { data: current } = await supabase
         .from('user_preferences')
@@ -107,7 +114,7 @@ router.put(
     const { data, error } = await supabase
       .from('user_preferences')
       .upsert(updates, { onConflict: 'user_id' })
-      .select('tone, response_style, language, notification_enabled, preferences')
+      .select(PREFERENCE_COLUMNS)
       .single();
 
     if (error) {

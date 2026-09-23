@@ -11,6 +11,7 @@ export function OtpCodeInput({
   disabled,
   status,
   focusRequest,
+  autoFocus = true,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -18,6 +19,7 @@ export function OtpCodeInput({
   disabled: boolean;
   status: OtpVisualStatus;
   focusRequest: number;
+  autoFocus?: boolean;
 }) {
   const inputRef = useRef<TextInput>(null);
   const [focused, setFocused] = useState(false);
@@ -68,7 +70,7 @@ export function OtpCodeInput({
         onBlur={() => setFocused(false)}
         onSubmitEditing={onSubmit}
         editable={!disabled}
-        autoFocus
+        autoFocus={autoFocus}
         autoComplete="one-time-code"
         textContentType="oneTimeCode"
         keyboardType="number-pad"
