@@ -21,6 +21,7 @@ import { handleNotificationResponse, type ClaireNotificationData } from '../serv
 import { bootstrapMobileCache, reconcileMobileCache } from '../services/mobile-sync';
 import { LaunchReveal } from '../components/LaunchReveal';
 import { useInboxRealtime } from '../hooks/useInboxRealtime';
+import { useInAppNotificationRealtime } from '../hooks/useInAppNotifications';
 import { useClaireFonts } from '../hooks/useClaireFonts';
 import { DesktopChrome } from '../components/desktop/DesktopChrome';
 import { useUnreadBadge } from '../hooks/useUnreadBadge';
@@ -65,6 +66,12 @@ function InboxRealtimeBridge() {
   const userId = useAuthStore((state) => state.user?.id);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   useInboxRealtime(isAuthenticated ? userId : undefined);
+  return null;
+}
+
+function NotificationFeedBridge() {
+  const userId = useAuthStore(state => state.isAuthenticated ? state.user?.id : undefined);
+  useInAppNotificationRealtime(userId);
   return null;
 }
 
@@ -200,6 +207,7 @@ export default function RootLayout() {
           <ClaireThemeProvider surface="mobile">
           <QueryClientProvider client={queryClient}>
             <InboxRealtimeBridge />
+            <NotificationFeedBridge />
             <UnreadBadgeBridge />
             <WorkspaceHandoffBridge />
             <DesktopPushBridge />

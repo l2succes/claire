@@ -72,6 +72,7 @@ import {
   useChatTimeline,
 } from '../../hooks/useChatTimeline';
 import { useScreenLoadMark } from '../../hooks/useScreenLoadMark';
+import { markInAppConversationRead, notificationFeedKey } from '../../hooks/useInAppNotifications';
 import {
   EMPTY_TIMELINE,
   chatMessageFromSend,
@@ -632,6 +633,11 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
     // Clear every visible/local representation before the network request. A
     // quick back gesture must not be able to strand the old count in the inbox.
     markInboxConversationRead(queryClient, user?.id, chatId, resolvedPlatform as Platform);
+    if (user?.id) {
+      void markInAppConversationRead(user.id, chatId)
+        .then(() => queryClient.invalidateQueries({ queryKey: notificationFeedKey(user.id) }))
+        .catch(error => console.warn('Could not clear conversation notifications:', error));
+    }
     try {
       await platformsApi.markChatRead(chatId, session?.id);
       // Realtime normally carries this chat-row update back to the inbox, but

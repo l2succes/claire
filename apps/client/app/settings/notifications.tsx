@@ -346,15 +346,15 @@ export default function NotificationsSettingsScreen() {
       <MobileHeader
         safeArea
         title="Notifications"
-        subtitle="Alerts, reminders, and quiet hours."
+        subtitle="Push alerts and quiet hours. In-app notifications remain available."
         leading={<MobileIconButton label="Back to Settings" testID="notifications-settings-back" onPress={() => router.back()}><ChevronLeft size={20} color={colors.ink} /></MobileIconButton>}
       />
       {loading ? <SettingsSkeleton testID="notifications-settings-loading" /> : (
       <View style={{ paddingHorizontal: space[4], gap: space[5] }}>
-        <SettingsSection title="Delivery">
+        <SettingsSection title="Push delivery">
           <ToggleRow
-            label="Claire notifications"
-            description="Turn off to pause every alert from Claire."
+            label="Push alerts"
+            description="Turn off lock-screen alerts. Notifications still appear in Claire."
             value={prefs.notification_enabled}
             onValueChange={(v) => update({ notification_enabled: v })}
             testID="notif-toggle-enabled"
@@ -392,7 +392,7 @@ export default function NotificationsSettingsScreen() {
           ) : null}
         </SettingsSection>
 
-        <SettingsSection title="What you receive">
+        <SettingsSection title="Push alert types">
           <ToggleRow
             label="New messages"
             value={prefs.notify_messages}
