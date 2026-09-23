@@ -626,6 +626,7 @@ async function initializePlatforms() {
             platform_chat_id: message.chatId,
             platform: message.platform,
             ...(chatDisplayName ? { name: chatDisplayName } : {}),
+            ...(message.chatAvatarUrl ? { avatar_url: message.chatAvatarUrl } : {}),
             is_group: message.chatType === 'group',
             // Audience size, not distinct-people count. The bridge already
             // computes it; persisting it lets group relevance scoring and the
@@ -682,7 +683,9 @@ async function initializePlatforms() {
                 whatsapp_id: platformContactId,
                 ...(contactName ? { name: contactName } : {}),
                 ...(contactPhone ? { phone_number: contactPhone } : {}),
-                ...(resolvedContactAvatar ? { avatar_url: resolvedContactAvatar } : {}),
+                ...(message.senderAvatarUrl || resolvedContactAvatar
+                  ? { avatar_url: message.senderAvatarUrl || resolvedContactAvatar }
+                  : {}),
               },
               { onConflict: 'user_id,platform,platform_contact_id' }
             )

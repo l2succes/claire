@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { NotificationDeliveryService, isInQuietHours, notificationImageUrl, quietHoursDelay, shouldDeliverLoopRevision, shouldNotifyConversation, shouldNotifyLoops } from './notification-delivery';
+import { buildIncomingMessageNotification, NotificationDeliveryService, isInQuietHours, notificationImageUrl, quietHoursDelay, shouldDeliverLoopRevision, shouldNotifyConversation, shouldNotifyLoops } from './notification-delivery';
 import { ExpoNotificationProvider } from './notification-providers';
 
 describe('notification eligibility', () => {
@@ -20,6 +20,43 @@ describe('notification eligibility', () => {
     expect(notificationImageUrl('http://cdn.example.com/avatar.jpg')).toBeUndefined();
     expect(notificationImageUrl('file:///tmp/avatar.jpg')).toBeUndefined();
     expect(notificationImageUrl('not a url')).toBeUndefined();
+  });
+
+  it('keeps sender and group identity separate without an avatar', () => {
+    const payload = buildIncomingMessageNotification({
+      userId: 'user-1', chatId: 'chat-1', platform: 'whatsapp',
+      senderContactId: 'contact-1', senderName: 'Jare CDMX',
+      chatName: 'Melaninaires', isGroup: true,
+      content: 'See you there', messageId: 'message-1',
+    }, 4);
+
+    expect(payload.title).toBe('Jare CDMX');
+    expect(payload.mutableContent).toBe(true);
+    expect(payload.data.senderName).toBe('Jare CDMX');
+    expect(payload.data.chatName).toBe('Melaninaires');
+    expect(payload.data.isGroup).toBe(true);
+    expect(payload.data.avatarUrl).toBeUndefined();
+  });
+
+  it('uses group artwork for a group and sender artwork for a direct message', () => {
+    const event = {
+      userId: 'user-1', chatId: 'chat-1', platform: 'whatsapp',
+      senderName: 'Ada', chatName: 'Design Team', isGroup: true,
+      content: 'New mockups', messageId: 'message-1',
+    };
+    const group = buildIncomingMessageNotification(event, 1, {
+      senderAvatarUrl: 'https://cdn.example.com/ada.jpg',
+      chatAvatarUrl: 'https://cdn.example.com/design-team.jpg',
+    });
+    const direct = buildIncomingMessageNotification({ ...event, isGroup: false }, 1, {
+      senderAvatarUrl: 'https://cdn.example.com/ada.jpg',
+      chatAvatarUrl: 'https://cdn.example.com/ignored.jpg',
+    });
+
+    expect(group.data.avatarUrl).toBe('https://cdn.example.com/design-team.jpg');
+    expect(group.data.avatarType).toBe('group');
+    expect(direct.data.avatarUrl).toBe('https://cdn.example.com/ada.jpg');
+    expect(direct.data.avatarType).toBe('sender');
   });
 
   it('drops loop deliveries after completion or a semantic edit', () => {
