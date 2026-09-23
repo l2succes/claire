@@ -243,12 +243,18 @@ export class NotificationDeliveryService {
       const [deviceResult, prefsResult, loopResult] = await Promise.all([
         supabase.from('notification_devices').select('*').eq('id', row.device_id).eq('user_id', row.user_id).maybeSingle(),
         supabase.from('user_preferences').select('notification_enabled,preferences').eq('user_id', row.user_id).maybeSingle(),
-        row.loop_id ? supabase.from('loops').select('user_id,status,visibility,reminder_revision,snoozed_until,reminder_reason,reminder_sent_at').eq('id', row.loop_id).maybeSingle() : Promise.resolve({ data: null, error: null }),
+        row.loop_id ? supabase.from('loops').select('user_id,status,visibility,reminder_revision,snoozed_until,reminder_reason,reminder_sent_at,title,content').eq('id', row.loop_id).maybeSingle() : Promise.resolve({ data: null, error: null }),
       ]);
       for (const result of [deviceResult, prefsResult, loopResult]) if (result.error) throw result.error;
       const device = deviceResult.data as NotificationDevice | null;
       let loop = loopResult.data;
       let payload = row.outbox_payload as NotificationPayload;
+      const isCreation = row.notification_type === 'loop_created';
+      if (isCreation && loop) {
+        // A title/deadline edit must not cancel the creation alert or leave it
+        // displaying stale copy while deferred by quiet hours.
+        payload = { ...payload, body: (loop.title?.trim() || loop.content || '').slice(0, 180) };
+      }
       if (row.digest_id) {
         const { data: items, error } = await supabase.from('loop_digest_items')
           .select('revision,loop:loops(id,user_id,status,visibility,reminder_revision,snoozed_until,title,content)')
@@ -264,8 +270,11 @@ export class NotificationDeliveryService {
           data: { type: 'loop_digest', digestId: row.digest_id, url: 'claire://loops' } };
       }
       const options = (prefsResult.data?.preferences ?? {}) as NotificationOptions;
+      const eligible = isCreation
+        ? loop?.user_id === row.user_id && ['open', 'waiting'].includes(loop.status)
+        : row.digest_id ? !!loop : shouldDeliverLoopRevision({ userId: row.user_id, revision: row.subject_revision }, loop);
       if (process.env.LOOP_NOTIFICATIONS_ENABLED === 'false' || !device?.enabled || !shouldNotifyLoops(prefsResult.data?.notification_enabled, options) ||
-          !(row.digest_id ? !!loop : shouldDeliverLoopRevision({ userId: row.user_id, revision: row.subject_revision }, loop)) || loop?.visibility !== 'surfaced') {
+          !eligible || loop?.visibility !== 'surfaced') {
         await finish({ state: 'suppressed', error_code: !device?.enabled ? 'device_disabled' : 'policy_changed' });
         return;
       }
@@ -275,7 +284,9 @@ export class NotificationDeliveryService {
         await finish({ next_attempt_at: new Date(Date.now() + delay).toISOString(), error_code: 'quiet_or_snoozed' });
         return;
       }
-      if (loop.reminder_reason !== 'snooze_ended') {
+      // Creation confirmations are immediate events, not proactive follow-ups;
+      // they neither consume the reminder budget nor acknowledge its schedule.
+      if (!isCreation && loop.reminder_reason !== 'snooze_ended') {
         const { data: reserved, error } = await supabase.rpc('reserve_loop_notification', {
           p_user_id: row.user_id, p_episode: row.digest_id ? `digest:${row.digest_id}` : `${row.loop_id}:${row.subject_revision}`, p_timezone: device.timezone || 'UTC',
         });
@@ -302,7 +313,7 @@ export class NotificationDeliveryService {
         const { error } = await supabase.from('notification_devices').update({ enabled: false }).eq('id', device.id);
         if (error) throw error;
       }
-      if (result.state === 'submitted' || result.state === 'delivered') {
+      if (!isCreation && (result.state === 'submitted' || result.state === 'delivered')) {
         const { error } = row.digest_id
           ? await supabase.rpc('accept_loop_digest', { p_digest_id: row.digest_id, p_user_id: row.user_id })
           : await supabase.rpc('accept_loop_reminder', { p_loop_id: row.loop_id, p_user_id: row.user_id, p_revision: row.subject_revision });

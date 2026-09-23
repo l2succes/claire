@@ -58,11 +58,35 @@ psql "$LOCAL_FIXTURE_DATABASE_URL" -v ON_ERROR_STOP=1 \
   -f apps/server/tests/integration/fixtures/proactive-recovery.sql \
   -f supabase/migrations/20260908120000_smart_loop_reminders.sql \
   -f supabase/migrations/20260915000001_add_loop_hygiene.sql \
-  -f supabase/migrations/20260923000000_proactive_recovery.sql
-CLAIRE_RECOVERY_TEST_DATABASE_URL="$LOCAL_FIXTURE_DATABASE_URL" bun test apps/server/tests/integration/proactive-recovery.test.ts
+  -f supabase/migrations/20260923000000_proactive_recovery.sql \
+  -f supabase/migrations/20260923120000_loop_created_notifications.sql
+CLAIRE_RECOVERY_TEST_DATABASE_URL="$LOCAL_FIXTURE_DATABASE_URL" bun test apps/server/tests/integration/proactive-recovery.test.ts apps/server/tests/integration/loop-created-notifications.test.ts
 ```
 
 These tests exercise actual row/advisory locks, concurrent transitions, transaction rollback, lease recovery, monotonic cursors, policy re-registration, hash-plan replay, digest claims and RPC permissions. The fixture covers the relevant preceding schema and triggers; it does not substitute for applying the migration to the complete staging schema.
+
+New surfaced loops also queue a **New loop created** alert in the same database
+transaction, for each enabled device. This covers detector and user-created
+loops, without replaying existing rows on migration or settings changes. The
+outbox checks every 15 seconds, retries provider failures, and respects the
+master switch, loop preference, and device quiet hours. A closed, hidden,
+deleted, or snoozed loop is suppressed before sending. Edits do not generate
+another creation alert; deferred alerts use the current title.
+
+Creation deliveries use `loop_created` and revision zero, separate from reminder
+revisions (which start at one). They bypass the proactive reminder budget and
+never mark a reminder sent. Deploy the server delivery changes and a client
+that handles `loop_created` taps/actions before applying
+`20260923120000_loop_created_notifications.sql`. The client labels the shared
+preference **Loops**, covering creation alerts and reminders. Physical APNs/Expo
+delivery still needs release verification with a registered device.
+
+Creation alert verification used `simctl push` with a synthetic `loop_created`
+payload on iPhone 17 Pro / iOS 26. The banner displayed the creation copy, and
+tapping it opened the Loop detail route. The synthetic ID deliberately had no
+server row; this verified native presentation and response routing, not remote
+delivery or loading a newly persisted loop. The settings screen also displayed
+the updated **Loops** description. Temporary permission-test code was removed.
 
 Client checks (from `apps/client`):
 

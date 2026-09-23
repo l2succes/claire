@@ -50,6 +50,70 @@ beforeEach(() => {
   };
 });
 describe('durable proactive push execution', () => {
+  function creation() {
+    Object.assign(rows.notification_deliveries[0], {
+      notification_type: 'loop_created', subject_revision: 0,
+      outbox_payload: { title: 'New loop created', body: 'Original title',
+        data: { type: 'loop_created', loopId: 'loop', url: 'claire://loops/loop' } },
+    });
+    rows.loops[0].title = 'Discuss fundraising';
+  }
+
+  it('delivers creation after edits, even when the reminder budget is exhausted', async () => {
+    creation(); reserved = false;
+    rows.loops[0].reminder_revision = 8;
+    await attempt();
+    expect(sends).toHaveLength(1);
+    expect(sends[0].payload).toEqual({ title: 'New loop created', body: 'Discuss fundraising',
+      data: { type: 'loop_created', loopId: 'loop', url: 'claire://loops/loop' } });
+    expect(rows.notification_deliveries[0].state).toBe('submitted');
+    expect(rpcs.map(call => call.name)).toEqual(['claim_loop_delivery']);
+  });
+
+  it('defers creation during quiet hours without consuming a reminder', async () => {
+    creation();
+    rows.user_preferences[0].preferences = { quiet_hours_enabled: true, quiet_hours_start: '00:00', quiet_hours_end: '00:00' };
+    await attempt();
+    expect(sends).toHaveLength(0);
+    expect(rows.notification_deliveries[0].state).toBe('queued');
+    expect(rows.notification_deliveries[0].error_code).toBe('quiet_or_snoozed');
+    expect(rpcs.map(call => call.name)).toEqual(['claim_loop_delivery']);
+  });
+
+  it('retries a transient creation push failure', async () => {
+    creation();
+    providerResult = { state: 'failed', errorCode: 'provider_unavailable', retryable: true };
+    await attempt();
+    expect(rows.notification_deliveries[0].state).toBe('queued');
+    expect(rpcs.some(call => call.name === 'accept_loop_reminder')).toBe(false);
+    providerResult = { state: 'delivered' };
+    await attempt();
+    expect(rows.notification_deliveries[0].state).toBe('delivered');
+    expect(rpcs.some(call => call.name === 'accept_loop_reminder')).toBe(false);
+  });
+
+  it.each([
+    ['closed', 'loops', { status: 'done' }],
+    ['snoozed', 'loops', { status: 'snoozed' }],
+    ['hidden', 'loops', { visibility: 'suppressed' }],
+    ['foreign owner', 'loops', { user_id: 'someone-else' }],
+    ['disabled device', 'notification_devices', { enabled: false }],
+    ['disabled notifications', 'user_preferences', { notification_enabled: false }],
+    ['disabled loops', 'user_preferences', { preferences: { notify_loops: false } }],
+  ])('suppresses creation for %s', async (_name, table, patch) => {
+    creation(); Object.assign(rows[table as string][0], patch);
+    await attempt();
+    expect(sends).toHaveLength(0);
+    expect(rows.notification_deliveries[0].state).toBe('suppressed');
+  });
+
+  it('suppresses creation if the loop was deleted', async () => {
+    creation(); rows.loops = [];
+    await attempt();
+    expect(sends).toHaveLength(0);
+    expect(rows.notification_deliveries[0].state).toBe('suppressed');
+  });
+
   it('reads the current token and records provider acceptance before acknowledging the loop', async () => {
     await attempt();
     expect(sends[0].token).toBe('refreshed-token');
