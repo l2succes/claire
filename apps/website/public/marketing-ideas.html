@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Claire's team-ready directory of short-form marketing concepts, scripts, shot lists, and production guidance." />
+    <title>Claire — Marketing Idea Directory</title>
+    <style>
+      :root { --ink:#17151d; --muted:#6f6878; --paper:#fffdfb; --lav:#eee5ff; --purple:#6541c8; --pink:#e6587d; --line:#e8e1e9; --green:#157a57; --amber:#9a5c09; }
+      * { box-sizing:border-box; } body { margin:0; background:linear-gradient(135deg,#fbf8ff,#fffaf5 58%,#f6f2ff); color:var(--ink); font:16px/1.5 Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+      button,input { font:inherit; }.toolbar { position:sticky; top:0; z-index:20; display:flex; justify-content:space-between; align-items:center; gap:18px; padding:11px max(20px,calc((100vw - 1080px)/2)); border-bottom:1px solid #e7dfeecc; background:#fffdfbe8; backdrop-filter:blur(18px); }.brand { font-weight:850; letter-spacing:-.03em; }.actions { display:flex; gap:8px; }.action { cursor:pointer; padding:8px 12px; border:1px solid var(--line); border-radius:999px; background:white; color:var(--ink); font-size:13px; font-weight:720; }.action.primary { border-color:var(--ink); background:var(--ink); color:white; }.action:hover { transform:translateY(-1px); box-shadow:0 6px 16px #30154316; }
+      main { max-width:1080px; margin:auto; padding:56px 24px 76px; }.eyebrow { color:var(--purple); font-size:12px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; } h1 { margin:10px 0; font-size:clamp(40px,6vw,70px); line-height:.98; letter-spacing:-.06em; } .intro { max-width:760px; color:var(--muted); font-size:18px; }.meta { display:flex; flex-wrap:wrap; gap:8px; margin-top:22px; }.meta span { padding:7px 10px; border:1px solid var(--line); border-radius:999px; background:#fffdfc; color:var(--muted); font-size:12px; font-weight:700; }
+      .principle { margin:32px 0 42px; padding:24px; border-radius:20px; background:var(--ink); color:white; box-shadow:0 20px 60px #3a225333; }.principle h2 { margin:0 0 8px; font-size:21px; }.principle p { max-width:820px; margin:0; color:#e5dcff; }
+      .menu { position:sticky; top:57px; z-index:15; display:flex; gap:7px; margin:0 0 34px; padding:8px; overflow-x:auto; border:1px solid var(--line); border-radius:16px; background:#fffdfbe8; backdrop-filter:blur(18px); box-shadow:0 10px 28px #30154310; }.menu a { flex:0 0 auto; padding:9px 13px; border-radius:10px; color:var(--muted); text-decoration:none; font-size:13px; font-weight:780; }.menu a:hover,.menu a.primary { background:var(--ink); color:white; }.anchor { scroll-margin-top:128px; }
+      .angle-lead { display:grid; grid-template-columns:1.1fr .9fr; gap:16px; margin-bottom:16px; }.angle-hero { padding:28px; border-radius:22px; color:white; background:linear-gradient(135deg,#5d35c5,#8d62e7); box-shadow:0 16px 42px #6541c82a; }.angle-hero.business { background:linear-gradient(135deg,#112c25,#217256); }.angle-hero h2 { margin:8px 0 10px; font-size:clamp(30px,4vw,46px); line-height:1; }.angle-hero p { margin:0; color:#f2edff; font-size:17px; }.angle-hero.business p { color:#d9f5e9; }.strategy { padding:24px; border:1px solid var(--line); border-radius:22px; background:#fffdfc; }.strategy h3 { margin:0 0 12px; font-size:19px; }.strategy dl { margin:0; }.strategy dt { margin-top:11px; color:var(--purple); font-size:11px; font-weight:850; letter-spacing:.08em; text-transform:uppercase; }.strategy dd { margin:3px 0 0; color:var(--muted); font-size:14px; }
+      .concepts { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; }.concept { display:flex; flex-direction:column; padding:20px; border:1px solid var(--line); border-radius:18px; background:#fffdfc; }.concept h3 { margin:11px 0 7px; font-size:19px; line-height:1.1; letter-spacing:-.025em; }.concept p { margin:0 0 12px; color:var(--muted); font-size:14px; }.concept .details { margin-top:auto; }.notes { min-height:74px; margin-top:14px; padding:12px; border:1px dashed #bcb0c8; border-radius:12px; background:#fbf8ff; color:#625a6c; font-size:13px; outline:none; }.notes:focus { border-color:var(--purple); background:white; box-shadow:0 0 0 3px #6541c814; }.notes:empty:before { content:attr(data-placeholder); color:#9a91a2; }.edit-hint { display:flex; align-items:center; gap:7px; margin:8px 0 16px; color:var(--muted); font-size:12px; }.edit-hint:before { content:'✎'; display:grid; width:22px; height:22px; place-items:center; border-radius:50%; background:var(--lav); color:var(--purple); font-weight:900; }
+      .quick { display:grid; grid-template-columns:1.1fr .9fr; gap:16px; margin:30px 0 42px; }.quick-card { padding:20px; border:1px solid var(--line); border-radius:18px; background:#fffdfc; }.quick-card h2 { margin:0 0 8px; font-size:19px; }.quick-card p { margin:0; color:var(--muted); font-size:14px; }.legend { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }.legend span { padding:5px 9px; border-radius:999px; font-size:11px; font-weight:800; }.ready { color:var(--green); background:#ddf6e9; }.develop { color:var(--amber); background:#fff0d7; }.explore { color:var(--purple); background:var(--lav); }
+      .directory-head { display:flex; justify-content:space-between; align-items:end; gap:20px; }.directory-head h2 { margin-bottom:10px; }.search { width:min(330px,100%); padding:10px 13px; border:1px solid var(--line); border-radius:12px; outline:none; background:white; }.search:focus { border-color:var(--purple); box-shadow:0 0 0 3px #6541c81a; }
+      .index-wrap { overflow-x:auto; border:1px solid var(--line); border-radius:18px; background:#fffdfc; box-shadow:0 6px 18px #30154309; }.index { width:100%; min-width:760px; border-collapse:collapse; text-align:left; }.index th,.index td { padding:14px 16px; border-bottom:1px solid var(--line); vertical-align:top; }.index tr:last-child td { border-bottom:0; }.index th { background:#f8f4ff; color:var(--purple); font-size:11px; letter-spacing:.09em; text-transform:uppercase; }.index td:first-child { font-weight:750; letter-spacing:-.015em; }.index td { font-size:14px; }.index td:nth-child(2) { color:var(--purple); font-size:12px; font-weight:750; }.index td:nth-child(3) { color:var(--muted); }.index a { color:inherit; text-decoration:none; }.index a:hover { color:var(--purple); }.index .state { white-space:nowrap; }.index tr[hidden] { display:none; }
+      h2 { margin:42px 0 16px; font-size:27px; letter-spacing:-.04em; }.grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }.idea { padding:22px; border:1px solid var(--line); border-radius:20px; background:#fffdfc; box-shadow:0 6px 18px #30154309; }.idea h3 { margin:12px 0 7px; font-size:20px; letter-spacing:-.03em; }.idea p { margin:0 0 13px; color:var(--muted); }.tag { display:inline-block; padding:5px 9px; border-radius:99px; font-size:11px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; background:var(--lav); color:var(--purple); }.tag.shipped { color:var(--green); background:#ddf6e9; }.details { padding-top:12px; border-top:1px solid var(--line); font-size:14px; }.details b { display:block; margin-bottom:3px; color:var(--ink); }.details span { color:var(--muted); }.status { margin-top:24px; padding:18px 20px; border:1px solid #cfe9dc; border-radius:16px; background:#f2fff8; color:#255a45; }.status b { color:#12442f; } ul { margin:8px 0 0; padding-left:20px; } li+li { margin-top:6px; } .note { margin-top:26px; padding:20px; border-radius:16px; background:var(--lav); font-size:14px; }.note p { margin:5px 0 0; color:#4d4658; }
+      .next { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }.next article { padding:18px; border-radius:16px; background:#fffdfc; border:1px solid var(--line); }.next strong { display:block; margin-bottom:5px; }.next p { margin:0; color:var(--muted); font-size:14px; }.footer { margin-top:48px; padding-top:20px; border-top:1px solid var(--line); color:var(--muted); font-size:12px; }
+      @media(max-width:800px) { .angle-lead,.concepts { grid-template-columns:1fr; } }
+      @media(max-width:700px) { .toolbar { align-items:flex-start; }.action.secondary { display:none; }.menu { top:54px; margin-left:-8px; margin-right:-8px; } main { padding:36px 16px 56px; }.grid,.quick,.next { grid-template-columns:1fr; }.directory-head { align-items:stretch; flex-direction:column; gap:6px; } }
+      @media print { body { background:white; }.toolbar,.menu,.search,.edit-hint { display:none!important; } main { max-width:none; padding:12mm; }.principle,.idea,.quick-card,.next article,.concept,.angle-hero,.strategy { break-inside:avoid; box-shadow:none; }.grid { display:block; }.idea { margin-bottom:10px; } a { color:inherit; text-decoration:none; } }
+    </style>
+  </head>
+  <body>
+    <nav class="toolbar" aria-label="Artifact actions">
+      <div class="brand">Claire <span style="color:var(--muted);font-weight:600">/ Marketing</span></div>
+      <div class="actions">
+        <button class="action secondary" id="copy-summary" type="button">Copy summary</button>
+        <button class="action secondary" id="print" type="button">Print / PDF</button>
+        <button class="action primary" id="download" type="button">Download HTML</button>
+      </div>
+    </nav>
+    <main>
+      <div class="eyebrow">Claire / Team share edition</div>
+      <h1>Marketing idea directory</h1>
+      <p class="intro">A working collection of short-form content concepts about the real role of AI in communication: more support, more context, and more follow-through—without handing over your voice.</p>
+      <div class="meta"><span>2 priority angles</span><span>Concept workspaces</span><span>Scripts + shot lists</span><span>Jamie production queue</span><span>Updated September 2026</span></div>
+
+      <section class="principle">
+        <h2>The Claire point of view</h2>
+        <p>AI should be an instrument, not an impersonator. Claire helps people express what they mean with more clarity and consistency, while the user remains the author of every message and decision.</p>
+      </section>
+
+      <nav class="menu" aria-label="Marketing workspace menu">
+        <a class="primary" href="#priority">Priority angles</a>
+        <a href="#dating-angle">Dating</a>
+        <a href="#business-angle">Business</a>
+        <a href="#jamie-queue">Jamie’s queue</a>
+        <a href="#directory">Idea library</a>
+      </nav>
+
+      <section class="quick anchor" id="priority" aria-label="Priority marketing angles">
+        <div class="quick-card"><span class="tag">Angle 01</span><h2>Dating: a thoughtful second opinion</h2><p>Meet the existing “what do I say next?” demand, but make Claire about clarity, confidence, and authenticity—not canned pickup lines or pretending to be someone else.</p></div>
+        <div class="quick-card"><span class="tag" style="background:#ddf6e9;color:var(--green)">Angle 02</span><h2>Business: your DMs are your pipeline</h2><p>Show founders how Claire can monitor Instagram, Telegram, WhatsApp, and LinkedIn, suggest responses, and make sure valuable conversations receive a follow-up.</p></div>
+      </section>
+
+      <section class="anchor" id="dating-angle">
+        <div class="angle-lead">
+          <div class="angle-hero"><div class="eyebrow" style="color:#e5dbff">Priority angle 01</div><h2>Dating without losing your voice</h2><p>Claire gives you context and options when you are overthinking a conversation. You still decide what to say—and the message still sounds like you.</p></div>
+          <aside class="strategy"><h3>Angle brief</h3><dl><dt>Audience</dt><dd>People who freeze, overthink, or second-guess themselves in dating conversations.</dd><dt>Product proof</dt><dd>Conversation context, visible-tone summary, unresolved questions, editable reply options, and follow-up reminders.</dd><dt>Positioning</dt><dd>“A second opinion for the conversation,” not a rizz generator.</dd><dt>Guardrail</dt><dd>Never claim to read someone’s mind, guarantee attraction, manipulate emotion, or impersonate the user.</dd></dl></aside>
+        </div>
+        <div class="edit-hint">The dotted boxes are editable working notes. Changes remain in this browser and are included when you download the HTML.</div>
+        <div class="concepts">
+          <article class="concept"><span class="tag shipped">Jamie · Shoot first</span><h3>“I have no idea what to say next”</h3><p>Open on Jamie staring at a chat, typing and deleting. Claire summarizes what is actually happening and offers three directions: warm, direct, or playful.</p><div class="details"><b>Hook</b><span>“You know when the conversation is going well—and then your brain suddenly forgets how words work?”</span></div><div class="notes" contenteditable="true" data-note-id="dating-next" data-placeholder="Develop the hook, example chat, CTA, or visual beats…"></div></article>
+          <article class="concept"><span class="tag">Comparison · 30 sec</span><h3>Pickup-line app vs. Claire</h3><p>Split screen: one side produces a generic line; Claire explains the visible context, identifies the unanswered point, and lets the user choose language that sounds natural.</p><div class="details"><b>Core line</b><span>“I don’t need AI to become someone else. I need another perspective when I’m overthinking.”</span></div><div class="notes" contenteditable="true" data-note-id="dating-compare" data-placeholder="Add competitor framing, split-screen beats, or sample replies…"></div></article>
+          <article class="concept"><span class="tag">POV · 25–35 sec</span><h3>“Should I double text?”</h3><p>Turn a familiar dating question into a product demo. Claire surfaces the last exchange and offers choices without pretending there is one magic answer.</p><div class="details"><b>CTA</b><span>“Get context—not games—from Claire.”</span></div><div class="notes" contenteditable="true" data-note-id="dating-double-text" data-placeholder="Add POV setup, phone shots, or alternative CTA…"></div></article>
+        </div>
+      </section>
+
+      <section class="anchor" id="business-angle">
+        <div class="angle-lead">
+          <div class="angle-hero business"><div class="eyebrow" style="color:#a8e6ce">Priority angle 02</div><h2>Your DMs are your business</h2><p>Leads, partners, customers, and team conversations live across four different inboxes. Claire gives a founder one place to monitor, respond, and follow through.</p></div>
+          <aside class="strategy"><h3>Angle brief</h3><dl><dt>Audience</dt><dd>Founders, consultants, agencies, creators, and small teams whose business happens in direct messages.</dd><dt>Product proof</dt><dd>Unified inbox across Instagram, Telegram, WhatsApp, and LinkedIn; editable response drafts; unanswered-message and follow-up reminders.</dd><dt>Positioning</dt><dd>“The relationship layer above your business inboxes.”</dd><dt>Guardrail</dt><dd>Do not imply autonomous sending, guaranteed sales, or monitoring capabilities that are not visible in the product demo.</dd></dl></aside>
+        </div>
+        <div class="concepts">
+          <article class="concept"><span class="tag shipped">Jamie · Shoot first</span><h3>“Your DMs are your CRM”</h3><p>Jamie names the four places business arrives, then reveals Claire as the unified view that stops opportunities from disappearing between apps.</p><div class="details"><b>Hook</b><span>“If you run a small business, your CRM probably isn’t Salesforce. It’s four different DM inboxes.”</span></div><div class="notes" contenteditable="true" data-note-id="business-crm" data-placeholder="Develop the hook, industry example, proof, or CTA…"></div></article>
+          <article class="concept"><span class="tag">Story · 30–45 sec</span><h3>The lead you left on read</h3><p>A promising Instagram inquiry gets buried. Rewind: Claire flags the open loop, drafts a useful response, and schedules the follow-up.</p><div class="details"><b>Hook</b><span>“The most expensive message in your business might be the one you forgot to answer.”</span></div><div class="notes" contenteditable="true" data-note-id="business-lead" data-placeholder="Add the lead scenario, reminder copy, or revenue-safe claim…"></div></article>
+          <article class="concept"><span class="tag">Founder POV · 45 sec</span><h3>A morning brief for every inbox</h3><p>Jamie opens his day with a concise view: conversations needing replies, promises made yesterday, and business follow-ups due today.</p><div class="details"><b>Hook</b><span>“Before I open four apps, Claire tells me which conversations actually need me.”</span></div><div class="notes" contenteditable="true" data-note-id="business-brief" data-placeholder="Add dashboard visuals, example brief, or closing line…"></div></article>
+        </div>
+      </section>
+
+      <section class="quick" aria-label="How to use the idea library">
+        <div class="quick-card"><h2>How the team should use this</h2><p>Pick a concept from the directory, adapt the wording to the creator, and keep the product proof visible. The green concepts already have enough scripting and visual direction to enter production.</p></div>
+        <div class="quick-card"><h2>Working status</h2><p>Status reflects creative readiness—not performance.</p><div class="legend"><span class="ready">Ready to produce</span><span class="develop">Develop next</span><span class="explore">Explore</span></div></div>
+      </section>
+
+      <section class="anchor" id="directory">
+        <div class="directory-head"><h2>All content ideas</h2><input class="search" id="idea-search" type="search" placeholder="Search ideas, formats, or themes…" aria-label="Search content ideas" /></div>
+        <div class="index-wrap"><table class="index"><thead><tr><th>Title</th><th>Format</th><th>Short description</th><th>Status</th></tr></thead><tbody>
+          <tr><td><a href="#left-on-read">You left them on read</a></td><td>UGC product demo · 45 sec</td><td>A relatable hook introduces Claire’s unified inbox, replies, reminders, and calendar assistance.</td><td class="state"><span class="ready">Ready</span></td></tr>
+          <tr><td><a href="#ai-voice">Are you speaking to AI—or with it?</a></td><td>Talking head · 45–60 sec</td><td>The honest middle ground between avoiding AI entirely and letting it write everything for you.</td><td class="state"><span class="develop">Develop</span></td></tr>
+          <tr><td><a href="#ai-voice">Her, but grounded</a></td><td>Cinematic reference · 30–45 sec</td><td>A playful, original homage that contrasts AI fantasy with Claire’s practical help today.</td><td class="state"><span class="explore">Explore</span></td></tr>
+          <tr><td><a href="#ai-voice">Your voice, higher volume</a></td><td>Product demo · 30 sec</td><td>Show Claire improving a rough draft while the user keeps control of the final message.</td><td class="state"><span class="develop">Develop</span></td></tr>
+          <tr><td><a href="#ai-voice">The communication economy</a></td><td>Founder POV · 45 sec</td><td>Why AI can create bandwidth for relationships in a high-volume, fragmented world.</td><td class="state"><span class="explore">Explore</span></td></tr>
+          <tr><td><a href="#latam">WhatsApp is the operating system of Latin America</a></td><td>Founder story · 45–60 sec</td><td>Six years in Latin America led to a clear problem: business, family, and life run through WhatsApp, but no one app holds every conversation.</td><td class="state"><span class="ready">Ready</span></td></tr>
+          <tr><td><a href="#travel">When you leave home, staying close takes work</a></td><td>Creator story · 45–60 sec</td><td>A travel-based story about keeping up with people, commitments, and messages across apps.</td><td class="state"><span class="ready">Ready</span></td></tr>
+          <tr><td><a href="#saturday">Saturday plans, Sunday realization</a></td><td>Animated product story · 45 sec</td><td>A missed dinner becomes a Claire reminder, then an editable confirmation draft—before it is too late.</td><td class="state"><span class="ready">Ready</span></td></tr>
+          <tr><td><a href="#dating-angle">I have no idea what to say next</a></td><td>Dating UGC · 30–45 sec</td><td>Claire offers context and three editable directions when a dating conversation stalls.</td><td class="state"><span class="ready">Jamie</span></td></tr>
+          <tr><td><a href="#business-angle">Your DMs are your CRM</a></td><td>Business UGC · 30–45 sec</td><td>One unified view for Instagram, Telegram, WhatsApp, and LinkedIn business conversations.</td><td class="state"><span class="ready">Jamie</span></td></tr>
+          <tr><td><a href="#business-angle">The lead you left on read</a></td><td>Business story · 30–45 sec</td><td>An unanswered inquiry becomes a timely reply and follow-up through Claire.</td><td class="state"><span class="develop">Develop</span></td></tr>
+          <tr><td><a href="#relationships">Better communication is not better pickup lines</a></td><td>Educational · 45–60 sec</td><td>Reframe dating-chat AI as a tool for clarity and consideration—not performance or manipulation.</td><td class="state"><span class="develop">Develop</span></td></tr>
+          <tr><td><a href="#relationships">Before you send it</a></td><td>Product demo · 30 sec</td><td>Show an optional tone check, open-loop review, and authentic response suggestions.</td><td class="state"><span class="develop">Develop</span></td></tr>
+        </tbody></table></div>
+      </section>
+
+      <section id="left-on-read">
+        <h2>Production-ready concept: the unified inbox</h2>
+        <div class="grid">
+          <article class="idea"><span class="tag shipped">Ready to produce · 45 sec</span><h3>“You left them on read”</h3><p>The broadest introduction to Claire: start with a familiar social mistake, reveal the fragmented inbox problem, then prove the unified inbox and assistant value.</p><div class="details"><b>Full script</b><span>“Do you always forget to text your friends back? Or worse—do you think they never replied, then realize <em>you’re</em> the one who left them on read? Keeping up with messages across Instagram, WhatsApp, Telegram, and iMessage is exhausting. Claire brings all of those conversations into one place. You can see where every message came from, read it, and reply directly from one unified inbox. It also has an agent built in for the plans you said you’d remember—but forgot to put on your calendar. Claire can remind you, and even create the calendar invite. Personal or business, Claire helps you stay connected and follow through. Check it out.”</span></div></article>
+          <article class="idea"><span class="tag">Shot list · 45 sec</span><h3>Recording plan</h3><ul><li><b>0–4 sec:</b> Creator delivers the hook; cut to unread badges.</li><li><b>4–8 sec:</b> Animate Instagram, WhatsApp, Telegram, and iMessage around the phone.</li><li><b>8–20 sec:</b> Reveal and scroll Claire’s unified inbox; pause on platform badges.</li><li><b>20–25 sec:</b> Open a conversation and reply in place.</li><li><b>25–38 sec:</b> Show a forgotten plan becoming a reminder and calendar event.</li><li><b>38–45 sec:</b> Close on the creator, inbox montage, and Claire branding.</li></ul><div class="details"><b>Motion note</b><span>Bring each platform visual in as its name is spoken, then collapse all four toward a central Claire inbox. Avoid real usernames, private messages, and notification counts.</span></div></article>
+        </div>
+      </section>
+
+      <section id="ai-voice">
+        <h2>Content pillar: AI that helps you sound like yourself</h2>
+        <div class="grid">
+          <article class="idea"><span class="tag">Talking-head / 45–60 sec</span><h3>“Are you speaking to AI—or with it?”</h3><p>Explore the spectrum: people who feel uneasy using Gmail autocomplete, people who ask AI to write an entire email, and the middle ground—using it to sharpen your own thought without losing your voice.</p><div class="details"><b>Core line</b><span>“I don’t want AI to dictate my voice. I want it to help me say what I already mean—more clearly, more often.”</span></div><div class="details"><b>Visual direction</b><span>Creator types a rough message, Claire offers optional wording, and the creator makes the final edit before sending.</span></div></article>
+          <article class="idea"><span class="tag">Cinematic reference / 30–45 sec</span><h3>“Her, but grounded”</h3><p>A playful discussion of the future people imagine when they think about AI companionship—then bring it back to what is useful today: context, reminders, draft support, and a second perspective.</p><div class="details"><b>Opening beat</b><span>“When people ask if we’re talking to AI now, they’re usually imagining <em>Her</em>. We are not there—and honestly, that’s not the point.”</span></div><div class="details"><b>Visual direction</b><span>Use an original, warm futuristic homage: a person walking with a discreet earbud and soft phone glow. Do not use footage or audio from the film.</span></div></article>
+          <article class="idea"><span class="tag">Demo / 30 sec</span><h3>Your voice, higher volume</h3><p>Show the difference between “write this for me” and “help me make this clearer, warmer, and more direct.” Position Claire as a collaborator that lets users preserve intent while reducing communication friction.</p><div class="details"><b>Demo sequence</b><span>Rough draft → two optional suggestions → user combines or edits them → final message retains their distinctive wording.</span></div></article>
+          <article class="idea"><span class="tag">Founder POV / 45 sec</span><h3>The communication economy</h3><p>Make the larger argument: communication has become high-volume, fragmented, and consequential. The value of AI is not replacing connection; it is helping people have the bandwidth to maintain it.</p><div class="details"><b>Core line</b><span>“The scarce thing isn’t care. It’s the time and mental space to turn care into a reply, a plan, or a follow-up.”</span></div></article>
+        </div>
+      </section>
+
+      <section id="latam">
+        <h2>Content pillar: WhatsApp and life in Latin America</h2>
+        <div class="grid">
+          <article class="idea"><span class="tag">Founder story · 45–60 sec</span><h3>“WhatsApp is the operating system of Latin America”</h3><p>A founder perspective on how communication works in the region, and why the reality of many active chats across many apps led to Claire.</p><div class="details"><b>Full script</b><span>“I spent the last six years of my life living in Latin America, and one thing I noticed right away is how much gets done on WhatsApp. Business conversations happen there. Personal conversations happen there. Group chats organize everything. WhatsApp really is the operating system of Latin America. But it also became hard for me to keep track of every group chat and conversation I was in. I had WhatsApp for business and personal life, Instagram, LinkedIn, and iMessage. I was always trying to remember where a conversation lived and who I still needed to get back to. That is why I built Claire. Claire organizes my conversations across all my apps in one place. And there is a personal AI assistant on top that reminds me when I need to follow up, so I do not accidentally leave people on read.”</span></div></article>
+          <article class="idea"><span class="tag">Shot list · 45–60 sec</span><h3>Recording plan</h3><ul><li><b>0–8 sec:</b> Creator on a street, in a café, or at a desk in Latin America. “I spent the last six years...”</li><li><b>8–18 sec:</b> Quick visual montage of business, a family chat, and lively group-chat activity represented by generic WhatsApp-style bubbles.</li><li><b>18–30 sec:</b> Show the clutter: WhatsApp, Instagram, LinkedIn, and iMessage, each with a different conversation.</li><li><b>30–42 sec:</b> Reveal Claire's unified inbox and show conversations organized together.</li><li><b>42–60 sec:</b> Show a follow-up reminder from the assistant, then finish on the founder speaking to camera.</li></ul><div class="details"><b>On-screen caption hook</b><span>“In Latin America, your life happens on WhatsApp. The problem is, the rest of it happens everywhere else.”</span></div></article>
+        </div>
+      </section>
+
+      <section id="travel">
+        <h2>Content pillar: staying close after leaving home</h2>
+        <div class="grid">
+          <article class="idea"><span class="tag">Creator story / 45–60 sec</span><h3>“When you leave home, staying close takes work”</h3><p>A personal, unpretentious reflection on having people you care about in many places—and the quiet effort it takes to keep those relationships alive once you start traveling.</p><div class="details"><b>Full script</b><span>“Have you ever left home, started traveling, and realized you suddenly have people you care about everywhere—but it’s harder than ever to stay in touch with them? Your people are in different time zones, and every relationship ends up living in a different app. I talk to my mom on WhatsApp. I talk to friends on Instagram. Telegram is where one of my work projects lives. And when everything is spread out like that, it’s really easy to let someone you care about slip through the cracks. That’s why I built Claire. It brings my conversations into one place, so I can actually stay on top of the people and commitments in my life. And I built an AI assistant on top of it that can nudge me when I forgot to reply or follow up. It has honestly changed my life—and that’s why I’m sharing it with you.”</span></div></article>
+          <article class="idea"><span class="tag">Shot list / 45–60 sec</span><h3>Recording plan</h3><ul><li><b>0–7 sec:</b> Creator walking through an airport, café, or unfamiliar street. “Have you ever left home, started traveling…”</li><li><b>7–15 sec:</b> Show a map / time zones / a contact list; then talking head.</li><li><b>15–25 sec:</b> Animate or film WhatsApp for Mom, Instagram for friends, and Telegram for work.</li><li><b>25–36 sec:</b> Show Claire’s unified inbox as the answer to scattered conversations.</li><li><b>36–48 sec:</b> Show an AI reminder or follow-up suggestion, then the creator responding.</li><li><b>48–60 sec:</b> Return to talking head and close with the personal payoff: “It has honestly changed my life.”</li></ul><div class="details"><b>On-screen caption hook</b><span>“When you leave home, the hard part isn’t meeting people. It’s staying close to them.”</span></div></article>
+        </div>
+      </section>
+
+      <section id="saturday">
+        <h2>Content pillar: remembering what you said you would do</h2>
+        <div class="grid">
+          <article class="idea"><span class="tag shipped">Animated story · 45 sec</span><h3>“Saturday plans, Sunday realization”</h3><p>Dramatize the painful version first: you make plans for Saturday, wake up Sunday, and realize you forgot. Then rewind and show how Claire could have intervened the day before.</p><div class="details"><b>Core sequence</b><span>Plans made in chat → Sunday-morning realization → rewind → Claire notification: “You made plans with Jamie tomorrow. Want to confirm?” → one tap creates a draft → user edits it → plans confirmed.</span></div><div class="details"><b>Closing line</b><span>“Claire helps you remember the people—and the promises—that matter.”</span></div></article>
+          <article class="idea"><span class="tag">Animation direction</span><h3>Notification-to-draft flow</h3><ul><li><b>0–12 sec:</b> Contrast Saturday’s confident plan with Sunday’s forgotten commitment.</li><li><b>12–17 sec:</b> Claire reveal and visual rewind.</li><li><b>17–24 sec:</b> A notification bubble surfaces the plan one day early.</li><li><b>24–34 sec:</b> The user taps, receives a draft, and changes the final sentence.</li><li><b>34–45 sec:</b> Confirmation sent; resolve with Claire’s value proposition.</li></ul><div class="details"><b>Product principle</b><span>The user always edits or approves the message. The assistant supplies context and momentum—not a replacement personality.</span></div></article>
+        </div>
+      </section>
+
+      <section id="relationships">
+        <h2>Content pillar: a useful second perspective in dating and relationships</h2>
+        <div class="grid">
+          <article class="idea"><span class="tag">Educational / 45–60 sec</span><h3>“Better communication is not better pickup lines”</h3><p>React to the wave of apps that help users with lines or dating-chat advice. Reframe the problem: people often need help slowing down, reading the context, and responding with honesty—not performing a personality.</p><div class="details"><b>Guardrail</b><span>Keep it inclusive and non-creepy. Claire should never manipulate, deceive, diagnose, or claim to tell a user what another person thinks or feels.</span></div><div class="details"><b>Core line</b><span>“A second perspective can help you be more considerate. It should never become a tool for pretending to be someone else.”</span></div></article>
+          <article class="idea"><span class="tag">Product demo / 30 sec</span><h3>“Before you send it”</h3><p>Show an optional conversation check: a user asks Claire to identify the visible tone, point out what is unresolved, and offer a few authentic ways to respond. The user chooses and edits the reply.</p><div class="details"><b>Example prompts</b><span>“What’s the tone here?” · “What am I missing?” · “Help me respond warmly without over-explaining.”</span></div></article>
+        </div>
+        <div class="status"><b>Product status:</b> This is already substantially supported in Claire: Ask Claire can check conversation tone, draft replies, find open loops, and use configured tone/personality preferences. The client also has in-chat reply suggestions. No new feature ticket was created; the opportunity is packaging and marketing the existing capability responsibly.</div>
+      </section>
+
+      <aside class="note"><b>Editorial rule:</b><p>Every video should make user control visible: suggestions are optional, context is treated carefully, and the person—not the model—writes the final message. Avoid claims that Claire can accurately infer hidden feelings, intentions, or compatibility from a conversation.</p></aside>
+
+      <section class="anchor" id="jamie-queue">
+        <h2>Jamie’s first production sprint</h2>
+        <div class="next">
+          <article><strong>1. Dating: what do I say next?</strong><p>One 30–45 second talking-head version plus two alternate hooks. Show Jamie editing Claire’s suggestion before sending.</p></article>
+          <article><strong>2. Business: your DMs are your CRM</strong><p>One 30–45 second founder-style version. Name all four platforms and show the unified inbox as proof.</p></article>
+          <article><strong>3. Shared B-roll package</strong><p>Capture typing/deleting, four app notifications, Claire’s inbox, a generated draft, a manual edit, and a follow-up reminder for reuse across both angles.</p></article>
+        </div>
+        <div class="status"><b>Jamie’s brief:</b> Speak in his own words, keep the first two seconds conversational, record clean vertical footage with extra pauses for edits, and always show the user reviewing or changing Claire’s suggestion. Deliver one clean take, two alternate hooks, and reusable phone/B-roll shots for each angle.</div>
+      </section>
+
+      <div class="footer">Claire marketing working document · Self-contained HTML · Prepared for internal team review</div>
+    </main>
+    <script>
+      const search = document.querySelector('#idea-search');
+      const rows = [...document.querySelectorAll('.index tbody tr')];
+      search.addEventListener('input', () => {
+        const query = search.value.trim().toLowerCase();
+        rows.forEach(row => row.hidden = query && !row.textContent.toLowerCase().includes(query));
+      });
+      document.querySelector('#print').addEventListener('click', () => window.print());
+      const noteKey = 'claire-marketing-workspace-v1';
+      const editableNotes = [...document.querySelectorAll('[data-note-id]')];
+      const savedNotes = JSON.parse(localStorage.getItem(noteKey) || '{}');
+      editableNotes.forEach(note => {
+        if (savedNotes[note.dataset.noteId]) note.innerHTML = savedNotes[note.dataset.noteId];
+        note.addEventListener('input', () => {
+          savedNotes[note.dataset.noteId] = note.innerHTML;
+          localStorage.setItem(noteKey, JSON.stringify(savedNotes));
+        });
+      });
+      document.querySelector('#copy-summary').addEventListener('click', async event => {
+        const text = `Claire marketing idea directory\n\nPriority angles: (1) Dating — a thoughtful second opinion that helps users decide what to say next without losing their voice. (2) Business — monitor Instagram, Telegram, WhatsApp, and LinkedIn in one place, draft responses, and follow up. Jamie’s first shoots: “I have no idea what to say next” and “Your DMs are your CRM.”`;
+        await navigator.clipboard.writeText(text);
+        const button = event.currentTarget; const old = button.textContent; button.textContent = 'Copied'; setTimeout(() => button.textContent = old, 1400);
+      });
+      document.querySelector('#download').addEventListener('click', () => {
+        const blob = new Blob(['<!doctype html>\n' + document.documentElement.outerHTML], {type:'text/html'});
+        const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = 'claire-marketing-idea-directory.html'; link.click(); URL.revokeObjectURL(link.href);
+      });
+    </script>
+  </body>
+</html>

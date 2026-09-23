@@ -4,12 +4,13 @@
  * `public/campaigns/` together so the Next route can serve the exact static
  * experience without a dependency on the retired landing directory.
  */
-import { access } from 'node:fs/promises';
+import { access, copyFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const websiteRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 const campaignRoot = join(websiteRoot, 'public', 'campaigns');
+const repositoryRoot = join(websiteRoot, '..', '..');
 const files = [
   'close-the-loop.html',
   'close-the-loop.css',
@@ -20,4 +21,12 @@ const files = [
 
 await Promise.all(files.map((file) => access(join(campaignRoot, file))));
 
-console.log(`Verified ${files.length} website-owned campaign files.`);
+const marketingIdeasSource = join(repositoryRoot, 'docs', 'marketing-ideas.html');
+const marketingIdeasPublic = join(websiteRoot, 'public', 'marketing-ideas.html');
+
+await access(marketingIdeasSource);
+await copyFile(marketingIdeasSource, marketingIdeasPublic);
+
+console.log(
+  `Verified ${files.length} website-owned campaign files and synced the marketing idea directory.`,
+);
