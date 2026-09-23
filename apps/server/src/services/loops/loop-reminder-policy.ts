@@ -11,10 +11,15 @@ export interface LoopReminderInput {
   priorityScore?: number | null;
   timezone?: string | null;
   now?: Date;
+  createdAt?: string | null;
+  lastEvidenceAt?: string | null;
+  reviewedAt?: string | null;
+  lastRemindedAt?: string | null;
+  reminderCount?: number;
 }
 
 export type LoopReminderPlan =
-  | { state: 'quiet'; reason: 'inactive' | 'not_actionable' | 'no_timing_signal' }
+  | { state: 'quiet'; reason: 'inactive' | 'not_actionable' | 'no_timing_signal' | 'historical_review' }
   | { state: 'scheduled'; at: Date; reason: LoopReminderReason };
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -68,17 +73,22 @@ export function planLoopReminder(input: LoopReminderInput): LoopReminderPlan {
   if (input.visibility !== 'surfaced' || !['open', 'waiting', 'snoozed'].includes(input.status)) {
     return { state: 'quiet', reason: 'inactive' };
   }
-  if (input.threadState === 'proposed' || input.threadState === 'negotiating') {
+  const snoozedUntil = validDate(input.snoozedUntil);
+  if (input.status === 'snoozed' && snoozedUntil) {
+    return { state: 'scheduled', at: snoozedUntil > now ? snoozedUntil : now, reason: 'snooze_ended' };
+  }
+  if (input.threadState === 'proposed' || input.threadState === 'negotiating' || input.threadState === 'resolved') {
     return { state: 'quiet', reason: 'not_actionable' };
   }
+  // A deliberate review and an accepted push buy time, even when overdue.
+  const reminded = validDate(input.lastRemindedAt);
+  const reviewed = validDate(input.reviewedAt);
+  const cooldown = Math.min(7 * 24, 24 * 2 ** Math.min(input.reminderCount ?? 0, 3)) * HOUR_MS;
+  const nextAllowed = Math.max(reminded ? reminded.getTime() + cooldown : 0, reviewed ? reviewed.getTime() + 48 * HOUR_MS : 0);
+  if (nextAllowed > now.getTime()) return { state: 'scheduled', at: new Date(nextAllowed), reason: 'follow_up' };
 
-  const snoozedUntil = validDate(input.snoozedUntil);
-  if (snoozedUntil && snoozedUntil > now) {
-    return { state: 'scheduled', at: snoozedUntil, reason: 'snooze_ended' };
-  }
-  if (input.status === 'snoozed' && snoozedUntil) {
-    return { state: 'scheduled', at: now, reason: 'snooze_ended' };
-  }
+  const activity = validDate(input.lastEvidenceAt) ?? validDate(input.createdAt);
+  if (activity && now.getTime() - activity.getTime() > 30 * 24 * HOUR_MS && !reviewed) return { state: 'quiet', reason: 'historical_review' };
 
   const deadline = validDate(input.deadline);
   const owner = input.owner ?? 'unknown';
@@ -90,7 +100,12 @@ export function planLoopReminder(input: LoopReminderInput): LoopReminderPlan {
   if (userCanAct && priorityScore >= 80) {
     return { state: 'scheduled', at: now, reason: 'act_now' };
   }
-  if (!deadline) return { state: 'quiet', reason: 'no_timing_signal' };
+  if (!deadline) {
+    const anchor = validDate(input.lastEvidenceAt) ?? validDate(input.createdAt);
+    if (!anchor) return { state: 'quiet', reason: 'no_timing_signal' };
+    const at = new Date(anchor.getTime() + (waitingOnThem ? 48 : 24) * HOUR_MS);
+    return { state: 'scheduled', at: at > now ? at : now, reason: 'follow_up' };
+  }
 
   if (waitingOnThem) {
     const followUpAt = precision === 'exact'

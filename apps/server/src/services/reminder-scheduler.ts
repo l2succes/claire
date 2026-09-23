@@ -2,9 +2,9 @@ import Bull from 'bull';
 import { redisConfig } from '../config';
 import { logger } from '../utils/logger';
 import { notificationDeliveryService } from './notification-delivery';
+import { calculateLoopPriority, type LoopOwner, type LoopState } from './loops/loop-priority';
 import { planLoopReminder, type LoopReminderReason } from './loops/loop-reminder-policy';
-import { expireStaleProposals } from './loops/loop-hygiene';
-import { recordEvent } from './loops/loop-store';
+
 import { supabase } from './supabase';
 
 interface ReminderJob {
@@ -34,6 +34,13 @@ interface ReminderLoopRow {
   reminder_revision: number;
   reminder_count: number;
   reminder_reason: LoopReminderReason | null;
+  created_at: string;
+  last_evidence_at: string | null;
+  reviewed_at: string | null;
+  reminder_sent_at: string | null;
+  confidence: number;
+  relevance: number;
+  priority_override: number | null;
 }
 
 const POLL_INTERVAL_MS = parseInt(process.env.REMINDER_POLL_INTERVAL_MS ?? '60000', 10);
@@ -68,8 +75,8 @@ export class ReminderScheduler {
     this.started = true;
     if (!this.queue) {
       const defaultJobOptions = {
-        removeOnComplete: 100,
-        removeOnFail: 50,
+        removeOnComplete: true,
+        removeOnFail: true,
         attempts: 3,
         backoff: { type: 'exponential' as const, delay: 5000 },
       };
@@ -88,8 +95,8 @@ export class ReminderScheduler {
       bull.process(this.processReminderJob.bind(this));
       this.queue = bull;
     }
-    this.pollTimer = setInterval(() => void this.runOnce(), POLL_INTERVAL_MS);
-    void this.runOnce();
+    this.pollTimer = setInterval(() => void this.runOnce().catch(error => logger.error('[reminder] poll failed', error)), POLL_INTERVAL_MS);
+    void this.runOnce().catch(error => logger.error('[reminder] poll failed', error));
     logger.info('[reminder] scheduler started');
   }
 
@@ -107,16 +114,21 @@ export class ReminderScheduler {
   }
 
   async runOnce(now = new Date()): Promise<void> {
-    await expireStaleProposals(now);
+    const { error } = await supabase.rpc('refresh_loop_reviews');
+    if (error) throw error;
     await this.refreshPendingPlans(now);
-    await this.enqueueDeadlineReminders(now);
+    if (process.env.LOOP_NOTIFICATIONS_ENABLED !== 'false') {
+      const { error } = await supabase.rpc('prepare_loop_digests');
+      if (error) throw error;
+      await this.enqueueDeadlineReminders(now);
+    }
   }
 
   /** Recompute only loop revisions invalidated by a meaningful semantic edit. */
   async refreshPendingPlans(now = new Date()): Promise<void> {
     const { data: loops, error } = await supabase
       .from('loops')
-      .select('id,user_id,title,content,status,visibility,owner,thread_state,deadline,deadline_precision,snoozed_until,priority_score,reminder_revision,reminder_count,reminder_reason')
+      .select('id,user_id,title,content,status,visibility,owner,thread_state,deadline,deadline_precision,snoozed_until,priority_score,reminder_revision,reminder_count,reminder_reason,created_at,last_evidence_at,reviewed_at,reminder_sent_at,confidence,relevance,priority_override')
       .eq('reminder_plan_state', 'pending')
       .limit(500);
     if (error) {
@@ -126,18 +138,25 @@ export class ReminderScheduler {
     if (!loops?.length) return;
 
     const userIds = [...new Set((loops as ReminderLoopRow[]).map((loop) => loop.user_id))];
-    const { data: devices } = await supabase
+    const { data: devices, error: deviceError } = await supabase
       .from('notification_devices')
       .select('user_id,timezone,last_seen_at')
       .in('user_id', userIds)
       .eq('enabled', true)
       .order('last_seen_at', { ascending: false });
+    if (deviceError) throw deviceError;
     const timezoneByUser = new Map<string, string>();
     for (const device of devices || []) {
       if (!timezoneByUser.has(device.user_id)) timezoneByUser.set(device.user_id, device.timezone || 'UTC');
     }
 
     for (const loop of loops as ReminderLoopRow[]) {
+      const priority = calculateLoopPriority({
+        status: loop.status, visibility: loop.visibility, owner: (loop.owner ?? 'unknown') as LoopOwner,
+        state: loop.thread_state as LoopState | null, deadline: loop.deadline, snoozedUntil: loop.snoozed_until,
+        confidence: loop.confidence ?? 0.5, relevance: loop.relevance ?? 1,
+        lastEvidenceAt: loop.last_evidence_at, override: loop.priority_override, now,
+      });
       const plan = planLoopReminder({
         status: loop.status,
         visibility: loop.visibility,
@@ -146,16 +165,21 @@ export class ReminderScheduler {
         deadline: loop.deadline,
         deadlinePrecision: loop.deadline_precision,
         snoozedUntil: loop.snoozed_until,
-        priorityScore: loop.priority_score,
+        priorityScore: priority.score,
+        lastEvidenceAt: loop.last_evidence_at,
+        createdAt: loop.created_at,
+        reviewedAt: loop.reviewed_at,
+        lastRemindedAt: loop.reminder_sent_at,
+        reminderCount: loop.reminder_count,
         timezone: timezoneByUser.get(loop.user_id) || 'UTC',
         now,
       });
       const patch = plan.state === 'scheduled'
-        ? { reminder_plan_state: 'scheduled', next_reminder_at: plan.at.toISOString(), reminder_reason: plan.reason }
-        : { reminder_plan_state: 'quiet', next_reminder_at: null, reminder_reason: null };
+        ? { reminder_plan_state: 'scheduled', next_reminder_at: plan.at.toISOString(), next_review_at: plan.at.toISOString(), reminder_reason: plan.reason, reminder_quiet_reason: null }
+        : { reminder_plan_state: 'quiet', next_reminder_at: null, reminder_reason: null, reminder_quiet_reason: plan.reason };
       const { error: updateError } = await supabase
         .from('loops')
-        .update(patch)
+        .update({ ...patch, priority_score: priority.score, priority_breakdown: priority.breakdown })
         .eq('id', loop.id)
         .eq('reminder_revision', loop.reminder_revision);
       if (updateError) logger.warn('[reminder] failed to persist plan', { loopId: loop.id, error: updateError.message });
@@ -167,9 +191,11 @@ export class ReminderScheduler {
     try {
       const { data: loops, error } = await supabase
         .from('loops')
-        .select('id,user_id,title,content,reminder_revision,reminder_count,reminder_reason')
+        .select('id,user_id,title,content,reminder_revision,reminder_count,reminder_reason,created_at,last_evidence_at,reviewed_at,reminder_sent_at,confidence,relevance,priority_override')
         .eq('reminder_plan_state', 'scheduled')
         .lte('next_reminder_at', now.toISOString())
+        .order('priority_score', { ascending: false })
+        .order('next_reminder_at', { ascending: true })
         .limit(500);
       if (error) {
         logger.error('[reminder] failed to query due loop plans:', error.message);
@@ -197,10 +223,11 @@ export class ReminderScheduler {
       logger.warn('[reminder] queue not initialised — skipping enqueue');
       return;
     }
-    await this.queue.add(data, { jobId: `reminder-${data.loopId}-r${data.revision}` });
+    await this.queue.add(data, { jobId: `reminder-v2-${data.loopId}-r${data.revision}` });
   }
 
   private async processReminderJob(job: { data: ReminderJob }): Promise<{ sent: boolean }> {
+    if (process.env.LOOP_NOTIFICATIONS_ENABLED === 'false') return { sent: false };
     const data = job.data;
     const { data: currentLoop, error: currentLoopError } = await supabase
       .from('loops')
@@ -235,25 +262,13 @@ export class ReminderScheduler {
       return { sent: false };
     }
 
-    const sent = result.queued > 0;
+    // Enqueued is not submitted. Only accept_loop_reminder records a send.
     const { error } = await supabase.from('loops').update({
-      reminder_plan_state: result.outcome === 'disabled' ? 'quiet' : 'sent',
-      reminder_sent_at: sent ? new Date().toISOString() : null,
-      reminder_count: sent ? data.reminderCount + 1 : data.reminderCount,
-      next_reminder_at: null,
-    }).eq('id', data.loopId).eq('reminder_revision', data.revision);
-    if (error) throw new Error(error.message);
-    if (sent) {
-      await recordEvent({
-        loopId: data.loopId,
-        userId: data.userId,
-        kind: 'reminder_sent',
-        actor: 'system',
-        summary: copy.title,
-        payload: { reason: data.reason, revision: data.revision },
-      });
-    }
-    return { sent };
+      reminder_plan_state: result.outcome === 'disabled' ? 'quiet' : 'enqueued',
+      reminder_quiet_reason: result.outcome === 'disabled' ? 'notifications_disabled' : null,
+    }).eq('id', data.loopId).eq('reminder_revision', data.revision).eq('reminder_plan_state', 'scheduled');
+    if (error) throw error;
+    return { sent: false };
   }
 
   async triggerReminderForLoop(loopId: string): Promise<{ sent: boolean }> {

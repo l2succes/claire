@@ -112,3 +112,12 @@ describe('notification actions', () => {
     expect(target.openChat).toHaveBeenCalledTimes(1);
   });
 });
+
+it('opens the follow-up queue for a digest without applying a loop action', async () => {
+  const openLoops = jest.fn();
+  await handleNotificationResponse({
+    actionIdentifier: 'expo.modules.notifications.actions.DEFAULT',
+    notification: { request: { identifier: 'digest-recovery-test', content: { data: { type: 'loop_digest' } } } },
+  } as any, { openChat: jest.fn(), openLoop: jest.fn(), openLoops, openOperations: jest.fn() });
+  expect(openLoops).toHaveBeenCalledTimes(1);
+});

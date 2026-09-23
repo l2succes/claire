@@ -1,9 +1,9 @@
 /**
  * The free stage: decide whether a window is worth spending a model call on.
  *
- * This is the single largest cost lever in the pipeline — it is expected to
- * remove 70–85% of calls at zero token cost. It is also pure and deterministic,
- * so it is exhaustively testable and behaves identically on every provider.
+ * Settings and empty/system-only windows are deterministic skips. Human
+ * language is evaluated semantically; English patterns explain signals but
+ * do not impose a language-dependent eligibility requirement.
  *
  * Bias: when unsure, RUN. A missed loop is worse than a wasted call, and the
  * eval measures exactly that trade.
@@ -32,8 +32,7 @@ const PLANNING =
   /\b(let'?s|we should|catch up|meet up|grab (coffee|lunch|dinner|drinks)|schedule|set up a|book a|sync up|get together)\b/i;
 
 /**
- * Resolution language. This family is what makes auto-close possible at all —
- * without it the pipeline can open loops but never notices them completing.
+ * Resolution language helps identify evidence for a user-reviewed closure.
  */
 const RESOLUTION =
   /\b(works|sounds good|confirmed|see you|deal|ok let'?s|i'?ll be there|done|sorted|sent|booked|just did|finished|handled|took care of|all set|got it)\b/i;
@@ -46,7 +45,8 @@ export type GateReason =
   | 'planning'
   | 'resolution'
   | 'watch_term'
-  | 'self_commissive';
+  | 'self_commissive'
+  | 'semantic_candidate';
 
 export type GateSkipReason =
   | 'ai_disabled'
@@ -72,7 +72,7 @@ export interface GateInput {
   /** Live loops already open in this chat. State may have changed even with no new intent signal. */
   openLoopCount: number;
   watchTerms?: readonly string[];
-  /** Consecutive prior runs that produced no ops, used to back off chatty but loop-free chats. */
+  /** Prior empty runs retained for compatibility; they never veto new intent. */
   consecutiveEmpty: number;
 }
 
@@ -85,18 +85,7 @@ export interface GateDecision {
 }
 
 /** Minimum human text before a window can possibly contain a commitment. */
-const MIN_WINDOW_CHARS = 12;
-
-/**
- * How many distinct signals a window must fire to survive backoff. A chat that
- * has produced nothing many times running has to clear a higher bar, but never
- * an impossible one — open loops always re-run so resolutions are never missed.
- */
-function requiredSignalsFor(consecutiveEmpty: number): number {
-  if (consecutiveEmpty >= 10) return 3;
-  if (consecutiveEmpty >= 5) return 2;
-  return 1;
-}
+const MIN_WINDOW_CHARS = 2;
 
 /**
  * Bridge and system senders never open loops. Most bridges send these as
@@ -131,7 +120,7 @@ export function evaluateGate(input: GateInput): GateDecision {
   if (!input.aiEnabled) return empty('ai_disabled');
   if (input.sensitivity === 'off') return empty('sensitivity_off');
   if (!input.detectionEnabled) return empty('detection_disabled');
-  if (!input.delta.length && input.openLoopCount === 0) return empty('window_empty');
+  if (!input.delta.length) return empty('window_empty');
 
   const human = input.delta.filter((m) => !isMachineSender(m));
   const consideredChars = human.reduce((total, m) => total + m.content.trim().length, 0);
@@ -165,22 +154,16 @@ export function evaluateGate(input: GateInput): GateDecision {
     }
   }
 
-  // The user binding themselves is the strongest possible signal and bypasses
-  // backoff entirely — their own commitment must never be dropped for cost.
+  // Record explicit self-commitments as a strong explanatory signal.
   const selfCommissive = human.some((m) => m.isSelf && COMMISSIVE.test(m.content));
   if (selfCommissive) reasons.push('self_commissive');
 
-  if (!reasons.length) {
-    return { run: false, reasons, skipReason: 'no_signal', consideredChars };
-  }
+  // Language and implicit intent are model work. English regexes may explain a
+  // signal, but cannot veto a substantive message in another language.
+  if (!reasons.length && human.some(m => /\p{L}/u.test(m.content))) reasons.push('semantic_candidate');
+  if (!reasons.length) return { run: false, reasons, skipReason: 'no_signal', consideredChars };
 
-  const bypassesBackoff =
-    selfCommissive || reasons.includes('open_loops_present') || reasons.includes('watch_term');
-
-  if (!bypassesBackoff && reasons.length < requiredSignalsFor(input.consecutiveEmpty)) {
-    return { run: false, reasons, skipReason: 'backoff', consideredChars };
-  }
-
+  // A previous empty window cannot justify dropping a new human request.
   return { run: true, reasons, skipReason: null, consideredChars };
 }
 

@@ -189,7 +189,7 @@ export class RealtimeSyncService extends EventEmitter {
           .from('loops')
           .select('*')
           .eq('user_id', userId)
-          .in('status', ['pending', 'in_progress'])
+          .in('status', ['open', 'waiting', 'snoozed'])
           .order('created_at', { ascending: false }),
         supabase
           .from('contacts')

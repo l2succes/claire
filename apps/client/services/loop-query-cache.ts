@@ -88,6 +88,7 @@ export async function invalidateLoopQueries(
 ): Promise<void> {
   await Promise.all([
     queryClient.invalidateQueries({ queryKey: listKey(userId) }),
+    queryClient.invalidateQueries({ queryKey: ['loop-attention', userId] }),
     queryClient.invalidateQueries({ queryKey: homeKey(userId) }),
     queryClient.invalidateQueries({ queryKey: ['inbox-open-loops', userId] }),
     queryClient.invalidateQueries({ queryKey: detailKey(loopId) }),

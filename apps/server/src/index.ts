@@ -49,7 +49,7 @@ import {
   phoneNumberFromPlatformContactId,
   resolveMentions,
 } from './services/contact-identity';
-import { scheduleChat } from './services/loops/loop-queue';
+import { scheduleChat, startLoopQueue, closeLoopQueue } from './services/loops/loop-queue';
 import { operationsMonitor } from './services/operations-monitor';
 import { operationsTelemetry } from './services/operations-telemetry';
 import { autoReplyEngine } from './services/auto-reply-engine';
@@ -1085,6 +1085,8 @@ const serverReady = Promise.resolve(
     }
 
     // Start loop reminder scheduler
+    startLoopQueue();
+    notificationDeliveryService.start();
     reminderScheduler.start();
 
     // Matrix room registration may backfill a substantial history. The
@@ -1107,6 +1109,8 @@ process.on('SIGTERM', async () => {
 
   sessionMonitor.stop();
   await reminderScheduler.stop();
+  await closeLoopQueue();
+  await notificationDeliveryService.stop();
   await platformManager.shutdown();
 
   const server = await serverReady;

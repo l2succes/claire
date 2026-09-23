@@ -40,8 +40,8 @@ export function createLoop(content: string): Promise<LoopItem> {
 }
 
 export function updateLoop(id: string, patch: Partial<Pick<LoopItem,
-  'status' | 'owner' | 'notes' | 'deadline' | 'priority' | 'content'>>): Promise<LoopItem> {
-  return request<LoopItem>(`/loops/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
+  'status' | 'owner' | 'notes' | 'deadline' | 'priority' | 'content'>>, expectedVersion?: number): Promise<LoopItem> {
+  return request<LoopItem>(`/loops/${id}`, { method: 'PATCH', body: JSON.stringify({ ...patch, ...(expectedVersion !== undefined ? { expected_version: expectedVersion } : {}) }) });
 }
 
 /**
@@ -91,3 +91,29 @@ export function reviewLoop(id: string, input: LoopReviewInput): Promise<LoopItem
 
 export * from './loop-types';
 export * from './loop-display';
+
+export interface LoopAttentionItem {
+  loop_id: string;
+  row_version: number;
+  reason: string;
+  next_action: string;
+  due_at: string;
+  loop: LoopItem;
+}
+
+export function fetchLoopAttention(): Promise<LoopAttentionItem[]> {
+  return request<LoopAttentionItem[]>('/loops/attention');
+}
+
+export interface LoopHealth {
+  detectionMode: string;
+  shadow: boolean;
+  notificationsEnabled: boolean;
+  enabledDevices: number;
+  dirtyChats: number;
+  oldestDirtyAt: string | null;
+  preferences: { detectionEnabled: boolean; aiEnabled: boolean; notificationsEnabled: boolean; notifyLoops: boolean } | null;
+}
+export function fetchLoopHealth(): Promise<LoopHealth> {
+  return request<LoopHealth>('/loops/health');
+}

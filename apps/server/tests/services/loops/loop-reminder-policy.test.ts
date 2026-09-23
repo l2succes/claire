@@ -49,3 +49,22 @@ describe('planLoopReminder', () => {
     expect(planLoopReminder(base)).toEqual({ state: 'quiet', reason: 'no_timing_signal' });
   });
 });
+
+describe('undated recovery and repeated review', () => {
+  const now = new Date('2026-09-22T12:00:00Z');
+  const input = { status: 'open', visibility: 'surfaced', owner: 'me', threadState: 'agreed', createdAt: '2026-09-21T10:00:00Z', now };
+  it('reviews undated obligations without inventing a deadline', () => {
+    expect(planLoopReminder(input)).toEqual({ state: 'scheduled', at: now, reason: 'follow_up' });
+    expect(planLoopReminder({ ...input, owner: 'them' })).toEqual({ state: 'scheduled', at: new Date('2026-09-23T10:00:00Z'), reason: 'follow_up' });
+  });
+  it('backs off an accepted reminder even when its deadline is overdue', () => {
+    const plan = planLoopReminder({ ...input, deadline: '2026-09-20T10:00:00Z', lastRemindedAt: now.toISOString(), reminderCount: 2 });
+    expect(plan).toEqual({ state: 'scheduled', at: new Date('2026-09-26T12:00:00Z'), reason: 'follow_up' });
+  });
+  it('keeps historical backlog in review instead of interrupting immediately', () => {
+    expect(planLoopReminder({ ...input, createdAt: '2025-01-01T00:00:00Z' })).toEqual({ state: 'quiet', reason: 'historical_review' });
+  });
+  it('honors explicit snooze even on a proposed loop', () => {
+    expect(planLoopReminder({ ...input, status: 'snoozed', threadState: 'proposed', snoozedUntil: '2026-09-23T15:00:00Z' })).toEqual({ state: 'scheduled', at: new Date('2026-09-23T15:00:00Z'), reason: 'snooze_ended' });
+  });
+});

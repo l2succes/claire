@@ -139,3 +139,11 @@ describe('loop cleanup review', () => {
     }, new Date('2026-08-15T12:00:00.000Z'))).toBe(false);
   });
 });
+
+describe('versioned close proposals', () => {
+  it('hides a proposal after the underlying loop changes', () => {
+    const event = { id: 'proposal', kind: 'agent_note' as const, actor: 'detector' as const, occurred_at: '2026-09-22T12:00:00Z', payload: { suggestedResolution: 'fulfilled', expectedVersion: 3 } };
+    expect(pendingCloseSuggestion([event], 3)?.eventId).toBe('proposal');
+    expect(pendingCloseSuggestion([event], 4)).toBeNull();
+  });
+});

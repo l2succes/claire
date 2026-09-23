@@ -20,15 +20,20 @@ function suggestedResolution(event: LoopEvent): PendingCloseSuggestion['resoluti
 }
 
 /** The latest close suggestion that the user has not already acted on. */
-export function pendingCloseSuggestion(events: LoopEvent[]): PendingCloseSuggestion | null {
+export function pendingCloseSuggestion(events: LoopEvent[], rowVersion?: number, chatGeneration?: number): PendingCloseSuggestion | null {
   for (let index = events.length - 1; index >= 0; index -= 1) {
     const event = events[index];
     if (event.kind !== 'agent_note') continue;
     const resolution = suggestedResolution(event);
     if (!resolution) continue;
+    if (rowVersion !== undefined && event.payload?.expectedVersion !== rowVersion) continue;
+    if (chatGeneration !== undefined && event.payload?.expectedChatGeneration !== chatGeneration) continue;
 
     const consumed = events.slice(index + 1).some((later) =>
-      later.kind === 'resolved'
+      later.kind === 'state_change'
+      || later.kind === 'user_edit'
+      || later.kind === 'evidence'
+      || later.kind === 'resolved'
       || later.kind === 'reopened'
       || later.payload?.reviewedSuggestionEventId === event.id,
     );
