@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import type { Metadata } from 'next';
+import type { ReactNode } from 'react';
 import {
   SITE_URL,
   aboutFaq,
@@ -49,7 +50,7 @@ const structuredData = [
   },
 ];
 
-function AboutSection({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
+function AboutSection({ id, title, children }: { id: string; title: string; children: ReactNode }) {
   return (
     <section className="about-section" aria-labelledby={id}>
       <h2 id={id}>{title}</h2>
