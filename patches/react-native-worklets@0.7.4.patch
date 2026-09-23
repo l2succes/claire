@@ -2,7 +2,7 @@ diff --git a/android/build.gradle b/android/build.gradle
 index 428242d..a24d266 100644
 --- a/android/build.gradle
 +++ b/android/build.gradle
-@@ -320,3 +320,26 @@ task prepareWorkletsHeadersForPrefabs(type: Copy) {
+@@ -320,3 +320,35 @@ task prepareWorkletsHeadersForPrefabs(type: Copy) {
      include("worklets/**/*.h")
      into(workletsPrefabHeadersDir)
  }
@@ -20,9 +20,18 @@ index 428242d..a24d266 100644
 +                fileTree("$buildDir/intermediates/cxx/${config.cmakeBuildType}") {
 +                    include "**/obj/*/libworklets.so"
 +                }.files.each { library ->
-+                    copy {
-+                        from library
-+                        into "$buildDir/intermediates/cmake/${config.legacyBuildType}/obj/${library.parentFile.name}"
++                    def destination = file("$buildDir/intermediates/cmake/${config.legacyBuildType}/obj/${library.parentFile.name}/libworklets.so")
++                    destination.parentFile.mkdirs()
++                    // Copy through a new inode: Gradle can hard-link source and destination.
++                    def staged = file("${destination.path}.staged")
++                    java.nio.file.Files.copy(library.toPath(), staged.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
++                    try {
++                        java.nio.file.Files.move(staged.toPath(), destination.toPath(),
++                            java.nio.file.StandardCopyOption.REPLACE_EXISTING,
++                            java.nio.file.StandardCopyOption.ATOMIC_MOVE)
++                    } catch (java.nio.file.AtomicMoveNotSupportedException ignored) {
++                        java.nio.file.Files.move(staged.toPath(), destination.toPath(),
++                            java.nio.file.StandardCopyOption.REPLACE_EXISTING)
 +                    }
 +                }
 +            }
