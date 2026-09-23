@@ -76,3 +76,7 @@ export function conversationName(item: Pick<LoopItem, 'chat' | 'contact' | 'cont
     'Personal reminder'
   );
 }
+
+export function isLoopClosed(loop: Pick<LoopItem, 'status'>): boolean {
+  return ['done', 'dropped', 'superseded'].includes(loop.status);
+}

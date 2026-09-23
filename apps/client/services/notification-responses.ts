@@ -1,4 +1,4 @@
-import * as Notifications from 'expo-notifications';
+import type * as Notifications from 'expo-notifications';
 import { platformsApi } from './platforms';
 import { snoozeLoop, updateLoop } from './loops';
 import { queryClient } from './query-client';
@@ -19,6 +19,7 @@ export interface ClaireNotificationData {
 export interface NotificationResponseOpeners {
   openChat: (data: ClaireNotificationData, draft?: string) => void;
   openLoop: (loopId: string) => void;
+  openLoops?: () => void;
   openOperations: (url: string) => void;
 }
 
@@ -58,17 +59,26 @@ export async function handleNotificationResponse(
     return;
   }
 
+  if (data.type === 'loop_digest') {
+    openers.openLoops?.();
+    return;
+  }
+
   if (data.type === 'loop_reminder' && typeof data.loopId === 'string') {
     try {
       if (action === notificationActions.completeLoop) {
         await updateLoop(data.loopId, { status: 'done' });
         await queryClient.invalidateQueries({ queryKey: ['mobile-loops'] });
+        await queryClient.invalidateQueries({ queryKey: ['loop-attention'] });
+        await queryClient.invalidateQueries({ queryKey: ['mobile-home-loops'] });
         await queryClient.invalidateQueries({ queryKey: ['loop-detail', data.loopId] });
         return;
       }
       if (action === notificationActions.snoozeLoop) {
         await snoozeLoop(data.loopId, new Date(Date.now() + 60 * 60_000).toISOString());
         await queryClient.invalidateQueries({ queryKey: ['mobile-loops'] });
+        await queryClient.invalidateQueries({ queryKey: ['loop-attention'] });
+        await queryClient.invalidateQueries({ queryKey: ['mobile-home-loops'] });
         await queryClient.invalidateQueries({ queryKey: ['loop-detail', data.loopId] });
         return;
       }

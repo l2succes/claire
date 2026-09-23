@@ -1,3 +1,4 @@
+import { transitionLoop, loopMutationError } from '../services/loops/loop-transition';
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { supabase, type DbRow } from '../services/supabase';
@@ -5,7 +6,6 @@ import { validateRequest } from '../middleware/validation';
 import { requireAuth } from '../middleware/auth';
 import { logger } from '../utils/logger';
 import { runLoopAgent } from '../services/loops/loop-agent';
-import { recordEvent } from '../services/loops/loop-store';
 
 
 const router = Router();
@@ -61,6 +61,7 @@ async function hydrateLoopConversations(userId: string, rows: LoopConversationRo
 
 const listLoopsSchema = z.object({
   query: z.object({
+    expected_version: z.number().int().positive().optional(),
     status: z.enum(['open', 'waiting', 'snoozed', 'done', 'dropped']).optional(),
     platform: z.string().optional(),
     contact_id: z.string().uuid().optional(),
@@ -83,7 +84,7 @@ const updateLoopSchema = z.object({
     deadline_precision: z.enum(['exact', 'day', 'week', 'month', 'none']).optional(),
     thread_state: z.enum(['proposed', 'negotiating', 'pending_confirmation', 'agreed', 'resolved']).optional(),
     priority: z.enum(['low', 'medium', 'high']).optional(),
-  }).refine(data => Object.keys(data).length > 0, {
+  }).refine(data => Object.keys(data).some(key => key !== 'expected_version'), {
     message: 'At least one field must be provided',
   }),
 });
@@ -156,6 +157,11 @@ router.post(
     try {
       const userId = req.user?.id;
       if (!userId) return res.status(401).json({ error: 'User not authenticated' });
+      if (req.body.chat_id) {
+        const { data: chat, error } = await supabase.from('chats').select('id').eq('id', req.body.chat_id).eq('user_id', userId).maybeSingle();
+        if (error) throw error;
+        if (!chat) return res.status(404).json({ error: 'Conversation not found' });
+      }
       const { data, error } = await supabase
         .from('loops')
         .insert({
@@ -234,10 +240,31 @@ router.get(
       return res.json({ success: true, data: hydrated, total: count ?? 0 });
     } catch (error) {
       logger.error('Error in GET /loops:', error);
-      return res.status(500).json({ success: false, error: 'Internal server error' });
+      const failure = loopMutationError(error);
+      return res.status(failure.status).json({ success: false, error: failure.error });
     }
   }
 );
+
+/** Persisted attention, including work whose push was deferred by the budget. */
+router.get('/attention', requireAuth, async (req, res) => {
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ error: 'User not authenticated' });
+  const { data, error } = await supabase.from('loop_attention')
+    .select('*,loop:loops(*)').eq('user_id', userId).lte('due_at', new Date().toISOString())
+    .order('due_at').limit(100);
+  if (error) return res.status(500).json({ error: 'Could not load attention' });
+  return res.json({ success: true, data: (data ?? []).filter((item: any) => item.loop?.row_version === item.row_version && ['open','waiting'].includes(item.loop.status)) });
+});
+
+router.get('/health', requireAuth, async (req, res) => {
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ error: 'User not authenticated' });
+  const { data, error } = await supabase.rpc('loop_recovery_health', { p_user_id: userId });
+  if (error) return res.status(500).json({ error: 'Could not load loop health' });
+  return res.json({ success: true, data: { ...data, detectionMode: process.env.LOOP_DETECTION_MODE || 'off',
+    shadow: process.env.LOOP_DETECTION_SHADOW === 'true', notificationsEnabled: process.env.LOOP_NOTIFICATIONS_ENABLED !== 'false', autoClose: 'review_required' } });
+});
 
 /**
  * GET /loops/:id?include=events,participants
@@ -277,6 +304,11 @@ router.get(
 
       const [hydrated] = await hydrateLoopConversations(userId, [loop as LoopConversationRow]);
       const data: Record<string, unknown> = { ...hydrated };
+      if (loop.chat_id) {
+        const { data: work, error } = await supabase.from('chat_loop_work').select('generation').eq('user_id', userId).eq('chat_id', loop.chat_id).maybeSingle();
+        if (error) throw error;
+        data.chat_generation = Number(work?.generation ?? 0);
+      }
 
       if (include.has('events')) {
         // Ascending: the timeline reads as a story, oldest first.
@@ -285,14 +317,14 @@ router.get(
           .select('id, kind, actor, message_id, summary, payload, confidence, occurred_at')
           .eq('loop_id', id)
           .eq('user_id', userId)
-          .order('occurred_at', { ascending: true })
-          .order('id', { ascending: true })
+          .order('occurred_at', { ascending: false })
+          .order('id', { ascending: false })
           .limit(200);
 
         if (error) {
           logger.warn('Failed to load loop events', { loopId: id, error: error.message });
         }
-        data.events = events ?? [];
+        data.events = (events ?? []).reverse();
       }
 
       if (include.has('participants')) {
@@ -311,7 +343,8 @@ router.get(
       return res.json({ success: true, data });
     } catch (error) {
       logger.error('Error in GET /loops/:id:', error);
-      return res.status(500).json({ success: false, error: 'Internal server error' });
+      const failure = loopMutationError(error);
+      return res.status(failure.status).json({ success: false, error: failure.error });
     }
   }
 );
@@ -360,7 +393,8 @@ router.get(
       return res.json({ success: true, data: data ?? [] });
     } catch (error) {
       logger.error('Error in GET /loops/:id/events:', error);
-      return res.status(500).json({ success: false, error: 'Internal server error' });
+      const failure = loopMutationError(error);
+      return res.status(failure.status).json({ success: false, error: failure.error });
     }
   }
 );
@@ -391,7 +425,8 @@ router.post(
       return res.json({ success: true, data: result });
     } catch (error) {
       logger.error('Error in POST /loops/:id/agent/messages:', error);
-      return res.status(500).json({ success: false, error: 'Internal server error' });
+      const failure = loopMutationError(error);
+      return res.status(failure.status).json({ success: false, error: failure.error });
     }
   }
 );
@@ -417,7 +452,8 @@ router.post(
 
       const now = new Date().toISOString();
       const { action, suggestion_event_id: suggestionEventId } = req.body;
-      const updates: Record<string, unknown> = { reviewed_at: now, user_edited: true };
+      const updates: Record<string, unknown> = { reviewed_at: now, user_edited: true,
+        ...(action === 'keep_open' && existing.thread_state === 'resolved' && ['open','waiting'].includes(existing.status) ? { thread_state: 'pending_confirmation' } : {}) };
       let eventKind = 'user_edit';
       let summary = 'Kept open after review';
       let resolution: string | null = null;
@@ -445,36 +481,18 @@ router.post(
         summary = 'Dismissed after review';
       }
 
-      const { data, error } = await supabase
-        .from('loops')
-        .update(updates)
-        .eq('id', req.params.id)
-        .eq('user_id', userId)
-        .select()
-        .single();
-
-      if (error || !data) {
-        logger.error('Error reviewing loop:', error);
-        return res.status(500).json({ success: false, error: 'Failed to review loop' });
-      }
-
-      await recordEvent({
-        loopId: req.params.id,
-        userId,
-        kind: eventKind,
-        actor: 'user',
-        summary,
-        payload: {
-          action,
-          resolution,
-          ...(suggestionEventId ? { reviewedSuggestionEventId: suggestionEventId } : {}),
-        },
+      const data = await transitionLoop({
+        loopId: req.params.id, userId, expectedVersion: existing.row_version,
+        patch: Object.fromEntries(Object.entries(updates).filter(([key]) => !['user_edited','completed_at','resolved_at'].includes(key))),
+        actor: 'user', kind: eventKind, summary,
+        payload: { action, resolution, ...(suggestionEventId ? { reviewedSuggestionEventId: suggestionEventId } : {}) },
       });
 
       return res.json({ success: true, data });
     } catch (error) {
       logger.error('Error in POST /loops/:id/review:', error);
-      return res.status(500).json({ success: false, error: 'Internal server error' });
+      const failure = loopMutationError(error);
+      return res.status(failure.status).json({ success: false, error: failure.error });
     }
   },
 );
@@ -502,38 +520,19 @@ router.patch(
         return res.status(404).json({ success: false, error: 'Loop not found' });
       }
 
-      const updates: Record<string, any> = { ...req.body, user_edited: true };
-
-      // If marking complete, record the timestamp
-      if (updates.status === 'done' && !existing.completed_at) {
-        updates.completed_at = new Date().toISOString();
-        updates.resolved_at = updates.completed_at;
-        updates.resolution = 'fulfilled';
-        updates.thread_state = 'resolved';
-      } else if (updates.status === 'open' || updates.status === 'waiting') {
-        updates.completed_at = null;
-        updates.resolved_at = null;
-        updates.resolution = null;
-        if (existing.thread_state === 'resolved' && updates.thread_state === undefined) updates.thread_state = 'agreed';
-      }
-
-      const { data, error } = await supabase
-        .from('loops')
-        .update(updates)
-        .eq('id', id)
-        .eq('user_id', userId)
-        .select()
-        .single();
-
-      if (error) {
-        logger.error('Error updating loop:', error);
-        return res.status(500).json({ success: false, error: 'Failed to update loop' });
-      }
+      const data = await transitionLoop({
+        userId, loopId: id, expectedVersion: req.body.expected_version ?? existing.row_version,
+        patch: { ...Object.fromEntries(Object.entries(req.body).filter(([key]) => key !== 'expected_version')),
+          ...('deadline' in req.body && !('deadline_precision' in req.body) ? { deadline_precision: req.body.deadline ? 'exact' : 'none' } : {}) },
+        actor: 'user', kind: req.body.status === 'open' || req.body.status === 'waiting' ? 'reopened' : 'user_edit',
+        summary: 'Updated by you',
+      });
 
       return res.json({ success: true, data });
     } catch (error) {
       logger.error('Error in PATCH /loops/:id:', error);
-      return res.status(500).json({ success: false, error: 'Internal server error' });
+      const failure = loopMutationError(error);
+      return res.status(failure.status).json({ success: false, error: failure.error });
     }
   }
 );
@@ -561,26 +560,18 @@ router.post(
         return res.status(404).json({ success: false, error: 'Loop not found' });
       }
 
-      // Snooze must not touch `deadline`. Overwriting it — as this endpoint used
-      // to — destroys the date the user actually committed to, so a loop
-      // snoozed twice loses the commitment it was tracking.
-      const { data, error } = await supabase
-        .from('loops')
-        .update({ snoozed_until: snooze_until, status: 'snoozed' })
-        .eq('id', id)
-        .eq('user_id', userId)
-        .select()
-        .single();
-
-      if (error) {
-        logger.error('Error snoozing loop:', error);
-        return res.status(500).json({ success: false, error: 'Failed to snooze loop' });
-      }
+      if (new Date(snooze_until).getTime() <= Date.now()) return res.status(400).json({ error: 'Choose a future snooze time' });
+      const data = await transitionLoop({
+        userId, loopId: id, expectedVersion: existing.row_version,
+        patch: { snoozed_until: snooze_until, status: 'snoozed' },
+        actor: 'user', kind: 'user_edit', summary: 'Snoozed by you',
+      });
 
       return res.json({ success: true, data });
     } catch (error) {
       logger.error('Error in POST /loops/:id/snooze:', error);
-      return res.status(500).json({ success: false, error: 'Internal server error' });
+      const failure = loopMutationError(error);
+      return res.status(failure.status).json({ success: false, error: failure.error });
     }
   }
 );
@@ -607,21 +598,17 @@ router.delete(
         return res.status(404).json({ success: false, error: 'Loop not found' });
       }
 
-      const { error } = await supabase
-        .from('loops')
-        .update({ status: 'dropped', resolution: 'user_dismissed', resolved_at: new Date().toISOString() })
-        .eq('id', id)
-        .eq('user_id', userId);
-
-      if (error) {
-        logger.error('Error deleting loop:', error);
-        return res.status(500).json({ success: false, error: 'Failed to delete loop' });
-      }
+      await transitionLoop({
+        userId, loopId: id, expectedVersion: existing.row_version,
+        patch: { status: 'dropped', resolution: 'user_dismissed' },
+        actor: 'user', kind: 'resolved', summary: 'Dismissed by you',
+      });
 
       return res.status(204).send();
     } catch (error) {
       logger.error('Error in DELETE /loops/:id:', error);
-      return res.status(500).json({ success: false, error: 'Internal server error' });
+      const failure = loopMutationError(error);
+      return res.status(failure.status).json({ success: false, error: failure.error });
     }
   }
 );

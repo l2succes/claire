@@ -4,7 +4,8 @@ import { useMutation } from '@tanstack/react-query';
 import { MessageCircle } from 'lucide-react-native';
 import { colors, mobileType, radius, space } from '@claire/design-system';
 
-import { askLoopAgent, type LoopAgentResult } from '../../services/loops';
+import { LoopProposalAction } from './loop-proposal-action';
+import { askLoopAgent, type LoopAgentResult, type LoopDetail } from '../../services/loops';
 import { userFacingErrorMessage } from '../../services/api-errors';
 
 /**
@@ -47,7 +48,7 @@ function QuickChip({ label, onPress, disabled }: { label: string; onPress: () =>
   );
 }
 
-function AgentAnswer({ result }: { result: LoopAgentResult }) {
+function AgentAnswer({ result, loop }: { result: LoopAgentResult; loop: LoopDetail }) {
   return (
     <View style={{ gap: space[3] }} testID="loop-agent-answer">
       <Text selectable style={{ ...mobileType.bodySmall, color: colors.ink }}>
@@ -82,11 +83,12 @@ function AgentAnswer({ result }: { result: LoopAgentResult }) {
       {result.proposal?.kind === 'loop_update' ? (
         <View testID="loop-agent-proposal" style={{ gap: space[2] }}>
           <Text style={{ ...mobileType.monoLabel, color: colors.neutral[600] }}>
-            SUGGESTED CHANGE — NOT APPLIED
+            SUGGESTED CHANGE
           </Text>
           <Text selectable style={{ ...mobileType.bodySmall, color: colors.ink }}>
             {result.proposal.rationale}
           </Text>
+          <LoopProposalAction loop={loop} proposal={result.proposal} />
         </View>
       ) : null}
 
@@ -99,11 +101,14 @@ function AgentAnswer({ result }: { result: LoopAgentResult }) {
   );
 }
 
-export function LoopAgentPanel({ loopId }: { loopId: string }) {
+export function LoopAgentPanel({ loop }: { loop: LoopDetail }) {
+  const loopId = loop.id;
+  const [snapshot, setSnapshot] = useState(loop);
   const [question, setQuestion] = useState('');
   const [result, setResult] = useState<LoopAgentResult | null>(null);
 
   const ask = useMutation({
+    onMutate: () => { setSnapshot(loop); },
     mutationFn: (asked: string) => askLoopAgent(loopId, asked),
     onSuccess: (data) => {
       setResult(data);
@@ -161,7 +166,7 @@ export function LoopAgentPanel({ loopId }: { loopId: string }) {
         </Text>
       ) : null}
 
-      {result && !busy ? <AgentAnswer result={result} /> : null}
+      {result && !busy ? <AgentAnswer key={result.answer} result={result} loop={snapshot} /> : null}
     </View>
   );
 }

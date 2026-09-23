@@ -50,6 +50,8 @@ export interface WindowMessage {
   mentionsRoom?: boolean;
   /** Set when this message replies to another in the same window. */
   replyToId?: string;
+  threadRoot?: string;
+  ingestSeq?: number;
 }
 
 export interface ParticipantRef {

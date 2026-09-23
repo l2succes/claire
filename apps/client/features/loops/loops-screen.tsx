@@ -14,11 +14,12 @@ import { useScreenLoadMark } from '../../hooks/useScreenLoadMark';
 import { useAuthStore } from '../../stores/authStore';
 import { supabase } from '../../services/supabase';
 import { LoopsSkeleton } from '../../components/claire/skeleton';
+import { LoopHealthCard } from './loop-health-card';
 import { LoopRow } from './loop-row';
 import { createLoop, reviewLoop, snoozeLoop, updateLoop } from '../../services/loops';
 import { BottomSheet } from '../../components/mobile/bottom-sheet';
-import { isLoopDeferred } from '../../services/loop-display';
-import { loopNeedsReview } from '../../services/loop-review';
+import { isLoopDeferred, isLoopClosed } from '../../services/loop-display';
+import { useLoopAttention } from '../../hooks/useLoopAttention';
 import { userFacingErrorMessage } from '../../services/api-errors';
 import {
   invalidateLoopQueries,
@@ -105,6 +106,7 @@ function ReviewButton({
 export function LoopsScreen() {
   const user = useAuthStore(state => state.user);
   const queryClient = useQueryClient();
+  const attentionQuery = useLoopAttention();
   const [filter, setFilter] = useState<LoopFilter>('for_you');
   const [showCreate, setShowCreate] = useState(false);
   const [newLoop, setNewLoop] = useState('');
@@ -217,7 +219,7 @@ export function LoopsScreen() {
     let dueToday = 0;
     let attention = 0;
     for (const item of items) {
-      if (item.status === 'done') completedItems.push(item);
+      if (['done', 'dropped', 'superseded'].includes(item.status)) completedItems.push(item);
       if (!LIVE_STATUSES.includes(item.status)) continue;
       // A postponed loop returns when its reminder is due; keeping it in the
       // active list immediately after a swipe makes “Later” appear to do
@@ -235,8 +237,8 @@ export function LoopsScreen() {
   }, [query.data]);
   const visible = filter === 'done' ? completed : filter === 'waiting' ? waiting : filter === 'for_you' ? forYou : open;
   const reviewCandidates = useMemo(
-    () => (query.data ?? []).filter((item) => loopNeedsReview(item)),
-    [query.data],
+    () => (attentionQuery.data ?? []).map(item => item.loop),
+    [attentionQuery.data],
   );
   const reviewTarget = reviewCandidates[0] ?? null;
 
@@ -250,8 +252,9 @@ export function LoopsScreen() {
     <View testID="loops-screen" style={{ flex: 1, backgroundColor: colors.cream }}>
       <MobileHeader title="Loops" subtitle="Follow through without losing the conversation." safeArea actions={<MobileIconButton label="Add a loop" testID="loops-add" onPress={() => setShowCreate(true)}><Plus size={21} color={colors.ink} /></MobileIconButton>} />
       <View style={{ paddingHorizontal: space[4], gap: space[3], paddingBottom: space[3] }}>
+        <LoopHealthCard />
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space[2] }}>
-          <View style={{ flex: 1, padding: space[4], borderRadius: radius.card, backgroundColor: colors.lime }}><Text style={{ ...mobileType.screenTitle, color: colors.ink, fontVariant: ['tabular-nums'] }}>{needsAttention}</Text><Text style={{ ...mobileType.monoLabel, color: colors.ink }}>NEED ATTENTION</Text></View>
+          <View style={{ flex: 1, padding: space[4], borderRadius: radius.card, backgroundColor: colors.lime }}><Text style={{ ...mobileType.screenTitle, color: colors.ink, fontVariant: ['tabular-nums'] }}>{attentionQuery.data?.length ?? needsAttention}</Text><Text style={{ ...mobileType.monoLabel, color: colors.ink }}>NEED ATTENTION</Text></View>
           <View style={{ flex: 1, padding: space[4], borderRadius: radius.card, backgroundColor: colors.sky }}><Text style={{ ...mobileType.screenTitle, color: colors.ink, fontVariant: ['tabular-nums'] }}>{today}</Text><Text style={{ ...mobileType.monoLabel, color: colors.ink }}>DUE TODAY</Text></View>
         </View>
         <View style={{ flexDirection: 'row', gap: space[2] }}>
@@ -264,7 +267,7 @@ export function LoopsScreen() {
           <Pressable
             testID="loops-review-old"
             accessibilityRole="button"
-            accessibilityLabel={`Review ${reviewCandidates.length} old ${reviewCandidates.length === 1 ? 'loop' : 'loops'}`}
+            accessibilityLabel={`Review ${reviewCandidates.length} ${reviewCandidates.length === 1 ? 'loop' : 'loops'}`}
             onPress={() => setReviewOpen(true)}
             style={{
               minHeight: 52,
@@ -281,10 +284,10 @@ export function LoopsScreen() {
             <RotateCcw size={17} color={colors.ink} />
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={{ ...mobileType.bodySmall, fontWeight: '700', color: colors.ink }}>
-                Review old loops
+                Review follow-ups
               </Text>
               <Text numberOfLines={1} style={{ ...mobileType.label, color: colors.neutral[600] }}>
-                {reviewCandidates.length} {reviewCandidates.length === 1 ? 'item may' : 'items may'} no longer need attention
+                {reviewCandidates.length} {reviewCandidates.length === 1 ? 'item needs' : 'items need'} your attention
               </Text>
             </View>
             <Text style={{ ...mobileType.label, fontWeight: '700', color: colors.ink }}>Review</Text>
@@ -292,7 +295,7 @@ export function LoopsScreen() {
         ) : null}
       </View>
       {query.isCold ? <LoopsSkeleton /> : (
-        <FlatList testID="loops-list" data={visible} renderItem={({ item }) => <LoopRow item={item} onOpen={() => router.push({ pathname: '/loops/[id]', params: { id: item.id } })} onToggle={() => patch.mutate({ id: item.id, status: item.status === 'done' ? 'open' : 'done' })} onWait={item.status === 'done' ? undefined : () => patch.mutate({ id: item.id, owner: item.owner === 'them' ? 'me' : 'them', status: item.owner === 'them' ? 'open' : 'waiting' })} onSnooze={item.status === 'done' ? undefined : () => setSnoozeTarget(item)} />} keyExtractor={item => item.id} contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ paddingHorizontal: space[4], paddingBottom: 112 }} refreshControl={<RefreshControl refreshing={query.isRefetching} onRefresh={() => void query.refetch()} tintColor={colors.ink} />} ListEmptyComponent={<MobileState title={filter === 'done' ? 'Nothing closed yet' : filter === 'waiting' ? "You're not waiting on anyone" : 'No open loops'} message="Claire will surface commitments from your conversations here." />} />
+        <FlatList testID="loops-list" data={visible} renderItem={({ item }) => <LoopRow item={item} onOpen={() => router.push({ pathname: '/loops/[id]', params: { id: item.id } })} onToggle={() => patch.mutate({ id: item.id, status: isLoopClosed(item) ? 'open' : 'done' })} onWait={isLoopClosed(item) ? undefined : () => patch.mutate({ id: item.id, owner: item.owner === 'them' ? 'me' : 'them', status: item.owner === 'them' ? 'open' : 'waiting' })} onSnooze={isLoopClosed(item) ? undefined : () => setSnoozeTarget(item)} />} keyExtractor={item => item.id} contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ paddingHorizontal: space[4], paddingBottom: 112 }} refreshControl={<RefreshControl refreshing={query.isRefetching} onRefresh={() => void query.refetch()} tintColor={colors.ink} />} ListEmptyComponent={<MobileState title={filter === 'done' ? 'Nothing closed yet' : filter === 'waiting' ? "You're not waiting on anyone" : 'No open loops'} message="Claire will surface commitments from your conversations here." />} />
       )}
 
       <BottomSheet
@@ -325,7 +328,7 @@ export function LoopsScreen() {
 
       <BottomSheet
         visible={reviewOpen && !!reviewTarget}
-        title="Review old loops"
+        title="Review follow-ups"
         onClose={() => setReviewOpen(false)}
         testID="loop-review-sheet"
         snapPoints={['62%']}
@@ -350,7 +353,7 @@ export function LoopsScreen() {
                 </Text>
               ) : null}
               <Text style={{ ...mobileType.label, color: colors.neutral[600] }}>
-                Claire will keep this open unless you choose Close or Dismiss.
+                {attentionQuery.data?.find(item => item.loop_id === reviewTarget.id)?.next_action || 'Review your next action.'}
               </Text>
             </Animated.View>
             <ReviewButton

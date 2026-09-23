@@ -94,6 +94,7 @@ const LIVE_ID = '11111111-1111-4111-8111-111111111111';
 function updateOp(overrides: Partial<LoopUpdateOp> = {}): LoopUpdateOp {
   return {
     op: 'update',
+    deadline_action: 'preserve',
     loop_id: LIVE_ID,
     state: 'agreed',
     state_summary: 'Moved to 3:15',
@@ -207,7 +208,7 @@ describe('update guards', () => {
 
 describe('close guards — the strictest path in the pipeline', () => {
   it('closes on confident, evidenced resolution', () => {
-    expect(decideClose(closeOp(), context())).toEqual({ action: 'close' });
+    expect(decideClose(closeOp(), context())).toEqual({ action: 'suggest_close', reason: 'review_required' });
   });
 
   it('never closes without evidence — silence is not resolution', () => {
@@ -243,7 +244,7 @@ describe('actionability', () => {
     ['negotiating', false],
     ['pending_confirmation', false],
     ['agreed', true],
-    ['resolved', true],
+    ['resolved', false],
   ])('%s is actionable=%s', (state, expected) => {
     expect(isActionable(state)).toBe(expected);
   });
@@ -263,16 +264,36 @@ describe('planning a whole ops list', () => {
     expect(created).toHaveLength(1);
   });
 
-  it('routes each op kind to its own bucket', () => {
+  it('does not apply conflicting update and close operations to one snapshot', () => {
     const plan = planOps([createOp(), updateOp(), closeOp()], context());
     expect(plan.creates).toHaveLength(1);
     expect(plan.updates).toHaveLength(1);
-    expect(plan.closes).toHaveLength(1);
+    expect(plan.closes).toHaveLength(0);
   });
 });
 
 describe('evidence resolution', () => {
   it('maps refs back to messages and drops refs that are not in the window', () => {
     expect(resolveEvidence(['m1', 'm99', 'm3'], WINDOW).map((m) => m.ref)).toEqual(['m1', 'm3']);
+  });
+});
+
+describe('recovery safety regressions', () => {
+  it('does not accept resolved state through create or update', () => {
+    expect(decideCreate(createOp({ state: 'resolved' }), context()).action).toBe('skip');
+    expect(decideUpdate(updateOp({ state: 'resolved', evidence_refs: [] }), context())).toEqual({ action: 'skip', reason: 'terminal_state' });
+  });
+  it('requires every cited close message to exist', () => {
+    expect(decideClose(closeOp({ evidence_refs: ['m1', 'm99'] }), context())).toEqual({ action: 'skip', reason: 'no_evidence' });
+  });
+  it('orders reversed evidence chronologically', () => {
+    const rows = [msg('m1', 'First', { at: '2026-01-01T00:00:00Z' }), msg('m2', 'Second', { at: '2026-01-02T00:00:00Z' })];
+    expect(resolveEvidence(['m2', 'm1', 'm2'], rows).map(row => row.ref)).toEqual(['m1', 'm2']);
+  });
+  it('keeps distinct non-Latin intents distinct', () => {
+    expect(computeDedupeKey('发送合同', ['小王'])).not.toBe(computeDedupeKey('预订餐厅', ['小王']));
+  });
+  it('requires a real date for explicit deadline replacement', () => {
+    expect(decideUpdate(updateOp({ deadline_action: 'set', deadline: null }), context())).toEqual({ action: 'skip', reason: 'invalid_deadline' });
   });
 });

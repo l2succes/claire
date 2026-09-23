@@ -31,6 +31,9 @@ export interface LoopConversationRef {
 }
 
 export interface LoopItem {
+  row_version?: number;
+  next_review_at?: string | null;
+  reminder_quiet_reason?: string | null;
   id: string;
   created_at?: string | null;
   updated_at?: string | null;
@@ -50,7 +53,7 @@ export interface LoopItem {
   priority_override?: number | null;
   snoozed_until?: string | null;
   next_reminder_at?: string | null;
-  reminder_plan_state?: 'pending' | 'scheduled' | 'quiet' | 'sent';
+  reminder_plan_state?: 'pending' | 'scheduled' | 'quiet' | 'enqueued' | 'sent';
   reminder_reason?: LoopReminderReason | null;
   reminder_revision?: number | null;
   reminder_count?: number | null;
@@ -117,6 +120,7 @@ export interface LoopParticipant {
 }
 
 export interface LoopDetail extends LoopItem {
+  chat_generation?: number;
   events?: LoopEvent[];
   participants?: LoopParticipant[];
   /** Present only when a plugin has contributed to this loop. */

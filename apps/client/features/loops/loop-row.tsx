@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { Image } from 'expo-image';
-import { AlertCircle, Check, Clock3, RotateCcw, UsersRound, UserRound } from 'lucide-react-native';
+import { AlertCircle, Check, XCircle, Clock3, RotateCcw, UsersRound, UserRound } from 'lucide-react-native';
 import { colors, mobileType } from '@claire/design-system';
+import { isLoopClosed } from '../../services/loop-display';
 import type { LoopItem } from '../../services/loop-types';
 import { SwipeActionRow } from '../../components/mobile/swipe-action-row';
 
@@ -27,6 +28,7 @@ function loopDetail(item: LoopItem, title: string) {
 }
 
 function ownerLabel(item: LoopItem) {
+  if (isLoopClosed(item)) return (item.resolution || item.status).replace(/_/g, ' ').toUpperCase();
   if (item.owner === 'me') return 'YOU OWE THIS';
   if (item.owner === 'them') return item.requester === 'me' ? 'WAITING ON THEM' : 'THEY OWE THIS';
   if (item.thread_state === 'pending_confirmation') return 'PENDING';
@@ -34,7 +36,7 @@ function ownerLabel(item: LoopItem) {
 }
 
 function dueLabel(item: LoopItem, overdue: boolean) {
-  if (!item.deadline) return null;
+  if (!item.deadline || isLoopClosed(item)) return null;
   const date = new Date(item.deadline);
   const day = new Date();
   const dateText = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
@@ -75,7 +77,7 @@ export function LoopRow({
       onPressIn={() => setPressed(true)}
       onPressOut={() => setPressed(false)}
       accessibilityActions={[
-        { name: 'toggle', label: item.status === 'done' ? 'Reopen' : 'Mark as closed' },
+        { name: 'toggle', label: isLoopClosed(item) ? 'Reopen' : 'Mark as closed' },
         ...(onWait ? [{ name: 'wait', label: 'Move to waiting' }] : []),
         ...(onSnooze ? [{ name: 'snooze', label: 'Postpone' }] : []),
       ]}
@@ -89,16 +91,16 @@ export function LoopRow({
       <Pressable
         testID={`loop-toggle-${item.id}`}
         accessibilityRole="checkbox"
-        accessibilityState={{ checked: item.status === 'done' }}
-        accessibilityLabel={`${item.status === 'done' ? 'Reopen' : 'Mark as closed'} ${title}`}
+        accessibilityState={{ checked: isLoopClosed(item) }}
+        accessibilityLabel={`${isLoopClosed(item) ? 'Reopen' : 'Mark as closed'} ${title}`}
         onPress={onToggle}
-        style={{ width: 28, height: 28, marginTop: 1, borderRadius: 14, borderWidth: 1.5, borderColor: overdue ? colors.danger : colors.ink, backgroundColor: item.status === 'done' ? colors.lime : overdue ? colors.blush : colors.paper, alignItems: 'center', justifyContent: 'center' }}
+        style={{ width: 28, height: 28, marginTop: 1, borderRadius: 14, borderWidth: 1.5, borderColor: overdue ? colors.danger : colors.ink, backgroundColor: isLoopClosed(item) ? colors.lime : overdue ? colors.blush : colors.paper, alignItems: 'center', justifyContent: 'center' }}
       >
-        {item.status === 'done' ? <Check size={16} color={colors.ink} /> : overdue ? <AlertCircle size={15} color={colors.danger} /> : null}
+        {isLoopClosed(item) ? item.status === 'done' ? <Check size={16} color={colors.ink} /> : <XCircle size={16} color={colors.ink} /> : overdue ? <AlertCircle size={15} color={colors.danger} /> : null}
       </Pressable>
 
       <View style={{ flex: 1, minWidth: 0, gap: 5 }}>
-        <Text selectable numberOfLines={1} style={{ ...mobileType.body, fontWeight: '700', color: colors.ink, textDecorationLine: item.status === 'done' ? 'line-through' : 'none' }}>{title}</Text>
+        <Text selectable numberOfLines={1} style={{ ...mobileType.body, fontWeight: '700', color: colors.ink, textDecorationLine: isLoopClosed(item) ? 'line-through' : 'none' }}>{title}</Text>
         {detail ? <Text selectable numberOfLines={1} style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{detail}</Text> : null}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 2 }}>
           <View testID={`loop-contact-avatar-${item.id}`} style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: group ? colors.sky : colors.blush, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }}>
@@ -132,14 +134,14 @@ export function LoopRow({
       contentBackgroundColor={colors.cream}
       leftActions={[{
         id: `toggle-loop-${item.id}`,
-        label: item.status === 'done' ? 'Reopen' : 'Close',
-        icon: item.status === 'done'
+        label: isLoopClosed(item) ? 'Reopen' : 'Close',
+        icon: isLoopClosed(item)
           ? <RotateCcw size={20} color={colors.ink} />
           : <Check size={21} color={colors.ink} />,
         backgroundColor: colors.lime,
         onPress: onToggle,
       }]}
-      rightActions={item.status === 'done' ? [] : [
+      rightActions={isLoopClosed(item) ? [] : [
         ...(onWait ? [{
           id: `wait-loop-${item.id}`,
           label: item.owner === 'them' ? 'For me' : 'Waiting',

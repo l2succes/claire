@@ -21,7 +21,7 @@ function chainFor(table: string): any {
 }
 
 mock.module('../../src/services/supabase', () => ({
-  supabase: { from: (table: string) => chainFor(table) },
+  supabase: { from: (table: string) => chainFor(table), rpc: async () => ({ data: null, error: null }) },
 }));
 
 const deliveryCalls: any[] = [];
@@ -108,9 +108,11 @@ describe('ReminderScheduler', () => {
     );
     await scheduler.refreshPendingPlans(new Date('2026-09-08T15:00:00.000Z'));
     const update = queryCalls.find((call) => call.method === 'update');
-    expect(update?.args[0]).toEqual({
+    expect(update?.args[0]).toMatchObject({
       reminder_plan_state: 'scheduled',
       next_reminder_at: '2026-09-10T18:00:00.000Z',
+      next_review_at: '2026-09-10T18:00:00.000Z',
+      reminder_quiet_reason: null,
       reminder_reason: 'deadline_soon',
     });
   });
@@ -123,10 +125,11 @@ describe('ReminderScheduler', () => {
     );
     await scheduler.refreshPendingPlans(new Date('2026-09-08T15:00:00.000Z'));
     const update = queryCalls.find((call) => call.method === 'update');
-    expect(update?.args[0]).toEqual({
+    expect(update?.args[0]).toMatchObject({
       reminder_plan_state: 'quiet',
       next_reminder_at: null,
       reminder_reason: null,
+      reminder_quiet_reason: 'no_timing_signal',
     });
   });
 
@@ -134,7 +137,7 @@ describe('ReminderScheduler', () => {
     responses.push({ data: [liveLoop()], error: null });
     await scheduler.enqueueDeadlineReminders(new Date('2026-09-10T18:00:00.000Z'));
     expect(addCalls).toHaveLength(1);
-    expect(addCalls[0].opts.jobId).toBe('reminder-loop-1-r3');
+    expect(addCalls[0].opts.jobId).toBe('reminder-v2-loop-1-r3');
   });
 
   it('delivers a manual trigger through the reliable device service', async () => {
@@ -144,7 +147,7 @@ describe('ReminderScheduler', () => {
       { data: null, error: null },
     );
     const result = await scheduler.triggerReminderForLoop('loop-1');
-    expect(result).toEqual({ sent: true });
+    expect(result).toEqual({ sent: false });
     expect(deliveryCalls[0]).toMatchObject({
       loopId: 'loop-1',
       revision: 3,
@@ -152,7 +155,7 @@ describe('ReminderScheduler', () => {
       reason: 'act_now',
     });
     const update = queryCalls.find((call) => call.method === 'update');
-    expect(update?.args[0]).toMatchObject({ reminder_plan_state: 'sent', reminder_count: 1, next_reminder_at: null });
+    expect(update?.args[0]).toMatchObject({ reminder_plan_state: 'enqueued' });
   });
 
   it('keeps a due plan retryable when the user has no registered device', async () => {
@@ -168,34 +171,11 @@ describe('ReminderScheduler', () => {
     expect(update?.args[0].reminder_plan_state).toBeUndefined();
   });
 
-  it('expires only detector proposals after seven quiet days', async () => {
+  it('never treats seven quiet days as proof a proposal expired', async () => {
     const now = new Date('2026-09-15T12:00:00.000Z');
-    responses.push(
-      { data: [{
-        id: 'loop-stale', user_id: 'user-1', title: 'Maybe get coffee', content: 'Maybe get coffee',
-        last_evidence_at: '2026-09-01T12:00:00.000Z',
-      }], error: null },
-      { data: { id: 'loop-stale' }, error: null },
-      { data: null, error: null },
-    );
-
     expect(staleProposalCutoff(now)).toBe('2026-09-08T12:00:00.000Z');
-    expect(await expireStaleProposals(now)).toBe(1);
-
-    const update = queryCalls.find((call) => call.table === 'loops' && call.method === 'update');
-    expect(update?.args[0]).toMatchObject({
-      status: 'dropped',
-      thread_state: 'resolved',
-      resolution: 'expired',
-      resolved_at: now.toISOString(),
-    });
-    const event = queryCalls.find((call) => call.table === 'loop_events' && call.method === 'insert');
-    expect(event?.args[0]).toMatchObject({
-      loop_id: 'loop-stale',
-      actor: 'system',
-      kind: 'resolved',
-      payload: { resolution: 'expired', lastEvidenceAt: '2026-09-01T12:00:00.000Z' },
-    });
+    expect(await expireStaleProposals(now)).toBe(0);
+    expect(queryCalls.filter(call => call.method === 'update')).toHaveLength(0);
   });
 
   it('drops a queued reminder after its loop revision changes', async () => {

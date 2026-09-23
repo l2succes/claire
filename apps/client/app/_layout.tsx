@@ -178,6 +178,7 @@ export default function RootLayout() {
     const openResponse = (response: Notifications.NotificationResponse) => {
       void handleNotificationResponse(response, {
         openChat,
+        openLoops: () => router.push('/(tabs)/loops'),
         openLoop: (loopId) => router.push({ pathname: '/loops/[id]', params: { id: loopId } }),
         openOperations: (url) => {
           void Linking.openURL(url).catch((error) => {
