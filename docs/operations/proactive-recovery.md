@@ -38,7 +38,7 @@ Replay creates or updates normal evidence-backed loops through the same guarded 
 
 ## Validation
 
-Local validation passed 230 server tests (including 20 PostgreSQL integration tests), 33 client tests, and both TypeScript checks. Production deployment and physical push delivery are not included in those results.
+Local validation passed the full server suite (757 tests, plus 8 outbox cases in its isolated child process), 20 PostgreSQL integration tests in a separate disposable database run, 33 targeted client tests, and both TypeScript checks. The database tests are skipped by the ordinary server suite unless the dedicated test URL is supplied. Production deployment and physical push delivery are not included in those results.
 
 Server checks (from `apps/server`):
 
@@ -49,7 +49,7 @@ bun test tests/routes/preferences.test.ts
 bun run typecheck
 ```
 
-The outbox suite is a separate process because Bun module mocks are process-global. It covers token refresh, changed settings, completion while queued, snooze/budget deferral, provider failure, persistence failure and stale digest items.
+The outbox suite automatically runs its regression cases in a child process because Bun module mocks are process-global, including when the full server suite runs. It covers token refresh, changed settings, completion while queued, snooze/budget deferral, provider failure, persistence failure and stale digest items.
 
 PostgreSQL integration setup uses an **empty disposable local database named `claire_recovery_test`**, never `DATABASE_URL` or account data:
 
