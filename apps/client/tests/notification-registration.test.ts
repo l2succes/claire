@@ -4,6 +4,7 @@ import {
   addPushTokenRotationListener,
   deregisterNotificationDevice,
   registerNotificationDevice,
+  requestNativeNotificationPermission,
 } from '../services/notifications';
 
 const expoNotifications = Notifications as jest.Mocked<typeof Notifications>;
@@ -52,5 +53,23 @@ describe('notification device registration', () => {
 
     expect(expoNotifications.getExpoPushTokenAsync).toHaveBeenCalledTimes(1);
     expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not request permission from background registration', async () => {
+    expoNotifications.getPermissionsAsync.mockResolvedValue({ status: 'undetermined' } as never);
+
+    await expect(registerNotificationDevice('access-token')).resolves.toBeNull();
+
+    expect(expoNotifications.requestPermissionsAsync).not.toHaveBeenCalled();
+    expect(expoNotifications.getExpoPushTokenAsync).not.toHaveBeenCalled();
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('requests permission only after an explicit user action', async () => {
+    expoNotifications.getPermissionsAsync.mockResolvedValue({ status: 'undetermined' } as never);
+    expoNotifications.requestPermissionsAsync.mockResolvedValue({ status: 'granted' } as never);
+
+    await expect(requestNativeNotificationPermission()).resolves.toBe('granted');
+    expect(expoNotifications.requestPermissionsAsync).toHaveBeenCalledTimes(1);
   });
 });

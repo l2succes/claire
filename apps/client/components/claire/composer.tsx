@@ -19,54 +19,21 @@ import Animated, {
 } from 'react-native-reanimated';
 import {
   AtSign,
-  Filter,
-  List,
   MessageCircle,
   Plus,
   Search,
   SendHorizonal,
-  Smile,
-  Trash2,
   ArrowUpRight,
 } from 'lucide-react-native';
 import { colors, mobileType, radius, space } from '@claire/design-system';
+import { GLOBAL_ASK_ACTIONS } from '../../features/assistant/ask-actions';
 import type { ChatPlusDefault } from '../../stores/chatPreferencesStore';
 import { VoiceNoteControl, type VoiceNoteDraft } from './voice-note-control';
 
 const CONTROL = 36;
 
-export const ASK_TOOLS = [
-  {
-    id: 'catch-me-up',
-    label: 'Catch me up',
-    description: 'Summarize recent conversations.',
-    prompt: 'Catch me up on the conversations that need my attention.',
-  },
-  {
-    id: 'open-loops',
-    label: 'Find open loops',
-    description: 'Open loops and questions.',
-    prompt: 'What commitments, questions, or plans are still unresolved?',
-  },
-  {
-    id: 'tone',
-    label: 'Check the tone',
-    description: 'Warm, direct, or playful.',
-    prompt:
-      'What patterns do you notice in the tone of my recent conversations? Distinguish observations from inference.',
-  },
-  {
-    id: 'find',
-    label: 'Find something',
-    description: 'Search messages and plans.',
-    prompt: 'Help me find something I remember saying or receiving.',
-  },
-] as const;
-
 const toolIcons = {
-  'catch-me-up': List,
-  'open-loops': ArrowUpRight,
-  tone: Smile,
+  attention: ArrowUpRight,
   find: Search,
 } as const;
 
@@ -203,7 +170,8 @@ function ComposerBar({
   inputRef?: React.RefObject<TextInput | null>;
   style?: StyleProp<ViewStyle>;
 }) {
-  const armed = Boolean(value?.toString().trim()) && !sending;
+  const trimmedValue = value?.toString().trim();
+  const armed = Boolean(trimmedValue && (variant !== 'ask' || trimmedValue !== '@')) && !sending;
   const controlSize = variant === 'ask' ? 32 : CONTROL;
   return (
     <View style={style}>
@@ -228,7 +196,7 @@ function ComposerBar({
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={addAccessibilityLabel}
-          accessibilityHint="Touch and hold to switch between attachments and reply options"
+          accessibilityHint={variant === 'ask' ? 'Choose a person or chat for the next question' : 'Touch and hold to switch between attachments and reply options'}
           onPress={onAddPress}
           onLongPress={onAddLongPress}
           delayLongPress={320}
@@ -300,23 +268,21 @@ function ComposerBar({
 }
 
 export function AskToolGrid({
-  onSelect,
-  scoped,
+  onAsk,
+  onFind,
 }: {
-  onSelect: (prompt: string) => void;
-  scoped?: boolean;
+  onAsk: (prompt: string) => void;
+  onFind: () => void;
 }) {
   return (
     <View testID="ask-tool-grid" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space[3] }}>
-      {ASK_TOOLS.map((tool) => {
+      {GLOBAL_ASK_ACTIONS.map((tool) => {
         const Icon = toolIcons[tool.id];
-        const description =
-          scoped && tool.id === 'find' ? 'Search just this chat.' : tool.description;
         return (
           <Pressable
             key={tool.id}
             accessibilityRole="button"
-            onPress={() => onSelect(tool.id === 'find' && scoped ? 'Find ' : tool.prompt)}
+            onPress={() => tool.prompt ? onAsk(tool.prompt) : onFind()}
             testID={`claire-tool-${tool.id}`}
             style={{
               width: '47.8%',
@@ -336,7 +302,7 @@ export function AskToolGrid({
                 {tool.label}
               </Text>
               <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>
-                {description}
+                {tool.description}
               </Text>
             </View>
           </Pressable>
@@ -464,13 +430,7 @@ export function AskComposer({
   menuOpen,
   onMenuOpenChange,
   onTagPerson,
-  onFilterPlatform,
-  onFocusChat,
-  onFindLoops,
-  onCheckTone,
-  onFindSomething,
-  onClear,
-  onDelete,
+  inputRef,
   chips,
   style,
   ...inputProps
@@ -480,13 +440,7 @@ export function AskComposer({
   menuOpen: boolean;
   onMenuOpenChange: (open: boolean) => void;
   onTagPerson?: () => void;
-  onFilterPlatform?: () => void;
-  onFocusChat?: () => void;
-  onFindLoops?: () => void;
-  onCheckTone?: () => void;
-  onFindSomething?: () => void;
-  onClear?: () => void;
-  onDelete?: () => void;
+  inputRef?: React.RefObject<TextInput | null>;
   chips?: ReactNode;
   style?: StyleProp<ViewStyle>;
 }) {
@@ -497,70 +451,13 @@ export function AskComposer({
   const actions: ComposerAction[] = [
     {
       id: 'tag',
-      label: 'Tag a person',
-      description: 'Focus Claire on someone with @.',
+      label: 'Focus a person or chat',
+      description: 'Choose who Claire should read for this question.',
       icon: <AtSign size={13} color={colors.ink} />,
       onPress: () => close(onTagPerson),
     },
-    {
-      id: 'platform',
-      label: 'Filter by platform',
-      description: 'WhatsApp, Telegram, Instagram, or all.',
-      icon: <Filter size={13} color={colors.ink} />,
-      onPress: () => close(onFilterPlatform),
-    },
-    {
-      id: 'focus',
-      label: 'Focus a chat',
-      description: 'Stay inside one conversation.',
-      icon: <MessageCircle size={13} color={colors.ink} />,
-      onPress: () => close(onFocusChat),
-    },
-    {
-      id: 'loops',
-      label: 'Find open loops',
-      description: 'Open loops, questions, and plans.',
-      icon: <ArrowUpRight size={13} color={colors.ink} />,
-      onPress: () => close(onFindLoops),
-    },
-    {
-      id: 'tone',
-      label: 'Check the tone',
-      description: 'Observation, then a matching line.',
-      icon: <Smile size={13} color={colors.ink} />,
-      onPress: () => close(onCheckTone),
-    },
-    {
-      id: 'find',
-      label: 'Find something',
-      description: 'Search messages and plans.',
-      icon: <Search size={13} color={colors.ink} />,
-      onPress: () => close(onFindSomething),
-    },
-    {
-      id: 'clear',
-      label: 'Clear this conversation',
-      description: 'Wipe turns. Keep the thread.',
-      icon: <List size={13} color={colors.ink} />,
-      onPress: () => close(onClear),
-    },
-    {
-      id: 'delete',
-      label: 'Delete thread',
-      description: 'Remove it from Recent.',
-      destructive: true,
-      icon: <Trash2 size={13} color={colors.danger} />,
-      onPress: () => close(onDelete),
-    },
   ].filter((item) => {
     if (item.id === 'tag') return Boolean(onTagPerson);
-    if (item.id === 'platform') return Boolean(onFilterPlatform);
-    if (item.id === 'focus') return Boolean(onFocusChat);
-    if (item.id === 'loops') return Boolean(onFindLoops);
-    if (item.id === 'tone') return Boolean(onCheckTone);
-    if (item.id === 'find') return Boolean(onFindSomething);
-    if (item.id === 'clear') return Boolean(onClear);
-    if (item.id === 'delete') return Boolean(onDelete);
     return true;
   });
 
@@ -579,15 +476,16 @@ export function AskComposer({
       sendIcon={
         <SendHorizonal
           size={18}
-          color={value?.toString().trim() && !sending ? colors.lime : colors.neutral[400]}
+          color={value?.toString().trim() && value?.toString().trim() !== '@' && !sending ? colors.lime : colors.neutral[400]}
           strokeWidth={2.2}
         />
       }
-      addAccessibilityLabel="Claire chat actions"
+      addAccessibilityLabel="Choose Claire scope"
       addActive={menuOpen}
       chips={chips}
       menu={menuOpen ? <ComposerMenu items={actions} testID="ask-composer-menu" /> : null}
       inputTestID={inputProps.testID || 'assistant-input'}
+      inputRef={inputRef}
       sendTestID="assistant-send"
       style={style}
       {...inputProps}

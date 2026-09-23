@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
-import { ArrowUpRight, ExternalLink, List, MessageCircle, Search, SendHorizontal, Smile, Square, X } from 'lucide-react-native';
+import { ArrowUpRight, ExternalLink, List, MessageCircle, SendHorizontal, Smile, Square, X } from 'lucide-react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as Crypto from 'expo-crypto';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -15,20 +15,9 @@ import { AssistantAnswerActions } from '../../../components/claire/assistant-ans
 import { AssistantRichText } from '../../../components/claire/assistant-rich-text';
 import { useAssistantStream } from '../../../hooks/useAssistantStream';
 import { userFacingErrorMessage } from '../../../services/api-errors';
+import { CONVERSATION_ASK_ACTIONS } from '../../../features/assistant/ask-actions';
 
-type QuickAction = {
-  label: string;
-  description: string;
-  icon: typeof List;
-  prompt?: string;
-};
-
-const quickActions: QuickAction[] = [
-  { label: 'Catch me up', description: 'Summarize the conversation.', icon: List, prompt: 'Catch me up on this conversation. Keep it concise and cite the important moments.' },
-  { label: 'Find open loops', description: 'Open loops and questions.', icon: ArrowUpRight, prompt: 'What commitments, questions, or open loops are still unresolved in this conversation?' },
-  { label: 'Check the tone', description: 'Warm, direct, or playful.', icon: Smile, prompt: 'What is the tone of this conversation lately? Separate observations from inference and suggest a constructive next step.' },
-  { label: 'Find something', description: 'Search just this chat.', icon: Search },
-];
+const quickActionIcons = { 'catch-me-up': List, 'open-loops': ArrowUpRight, tone: Smile } as const;
 
 export default function ConversationAssistantScreen() {
   const { chatId, name = 'this chat' } = useLocalSearchParams<{ chatId: string; name?: string }>();
@@ -140,9 +129,9 @@ export default function ConversationAssistantScreen() {
 
             <Text style={{ ...mobileType.monoLabel, color: colors.ink, letterSpacing: 1.4, paddingTop: space[1] }}>MORE WAYS I CAN HELP</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space[3] }}>
-              {quickActions.map(action => {
-                const Icon = action.icon;
-                return <FeedbackPressable key={action.label} testID={`conversation-assistant-${action.label.toLowerCase().replace(/\s+/g, '-')}`} onPress={() => action.prompt ? void ask(action.prompt) : setQuestion('Find ')} style={({ pressed }) => ({ width: '47.8%', minHeight: 154, padding: space[3], justifyContent: 'space-between', borderRadius: 24, borderWidth: 1, borderColor: colors.neutral[400], backgroundColor: colors.paper, opacity: pressed ? 0.7 : 1 })}>
+              {CONVERSATION_ASK_ACTIONS.map(action => {
+                const Icon = quickActionIcons[action.id];
+                return <FeedbackPressable key={action.id} testID={`conversation-assistant-${action.id}`} onPress={() => void ask(action.prompt)} style={({ pressed }) => ({ width: action.id === 'tone' ? '100%' : '47.8%', minHeight: action.id === 'tone' ? 110 : 154, padding: space[3], justifyContent: 'space-between', borderRadius: 24, borderWidth: 1, borderColor: colors.neutral[400], backgroundColor: colors.paper, opacity: pressed ? 0.7 : 1 })}>
                   <Icon size={25} color={colors.ink} strokeWidth={2.2} />
                   <View style={{ gap: 4 }}><Text style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>{action.label}</Text><Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{action.description}</Text></View>
                 </FeedbackPressable>;
@@ -169,9 +158,12 @@ export default function ConversationAssistantScreen() {
           />
         )}
         {error && turns.length > 0 ? <Text style={{ ...mobileType.bodySmall, color: colors.danger, paddingHorizontal: space[4], paddingBottom: space[2] }}>{error}</Text> : null}
-        <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: space[2], paddingHorizontal: space[4], paddingTop: space[2], paddingBottom: Math.max(insets.bottom, space[3]), borderTopWidth: 1, borderTopColor: 'rgba(16,18,15,0.12)', backgroundColor: colors.sky }}>
-          <MobileSearchField value={question} onChangeText={setQuestion} placeholder={`Ask about ${name}…`} multiline style={{ flex: 1, minHeight: 44, backgroundColor: colors.paper, borderColor: colors.neutral[300] }} inputStyle={{ maxHeight: 88, paddingVertical: 9 }} />
-          <FeedbackPressable accessibilityRole="button" accessibilityLabel="Ask Claire" disabled={!question.trim() || asking} onPress={() => void ask()} style={({ pressed }) => ({ width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: question.trim() ? colors.ink : colors.neutral[200], opacity: pressed ? 0.75 : 1 })}><SendHorizontal size={18} color={question.trim() ? colors.paper : colors.neutral[400]} /></FeedbackPressable>
+        <View style={{ paddingHorizontal: space[4], paddingTop: space[2], paddingBottom: Math.max(insets.bottom, space[3]), borderTopWidth: 1, borderTopColor: 'rgba(16,18,15,0.12)', backgroundColor: colors.sky }}>
+          <View testID="conversation-assistant-scope" style={{ alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 5, marginBottom: space[2], borderRadius: radius.pill, borderWidth: 1, borderColor: colors.neutral[300], backgroundColor: colors.paper }}><Text numberOfLines={1} style={{ ...mobileType.label, color: colors.ink }}>Only {name}</Text></View>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: space[2] }}>
+            <MobileSearchField value={question} onChangeText={setQuestion} placeholder={`Ask about ${name}…`} multiline style={{ flex: 1, minHeight: 44, backgroundColor: colors.paper, borderColor: colors.neutral[300] }} inputStyle={{ maxHeight: 88, paddingVertical: 9 }} />
+            <FeedbackPressable accessibilityRole="button" accessibilityLabel="Ask Claire" disabled={!question.trim() || asking} onPress={() => void ask()} style={({ pressed }) => ({ width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: question.trim() ? colors.ink : colors.neutral[200], opacity: pressed ? 0.75 : 1 })}><SendHorizontal size={18} color={question.trim() ? colors.paper : colors.neutral[400]} /></FeedbackPressable>
+          </View>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
