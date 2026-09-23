@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -7,6 +7,7 @@ import { colors, mobileType, radius, space } from '@claire/design-system';
 
 import { MobileHeader, MobileIconButton, MobileState } from '../../components/mobile/claire-mobile';
 import { useAuthStore } from '../../stores/authStore';
+import { markInAppLoopRead, notificationFeedKey } from '../../hooks/useInAppNotifications';
 import {
   conversationName,
   deleteLoop,
@@ -211,6 +212,12 @@ export function LoopDetailScreen() {
   });
 
   const loopId = String(id);
+  useEffect(() => {
+    if (!user?.id || !id) return;
+    void markInAppLoopRead(user.id, loopId)
+      .then(() => queryClient.invalidateQueries({ queryKey: notificationFeedKey(user.id) }))
+      .catch(error => console.warn('Could not clear follow-up notification:', error));
+  }, [id, loopId, queryClient, user?.id]);
   const beginOptimisticPatch = async (next: Partial<LoopItem>) => {
     await Promise.all([
       queryClient.cancelQueries({ queryKey: ['loop-detail', loopId] }),

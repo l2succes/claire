@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { FlatList, Modal, Pressable, RefreshControl, Text, TextInput, View } from 'react-native';
-import { Check, Plus, RotateCcw, X, XCircle } from 'lucide-react-native';
+import { FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
+import { Check, RotateCcw, XCircle } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import Animated, { FadeInRight, FadeOutLeft } from 'react-native-reanimated';
 import { colors, mobileType, radius, space } from '@claire/design-system';
-import { MobileChip, MobileHeader, MobileIconButton, MobileState } from '../../components/mobile/claire-mobile';
-import { FeedbackPressable } from '../../components/mobile/pressable-feedback';
+import { MobileChip, MobileHeader, MobileState } from '../../components/mobile/claire-mobile';
 import type { LoopItem } from '../../services/loop-types';
 import { cacheLoop, cachedLoops, replaceCachedLoops } from '../../services/mobile-cache';
 import { useLocalFirstQuery } from '../../hooks/useLocalFirstQuery';
@@ -14,9 +13,8 @@ import { useScreenLoadMark } from '../../hooks/useScreenLoadMark';
 import { useAuthStore } from '../../stores/authStore';
 import { supabase } from '../../services/supabase';
 import { LoopsSkeleton } from '../../components/claire/skeleton';
-import { LoopHealthCard } from './loop-health-card';
 import { LoopRow } from './loop-row';
-import { createLoop, reviewLoop, snoozeLoop, updateLoop } from '../../services/loops';
+import { reviewLoop, snoozeLoop, updateLoop } from '../../services/loops';
 import { BottomSheet } from '../../components/mobile/bottom-sheet';
 import { isLoopDeferred, isLoopClosed } from '../../services/loop-display';
 import { useLoopAttention } from '../../hooks/useLoopAttention';
@@ -108,8 +106,6 @@ export function LoopsScreen() {
   const queryClient = useQueryClient();
   const attentionQuery = useLoopAttention();
   const [filter, setFilter] = useState<LoopFilter>('for_you');
-  const [showCreate, setShowCreate] = useState(false);
-  const [newLoop, setNewLoop] = useState('');
   const [snoozeTarget, setSnoozeTarget] = useState<LoopItem | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
   const loopsQueryKey = useMemo(() => ['mobile-loops', user?.id] as const, [user?.id]);
@@ -170,16 +166,6 @@ export function LoopsScreen() {
     },
     onSettled: (_data, _error, variables) => invalidateLoopQueries(queryClient, user?.id, variables.id),
   });
-  const create = useMutation({
-    mutationFn: createLoop,
-    onSuccess: () => {
-      setNewLoop('');
-      setShowCreate(false);
-      void queryClient.invalidateQueries({ queryKey: ['mobile-loops', user?.id] });
-      void queryClient.invalidateQueries({ queryKey: ['mobile-home-loops', user?.id] });
-    },
-  });
-
   const review = useMutation({
     mutationFn: ({ id, ...input }: { id: string } & Parameters<typeof reviewLoop>[1]) => reviewLoop(id, input),
     onMutate: async ({ id, action }) => {
@@ -250,9 +236,8 @@ export function LoopsScreen() {
 
   return (
     <View testID="loops-screen" style={{ flex: 1, backgroundColor: colors.cream }}>
-      <MobileHeader title="Loops" subtitle="Follow through without losing the conversation." safeArea actions={<MobileIconButton label="Add a loop" testID="loops-add" onPress={() => setShowCreate(true)}><Plus size={21} color={colors.ink} /></MobileIconButton>} />
+      <MobileHeader title="Loops" subtitle="Follow through without losing the conversation." safeArea />
       <View style={{ paddingHorizontal: space[4], gap: space[3], paddingBottom: space[3] }}>
-        <LoopHealthCard />
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space[2] }}>
           <View style={{ flex: 1, padding: space[4], borderRadius: radius.card, backgroundColor: colors.lime }}><Text style={{ ...mobileType.screenTitle, color: colors.ink, fontVariant: ['tabular-nums'] }}>{attentionQuery.data?.length ?? needsAttention}</Text><Text style={{ ...mobileType.monoLabel, color: colors.ink }}>NEED ATTENTION</Text></View>
           <View style={{ flex: 1, padding: space[4], borderRadius: radius.card, backgroundColor: colors.sky }}><Text style={{ ...mobileType.screenTitle, color: colors.ink, fontVariant: ['tabular-nums'] }}>{today}</Text><Text style={{ ...mobileType.monoLabel, color: colors.ink }}>DUE TODAY</Text></View>
@@ -394,16 +379,6 @@ export function LoopsScreen() {
         ) : null}
       </BottomSheet>
 
-      <Modal visible={showCreate} transparent animationType="slide" onRequestClose={() => setShowCreate(false)}>
-        <View style={{ flex: 1, backgroundColor: 'rgba(16,18,15,0.35)', justifyContent: 'flex-end' }}>
-          <View style={{ backgroundColor: colors.paper, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: space[5], paddingBottom: 36, gap: space[4] }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}><Text style={{ ...mobileType.sectionTitle, flex: 1, color: colors.ink }}>Add a loop</Text><MobileIconButton label="Close" onPress={() => setShowCreate(false)}><X size={19} color={colors.ink} /></MobileIconButton></View>
-            <TextInput autoFocus multiline value={newLoop} onChangeText={setNewLoop} placeholder="What do you want to remember?" placeholderTextColor={colors.neutral[400]} style={{ minHeight: 110, textAlignVertical: 'top', padding: space[4], borderRadius: radius.card, borderWidth: 1, borderColor: colors.neutral[200], backgroundColor: colors.cream, ...mobileType.body, color: colors.ink }} />
-            {create.error ? <Text selectable style={{ ...mobileType.bodySmall, color: colors.danger }}>{userFacingErrorMessage(create.error)}</Text> : null}
-            <FeedbackPressable disabled={!newLoop.trim() || create.isPending} onPress={() => create.mutate(newLoop.trim())} style={({ pressed }) => ({ minHeight: 50, borderRadius: radius.control, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center', opacity: !newLoop.trim() || create.isPending ? 0.42 : pressed ? 0.78 : 1 })}><Text style={{ ...mobileType.body, fontWeight: '700', color: colors.paper }}>{create.isPending ? 'Adding…' : 'Add loop'}</Text></FeedbackPressable>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }

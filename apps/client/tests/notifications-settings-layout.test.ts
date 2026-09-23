@@ -16,10 +16,11 @@ describe('notification settings layout', () => {
     expect(source).not.toMatch(/bg-gray-|text-gray-|#10b981/);
   });
 
-  it('groups delivery, notification types, and quiet hours into app-style sections', () => {
-    expect(source).toContain('<SettingsSection title="Delivery">');
-    expect(source).toContain('<SettingsSection title="What you receive">');
+  it('makes clear that these switches only control push alerts', () => {
+    expect(source).toContain('<SettingsSection title="Push delivery">');
+    expect(source).toContain('<SettingsSection title="Push alert types">');
     expect(source).toContain('<SettingsSection title="Quiet hours"');
+    expect(source).toContain('Notifications still appear in Claire.');
   });
 
   it('saves changes automatically without a header save button', () => {
