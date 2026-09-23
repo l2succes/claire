@@ -64,7 +64,7 @@ export async function handleNotificationResponse(
     return;
   }
 
-  if (data.type === 'loop_reminder' && typeof data.loopId === 'string') {
+  if ((data.type === 'loop_reminder' || data.type === 'loop_created') && typeof data.loopId === 'string') {
     try {
       if (action === notificationActions.completeLoop) {
         await updateLoop(data.loopId, { status: 'done' });
