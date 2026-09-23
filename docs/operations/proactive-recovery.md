@@ -2,7 +2,7 @@
 
 ## Implemented behavior
 
-- Message inserts, meaningful edits and deletions create durable per-chat work in the same PostgreSQL transaction. Generations serialize within a chat, including late arrivals; workers start at boot, lease work, retry failures and preserve traffic arriving during a pass. Redis job retention no longer decides whether detection runs.
+- Message inserts, meaningful edits and deletions create durable per-chat work in the same PostgreSQL transaction. Generations serialize within a chat, including late arrivals and duplicate-upsert suppression; workers start at boot, lease work, retry failures and preserve traffic arriving during a pass. Redis job retention no longer decides whether detection runs.
 - Extraction consumes the oldest pending message window. The character budget never acknowledges only a prefix of a message: one oversized message runs alone, and provider-limit failures remain visible, retryable work. Native thread identifiers are included in the transcript. English keyword patterns no longer veto other languages, implicit requests or new intent after empty windows.
 - An extraction/write failure cannot advance the cursor. Cursor updates are monotonic. Detection honors account AI, chat AI, sensitivity and the detection switch. Disabled scopes keep their backlog pending.
 - User mutations and detector updates use one transactional, versioned transition RPC. Creation and transitions have atomic timeline events. Existing corrections are preserved by field. Every autonomous close becomes an evidenced, versioned proposal; elapsed time does not close anything. Cancellation, dismissal and expiry are distinct from fulfillment. Reopening clears terminal metadata, and terminal loops must be reopened before snoozing.
@@ -38,7 +38,7 @@ Replay creates or updates normal evidence-backed loops through the same guarded 
 
 ## Validation
 
-Local validation passed the full server suite (757 tests, plus 8 outbox cases in its isolated child process), 20 PostgreSQL integration tests in a separate disposable database run, 33 targeted client tests, and both TypeScript checks. The database tests are skipped by the ordinary server suite unless the dedicated test URL is supplied. Production deployment and physical push delivery are not included in those results.
+Local validation passed the full server suite (757 tests, plus 8 outbox cases in its isolated child process), 21 PostgreSQL integration tests in a separate disposable database run, 33 targeted client tests, and both TypeScript checks. The database tests are skipped by the ordinary server suite unless the dedicated test URL is supplied. Production deployment and physical push delivery are not included in those results.
 
 Server checks (from `apps/server`):
 

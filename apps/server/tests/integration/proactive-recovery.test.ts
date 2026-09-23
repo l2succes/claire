@@ -69,6 +69,16 @@ suite('proactive recovery / real Postgres', () => {
     await sql!`UPDATE messages SET content='Synthetic: edited request' WHERE id=${late.id}`;
     expect(Number((await sql!`SELECT loop_ingest_seq FROM messages WHERE id=${late.id}`)[0].loop_ingest_seq)).toBeGreaterThan(Number(work.generation));
   });
+  it('does not create phantom work for duplicate message upserts', async () => {
+    const [message] = await sql!`INSERT INTO messages(user_id,chat_id,content) VALUES(${user},${chat},'Synthetic duplicate') RETURNING id`;
+    const before = (await sql!`SELECT generation FROM chat_loop_work WHERE chat_id=${chat}`)[0].generation;
+    await sql!`INSERT INTO messages(id,user_id,chat_id,content) VALUES(${message.id},${user},${chat},'Synthetic duplicate') ON CONFLICT(id) DO UPDATE SET content=excluded.content`;
+    expect((await sql!`SELECT generation FROM chat_loop_work WHERE chat_id=${chat}`)[0].generation).toBe(before);
+    await sql!`INSERT INTO messages(id,user_id,chat_id,content) VALUES(${message.id},${user},${chat},'Synthetic changed') ON CONFLICT(id) DO UPDATE SET content=excluded.content`;
+    const after = (await sql!`SELECT generation FROM chat_loop_work WHERE chat_id=${chat}`)[0].generation;
+    expect(Number(after)).toBe(Number(before) + 1);
+    expect((await sql!`SELECT loop_ingest_seq FROM messages WHERE id=${message.id}`)[0].loop_ingest_seq).toBe(after);
+  });
   it('recovers expired leases and fences old workers', async () => {
     await sql!`UPDATE chat_loop_work SET lease_until=now()-interval '1 minute',next_run_at=now()-interval '1 minute' WHERE chat_id=${chat}`;
     const [old] = await sql!`SELECT lease_token FROM chat_loop_work WHERE chat_id=${chat}`;

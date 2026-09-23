@@ -142,10 +142,12 @@ BEGIN
       first_dirty_at = CASE WHEN chat_loop_work.generation = chat_loop_work.processed_generation THEN now() ELSE chat_loop_work.first_dirty_at END,
       next_run_at = least(now() + interval '45 seconds', CASE WHEN chat_loop_work.generation = chat_loop_work.processed_generation THEN now() ELSE chat_loop_work.first_dirty_at END + interval '3 minutes')
     RETURNING generation INTO seq;
-  NEW.loop_ingest_seq := seq;
+  -- AFTER excludes attempted inserts that resolve to an unchanged upsert.
+  -- Updating only the sequence does not recursively fire this column trigger.
+  UPDATE messages SET loop_ingest_seq = seq WHERE id = NEW.id;
   RETURN NEW;
 END $$;
-CREATE TRIGGER messages_mark_loop_dirty BEFORE INSERT OR UPDATE OF content,is_deleted,from_me,timestamp ON public.messages FOR EACH ROW EXECUTE FUNCTION public.mark_chat_loop_dirty();
+CREATE TRIGGER messages_mark_loop_dirty AFTER INSERT OR UPDATE OF content,is_deleted,from_me,timestamp ON public.messages FOR EACH ROW EXECUTE FUNCTION public.mark_chat_loop_dirty();
 CREATE FUNCTION public.claim_chat_loop_work() RETURNS SETOF public.chat_loop_work LANGUAGE sql SECURITY DEFINER SET search_path = public AS $$
   UPDATE chat_loop_work w SET lease_token = gen_random_uuid(), lease_until = now() + interval '5 minutes', attempts = attempts + 1
   WHERE (w.user_id,w.chat_id) IN (
