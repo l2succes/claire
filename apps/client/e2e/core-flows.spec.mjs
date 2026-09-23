@@ -314,28 +314,97 @@ test.describe('Core loop — mock backend', () => {
 
   test('global Ask Claire searches messages and opens a cited source', async ({ page }) => {
     await signIn(page);
-    await expect(page.getByTestId('open-ask-claire')).toBeVisible({ timeout: 8_000 });
-    await page.getByTestId('open-ask-claire').click();
+    await page.goto('/ask-claire');
 
     await expect(page.getByTestId('assistant-screen')).toBeVisible({ timeout: 8_000 });
+    await page.getByTestId('assistant-new-thread').click();
     await page.getByTestId('assistant-input').fill('Where did I mention meeting Alice?');
     await page.getByTestId('assistant-send').click();
 
     await expect(page.getByTestId('assistant-turn-list')).toContainText('You discussed meeting Alice after the report is sent.');
-    await expect(page.getByTestId('assistant-sources')).toContainText("Hi! I'll send you the report by Friday");
-    await expect(page.locator('[data-testid^="assistant-source-"]')).toHaveCount(3);
+    await expect(page.getByTestId('assistant-sources')).toContainText('Sources');
     await page.getByTestId('assistant-sources-toggle').click();
-    await expect(page.locator('[data-testid^="assistant-source-"]')).toHaveCount(5);
+    await expect(page.getByTestId('assistant-sources')).toContainText("Hi! I'll send you the report by Friday");
+    await expect(page.locator('[data-testid^="assistant-source-"]')).toHaveCount(1);
     await page.getByTestId('assistant-source-chatmsg-1').click();
     await expect(page.getByTestId('chat-screen')).toBeVisible({ timeout: 8_000 });
     await expect(page).toHaveURL(/highlightMessageId=chatmsg-1/);
     await expect(page.getByTestId('message-bubble-chatmsg-1-incoming')).toHaveCSS('border-top-width', '2px');
   });
 
+  test('an untouched Ask Claire draft never appears in Recent', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 540 });
+    await signIn(page);
+    await page.goto('/ask-claire');
+    await expect(page.getByTestId('assistant-home')).toBeVisible();
+    await expect(page.getByTestId('claire-tool-catch-me-up')).toHaveCount(1);
+    await expect(page.getByTestId('assistant-recommendations')).toHaveCount(0);
+    const homeScroll = page.getByTestId('assistant-home');
+    await homeScroll.evaluate((element) => { element.scrollTop = 200; });
+    await expect.poll(() => homeScroll.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+
+    let createRequests = 0;
+    page.on('request', (request) => {
+      if (request.method() === 'POST' && new URL(request.url()).pathname.endsWith('/ai/assistant/threads')) createRequests += 1;
+    });
+    await page.getByTestId('assistant-new-thread').click();
+    await expect(page.getByTestId('assistant-turn-list')).toBeVisible();
+    await expect(page.getByTestId('assistant-answer-bubble')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Back to Ask Claire' }).click();
+    await expect(page.getByTestId('assistant-home')).toBeVisible();
+    await expect(page.locator('[data-testid^="assistant-thread-"]')).toHaveCount(0);
+    expect(createRequests).toBe(0);
+
+    await page.getByTestId('assistant-new-thread').click();
+    await page.getByTestId('assistant-input').fill('What happened here?');
+    await page.getByTestId('assistant-send').click();
+    await expect(page.getByTestId('assistant-answer-bubble')).toHaveCount(1);
+    await expect(page.getByTestId('assistant-answer-bubble')).toContainText('You discussed meeting Alice');
+    await page.getByRole('button', { name: 'Back to Ask Claire' }).click();
+    await expect(page.locator('[data-testid^="assistant-thread-"]')).toHaveCount(1);
+  });
+
+  test('Ask Claire conversation header compacts on scroll and skips empty answers', async ({ page }) => {
+    const thread = { id: 'test-long-thread', title: 'What commitments are still unresolved?', chat_id: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+    const turns = Array.from({ length: 12 }, (_, index) => [
+      { id: `question-${index}`, role: 'user', content: `Question ${index + 1}`, citations: [], created_at: new Date().toISOString() },
+      { id: `answer-${index}`, role: 'assistant', content: `Answer ${index + 1} with context from the conversation.`, citations: [], created_at: new Date().toISOString() },
+    ]).flat();
+    turns.push({ id: 'empty-answer', role: 'assistant', content: '', citations: [], created_at: new Date().toISOString() });
+    await page.route('**/ai/assistant/threads', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data: [thread] }) });
+    });
+    await page.route('**/ai/assistant/threads/test-long-thread', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data: { thread, turns } }) });
+    });
+
+    await signIn(page);
+    await page.goto('/ask-claire');
+    await page.getByTestId(`assistant-thread-${thread.id}`).click();
+    const title = page.getByText(thread.title, { exact: true });
+    await expect(title).toBeVisible();
+    await expect(page.getByTestId('assistant-answer-bubble')).toHaveCount(12);
+    const expandedSize = await title.evaluate((element) => parseFloat(getComputedStyle(element).fontSize));
+    await page.getByTestId('assistant-turn-list').evaluate((element) => { element.scrollTop = 360; });
+    await expect.poll(() => title.evaluate((element) => parseFloat(getComputedStyle(element).fontSize))).toBeLessThan(expandedSize);
+    await page.getByTestId('assistant-turn-list').evaluate((element) => { element.scrollTop = 0; });
+    await expect.poll(() => title.evaluate((element) => parseFloat(getComputedStyle(element).fontSize))).toBe(expandedSize);
+  });
+
+  test('an Ask Claire home tool starts and saves a conversation', async ({ page }) => {
+    await signIn(page);
+    await page.goto('/ask-claire');
+    await page.getByTestId('claire-tool-catch-me-up').click();
+    await expect(page.getByTestId('assistant-answer-bubble')).toContainText('You discussed meeting Alice');
+    await page.getByRole('button', { name: 'Back to Ask Claire' }).click();
+    await expect(page.locator('[data-testid^="assistant-thread-"]')).toHaveCount(1);
+  });
+
   test('Ask Claire @ targeting sends the selected conversation scope', async ({ page }) => {
     await signIn(page);
-    await page.getByTestId('open-ask-claire').click();
+    await page.goto('/ask-claire');
     await expect(page.getByTestId('assistant-screen')).toBeVisible({ timeout: 8_000 });
+    await page.getByTestId('assistant-new-thread').click();
 
     await page.getByTestId('assistant-input').fill('@');
     await expect(page.getByTestId('assistant-mention-candidate-mock-chat-wa-alice')).toBeVisible({ timeout: 5_000 });
@@ -1192,6 +1261,29 @@ test.describe('Platform connect flows — mock backend', () => {
   // ---------------------------------------------------------------------------
   // Auto-reply rules (#40)
   // ---------------------------------------------------------------------------
+
+  test('Profile destinations open Connections, People, and Auto-Reply Rules', async ({ page }) => {
+    await page.route('**/auto-reply**', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ rules: [] }) });
+    });
+
+    await signIn(page);
+    await page.click('text=Settings');
+    await expect(page.getByTestId('settings-screen')).toBeVisible({ timeout: 8_000 });
+
+    await page.getByTestId('settings-connections').click();
+    await expect(page.getByTestId('connections-screen')).toBeVisible({ timeout: 8_000 });
+    await page.getByRole('button', { name: 'Back to Profile' }).click();
+    await expect(page.getByTestId('settings-screen')).toBeVisible();
+
+    await page.getByTestId('settings-relationships').click();
+    await expect(page.getByTestId('contacts-screen')).toBeVisible({ timeout: 8_000 });
+    await page.getByRole('button', { name: 'Back', exact: true }).click();
+    await expect(page.getByTestId('settings-screen')).toBeVisible();
+
+    await page.getByTestId('settings-auto-reply').click();
+    await expect(page.getByTestId('auto-reply-settings-screen')).toBeVisible({ timeout: 8_000 });
+  });
 
   test('auto-reply rules screen renders from settings', async ({ page }) => {
     const MOCK_RULES = [];

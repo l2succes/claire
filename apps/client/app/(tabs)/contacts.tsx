@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, SectionList, Text, View } from 'react-native';
-import { Check, ListFilter, Search } from 'lucide-react-native';
+import { Check, ChevronLeft, ListFilter, Search } from 'lucide-react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { colors, mobileType, space, useIsDesktopLayout } from '@claire/design-system';
@@ -83,7 +83,7 @@ function letterFor(name: string): string {
   return /^[A-Z]$/.test(initial) ? initial : '#';
 }
 
-export default function ContactsScreen() {
+export default function ContactsScreen({ showBack = false }: { showBack?: boolean }) {
   const isDesktop = useIsDesktopLayout();
   const params = useLocalSearchParams<{ q?: string; query?: string }>();
   const [searchQuery, setSearchQuery] = useState(params.q || params.query || '');
@@ -356,6 +356,7 @@ export default function ContactsScreen() {
         title="People"
         subtitle="The people behind your conversations"
         safeArea
+        leading={showBack ? <MobileIconButton label="Back" onPress={() => router.back()}><ChevronLeft size={20} color={colors.ink} /></MobileIconButton> : undefined}
         actions={!isDesktop ? (
           <MobileIconButton
             label="Filter by platform"

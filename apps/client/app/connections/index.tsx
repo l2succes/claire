@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { Image } from 'expo-image';
-import { Check, ChevronRight, Laptop, Plus, RefreshCw, Smartphone } from 'lucide-react-native';
-import { router, useFocusEffect } from 'expo-router';
+import { Check, ChevronLeft, ChevronRight, Laptop, Plus, RefreshCw, Smartphone } from 'lucide-react-native';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { colors, mobileType, radius, space, useIsDesktopLayout } from '@claire/design-system';
 import { host } from '@claire/host';
 import { API_BASE_URL, platformsApi, type PlatformDefinition } from '../../services/platforms';
@@ -30,6 +30,7 @@ function ConnectionMark({ definition }: { definition: PlatformDefinition }) {
 }
 
 export default function ConnectionsScreen() {
+  const { from } = useLocalSearchParams<{ from?: string }>();
   const isDesktop = useIsDesktopLayout();
   const sessions = usePlatformStore(state => state.connectedSessions);
   const fetchSessions = usePlatformStore(state => state.fetchConnectedSessions);
@@ -210,11 +211,12 @@ export default function ConnectionsScreen() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.cream }}>
+    <View style={{ flex: 1, backgroundColor: colors.cream }} testID="connections-screen">
       <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ paddingBottom: 48 }}>
         <MobileHeader
           title="Connections"
           subtitle="Bring your conversations into Claire."
+          leading={from === 'settings' ? <MobileIconButton label="Back to Profile" onPress={() => router.back()}><ChevronLeft size={20} color={colors.ink} /></MobileIconButton> : undefined}
           actions={<MobileIconButton label="Refresh connections" onPress={() => void load()}><RefreshCw size={18} color={colors.ink} /></MobileIconButton>}
         />
         {loading ? (
