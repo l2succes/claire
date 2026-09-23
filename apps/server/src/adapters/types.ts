@@ -79,12 +79,14 @@ export interface UnifiedMessage {
   // Participants
   senderId: string;
   senderName?: string;
+  senderAvatarUrl?: string;
   receiverId?: string;
 
   // Chat context
   chatId: string;
   chatType: 'individual' | 'group';
   chatName?: string;
+  chatAvatarUrl?: string;
 
   // Message metadata
   timestamp: Date;
