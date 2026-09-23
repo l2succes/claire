@@ -19,6 +19,8 @@ import { cachedLoops } from '../../services/mobile-cache';
 import { useLocalFirstQuery } from '../../hooks/useLocalFirstQuery';
 import { useScreenLoadMark } from '../../hooks/useScreenLoadMark';
 import { belongsInHomeLoops } from '../../services/loop-query-cache';
+import { NotificationBell } from './notification-bell';
+import { FollowUpStatusCard } from './follow-up-status-card';
 
 const HOME_LOOP_SELECT = 'id, content, title, state_summary, deadline, chat_id, status, from_me, owner, priority_score, chat:chats!loops_chat_id_fkey(name, platform, is_group)';
 
@@ -130,6 +132,7 @@ export function HomeScreen() {
         title={greetingTitle}
         titleNumberOfLines={1}
         titleStyle={{ fontSize: 26, lineHeight: 30, letterSpacing: -0.6 }}
+        actions={<NotificationBell />}
         profile={
           <Pressable accessibilityRole="button" accessibilityLabel="Open profile" onPress={() => router.navigate('/(tabs)/settings')}>
             <MobileAvatar name={user?.name || user?.email || 'You'} uri={user?.avatar_url} size={44} badge={<View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: colors.lime, borderWidth: 2, borderColor: colors.cream }} />} />
@@ -138,6 +141,7 @@ export function HomeScreen() {
       />
 
       <View style={{ paddingHorizontal: space[4], gap: space[4] }}>
+        <FollowUpStatusCard />
         {inbox.isCold && loops.isCold ? (
           <HomeSkeleton />
         ) : (

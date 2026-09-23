@@ -6,6 +6,7 @@ import { apnsNotificationProvider, expoNotificationProvider, type NotificationPa
 import { logger } from '../utils/logger';
 import { operationsTelemetry } from './operations-telemetry';
 import { isWhatsAppStatusUpdate } from './whatsapp-status';
+import { recordLoopActivity, recordMessageActivity } from './in-app-notifications';
 
 interface NotificationDevice {
   id: string;
@@ -359,13 +360,22 @@ export class NotificationDeliveryService {
     if (chatError) throw chatError;
     if (contactError) throw contactError;
     const options = (preferences?.preferences || {}) as NotificationOptions;
+    // The activity feed is account-level and survives unavailable/disabled push
+    // devices. A muted chat, however, should not create an alert in either place.
+    if (chat?.is_muted) return 0;
+    const contact = Array.isArray(chat?.contact) ? chat.contact[0] : chat?.contact;
+    const senderAvatarUrl = notificationImageUrl(contactRow?.avatar_url || contact?.avatar_url);
+    const chatAvatarUrl = notificationImageUrl(chat?.avatar_url);
+    try {
+      await recordMessageActivity(event, { senderAvatarUrl, chatAvatarUrl });
+    } catch (error) {
+      // An activity-feed outage must not prevent normal message push delivery.
+      logger.error('[notifications] could not record incoming activity', error);
+    }
     if (!shouldNotifyConversation(preferences?.notification_enabled, options, chat?.is_muted)) return 0;
 
     const { data: chats } = await supabase.from('chats').select('unread_count').eq('user_id', event.userId);
     const badge = (chats || []).reduce((sum: number, chat: { unread_count?: number }) => sum + Math.max(0, chat.unread_count || 0), 0);
-    const contact = Array.isArray(chat?.contact) ? chat.contact[0] : chat?.contact;
-    const senderAvatarUrl = notificationImageUrl(contactRow?.avatar_url || contact?.avatar_url);
-    const chatAvatarUrl = notificationImageUrl(chat?.avatar_url);
     let queued = 0;
     for (const device of (devices || []) as NotificationDevice[]) {
       let suppression: string | null = null;
@@ -416,6 +426,13 @@ export class NotificationDeliveryService {
   async enqueueLoopReminder(event: LoopReminderNotificationEvent): Promise<NotificationEnqueueResult> {
     if (process.env.LOOP_NOTIFICATIONS_ENABLED === 'false') return { queued: 0, outcome: 'disabled' };
     this.start();
+    // A due follow-up should remain visible inside Claire even when push is
+    // switched off or this account has no registered device.
+    try {
+      await recordLoopActivity(event);
+    } catch (error) {
+      logger.error('[notifications] could not record follow-up activity', error);
+    }
     const [{ data: preferences, error: preferenceError }, { data: devices, error: deviceError }] = await Promise.all([
       supabase.from('user_preferences').select('notification_enabled,preferences').eq('user_id', event.userId).maybeSingle(),
       supabase.from('notification_devices').select('id,user_id,device_id,platform,provider,token,enabled,timezone').eq('user_id', event.userId).eq('enabled', true),
