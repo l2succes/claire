@@ -1006,31 +1006,20 @@ claire-mobile-tabs.rf-tabs .rf-count {
 }
 
 /* ---------- status bar ---------- */
-/* Same glyphs as the landing page hero (MobileStatusBar): signal bars, wifi, full battery. */
+/* iOS glyphs: filled signal bars, the SF wifi fan and the filled battery. */
+.status {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+}
 .status .status-icons {
   display: flex;
   align-items: center;
-  gap: 5px;
-  padding-top: 1px;
+  gap: 6px;
+  padding-top: 3px;
+  color: var(--claire-ink);
+  fill: currentColor;
 }
-.status .status-icons .hero-icon {
-  width: 18px;
-  height: 18px;
-  stroke-width: 2;
-}
-.status .status-signal {
-  display: flex;
-  align-items: flex-end;
-  gap: 1.5px;
-  width: 17px;
-  height: 12px;
-}
-.status .status-signal i {
-  width: 3px;
-  border-radius: 1px;
-  background: var(--claire-ink);
-}
-.status .status-signal i:nth-child(1) { height: 4px; }
-.status .status-signal i:nth-child(2) { height: 6.5px; }
-.status .status-signal i:nth-child(3) { height: 9px; }
-.status .status-signal i:nth-child(4) { height: 12px; }
+.status .status-signal { width: 18px; height: 12px; }
+.status .status-wifi { width: 17px; height: 12.5px; }
+.status .status-battery { width: 27px; height: 12.5px; }
