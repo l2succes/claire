@@ -1115,7 +1115,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
    * Mark a session as connected after successful bridge HTTP API login.
    * Replicates the logic in handleControlRoomMessage for the login-success case.
    */
-  async markSessionConnected(sessionId: string, platformUserId?: string): Promise<void> {
+  async markSessionConnected(sessionId: string, platformUserId?: string, options?: { backgroundSync?: boolean }): Promise<void> {
     const session = this.sessions.get(sessionId) || (await this.loadSessionFromRedis(sessionId));
     if (!session) return;
 
@@ -1155,9 +1155,16 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     this.emitPlatformEvent('session_ready', sessionId, {});
 
     if (platform) {
-      await this.registerExistingRooms();
-      await this.syncRoomHistory(sessionId, platform);
-      await this.syncContacts(sessionId);
+      const sync = async () => {
+        await this.registerExistingRooms();
+        await this.syncRoomHistory(sessionId, platform);
+        await this.syncContacts(sessionId);
+      };
+      if (options?.backgroundSync) {
+        void sync().catch(() => logger.warn('Initial Instagram sync did not finish; the connection remains authenticated.'));
+      } else {
+        await sync();
+      }
     }
   }
 
