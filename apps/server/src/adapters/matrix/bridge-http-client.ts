@@ -18,12 +18,19 @@ export interface LoginFlow {
 // RespSubmitLogin = { login_id, ...LoginStep }
 export interface LoginStepResponse {
   login_id: string;    // login process ID (for subsequent step calls)
-  type: 'user_input' | 'cookies' | 'display_and_wait' | 'complete';
+  type: 'user_input' | 'cookies' | 'display_and_wait' | 'complete' | 'client_http' | 'webauthn';
   step_id: string;     // step ID (for the step URL)
   txn_id?: string;
   instructions?: string;
   complete?: { user_login_id: string };
-  cookies?: unknown;
+  user_input?: { fields: Array<{ id: string; type: string; name: string; description?: string; options?: string[] }> };
+  cookies?: {
+    url: string;
+    user_agent?: string;
+    fields: Array<{ id: string; required: boolean; sources: Array<{ type: string; name?: string; cookie_domain?: string }> }>;
+    wait_for_url_pattern?: string;
+    extract_js?: string;
+  };
   display_and_wait?: {
     type?: string;
     data?: string;
@@ -68,7 +75,8 @@ export class BridgeHttpClient {
     method: string,
     path: string,
     body?: unknown,
-    query: Record<string, string | undefined> = {}
+    query: Record<string, string | undefined> = {},
+    timeoutMs = BridgeHttpClient.REQUEST_TIMEOUT_MS
   ): Promise<T> {
     const params = new URLSearchParams({ user_id: this.matrixUserId });
     for (const [key, value] of Object.entries(query)) {
@@ -84,7 +92,7 @@ export class BridgeHttpClient {
           Authorization: `Bearer ${this.sharedSecret}`,
         },
         body: body !== undefined ? JSON.stringify(body) : undefined,
-        signal: AbortSignal.timeout(BridgeHttpClient.REQUEST_TIMEOUT_MS),
+        signal: AbortSignal.timeout(timeoutMs),
       });
     } catch (error) {
       const detail = error instanceof Error ? error.message : 'Unknown network error';
@@ -92,6 +100,7 @@ export class BridgeHttpClient {
     }
 
     const text = await res.text();
+    if (res.ok && !text) return undefined as T;
     let json: unknown;
     try {
       json = JSON.parse(text);
@@ -158,6 +167,21 @@ export class BridgeHttpClient {
   async startLogin(flowId: string): Promise<LoginStepResponse> {
     logger.debug(`[BridgeHttpClient] startLogin flow=${flowId}`);
     return this.request<LoginStepResponse>('POST', `/v3/login/start/${encodeURIComponent(flowId)}`);
+  }
+
+  /** Mobile attempts are bound to their owner by the coordinator, never by client-supplied bridge IDs. */
+  async advanceLogin(step: LoginStepResponse, input?: Record<string, string>): Promise<LoginStepResponse> {
+    return this.request<LoginStepResponse>(
+      'POST',
+      `/v3/login/step/${encodeURIComponent(step.login_id)}/${encodeURIComponent(step.step_id)}/${step.type}`,
+      input,
+      { txn_id: step.txn_id },
+      90_000,
+    );
+  }
+
+  async cancelLogin(loginId: string): Promise<void> {
+    await this.request('POST', `/v3/login/cancel/${encodeURIComponent(loginId)}`);
   }
 
   async submitCookies(

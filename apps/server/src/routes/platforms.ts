@@ -25,6 +25,8 @@ import { ClientFacingError, respondWithError } from '../utils/api-error';
 import { queueWhatsAppContactIdentitySync } from '../services/whatsapp-contact-backfill';
 import { outgoingTransactionId } from '../services/outgoing-request-id';
 import { transcodeVoiceToOggOpus } from '../services/audio-transcoder';
+import { InstagramMobileLogin } from '../services/instagram-mobile-login';
+import { instagramMobileLoginRouter } from './instagram-mobile-login';
 
 // Railway services cannot reach each other through localhost. Railway does not
 // inject NODE_ENV by default, so its public-domain marker is also used to
@@ -179,6 +181,24 @@ router.use((req, res, next) => {
   if (req.method === 'GET' && (req.path === '/' || req.path === '/definitions')) return next();
   return requireAuth(req, res, next);
 });
+
+const instagramMobileLogin = new InstagramMobileLogin({
+  bridge: instagramBridgeClient,
+  async createSession(userId, sessionId) {
+    const adapter = platformManager.getAdapter(Platform.INSTAGRAM);
+    if (!(adapter instanceof MatrixBridgeAdapter)) throw new Error('Instagram bridge unavailable');
+    await adapter.createSession(userId, sessionId, { platform: Platform.INSTAGRAM, skipBridgeAuth: true } as never);
+  },
+  async completeSession(sessionId, loginId) {
+    const adapter = platformManager.getAdapter(Platform.INSTAGRAM) as MatrixBridgeAdapter;
+    await adapter.markSessionConnected(sessionId, loginId, { backgroundSync: true });
+  },
+  async failSession(sessionId) {
+    const adapter = platformManager.getAdapter(Platform.INSTAGRAM) as MatrixBridgeAdapter | undefined;
+    await adapter?.markSessionFailed(sessionId, 'Instagram mobile sign-in ended.');
+  },
+}, process.env.INSTAGRAM_MOBILE_LOGIN_FLOW === 'instagram-password' ? 'instagram-password' : 'android');
+router.use('/instagram/mobile-login', instagramMobileLoginRouter(instagramMobileLogin));
 
 /** Authenticated opt-in platform interest. No external credentials are stored. */
 router.get('/interests', async (req: Request, res: Response) => {
@@ -399,7 +419,7 @@ router.post('/instagram/login/start', async (req: Request, res: Response) => {
     // which made a failed attempt look like an authentication flow still in
     // progress on every subsequent visit to Settings.
     const flows = await instagramBridgeClient.getLoginFlows();
-    const flowId = flows[0]?.id;
+    const flowId = flows.find(flow => flow.id === 'instagram')?.id;
     if (!flowId) {
       return res.status(502).json({ success: false, error: 'No login flows available from bridge' });
     }

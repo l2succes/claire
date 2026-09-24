@@ -33,12 +33,15 @@ import { CONNECTION_PLATFORM_CONFIG } from './connection-platform-config';
 import { formatPairingCodeForDisplay } from './connection-formatters';
 import { ConnectionPlatformMark } from './connection-platform-mark';
 import { useConnectionFlow } from './use-connection-flow';
+import { useInstagramMobileLogin } from './use-instagram-mobile-login';
+import { hasInstagramMobileLogin } from '../../modules/instagram-login';
 
 const isAndroid = process.env.EXPO_OS === 'android';
 
 export function ConnectionFlowScreen({ platform, source }: { platform: Platform; source: ConnectionSource }) {
   const insets = useSafeAreaInsets();
   const connection = useConnectionFlow(platform, source);
+  const instagram = useInstagramMobileLogin();
   const config = CONNECTION_PLATFORM_CONFIG[platform];
   const flowError = connection.error || '';
   const rateLimited = platform === Platform.WHATSAPP && /rate limited/i.test(flowError);
@@ -52,6 +55,9 @@ export function ConnectionFlowScreen({ platform, source }: { platform: Platform;
   } else if (connection.success) {
     body = <SuccessState platform={platform} account={connection.connectedSession?.platformUsername || connection.connectedSession?.phoneNumber || connection.connectedSession?.platformUserId} />;
     footer = <FlowButton label={source === 'onboarding' ? 'Back to accounts' : 'Done'} onPress={connection.goBack} />;
+  } else if (platform === Platform.INSTAGRAM && hasInstagramMobileLogin) {
+    body = <InstagramMobileIntro error={instagram.error} />;
+    footer = <><FlowButton label="Sign in to Instagram" loading={instagram.busy} onPress={() => void instagram.start()} /><FlowButton label="Do this later" variant="tertiary" onPress={connection.goBack} /></>;
   } else if (platform === Platform.INSTAGRAM || platform === Platform.IMESSAGE) {
     body = <CompanionGuide platform={platform} error={flowError} />;
     footer = (
@@ -313,6 +319,15 @@ function TelegramCodeState({ value, error, onChange, onChangeNumber }: { value: 
   );
 }
 
+function InstagramMobileIntro({ error }: { error: string | null }) {
+  return <View style={{ flex: 1, gap: space[4] }} testID="instagram-mobile-login">
+    <FlowIntro platform={Platform.INSTAGRAM} title="Connect Instagram on your iPhone" copy="Sign in and complete any verification Instagram asks for. Your conversations will sync to Claire after you connect." />
+    <InfoNote icon={<ShieldCheck size={17} color={colors.ink} />} text="Your password is used only for this sign-in. Claire’s bridge keeps your connection active after you close the app." />
+    {error ? <ErrorCallout text={error} /> : null}
+  </View>;
+}
+
+// Retained as the fallback for builds without the native module and for Android.
 function CompanionGuide({ platform, error }: { platform: Platform.INSTAGRAM | Platform.IMESSAGE; error: string }) {
   const instagram = platform === Platform.INSTAGRAM;
   const steps = instagram
