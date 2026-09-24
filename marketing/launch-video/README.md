@@ -7,7 +7,8 @@ self-contained HyperFrames project; `index.html` is the whole composition
 
 | Project | Canvas | Product surface |
 | --- | --- | --- |
-| `desktop/` | 1920×1080 | Desktop screens from `apps/website/public/mockups/desktop-mockups.html` |
+| `desktop/` | 1920×1080, 38s | Desktop screens from `apps/website/public/mockups/desktop-mockups.html` |
+| `mobile/` | 1080×1920, 40s | Phone screens from `apps/website/public/mockups/app-mockups.html` |
 
 ## Story
 
@@ -24,12 +25,22 @@ self-contained HyperFrames project; `index.html` is the whole composition
 6. **Close** — pixel dissolve to lime, "All your chats. One AI.", wordmark, dark end
    card with `useclaire.co`.
 
+### Mobile cut
+
+Same arc, but one phone carries the whole middle: tap Maya → the chat pushes in
+and Claire finds the promise → tap Track → back to the inbox and the Promises
+tab → the Search tab, where Claire answers "What did Maya say about launch
+timing?" from three conversations → connected accounts → a 2×2 grid of phones
+("It all lives together"). Taps are shown as a touch indicator rather than a
+cursor. Screens push inside the phone's viewport while the bezel and status bar
+stay put.
+
 ## Render
 
 Requires Node 22+ and FFmpeg.
 
 ```bash
-cd marketing/launch-video/desktop
+cd marketing/launch-video/desktop   # or mobile
 npx hyperframes check     # lint + runtime + layout + motion + contrast
 npx hyperframes render --output renders/claire-launch.mp4
 ```
@@ -45,18 +56,24 @@ export HYPERFRAMES_BROWSER_PATH="/Applications/Google Chrome.app/Contents/MacOS/
 
 ## Product screens
 
-`assets/ui/` holds screenshots of the website mockups: for each screen a
+In both projects, `assets/ui/` holds screenshots of the website mockups: for each screen a
 `*-base.png` with the animated parts hidden, plus every animated part on its
 own (`uw-b1.png`, `ak-sug.png`, …). The video places each part at its measured
 position and animates it, so the UI builds up over the real screen.
 
 After the mockups change, regenerate them and paste the printed positions into
-the `UW` / `AK` / `CN` tables in `index.html`:
+`index.html` (desktop: the `UW` / `AK` / `CN` tables; mobile: `LAYOUT`):
 
 ```bash
 (cd apps/website/public && python3 -m http.server 8765 --bind 127.0.0.1) &
 node marketing/launch-video/desktop/scripts/capture-ui.cjs marketing/launch-video/desktop/assets/ui
+node marketing/launch-video/mobile/scripts/capture-ui.cjs marketing/launch-video/mobile/assets/ui
 ```
+
+The scripts load `puppeteer-core` from the repo's `node_modules`; in a checkout
+without it, point `PUPPETEER_CORE` at another copy. The mobile status bar
+(`mobile/assets/ui/status.png`) is a crop of `ib-base.png`
+(`ffmpeg -i ib-base.png -vf crop=1474:195:30:30 status.png`).
 
 ## Audio
 
