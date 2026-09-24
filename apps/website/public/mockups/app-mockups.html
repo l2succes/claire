@@ -17,6 +17,7 @@
     <link rel="stylesheet" href="./tokens.css" />
     <link rel="stylesheet" href="./phone-frame.css" />
     <link rel="stylesheet" href="./app-mockups.css" />
+    <link rel="stylesheet" href="./app-mockups-refresh.css" />
     <link rel="icon" href="/assets/brand/claire-app-icon.svg" type="image/svg+xml" />
     <script src="./heroicons.js" defer></script>
     <script src="./phone-frame.js" defer></script>
@@ -134,135 +135,107 @@
           </p>
         </div>
         <div class="phone-grid">
-          <article class="screen-case" data-kind="core" data-screen="daily-brief">
-            <div class="screen-meta"><b>01 / DAILY BRIEF</b><span>HOME TAB</span></div>
+          <article class="screen-case" data-kind="core" data-screen="home">
+            <div class="screen-meta"><b>01 / HOME</b><span>HOME TAB</span></div>
             <claire-phone>
               <div class="island"></div>
               <div class="status"><span>9:41</span><span>● ◒</span></div>
-              <div class="screen">
-                <div class="brief-date">THURSDAY, AUG 13</div>
-                <h2 class="brief-title">Good morning,<br />Luc.</h2>
-                <p class="brief-sub">You’re clear after three quick actions.</p>
-                <div class="hero-card">
-                  <span>↗</span>
-                  <div><small>NEEDS A REPLY</small><b>3 conversations are waiting</b></div>
-                  <em>View</em>
+              <div class="screen rf cream">
+                <div class="rf-hello">
+                  <h2>Good morning, Luc</h2>
+                  <div class="rf-me">LS</div>
                 </div>
-                <div class="section-label"><span>YOUR DAY</span><span>4 ITEMS</span></div>
-                <div class="daily-row">
-                  <i class="wa">W</i>
-                  <div>
-                    <b>Maya needs the Q3 deck</b>
-                    <p>WhatsApp · waiting 2m</p>
+                <div class="rf-focus">
+                  <div class="rf-focus-head"><span class="rf-mono">Focus</span><span>3 loops worth attention</span><b>All loops</b></div>
+                  <div class="rf-loop">
+                    <span class="rf-ring"></span>
+                    <div class="rf-loop-body"><b>Send Maya the updated deck</b><p>You owe this · Today</p></div>
+                    <span class="rf-act rf-mono">Act now</span>
                   </div>
-                  <time>Now</time>
-                </div>
-                <div class="daily-row">
-                  <i>✓</i>
-                  <div>
-                    <b>Confirm dinner with Dad</b>
-                    <p>Promise · due at 5:00</p>
+                  <div class="rf-loop">
+                    <span class="rf-ring"></span>
+                    <div class="rf-loop-body"><b>Confirm dinner with Dad</b><p>You owe this · Sunday</p></div>
+                    <span class="rf-act rf-mono">Act now</span>
                   </div>
-                  <time>8h</time>
-                </div>
-                <div class="daily-row">
-                  <i style="background: var(--claire-blush)">!</i>
-                  <div>
-                    <b>Sofia asked a direct question</b>
-                    <p>Instagram · yesterday</p>
+                  <div class="rf-loop">
+                    <span class="rf-ring calm"></span>
+                    <div class="rf-loop-body"><b>Noah’s intro to Priya</b><p>Waiting on Noah · Friday</p></div>
+                    <span class="rf-act calm rf-mono">Waiting</span>
                   </div>
-                  <time>1d</time>
                 </div>
-                <div class="take-card">
-                  <span>✦</span>
-                  <div><small>CLAIRE’S TAKE</small><b>Your morning is quiet after these.</b></div>
+                <div class="rf-section rf-mono"><span>Recent conversations</span><span>3 recent</span></div>
+                <div class="rf-convo">
+                  <span class="rf-bubble-tile"><i data-heroicon="bubble"></i></span>
+                  <div class="rf-loop-body"><b>Maya needs a reply</b><p><span class="rf-pi wa"><img src="/assets/platforms/whatsapp.svg" alt="" /></span> WhatsApp · Maya Kim</p></div>
+                  <time>9:41</time>
                 </div>
-                <claire-mobile-tabs active="home"></claire-mobile-tabs>
+                <div class="rf-convo">
+                  <span class="rf-bubble-tile"><i data-heroicon="bubble"></i></span>
+                  <div class="rf-loop-body"><b>Sofia shared a place</b><p><span class="rf-pi ig"><img src="/assets/platforms/instagram.svg" alt="" /></span> Instagram · Sofia</p></div>
+                  <time>9:02</time>
+                </div>
+                <div class="rf-ask">
+                  <i data-heroicon="bubble"></i>
+                  <div><span class="rf-mono">Ask Claire</span><b>What deserves my attention next?</b></div>
+                </div>
+                <claire-mobile-tabs active="home" loops="3"></claire-mobile-tabs>
               </div>
             </claire-phone>
             <p class="screen-note">
-              Orientation screen: prioritizes people and commitments, not message volume.
+              Home leads with the loops that need you, then recent conversations and a way into Ask Claire.
             </p>
           </article>
           <article class="screen-case" data-kind="core" data-screen="unified-inbox">
-            <div class="screen-meta"><b>02 / UNIFIED INBOX</b><span>INBOX TAB</span></div>
+            <div class="screen-meta"><b>02 / INBOX</b><span>INBOX TAB</span></div>
             <claire-phone>
               <div class="island"></div>
               <div class="status"><span>9:41</span><span>● ◒</span></div>
-              <div class="screen">
-                <div class="app-title">
-                  <h2>Inbox</h2>
-                  <div class="app-title-actions">
-                    <button class="round-button" aria-label="Search">
-                      <i data-heroicon="search"></i></button
-                    ><button class="round-button" aria-label="New message">
-                      <i data-heroicon="compose"></i>
-                    </button>
+              <div class="screen rf paper">
+                <div class="rf-title"><h2>Inbox</h2><span class="rf-square"><i data-heroicon="compose"></i></span></div>
+                <div class="rf-search"><i data-heroicon="search"></i>Search conversations</div>
+                <div class="rf-chips">
+                  <span class="rf-chip on">DMs</span><span class="rf-chip">All</span><span class="rf-chip">Groups</span><span class="rf-chip">Unread 12</span><span class="rf-chip">Needs reply</span>
+                </div>
+                <div class="rf-section rf-mono"><span>Highlights</span><span>Claire’s picks</span></div>
+                <div class="rf-picks">
+                  <div class="rf-pick">
+                    <div class="rf-pick-head rf-mono"><i data-heroicon="check-circle"></i>Claire’s pick<span class="rf-pi wa"><img src="/assets/platforms/whatsapp.svg" alt="" /></span></div>
+                    <b>Maya Kim</b><p>Can you send that deck?</p>
+                    <div class="rf-pick-foot"><span>Open loop</span><time>9:41 AM</time></div>
+                  </div>
+                  <div class="rf-pick">
+                    <div class="rf-pick-head rf-mono"><i data-heroicon="check-circle"></i>Claire’s pick<span class="rf-pi tg"><img src="/assets/platforms/telegram.svg" alt="" /></span></div>
+                    <b>Noah Oliver</b><p>Did you get a chance to look?</p>
+                    <div class="rf-pick-foot"><span>Open loop</span><time>9:12 AM</time></div>
                   </div>
                 </div>
-                <div class="search-field">
-                  <i data-heroicon="search"></i
-                  ><input value="Search conversations" aria-label="Search conversations" />
+                <div class="rf-section rf-mono"><span>Recent</span><span>24 conversations</span></div>
+                <div class="rf-row">
+                  <div class="rf-av">MK<span class="rf-pf wa"><img src="/assets/platforms/whatsapp.svg" alt="" /></span></div>
+                  <div class="rf-row-body"><b>Maya Kim</b><p>Can you send that deck?</p></div>
+                  <div class="rf-row-side"><time>9:41 AM</time><span class="rf-badges"><span class="rf-loopbadge"><i data-heroicon="check-circle"></i></span><span class="rf-unread">2</span></span></div>
                 </div>
-                <div class="filter-chips">
-                  <button class="active">All</button><button>Unread 12</button
-                  ><button>Needs reply</button><button>WhatsApp</button>
+                <div class="rf-row">
+                  <div class="rf-av sky">NO<span class="rf-pf tg"><img src="/assets/platforms/telegram.svg" alt="" /></span></div>
+                  <div class="rf-row-body"><b>Noah Oliver</b><p>Voice message · 0:24</p></div>
+                  <div class="rf-row-side"><time>9:12 AM</time><span class="rf-badges"><span class="rf-unread">1</span></span></div>
                 </div>
-                <div class="section-label"><span>PINNED</span><span>EDIT</span></div>
-                <div class="conversation-row urgent">
-                  <div class="avatar-wrap">
-                    <div class="avatar">MK</div>
-                    <i class="platform-dot wa">W</i>
-                  </div>
-                  <div>
-                    <h4>Maya Kim</h4>
-                    <p>Can you send that deck?</p>
-                  </div>
-                  <div><time>2m</time><span class="unread">1</span></div>
+                <div class="rf-row">
+                  <div class="rf-av mint">ST<span class="rf-pf wa"><img src="/assets/platforms/whatsapp.svg" alt="" /></span></div>
+                  <div class="rf-row-body"><b>Studio team</b><p>Lea: latest screens are in</p></div>
+                  <div class="rf-row-side"><time>8:50 AM</time><span class="rf-badges"><span class="rf-loopbadge"><i data-heroicon="check-circle"></i></span></span></div>
                 </div>
-                <div class="section-label"><span>RECENT</span><span>24 CONVERSATIONS</span></div>
-                <div class="conversation-row">
-                  <div class="avatar-wrap">
-                    <div class="avatar blue">NO</div>
-                    <i class="platform-dot tg">T</i>
-                  </div>
-                  <div>
-                    <h4>Noah Oliver</h4>
-                    <p>Voice message · 0:24</p>
-                  </div>
-                  <time>18m</time>
+                <div class="rf-row">
+                  <div class="rf-av lav">SR<span class="rf-pf ig"><img src="/assets/platforms/instagram.svg" alt="" /></span></div>
+                  <div class="rf-row-body"><b>Sofia Ramirez</b><p>That place looks perfect</p></div>
+                  <div class="rf-row-side"><time>Yesterday</time></div>
                 </div>
-                <div class="conversation-row">
-                  <div class="avatar-wrap">
-                    <div class="avatar mint">ST</div>
-                    <i class="platform-dot wa">W</i>
-                  </div>
-                  <div>
-                    <h4>Studio team</h4>
-                    <p>Lea: latest screens are in</p>
-                  </div>
-                  <time>1h</time>
-                </div>
-                <div class="conversation-row">
-                  <div class="avatar-wrap">
-                    <div class="avatar purple">SO</div>
-                    <i class="platform-dot ig">I</i>
-                  </div>
-                  <div>
-                    <h4>Sofia</h4>
-                    <p>That place looks perfect ✨</p>
-                  </div>
-                  <time>3h</time>
-                </div>
-                <button class="floating-compose" aria-label="New message">
-                  <i data-heroicon="compose"></i>
-                </button>
-                <claire-mobile-tabs active="inbox"></claire-mobile-tabs>
+                <span class="rf-fab"><i data-heroicon="compose"></i></span>
+                <claire-mobile-tabs active="inbox" loops="3"></claire-mobile-tabs>
               </div>
             </claire-phone>
             <p class="screen-note">
-              Standard inbox: one person-first list with explicit platform badges and utility
-              filters.
+              Direct messages first, with Claire’s picks surfacing the conversations that still hold an open loop.
             </p>
           </article>
           <article class="screen-case" data-kind="core" data-screen="chat">
@@ -270,63 +243,34 @@
             <claire-phone>
               <div class="island"></div>
               <div class="status"><span>9:41</span><span>● ◒</span></div>
-              <div class="screen chat-screen">
-                <header class="chat-head">
-                  <button class="back">‹</button>
-                  <div class="chat-head-person">
-                    <div class="avatar-wrap">
-                      <div class="avatar">MK</div>
-                      <i class="platform-dot wa">W</i>
-                    </div>
-                    <div>
-                      <h3>Maya Kim</h3>
-                      <p>WhatsApp · active now</p>
-                    </div>
-                  </div>
-                  <button aria-label="More"><i data-heroicon="more"></i></button>
+              <div class="screen rf cream rf-chat no-tab">
+                <header class="rf-chat-head">
+                  <span class="rf-square"><i data-heroicon="chevron-left"></i></span>
+                  <div class="rf-av">MK</div>
+                  <div class="rf-chat-who"><b>Maya Kim</b><small><span class="rf-pi wa"><img src="/assets/platforms/whatsapp.svg" alt="" /></span> WhatsApp</small></div>
+                  <span class="rf-square"><i data-heroicon="more"></i></span>
                 </header>
-                <div class="ai-ribbon">
-                  <span>✦</span>
-                  <div>
-                    <small>QUICK CONTEXT</small>
-                    <p>Product review tomorrow · deck still open</p>
+                <div class="rf-stream">
+                  <div class="rf-openloop">
+                    <span class="rf-ring"><i data-heroicon="check-circle"></i></span>
+                    <div><small class="rf-mono">Open loop</small><b>Send Maya the updated deck before 10</b></div>
+                    <em>View</em>
                   </div>
-                  <button>Ask Claire</button>
+                  <div class="rf-day">Today</div>
+                  <div class="rf-msg">Hey! Are we still good for the product review tomorrow?<small>9:12 AM</small></div>
+                  <div class="rf-msg out">Absolutely. I’ll send the updated deck before 10.<small>9:14 AM</small></div>
+                  <div class="rf-msg">Perfect. I’ll add comments tonight. Thank you!<small>9:15 AM</small></div>
                 </div>
-                <div class="message-stream">
-                  <div class="day-chip">Today</div>
-                  <div class="bubble in">
-                    Hey! Are we still good for the product review tomorrow?<span class="bubble-time"
-                      >9:12</span
-                    >
-                  </div>
-                  <div class="bubble out">
-                    Absolutely. I’ll send the updated deck before 10.<span class="bubble-time"
-                      >9:14 · ✓✓</span
-                    >
-                  </div>
-                  <div class="promise-inline">
-                    <span>✦</span>
-                    <div><small>PROMISE FOUND</small><b>Send the deck tomorrow before 10</b></div>
-                    <button>Track</button>
-                  </div>
-                  <div class="bubble in">
-                    Perfect. I’ll add comments tonight. Thank you!<span class="bubble-time"
-                      >9:15</span
-                    >
-                  </div>
-                </div>
-                <div class="composer">
-                  <button aria-label="Add attachment"><i data-heroicon="plus"></i></button
-                  ><span>Write a message…</span
-                  ><button aria-label="Ask Claire"><i data-heroicon="chat"></i></button
-                  ><button class="send" aria-label="Send"><i data-heroicon="send"></i></button>
+                <div class="rf-composer">
+                  <span class="rf-cbtn"><i data-heroicon="plus"></i></span>
+                  <span>Write a message…</span>
+                  <span class="rf-cbtn round"><i data-heroicon="microphone"></i></span>
+                  <span class="rf-cbtn round send"><i data-heroicon="send"></i></span>
                 </div>
               </div>
             </claire-phone>
             <p class="screen-note">
-              AI stays at the top as context and inline as a promise. The conversation remains
-              primary.
+              When Claire hears a commitment it pins the open loop above the thread. The conversation stays primary.
             </p>
           </article>
           <article class="screen-case" data-kind="core" data-screen="new-message">
@@ -387,65 +331,46 @@
               person.
             </p>
           </article>
-          <article class="screen-case" data-kind="core" data-screen="promises">
-            <div class="screen-meta"><b>05 / PROMISES</b><span>PROMISES TAB</span></div>
+          <article class="screen-case" data-kind="core" data-screen="loops">
+            <div class="screen-meta"><b>05 / LOOPS</b><span>LOOPS TAB</span></div>
             <claire-phone>
               <div class="island"></div>
               <div class="status"><span>9:41</span><span>● ◒</span></div>
-              <div class="screen">
-                <div class="app-title">
-                  <h2>Promises</h2>
-                  <button class="round-button" aria-label="Add person">
-                    <i data-heroicon="plus"></i>
-                  </button>
+              <div class="screen rf cream rf-loops">
+                <div class="rf-title">
+                  <div><h2>Loops</h2><p>Follow through without losing the conversation.</p></div>
+                  <span class="rf-square"><i data-heroicon="plus"></i></span>
                 </div>
-                <div class="promise-summary">
-                  <div class="metric lime"><strong>4</strong><span>OPEN PROMISES</span></div>
-                  <div class="metric blue"><strong>2</strong><span>DUE TODAY</span></div>
+                <div class="rf-metrics">
+                  <div class="rf-metric"><b>3</b><span class="rf-mono">Need attention</span></div>
+                  <div class="rf-metric sky"><b>1</b><span class="rf-mono">Due today</span></div>
                 </div>
-                <div class="filter-chips">
-                  <button class="active">Open</button><button>Completed</button
-                  ><button>I’m waiting</button>
+                <div class="rf-chips">
+                  <span class="rf-chip on">For you 5</span><span class="rf-chip">Closed</span><span class="rf-chip">I’m waiting 2</span><span class="rf-chip">All 12</span>
                 </div>
-                <div class="section-label"><span>TODAY</span><span>2</span></div>
-                <div class="promise-item overdue">
-                  <div class="promise-check">!</div>
-                  <div>
-                    <b>Send Maya the Q3 deck</b>
-                    <p>From your WhatsApp conversation</p>
-                  </div>
-                  <span class="due">10:00</span>
+                <div class="rf-looprow">
+                  <span class="rf-ring"><i data-heroicon="exclamation-circle"></i></span>
+                  <div class="rf-loop-body"><b>Send Maya the updated deck</b><p>You said you’d send it before 10.</p>
+                    <div class="rf-owner"><span class="rf-av sm">MK</span>Maya Kim <span class="rf-mono">You owe this</span></div></div>
+                  <div class="rf-due rf-mono"><i data-heroicon="clock"></i>Due<span>Today</span></div>
                 </div>
-                <div class="promise-item">
-                  <div class="promise-check">○</div>
-                  <div>
-                    <b>Confirm dinner with Dad</b>
-                    <p>From your family group</p>
-                  </div>
-                  <span class="due">17:00</span>
+                <div class="rf-looprow">
+                  <span class="rf-ring"><i data-heroicon="exclamation-circle"></i></span>
+                  <div class="rf-loop-body"><b>Confirm dinner with Dad</b><p>He asked if Sunday still works.</p>
+                    <div class="rf-owner"><span class="rf-av sm sand">D</span>Dad <span class="rf-mono">You owe this</span></div></div>
+                  <div class="rf-due rf-mono"><i data-heroicon="clock"></i>Due<span>Sun</span></div>
                 </div>
-                <div class="section-label"><span>LATER</span><span>2</span></div>
-                <div class="promise-item">
-                  <div class="promise-check">○</div>
-                  <div>
-                    <b>Review Noah’s introduction</b>
-                    <p>Telegram · due Friday</p>
-                  </div>
-                  <span class="due">FRI</span>
+                <div class="rf-looprow">
+                  <span class="rf-ring calm"></span>
+                  <div class="rf-loop-body"><b>Noah’s intro to Priya</b><p>Noah offered to make the introduction.</p>
+                    <div class="rf-owner"><span class="rf-av sm sky">NO</span>Noah Oliver <span class="rf-mono">I’m waiting</span></div></div>
+                  <div class="rf-due calm rf-mono"><i data-heroicon="clock"></i>Fri</div>
                 </div>
-                <div class="promise-item">
-                  <div class="promise-check">○</div>
-                  <div>
-                    <b>Book dentist appointment</b>
-                    <p>Added manually</p>
-                  </div>
-                  <span class="due">MON</span>
-                </div>
-                <claire-mobile-tabs active="promises"></claire-mobile-tabs>
+                <claire-mobile-tabs active="loops" loops="3"></claire-mobile-tabs>
               </div>
             </claire-phone>
             <p class="screen-note">
-              Commitments link back to their source message so they always retain human context.
+              Loops split what you owe from what you’re waiting on, each tied back to the person and thread.
             </p>
           </article>
           <article class="screen-case" data-kind="core" data-screen="contacts">
@@ -525,54 +450,29 @@
           </p>
         </div>
         <div class="phone-grid">
-          <article class="screen-case" data-kind="ai" data-screen="ai-copilot">
-            <div class="screen-meta"><b>07 / AI COPILOT</b><span>FORM SHEET</span></div>
+          <article class="screen-case" data-kind="ai" data-screen="ask-claire">
+            <div class="screen-meta"><b>07 / ASK CLAIRE</b><span>CLAIRE TAB</span></div>
             <claire-phone>
               <div class="island"></div>
-              <div class="status" style="background: var(--claire-sky)">
-                <span>9:41</span><span>● ◒</span>
-              </div>
-              <div class="screen no-tab copilot-screen">
-                <div class="sheet-handle"></div>
-                <div class="copilot-head">
-                  <h2>Ask Claire</h2>
-                  <button>×</button>
+              <div class="status"><span>9:41</span><span>● ◒</span></div>
+              <div class="screen rf sky rf-ask-screen">
+                <div class="rf-title">
+                  <div><h2>Ask Claire</h2><p>Across your connected conversations</p></div>
+                  <span class="rf-square lime"><i data-heroicon="plus"></i></span>
                 </div>
-                <p class="copilot-context">Using your conversation with Maya</p>
-                <article class="suggestion-card">
-                  <small>SUGGESTED REPLY · WARM + DIRECT</small>
-                  <p>
-                    “Yes—we’re all set for tomorrow. I’ll send the updated deck by 10, and we can
-                    use the first few minutes to cover your comments.”
-                  </p>
-                  <div class="suggestion-actions">
-                    <button>Use reply</button><button>Make shorter</button
-                    ><button>Try again</button>
-                  </div>
-                </article>
-                <div class="tiny-label">MORE WAYS I CAN HELP</div>
-                <div class="copilot-tool-grid">
-                  <div class="copilot-tool">
-                    <span>≡</span><b>Catch me up</b>
-                    <p>Summarize the conversation.</p>
-                  </div>
-                  <div class="copilot-tool">
-                    <span>↗</span><b>Find open loops</b>
-                    <p>Promises and questions.</p>
-                  </div>
-                  <div class="copilot-tool">
-                    <span>☺</span><b>Check the tone</b>
-                    <p>Warm, direct, or playful.</p>
-                  </div>
-                  <div class="copilot-tool">
-                    <i data-heroicon="search"></i><b>Find something</b>
-                    <p>Search just this chat.</p>
-                  </div>
+                <div class="rf-q">What did Maya say about launch timing?</div>
+                <div class="rf-a">Maya suggested moving the public launch to <mark>September 18</mark> so support gets one more week. The studio team agreed the next day.</div>
+                <div class="rf-sources"><span class="rf-stack"><i>MK</i><i>ST</i><i>MK</i></span><span>Sources</span><span>3</span></div>
+                <div class="rf-srcs">
+                  <div class="rf-src"><div class="rf-src-head"><span>Maya Kim</span><time>Jul 24</time></div><p>Could we move the launch to September 18? Support needs one more week.</p><em>Open chat ›</em></div>
+                  <div class="rf-src"><div class="rf-src-head"><span>Studio team</span><time>Jul 25</time></div><p>Maya’s launch timing note makes sense. Let’s lock the 18th.</p><em>Open chat ›</em></div>
                 </div>
+                <div class="rf-askbar"><span>Ask Claire…</span><span class="rf-cbtn"><i data-heroicon="arrow-up"></i></span></div>
+                <claire-mobile-tabs class="sky" active="claire" loops="3"></claire-mobile-tabs>
               </div>
             </claire-phone>
             <p class="screen-note">
-              A native form sheet keeps AI reversible and subordinate to the active chat.
+              Answers are short and cite the messages behind them—never a source-less oracle.
             </p>
           </article>
           <article class="screen-case" data-kind="ai" data-screen="global-search">
@@ -925,71 +825,33 @@ Maya is my product lead. Be concise and warm. Avoid over-explaining, and always 
               and backspace all work in the prototype.
             </p>
           </article>
-          <article class="screen-case" data-kind="setup" data-screen="connect-accounts">
-            <div class="screen-meta">
-              <b>14 / CONNECT ACCOUNTS</b><span>ONBOARDING + SETTINGS</span>
-            </div>
+          <article class="screen-case" data-kind="setup" data-screen="connections">
+            <div class="screen-meta"><b>13 / CONNECTIONS</b><span>PROFILE STACK</span></div>
             <claire-phone>
               <div class="island"></div>
               <div class="status"><span>9:41</span><span>● ◒</span></div>
-              <div class="screen no-tab">
-                <div class="app-title">
-                  <button class="round-button">‹</button>
-                  <h3>Connected accounts</h3>
-                  <button class="round-button">?</button>
+              <div class="screen rf cream no-tab">
+                <div class="rf-nav"><span class="rf-square"><i data-heroicon="chevron-left"></i></span><span class="rf-square"><i data-heroicon="arrow-path"></i></span></div>
+                <div class="rf-title"><div><h2>Connections</h2><p>Bring your conversations into Claire.</p></div></div>
+                <div class="rf-hero">
+                  <span class="rf-square"><i data-heroicon="plus"></i></span>
+                  <b>One inbox, your choice of networks</b>
+                  <p>Phone-safe setup happens here. Desktop-only connectors tell you when Claire Desktop is required.</p>
                 </div>
-                <div
-                  style="
-                    background: var(--claire-lime);
-                    border-radius: 17px;
-                    padding: 15px;
-                    margin-bottom: 18px;
-                  "
-                >
-                  <span class="tiny-label">STEP 2 OF 3</span>
-                  <h2 style="font-size: 22px; line-height: 1.05; margin: 7px 0">
-                    Bring your conversations together.
-                  </h2>
-                  <p style="font-size: 9px; margin: 0; color: var(--neutral-600)">
-                    Connect one now. You can always add or remove accounts later.
-                  </p>
+                <div class="rf-section rf-mono"><span>Connect on this phone</span></div>
+                <div class="rf-group">
+                  <div class="rf-net"><span class="rf-net-icon wa"><img src="/assets/platforms/whatsapp.svg" alt="" /></span><div><b>WhatsApp</b><p>About 2 minutes · Phone pairing</p><span class="rf-state"><i data-heroicon="check"></i>Connected</span></div><i data-heroicon="chevron-right"></i></div>
+                  <div class="rf-net"><span class="rf-net-icon tg"><img src="/assets/platforms/telegram.svg" alt="" /></span><div><b>Telegram</b><p>About 1 minute · Verify in Telegram</p><span class="rf-state"><i data-heroicon="check"></i>Connected</span></div><i data-heroicon="chevron-right"></i></div>
                 </div>
-                <div class="account-card">
-                  <div class="account-icon wa">W</div>
-                  <div>
-                    <b>WhatsApp</b>
-                    <p>Scan a QR code from Linked Devices</p>
-                  </div>
-                  <button>Connect</button>
+                <div class="rf-section rf-mono"><span>Finish on another device</span></div>
+                <div class="rf-group">
+                  <div class="rf-net"><span class="rf-net-icon ig"><img src="/assets/platforms/instagram.svg" alt="" /></span><div><b>Instagram</b><p>One-time setup in Claire Desktop</p><span class="rf-state"><i data-heroicon="check"></i>Connected</span></div><i data-heroicon="chevron-right"></i></div>
+                  <div class="rf-net"><span class="rf-net-icon im"><img src="/assets/platforms/imessage.svg" alt="" /></span><div><b>iMessage</b><p>Requires a Mac that stays online</p><span class="rf-state muted"><i data-heroicon="desktop"></i>Mac required</span></div><i data-heroicon="chevron-right"></i></div>
                 </div>
-                <div class="account-card">
-                  <div class="account-icon tg">T</div>
-                  <div>
-                    <b>Telegram</b>
-                    <p>Verify with your phone number</p>
-                  </div>
-                  <button>Connect</button>
-                </div>
-                <div class="account-card">
-                  <div class="account-icon ig">I</div>
-                  <div>
-                    <b>Instagram</b>
-                    <p>Sign in securely with Meta</p>
-                  </div>
-                  <button>Connect</button>
-                </div>
-                <div class="security-note">
-                  <i data-heroicon="desktop"></i>
-                  <p>
-                    <b>Your account stays yours.</b><br />Claire connects through dedicated Matrix
-                    bridges. Disconnect at any time.
-                  </p>
-                </div>
-                <button class="save-bar">Continue</button>
               </div>
             </claire-phone>
             <p class="screen-note">
-              The same connection UI works during onboarding and later from Settings.
+              Connections group by where setup happens, so nobody starts a flow their phone can’t finish.
             </p>
           </article>
           <article class="screen-case" data-kind="setup" data-screen="account-attention">
