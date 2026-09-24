@@ -1,0 +1,507 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      @font-face { font-family: "Inter"; src: url("assets/fonts/Inter-SemiBold.ttf"); font-weight: 600; }
+      @font-face { font-family: "Inter"; src: url("assets/fonts/Inter-Bold.ttf"); font-weight: 700; }
+      @font-face { font-family: "Public Sans"; src: url("assets/fonts/PublicSans-Medium.ttf"); font-weight: 500; }
+      @font-face { font-family: "Public Sans"; src: url("assets/fonts/PublicSans-SemiBold.ttf"); font-weight: 600; }
+      @font-face { font-family: "DM Mono"; src: url("assets/fonts/DMMono-Medium.ttf"); font-weight: 500; }
+
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; background: #10120f; }
+      #root { position: relative; width: 100%; height: 100%; overflow: hidden; background: #10120f; font-family: "Public Sans", sans-serif; }
+      .clip { position: absolute; inset: 0; overflow: hidden; }
+
+      /* ---------- wallpaper ---------- */
+      #wall .base { position: absolute; inset: 0; background: #f4f1ea; }
+      #wall .blob { position: absolute; border-radius: 50%; filter: blur(110px); }
+      #wall .dark { position: absolute; inset: 0; background: radial-gradient(120% 90% at 50% 40%, #1b1f18 0%, #0c0e0b 70%); }
+      #wall .dblob { position: absolute; border-radius: 50%; filter: blur(140px); opacity: 0.55; }
+
+      /* ---------- captions ---------- */
+      .cap {
+        position: absolute; left: 0; right: 0; text-align: center; white-space: nowrap;
+        font-family: "Inter", sans-serif; font-weight: 600; font-size: 58px; letter-spacing: -0.032em; color: #10120f;
+      }
+      .cap.light { color: #f4f1ea; }
+      .cap .w { display: inline-block; }
+      .hl { position: relative; display: inline-block; z-index: 0; }
+      .hl .sw { position: absolute; left: -10px; right: -10px; top: 8%; bottom: 0%; border-radius: 10px; background: #dfff64; z-index: -1; transform-origin: 0 50%; }
+      .slot { position: relative; display: inline-block; height: 1.2em; vertical-align: top; }
+      .slot > span { position: absolute; left: 0; top: 0; white-space: nowrap; }
+
+      /* ---------- S1 notifications ---------- */
+      #nstack { position: absolute; left: 50%; top: 470px; width: 0; height: 0; }
+      .note {
+        position: absolute; left: -330px; top: 0; width: 660px; height: 112px; border-radius: 30px;
+        background: rgba(40, 43, 37, 0.96); box-shadow: 0 30px 60px rgba(0, 0, 0, 0.35), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+        display: flex; align-items: center; gap: 22px; padding: 0 26px; color: #f4f1ea;
+      }
+      .note .ic { width: 64px; height: 64px; border-radius: 16px; flex: none; display: flex; align-items: center; justify-content: center; }
+      .note .ic img { width: 58%; height: 58%; display: block; }
+      .note .tx { flex: 1; min-width: 0; }
+      .note .row1 { display: flex; justify-content: space-between; font-size: 21px; color: #a9ada2; font-weight: 500; }
+      .note b { display: block; font-size: 25px; font-weight: 600; margin-top: 2px; }
+      .note p { font-size: 23px; color: #d9dcd2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .wa { background: #25d366; } .tg { background: #229ed9; } .ig { background: linear-gradient(135deg, #f58529, #dd2a7b 55%, #8134af); }
+      .im { background: #34c759; } .sl { background: #4a154b; }
+
+      /* ---------- S2 icon ---------- */
+      #icon-wrap { position: absolute; left: 50%; top: 430px; width: 0; height: 0; }
+      #icon {
+        position: absolute; left: -110px; top: -110px; width: 220px; height: 220px; border-radius: 56px; background: #dfff64;
+        display: flex; align-items: center; justify-content: center; box-shadow: 0 0 120px rgba(223, 255, 100, 0.45);
+      }
+      #icon svg { width: 150px; height: 150px; }
+      #lime-fill { position: absolute; inset: 0; background: #dfff64; opacity: 0; }
+
+      /* ---------- product windows ---------- */
+      .cam { position: absolute; inset: 0; transform-origin: 0 0; }
+      .win {
+        position: absolute; left: 280px; top: 255px; width: 1360px; height: 765px; border-radius: 16px; overflow: hidden;
+        box-shadow: 0 50px 120px rgba(16, 18, 15, 0.25), 0 0 0 1px rgba(16, 18, 15, 0.1); background: #f7f5ef;
+      }
+      .win > img, .win .pc { position: absolute; display: block; }
+      .win > img.base { left: 0; top: 0; width: 1360px; height: 765px; }
+      .cursor { position: absolute; left: 0; top: 0; width: 42px; height: 42px; z-index: 30; }
+      .cursor svg { width: 100%; height: 100%; display: block; filter: drop-shadow(0 3px 5px rgba(0, 0, 0, 0.28)); }
+      .ripple { position: absolute; left: 0; top: 0; width: 44px; height: 44px; margin: -22px 0 0 -22px; border-radius: 50%; border: 3px solid #10120f; opacity: 0; z-index: 29; }
+      .glow { position: absolute; border-radius: 14px; box-shadow: 0 0 0 3px #dfff64, 0 0 40px rgba(223, 255, 100, 0.9); opacity: 0; }
+      #tracked {
+        position: absolute; border-radius: 99px; background: #dfff64; color: #10120f; font-weight: 600; font-size: 8px;
+        display: flex; align-items: center; justify-content: center; gap: 3px; opacity: 0;
+      }
+      #typed { position: absolute; font: 500 10px/15px "Public Sans", sans-serif; color: #10120f; display: flex; align-items: center; }
+      #typed-text { display: block; overflow: hidden; white-space: nowrap; }
+      #typed-caret { width: 1.2px; height: 13px; background: #10120f; margin-left: 1px; }
+
+      /* gallery */
+      .gw { position: absolute; width: 1360px; height: 765px; border-radius: 16px; overflow: hidden; transform-origin: 0 0; box-shadow: 0 40px 90px rgba(16, 18, 15, 0.22), 0 0 0 1px rgba(16, 18, 15, 0.1); }
+      .gw img { width: 100%; height: 100%; display: block; }
+
+      /* pixel dissolve */
+      #pix { position: absolute; inset: 0; }
+      #pix i { position: absolute; width: 81px; height: 81px; background: #dfff64; display: block; }
+
+      /* lime field + wordmark */
+      #field { position: absolute; inset: 0; background: #dfff64; }
+      #field i { position: absolute; width: 60px; height: 60px; background: #d0f24a; display: block; }
+      #wordmark { position: absolute; left: 0; right: 0; top: 0; bottom: 0; display: flex; align-items: center; justify-content: center; gap: 44px; }
+      #wordmark svg { width: 210px; height: 210px; }
+      #wordmark span { font-family: "Inter"; font-weight: 700; font-size: 240px; letter-spacing: -0.05em; color: #10120f; }
+
+      /* end card */
+      #end { background: #0b0c0a; }
+      #end i { position: absolute; width: 54px; height: 54px; background: #1a1d17; display: block; }
+      #end-mark { position: absolute; left: 50%; top: 330px; width: 150px; height: 150px; margin-left: -75px; border-radius: 40px; background: #dfff64; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 140px rgba(223, 255, 100, 0.35); }
+      #end-mark svg { width: 102px; height: 102px; }
+      #end-tag { position: absolute; left: 0; right: 0; top: 540px; text-align: center; font-family: "Inter"; font-weight: 600; font-size: 64px; letter-spacing: -0.035em; line-height: 1.12; color: #f4f1ea; }
+      #end-tag .l { display: block; }
+      #end-url { position: absolute; left: 0; right: 0; top: 740px; text-align: center; font-family: "DM Mono"; font-weight: 500; font-size: 26px; letter-spacing: 0.06em; color: #8b8f85; }
+      #black { position: absolute; inset: 0; background: #000; opacity: 0; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="38" data-width="1920" data-height="1080">
+      <!-- wallpaper (0 – 27.6) -->
+      <div id="wall" class="clip" data-start="0" data-duration="27.6" data-track-index="0">
+        <div class="base"></div>
+        <div class="blob" id="b1" style="left: -200px; top: 420px; width: 900px; height: 800px; background: #dfff64; opacity: 0.7"></div>
+        <div class="blob" id="b2" style="left: 1150px; top: -250px; width: 1000px; height: 900px; background: #b9dcff; opacity: 0.85"></div>
+        <div class="blob" id="b3" style="left: 700px; top: 700px; width: 800px; height: 600px; background: #f2cfe1; opacity: 0.7"></div>
+        <div class="blob" id="b4" style="left: 150px; top: -300px; width: 700px; height: 600px; background: #d8ccff; opacity: 0.6"></div>
+        <div class="dark" id="wall-dark">
+          <div class="dblob" id="d1" style="left: 200px; top: 500px; width: 800px; height: 600px; background: #dfff64"></div>
+          <div class="dblob" id="d2" style="left: 1100px; top: 50px; width: 800px; height: 700px; background: #3a76f0"></div>
+          <div class="dblob" id="d3" style="left: 900px; top: 700px; width: 600px; height: 500px; background: #dd2a7b"></div>
+        </div>
+      </div>
+
+      <!-- S1 · hook -->
+      <div id="s1" class="clip" data-start="0" data-duration="5" data-track-index="1">
+        <div class="cap light" id="cap1" style="top: 260px">
+          <span class="w">Your</span> <span class="w">people</span> <span class="w">are</span>
+          <span class="w slot" id="slot1"><span style="color: #f4f1ea">on <span style="color: #25d366">WhatsApp</span></span><span>on <span style="color: #36b3ef">Telegram</span></span><span>on <span style="color: #f0588f">Instagram</span></span><span>on <span style="color: #34c759">iMessage</span></span><span>on <span style="color: #ecb22e">Slack</span></span><span style="color: #dfff64">everywhere.</span></span>
+        </div>
+        <div id="nstack"></div>
+      </div>
+
+      <!-- S2 · meet claire -->
+      <div id="s2" class="clip" data-start="5" data-duration="2.4" data-track-index="1">
+        <div id="icon-wrap">
+          <div id="icon">
+            <svg viewBox="0 0 64 64"><g transform="translate(64 0) scale(-1 1)"><path id="icon-path" pathLength="1" d="M10 34c0-13 9-22 22-22s22 8 22 20-9 20-21 20c-10 0-17-6-17-14 0-7 5-12 12-12 6 0 10 4 10 9 0 6-4 10-10 10" fill="none" stroke="#10120F" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="1 1" stroke-dashoffset="1" /><circle id="icon-dot" cx="10" cy="34" r="4.5" fill="#FFFDF8" /></g></svg>
+          </div>
+        </div>
+        <div class="cap light" id="cap2" style="top: 640px"><span class="w">Meet</span> <span class="w" style="color: #dfff64">Claire.</span></div>
+        <div id="lime-fill"></div>
+      </div>
+
+      <!-- S3 · inbox + promise -->
+      <div id="s3" class="clip" data-start="7.3" data-duration="8.4" data-track-index="1">
+        <div class="cap" id="cap3a" style="top: 110px"><span class="w">Every</span> <span class="w">chat,</span> <span class="w">in</span> <span class="w hl"><span class="sw"></span>one inbox.</span></div>
+        <div class="cam" id="cam3">
+          <div class="win" id="win3">
+            <img class="base" src="assets/ui/uw-base.png" alt="" />
+            <img class="pc" id="uw-row" src="assets/ui/uw-row.png" alt="" />
+            <img class="pc" id="uw-aibar" src="assets/ui/uw-aibar.png" alt="" />
+            <img class="pc" id="uw-b1" src="assets/ui/uw-b1.png" alt="" />
+            <img class="pc" id="uw-b2" src="assets/ui/uw-b2.png" alt="" />
+            <div class="glow" id="uw-glow"></div>
+            <img class="pc" id="uw-promise" src="assets/ui/uw-promise.png" alt="" />
+            <div id="tracked"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#10120F" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>Tracked</div>
+            <img class="pc" id="uw-b3" src="assets/ui/uw-b3.png" alt="" />
+            <img class="pc" id="uw-ctask" src="assets/ui/uw-ctask.png" alt="" />
+            <div class="ripple" id="rip3"></div>
+            <div class="cursor" id="cur3"><svg viewBox="0 0 32 32"><path d="M6 3l20 11.5-8.6 2.1L13 25z" fill="#10120F" stroke="#FFFDF8" stroke-width="2" stroke-linejoin="round" /></svg></div>
+          </div>
+        </div>
+        <div class="cap" id="cap3b" style="top: 110px"><span class="w">You</span> <span class="w">make</span> <span class="w">a</span> <span class="w">promise.</span></div>
+        <div class="cap" id="cap3c" style="top: 110px"><span class="w">Claire</span> <span class="w hl"><span class="sw"></span>keeps track.</span></div>
+      </div>
+
+      <!-- S4 · ask claire -->
+      <div id="s4" class="clip" data-start="15.5" data-duration="7" data-track-index="1">
+        <div class="cam" id="cam4">
+          <div class="win" id="win4">
+            <img class="base" src="assets/ui/ak-base.png" alt="" />
+            <div id="typed"><span id="typed-text">What do I still owe Maya?</span><span id="typed-caret"></span></div>
+            <img class="pc" id="ak-sug" src="assets/ui/ak-sug.png" alt="" />
+            <img class="pc" id="ak-ev1" src="assets/ui/ak-ev1.png" alt="" />
+            <img class="pc" id="ak-ev2" src="assets/ui/ak-ev2.png" alt="" />
+            <img class="pc" id="ak-ev3" src="assets/ui/ak-ev3.png" alt="" />
+            <div class="ripple" id="rip4"></div>
+            <div class="cursor" id="cur4"><svg viewBox="0 0 32 32"><path d="M6 3l20 11.5-8.6 2.1L13 25z" fill="#10120F" stroke="#FFFDF8" stroke-width="2" stroke-linejoin="round" /></svg></div>
+          </div>
+        </div>
+        <div class="cap" id="cap4a" style="top: 110px"><span class="w">Ask</span> <span class="w">anything,</span></div>
+        <div class="cap" id="cap4b" style="top: 110px"><span class="w">answered</span> <span class="w">from</span> <span class="w hl"><span class="sw"></span>every chat.</span></div>
+      </div>
+
+      <!-- S5 · connections + gallery -->
+      <div id="s5" class="clip" data-start="22.3" data-duration="5.3" data-track-index="1">
+        <div class="gw" id="g1"><img src="assets/ui/unified-workspace.png" alt="" /></div>
+        <div class="gw" id="g2"><img src="assets/ui/ask-claire-workspace.png" alt="" /></div>
+        <div class="gw" id="g3"><img src="assets/ui/desktop-home.png" alt="" /></div>
+        <div class="cam" id="cam5">
+          <div class="win" id="win5">
+            <img class="base" src="assets/ui/cn-base.png" alt="" />
+            <img class="pc" id="cn-banner" src="assets/ui/cn-banner.png" alt="" />
+            <img class="pc cn" id="cn-c1" src="assets/ui/cn-c1.png" alt="" />
+            <img class="pc cn" id="cn-c2" src="assets/ui/cn-c2.png" alt="" />
+            <img class="pc cn" id="cn-c3" src="assets/ui/cn-c3.png" alt="" />
+            <img class="pc cn" id="cn-c4" src="assets/ui/cn-c4.png" alt="" />
+            <img class="pc cn" id="cn-c5" src="assets/ui/cn-c5.png" alt="" />
+            <img class="pc cn" id="cn-c6" src="assets/ui/cn-c6.png" alt="" />
+          </div>
+        </div>
+        <div class="cap" id="cap5a" style="top: 110px">
+          <span class="w">Connect</span>
+          <span class="w slot" id="slot5"><span style="color: #1a9e4b">WhatsApp</span><span style="color: #1d8cc4">Telegram</span><span style="color: #2f6fe0">iMessage</span><span style="color: #d62a73">Instagram</span><span>every network.</span></span>
+        </div>
+        <div class="cap" id="cap5b" style="top: 110px"><span class="w">It</span> <span class="w">all</span> <span class="w">lives</span> <span class="w hl"><span class="sw"></span>together.</span></div>
+        <div id="pix"></div>
+      </div>
+
+      <!-- S6 · lime field + wordmark -->
+      <div id="s6" class="clip" data-start="27.6" data-duration="4.4" data-track-index="1">
+        <div id="field"></div>
+        <div class="cap" id="cap6" style="top: 500px; font-size: 44px"><span class="w">All</span> <span class="w">your</span> <span class="w">chats.</span> <span class="w">One</span> <span class="w">AI.</span></div>
+        <div id="wordmark">
+          <svg viewBox="0 0 64 64"><g transform="translate(64 0) scale(-1 1)"><path id="wm-path" pathLength="1" d="M10 34c0-13 9-22 22-22s22 8 22 20-9 20-21 20c-10 0-17-6-17-14 0-7 5-12 12-12 6 0 10 4 10 9 0 6-4 10-10 10" fill="none" stroke="#10120F" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="1 1" stroke-dashoffset="1" /><circle id="wm-dot" cx="10" cy="34" r="4.5" fill="#FFFDF8" /></g></svg>
+          <span id="wm-text">Claire</span>
+        </div>
+      </div>
+
+      <!-- S7 · end card -->
+      <div id="end" class="clip" data-start="32" data-duration="6" data-track-index="1">
+        <div id="end-mark">
+          <svg viewBox="0 0 64 64"><g transform="translate(64 0) scale(-1 1)"><path d="M10 34c0-13 9-22 22-22s22 8 22 20-9 20-21 20c-10 0-17-6-17-14 0-7 5-12 12-12 6 0 10 4 10 9 0 6-4 10-10 10" fill="none" stroke="#10120F" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" /><circle cx="10" cy="34" r="4.5" fill="#FFFDF8" /></g></svg>
+        </div>
+        <div id="end-tag"><span class="l" id="et1">All your chats.</span><span class="l" id="et2">One AI.</span></div>
+        <div id="end-url">useclaire.co</div>
+        <div id="black"></div>
+      </div>
+
+      <!-- sound effects -->
+      <audio id="sfx-n1" src="assets/sfx/pop.mp3" data-start="0.5" data-duration="0.72" data-volume="0.55"></audio>
+      <audio id="sfx-n2" src="assets/sfx/pop.mp3" data-start="1.15" data-duration="0.72" data-volume="0.55"></audio>
+      <audio id="sfx-n3" src="assets/sfx/pop.mp3" data-start="1.8" data-duration="0.72" data-volume="0.55"></audio>
+      <audio id="sfx-n4" src="assets/sfx/pop.mp3" data-start="2.45" data-duration="0.72" data-volume="0.55"></audio>
+      <audio id="sfx-n5" src="assets/sfx/pop.mp3" data-start="3.1" data-duration="0.72" data-volume="0.55"></audio>
+      <audio id="sfx-collapse" src="assets/sfx/whoosh-short.mp3" data-start="4.35" data-duration="0.57" data-volume="0.6"></audio>
+      <audio id="sfx-icon" src="assets/sfx/sparkle.mp3" data-start="5.05" data-duration="1.8" data-volume="0.55"></audio>
+      <audio id="sfx-zoom" src="assets/sfx/whoosh-cinematic.mp3" data-start="6.6" data-duration="2.2" data-volume="0.5"></audio>
+      <audio id="sfx-c1" src="assets/sfx/click.mp3" data-start="10.4" data-duration="0.37" data-volume="0.8"></audio>
+      <audio id="sfx-b" src="assets/sfx/click-soft.mp3" data-start="11.35" data-duration="0.37" data-volume="0.6"></audio>
+      <audio id="sfx-promise" src="assets/sfx/chime.mp3" data-start="12.6" data-duration="1.6" data-volume="0.45"></audio>
+      <audio id="sfx-c2" src="assets/sfx/click.mp3" data-start="13.95" data-duration="0.37" data-volume="0.8"></audio>
+      <audio id="sfx-t1" src="assets/sfx/whoosh.mp3" data-start="15.3" data-duration="0.57" data-volume="0.5"></audio>
+      <audio id="sfx-c3" src="assets/sfx/click.mp3" data-start="16.75" data-duration="0.37" data-volume="0.8"></audio>
+      <audio id="sfx-type" src="assets/sfx/typing.mp3" data-start="16.95" data-duration="1.3" data-volume="0.55"></audio>
+      <audio id="sfx-c4" src="assets/sfx/click.mp3" data-start="18.55" data-duration="0.37" data-volume="0.8"></audio>
+      <audio id="sfx-ans" src="assets/sfx/sparkle.mp3" data-start="18.8" data-duration="1.8" data-volume="0.5"></audio>
+      <audio id="sfx-t2" src="assets/sfx/whoosh.mp3" data-start="22.2" data-duration="0.57" data-volume="0.5"></audio>
+      <audio id="sfx-k1" src="assets/sfx/pop.mp3" data-start="22.95" data-duration="0.72" data-volume="0.45"></audio>
+      <audio id="sfx-k2" src="assets/sfx/pop.mp3" data-start="23.5" data-duration="0.72" data-volume="0.45"></audio>
+      <audio id="sfx-k3" src="assets/sfx/pop.mp3" data-start="24.05" data-duration="0.72" data-volume="0.45"></audio>
+      <audio id="sfx-k4" src="assets/sfx/pop.mp3" data-start="24.6" data-duration="0.72" data-volume="0.45"></audio>
+      <audio id="sfx-riser" src="assets/sfx/riser.mp3" data-start="24.4" data-duration="3.2" data-volume="0.35"></audio>
+      <audio id="sfx-pix" src="assets/sfx/whoosh-cinematic.mp3" data-start="26.8" data-duration="2" data-volume="0.45"></audio>
+      <audio id="sfx-wm" src="assets/sfx/impact-bass-1.mp3" data-start="30.3" data-duration="2.1" data-volume="0.6"></audio>
+      <audio id="sfx-end" src="assets/sfx/chime.mp3" data-start="32.2" data-duration="2.5" data-volume="0.4"></audio>
+    </div>
+
+    <script>
+      (function () {
+        // ------- layout measured from the website mockups (window-local CSS px, 1360×765) -------
+        const UW = {
+          row: [78, 214.5, 273, 58], aibar: [383, 120, 673, 46], b1: [399, 205.5, 435.9, 48.5], b2: [815, 263, 225, 48.5],
+          promise: [456.7, 320.5, 525.6, 49], b3: [399, 378.5, 435.9, 48.5], ctask: [1091, 400, 252, 34.5], track: [935.2, 334.8, 36.1, 20.5],
+        };
+        const AK = { sug: [287, 169, 820, 118.9], ev1: [1154, 108, 191, 77.8], ev2: [1154, 197.8, 191, 67.6], ev3: [1154, 277.4, 191, 110.8], input: [327, 714, 697.4, 17], send: [1067, 707.5, 30, 30] };
+        const CN = { banner: [329, 162, 996, 44], c1: [329, 223, 326, 158.5], c2: [664, 223, 326, 158.5], c3: [999, 223, 326, 158.5], c4: [329, 390.5, 326, 158.5], c5: [664, 390.5, 326, 158.5], c6: [999, 390.5, 326, 158.5] };
+        const place = (id, r) => { const e = document.getElementById(id); Object.assign(e.style, { left: r[0] + "px", top: r[1] + "px", width: r[2] + "px", height: r[3] + "px" }); };
+        Object.entries(UW).forEach(([k, r]) => { if (k !== "track") place("uw-" + k, r); });
+        place("uw-glow", UW.promise);
+        place("tracked", UW.track);
+        Object.entries(AK).forEach(([k, r]) => { if (k !== "input" && k !== "send") place("ak-" + k, r); });
+        place("typed", AK.input);
+        Object.entries(CN).forEach(([k, r]) => place("cn-" + k, r));
+
+        // ------- S1 notifications -------
+        const NOTES = [
+          ["wa", "whatsapp", "WhatsApp", "Maya Kim", "Can you send that deck?"],
+          ["tg", "telegram", "Telegram", "Noah Oliver", "Voice message · 0:24"],
+          ["ig", "instagram", "Instagram", "sofia.rmz", "That place looks perfect"],
+          ["im", "imessage", "iMessage", "Dad", "Dinner Sunday?"],
+          ["sl", "slack", "Slack", "#studio-team", "Lea: latest screens are in"],
+        ];
+        const ns = document.getElementById("nstack");
+        NOTES.forEach((n, i) => {
+          const el = document.createElement("div");
+          el.className = "note";
+          el.id = "note-" + i;
+          el.innerHTML = '<div class="ic ' + n[0] + '"><img src="assets/platforms/' + n[1] + '.svg" alt="" /></div><div class="tx"><div class="row1"><span>' + n[2] + '</span><span>now</span></div><b>' + n[3] + "</b><p>" + n[4] + "</p></div>";
+          ns.appendChild(el);
+        });
+
+        // ------- seeded PRNG for pixel layouts -------
+        function rng(seed) { return function () { seed |= 0; seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+        const pix = document.getElementById("pix");
+        const PIX = [];
+        const r1 = rng(7);
+        for (let row = 0; row < 14; row++) for (let col = 0; col < 24; col++) {
+          const i = document.createElement("i");
+          i.style.left = col * 80 + "px"; i.style.top = row * 80 + "px";
+          pix.appendChild(i);
+          PIX.push({ el: i, d: (col / 23) * 0.55 + r1() * 0.3 });
+        }
+        const field = document.getElementById("field");
+        const FIELD = [];
+        const r2 = rng(19);
+        for (let k = 0; k < 26; k++) {
+          const i = document.createElement("i");
+          i.style.left = Math.floor(r2() * 32) * 60 + "px"; i.style.top = Math.floor(r2() * 18) * 60 + "px";
+          field.appendChild(i); FIELD.push({ el: i, d: r2() });
+        }
+        const end = document.getElementById("end");
+        const ENDPX = [];
+        const r3 = rng(41);
+        for (let k = 0; k < 34; k++) {
+          const i = document.createElement("i");
+          i.style.left = Math.floor(r3() * 36) * 54 + "px"; i.style.top = Math.floor(r3() * 20) * 54 + "px";
+          end.insertBefore(i, end.firstChild); ENDPX.push({ el: i, d: r3() });
+        }
+
+        function build() {
+          const tl = gsap.timeline({ paused: true });
+          const W = (sel) => gsap.utils.toArray(sel + " .w");
+          const capIn = (sel, at, st = 0.08) => {
+            tl.fromTo(W(sel), { opacity: 0, y: 16, filter: "blur(12px)" }, { opacity: 1, y: 0, filter: "blur(0px)", duration: 0.45, ease: "power3.out", stagger: st }, at);
+            const sw = document.querySelector(sel + " .sw");
+            if (sw) tl.fromTo(sw, { scaleX: 0 }, { scaleX: 1, duration: 0.45, ease: "expo.inOut" }, at + W(sel).length * st + 0.05);
+          };
+          const capOut = (sel, at) => tl.to(W(sel), { opacity: 0, y: -12, filter: "blur(12px)", duration: 0.3, ease: "power2.in", stagger: 0.03 }, at);
+          // slot word-swap: widths measured once at setup
+          const slot = (id, times) => {
+            const s = document.getElementById(id);
+            const alts = Array.from(s.children);
+            const widths = alts.map((a) => a.offsetWidth);
+            gsap.set(s, { width: widths[0] });
+            gsap.set(alts.slice(1), { opacity: 0 });
+            times.forEach((t, k) => {
+              const a = alts[k], b = alts[k + 1];
+              tl.to(a, { opacity: 0, y: -18, filter: "blur(10px)", duration: 0.22, ease: "power2.in" }, t);
+              tl.to(s, { width: widths[k + 1], duration: 0.35, ease: "power3.inOut" }, t);
+              tl.fromTo(b, { opacity: 0, y: 18, filter: "blur(10px)" }, { opacity: 1, y: 0, filter: "blur(0px)", duration: 0.3, ease: "power3.out" }, t + 0.12);
+            });
+          };
+          // camera: bring window-local point (lx,ly) to screen (sx,sy) at scale s
+          const OX = 280, OY = 255;
+          const camTo = (sel, s, lx, ly, sx, sy, at, dur, ease = "power3.inOut") =>
+            tl.to(sel, { scale: s, x: sx - s * (OX + lx), y: sy - s * (OY + ly), duration: dur, ease }, at);
+          const camSet = (sel, s, lx, ly, sx, sy) => gsap.set(sel, { scale: s, x: sx - s * (OX + lx), y: sy - s * (OY + ly) });
+          const click = (cur, rip, x, y, at) => {
+            tl.to(cur, { scale: 0.8, duration: 0.07, ease: "power2.in", transformOrigin: "20% 10%" }, at);
+            tl.to(cur, { scale: 1, duration: 0.2, ease: "back.out(3)" }, at + 0.07);
+            tl.fromTo(rip, { x: x, y: y, scale: 0.3, opacity: 0.8 }, { scale: 1.4, opacity: 0, duration: 0.45, ease: "power2.out", immediateRender: false }, at + 0.03);
+          };
+          const mid = (r) => [r[0] + r[2] / 2, r[1] + r[3] / 2];
+
+          // ===== wallpaper drift =====
+          tl.to("#b1", { x: 220, y: -120, duration: 27.6, ease: "sine.inOut" }, 0);
+          tl.to("#b2", { x: -260, y: 140, duration: 27.6, ease: "sine.inOut" }, 0);
+          tl.to("#b3", { x: -200, y: -160, duration: 27.6, ease: "sine.inOut" }, 0);
+          tl.to("#b4", { x: 240, y: 120, duration: 27.6, ease: "sine.inOut" }, 0);
+          tl.to("#d1", { x: 260, y: -100, duration: 7.3, ease: "sine.inOut" }, 0);
+          tl.to("#d2", { x: -200, y: 120, duration: 7.3, ease: "sine.inOut" }, 0);
+          tl.to("#d3", { x: -160, y: -140, duration: 7.3, ease: "sine.inOut" }, 0);
+
+          // ===== S1 · hook (0 – 5) =====
+          capIn("#cap1", 0.15, 0.09);
+          slot("slot1", [1.1, 1.75, 2.4, 3.05, 3.75]);
+          const notes = gsap.utils.toArray(".note");
+          const NT = [0.5, 1.15, 1.8, 2.45, 3.1];
+          notes.forEach((n, i) => {
+            tl.fromTo(n, { y: -60, opacity: 0, scale: 0.9 }, { y: 0, opacity: 1, scale: 1, duration: 0.45, ease: "back.out(1.7)" }, NT[i]);
+            // every later arrival pushes this one down the stack
+            for (let j = i + 1; j < notes.length; j++) {
+              const depth = j - i;
+              tl.to(n, { y: depth * 26, scale: 1 - depth * 0.06, opacity: Math.max(0, 1 - depth * 0.28), duration: 0.45, ease: "power3.out" }, NT[j]);
+            }
+            if (i < notes.length - 1) tl.to(n.children, { opacity: 0, duration: 0.2, ease: "power1.out" }, NT[i + 1]);
+          });
+          tl.to("#nstack", { y: 30, duration: 4, ease: "none" }, 0.5);
+          tl.to(notes, { y: 0, scale: 0.2, opacity: 0, duration: 0.45, ease: "power4.in", stagger: 0.03 }, 4.3);
+          capOut("#cap1", 4.4);
+
+          // ===== S2 · meet claire (5 – 7.3) =====
+          tl.fromTo("#icon", { scale: 0, rotation: -20 }, { scale: 1, rotation: 0, duration: 0.7, ease: "back.out(1.8)" }, 5.0);
+          tl.fromTo("#icon-path", { attr: { "stroke-dashoffset": 1 } }, { attr: { "stroke-dashoffset": 0 }, duration: 0.8, ease: "power3.inOut" }, 5.15);
+          tl.fromTo("#icon-dot", { scale: 0, transformOrigin: "50% 50%" }, { scale: 1, duration: 0.35, ease: "back.out(4)" }, 5.85);
+          capIn("#cap2", 5.5, 0.14);
+          capOut("#cap2", 6.55);
+          tl.to("#icon", { scale: 14, borderRadius: 20, duration: 0.7, ease: "power4.in" }, 6.6);
+          tl.to("#icon svg", { opacity: 0, duration: 0.2 }, 6.65);
+          tl.to("#lime-fill", { opacity: 1, duration: 0.15 }, 7.15);
+          tl.to("#wall-dark", { opacity: 0, duration: 0.01 }, 7.3);
+
+          // ===== S3 · inbox + promise (7.3 – 15.7) =====
+          const S3 = 7.3;
+          tl.fromTo("#win3", { y: 380, rotationX: 22, scale: 0.9, filter: "blur(18px)", transformPerspective: 1800, transformOrigin: "50% 0%" }, { y: 0, rotationX: 0, scale: 1, filter: "blur(0px)", duration: 1.1, ease: "expo.out" }, S3);
+          camSet("#cam3", 1, 680, 382, 960, 637, 0);
+          capIn("#cap3a", S3 + 0.3, 0.1);
+          gsap.set("#uw-row, #uw-aibar, #uw-b1, #uw-b2, #uw-promise, #uw-b3, #uw-ctask", { opacity: 0 });
+          // cursor → Maya row
+          const rowC = mid(UW.row);
+          tl.fromTo("#cur3", { x: 900, y: 820 }, { x: rowC[0] - 40, y: rowC[1] - 6, duration: 1.1, ease: "power3.inOut" }, S3 + 1.8);
+          click("#cur3", "#rip3", rowC[0] - 40, rowC[1] - 6, S3 + 3.1);
+          tl.fromTo("#uw-row", { opacity: 0, scale: 0.97 }, { opacity: 1, scale: 1, duration: 0.3, ease: "back.out(2)" }, S3 + 3.15);
+          capOut("#cap3a", S3 + 3.3);
+          // push into the conversation
+          camTo("#cam3", 1.45, 720, 280, 960, 650, S3 + 3.35, 1.0);
+          tl.to("#cur3", { x: 560, y: 600, opacity: 0, duration: 0.6, ease: "power2.in" }, S3 + 3.5);
+          tl.fromTo("#uw-aibar", { opacity: 0, y: -12 }, { opacity: 1, y: 0, duration: 0.4, ease: "power3.out" }, S3 + 3.6);
+          tl.fromTo("#uw-b1", { opacity: 0, y: 14, scale: 0.94, transformOrigin: "0% 100%" }, { opacity: 1, y: 0, scale: 1, duration: 0.4, ease: "back.out(1.8)" }, S3 + 3.9);
+          capIn("#cap3b", S3 + 4.05, 0.08);
+          tl.fromTo("#uw-b2", { opacity: 0, y: 14, scale: 0.94, transformOrigin: "100% 100%" }, { opacity: 1, y: 0, scale: 1, duration: 0.4, ease: "back.out(1.8)" }, S3 + 4.3);
+          capOut("#cap3b", S3 + 5.05);
+          tl.fromTo("#uw-promise", { opacity: 0, scale: 0.9, filter: "blur(10px)" }, { opacity: 1, scale: 1, filter: "blur(0px)", duration: 0.5, ease: "expo.out" }, S3 + 5.3);
+          tl.fromTo("#uw-glow", { opacity: 0 }, { opacity: 1, duration: 0.25 }, S3 + 5.35);
+          tl.to("#uw-glow", { opacity: 0, duration: 0.6 }, S3 + 5.9);
+          capIn("#cap3c", S3 + 5.4, 0.1);
+          // click Track
+          tl.set("#cur3", { x: 1060, y: 420, opacity: 1 }, S3 + 5.7);
+          const trk = mid(UW.track);
+          tl.to("#cur3", { x: trk[0] - 4, y: trk[1] - 3, duration: 0.7, ease: "power3.out" }, S3 + 5.75);
+          click("#cur3", "#rip3", trk[0] - 4, trk[1] - 3, S3 + 6.65);
+          tl.fromTo("#tracked", { opacity: 0, scale: 0.6 }, { opacity: 1, scale: 1, duration: 0.3, ease: "back.out(3)" }, S3 + 6.7);
+          // pull back so the promise lands in the context panel
+          camTo("#cam3", 1.12, 700, 382, 960, 640, S3 + 6.9, 0.8);
+          tl.to("#cur3", { x: 1200, y: 700, opacity: 0, duration: 0.5, ease: "power2.in" }, S3 + 6.95);
+          tl.fromTo("#uw-ctask", { opacity: 0, x: UW.promise[0] - UW.ctask[0] + 20, y: UW.promise[1] - UW.ctask[1] + 8, scale: 0.9 }, { opacity: 1, x: 0, y: 0, scale: 1, duration: 0.8, ease: "power3.inOut" }, S3 + 7.05);
+          tl.fromTo("#uw-b3", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.4, ease: "back.out(1.8)" }, S3 + 7.4);
+          capOut("#cap3c", S3 + 7.85);
+          tl.to("#win3", { scale: 1.08, opacity: 0, filter: "blur(22px)", duration: 0.4, ease: "power2.in" }, S3 + 8.0);
+
+          // ===== S4 · ask (15.5 – 22.5) =====
+          const S4 = 15.5;
+          camSet("#cam4", 1.05, 680, 382, 960, 640, 0);
+          tl.fromTo("#win4", { x: 300, rotationY: -24, filter: "blur(20px)", opacity: 0, transformPerspective: 2000, transformOrigin: "0% 50%" }, { x: 0, rotationY: 0, filter: "blur(0px)", opacity: 1, duration: 1.0, ease: "expo.out" }, S4 + 0.05);
+          capIn("#cap4a", S4 + 0.2, 0.12);
+          gsap.set("#ak-sug, #ak-ev1, #ak-ev2, #ak-ev3", { opacity: 0 });
+          const inp = [AK.input[0] + 60, AK.input[1] + 8];
+          tl.fromTo("#cur4", { x: 1000, y: 460 }, { x: inp[0], y: inp[1], duration: 0.9, ease: "power3.inOut" }, S4 + 0.3);
+          click("#cur4", "#rip4", inp[0], inp[1], S4 + 1.25);
+          capOut("#cap4a", S4 + 1.3);
+          camTo("#cam4", 1.6, 560, 700, 960, 700, S4 + 1.35, 1.0);
+          const tt = document.getElementById("typed-text");
+          const tw = tt.scrollWidth;
+          tl.fromTo(tt, { width: 0 }, { width: tw, duration: 1.2, ease: "steps(" + tt.textContent.length + ")" }, S4 + 1.45);
+          tl.fromTo("#typed-caret", { opacity: 1 }, { opacity: 0, duration: 0.01, repeat: 5, yoyo: true, repeatDelay: 0.22 }, S4 + 0.9);
+          const snd = mid(AK.send);
+          tl.to("#cur4", { x: snd[0] - 3, y: snd[1] - 3, duration: 0.45, ease: "power3.inOut" }, S4 + 2.6);
+          click("#cur4", "#rip4", snd[0] - 3, snd[1] - 3, S4 + 3.05);
+          camTo("#cam4", 1.12, 700, 330, 960, 610, S4 + 3.15, 0.9);
+          tl.to("#cur4", { x: 1180, y: 740, opacity: 0, duration: 0.5, ease: "power2.in" }, S4 + 3.2);
+          tl.fromTo("#ak-sug", { opacity: 0, y: 24, filter: "blur(12px)" }, { opacity: 1, y: 0, filter: "blur(0px)", duration: 0.6, ease: "expo.out" }, S4 + 3.3);
+          capIn("#cap4b", S4 + 3.45, 0.1);
+          tl.fromTo("#ak-ev1, #ak-ev2, #ak-ev3", { opacity: 0, x: 30 }, { opacity: 1, x: 0, duration: 0.5, ease: "expo.out", stagger: 0.15 }, S4 + 3.8);
+          tl.to("#cam4", { scale: "+=0.04", duration: 2.0, ease: "none" }, S4 + 4.1);
+          capOut("#cap4b", S4 + 6.35);
+          tl.to("#win4", { x: -260, rotationY: 18, filter: "blur(20px)", opacity: 0, duration: 0.45, ease: "power2.in" }, S4 + 6.5);
+
+          // ===== S5 · connections + gallery (22.3 – 27.6) =====
+          const S5 = 22.3;
+          camSet("#cam5", 1.05, 680, 382, 960, 640, 0);
+          tl.fromTo("#win5", { y: 300, filter: "blur(18px)", opacity: 0, scale: 0.94 }, { y: 0, filter: "blur(0px)", opacity: 1, scale: 1, duration: 0.9, ease: "expo.out" }, S5);
+          gsap.set(".cn, #cn-banner", { opacity: 0 });
+          capIn("#cap5a", S5 + 0.25, 0.1);
+          slot("slot5", [S5 + 1.2, S5 + 1.75, S5 + 2.3, S5 + 2.85]);
+          const cardOrder = ["#cn-c1", "#cn-c2", "#cn-c3", "#cn-c4", "#cn-c5", "#cn-c6"];
+          const CT = [S5 + 0.65, S5 + 1.2, S5 + 1.75, S5 + 2.3, S5 + 2.85, S5 + 2.95];
+          cardOrder.forEach((c, i) => tl.fromTo(c, { opacity: 0, scale: 0.85, y: 20 }, { opacity: 1, scale: 1, y: 0, duration: 0.45, ease: "back.out(1.8)" }, CT[i]));
+          tl.fromTo("#cn-banner", { opacity: 0, y: -10 }, { opacity: 1, y: 0, duration: 0.4, ease: "power3.out" }, S5 + 3.0);
+          capOut("#cap5a", S5 + 3.45);
+          // gallery: shrink the window, three more screens fan in
+          camTo("#cam5", 0.36, 0, 0, 975, 635, S5 + 3.5, 0.9, "expo.inOut");
+          const gpos = [[455, 330], [455, 635], [975, 330]];
+          ["#g1", "#g2", "#g3"].forEach((g, i) => {
+            tl.fromTo(g, { x: gpos[i][0] + (i === 2 ? 400 : -400), y: gpos[i][1], scale: 0.36, opacity: 0, filter: "blur(14px)" }, { x: gpos[i][0], y: gpos[i][1], scale: 0.36, opacity: 1, filter: "blur(0px)", duration: 0.9, ease: "expo.out" }, S5 + 3.6 + i * 0.08);
+          });
+          capIn("#cap5b", S5 + 3.7, 0.09);
+          PIX.forEach((p) => tl.fromTo(p.el, { opacity: 0, scale: 0.4 }, { opacity: 1, scale: 1, duration: 0.18, ease: "power2.out" }, S5 + 4.45 + p.d));
+
+          // ===== S6 · lime field + wordmark (27.6 – 32) =====
+          const S6 = 27.6;
+          FIELD.forEach((f) => tl.fromTo(f.el, { opacity: 0 }, { opacity: 1, duration: 0.25, yoyo: true, repeat: 3, repeatDelay: 0.3, ease: "sine.inOut" }, S6 + f.d * 1.2));
+          capIn("#cap6", S6 + 0.25, 0.14);
+          capOut("#cap6", S6 + 2.3);
+          tl.fromTo("#wordmark svg", { opacity: 0, scale: 0.7, rotation: -30 }, { opacity: 1, scale: 1, rotation: 0, duration: 0.8, ease: "expo.out" }, S6 + 2.65);
+          tl.fromTo("#wm-path", { attr: { "stroke-dashoffset": 1 } }, { attr: { "stroke-dashoffset": 0 }, duration: 0.7, ease: "power3.inOut" }, S6 + 2.65);
+          tl.fromTo("#wm-dot", { scale: 0, transformOrigin: "50% 50%" }, { scale: 1, duration: 0.3, ease: "back.out(4)" }, S6 + 3.25);
+          tl.fromTo("#wm-text", { opacity: 0, filter: "blur(24px)", x: -30 }, { opacity: 1, filter: "blur(0px)", x: 0, duration: 0.7, ease: "power3.out" }, S6 + 2.75);
+          tl.to("#wordmark", { scale: 1.05, duration: 1.8, ease: "none" }, S6 + 2.65);
+
+          // ===== S7 · end card (32 – 38) =====
+          const S7 = 32;
+          ENDPX.forEach((p) => tl.fromTo(p.el, { opacity: 0 }, { opacity: 1, duration: 0.6, yoyo: true, repeat: 3, repeatDelay: 0.4, ease: "sine.inOut" }, S7 + p.d * 1.5));
+          tl.fromTo("#end-mark", { scale: 0.6, opacity: 0, filter: "blur(16px)" }, { scale: 1, opacity: 1, filter: "blur(0px)", duration: 0.8, ease: "expo.out" }, S7 + 0.1);
+          tl.fromTo("#et1", { opacity: 0, y: 20, filter: "blur(10px)" }, { opacity: 1, y: 0, filter: "blur(0px)", duration: 0.6, ease: "power3.out" }, S7 + 0.6);
+          tl.fromTo("#et2", { opacity: 0, y: 20, filter: "blur(10px)" }, { opacity: 1, y: 0, filter: "blur(0px)", duration: 0.6, ease: "power3.out" }, S7 + 0.9);
+          tl.fromTo("#end-url", { opacity: 0 }, { opacity: 1, duration: 0.6 }, S7 + 1.5);
+          tl.fromTo("#black", { opacity: 0 }, { opacity: 1, duration: 1.0, ease: "power1.in" }, S7 + 5.0);
+
+          window.__timelines["main"] = tl;
+          if (window.__hfForceTimelineRebind) window.__hfForceTimelineRebind();
+        }
+        document.fonts.ready.then(build);
+      })();
+    </script>
+  </body>
+</html>
