@@ -25,7 +25,7 @@
       /* ---------- captions ---------- */
       .cap {
         position: absolute; left: 50%; transform: translateX(-50%); text-align: center; white-space: nowrap;
-        padding: 12px 36px 20px; border-radius: 30px; background: rgba(250, 248, 242, 0);
+        padding: 12px 36px 20px; border-radius: 30px;
         font-family: "Inter", sans-serif; font-weight: 600; font-size: 84px; letter-spacing: -0.035em; color: #10120f;
       }
       .cap.light { color: #f4f1ea; }
@@ -322,16 +322,13 @@
         function build() {
           const tl = gsap.timeline({ paused: true });
           const W = (sel) => gsap.utils.toArray(sel + " .w");
-          const pill = (sel) => !document.querySelector(sel).classList.contains("light") && sel !== "#cap6";
           const capIn = (sel, at, st = 0.08) => {
-            if (pill(sel)) tl.fromTo(sel, { backgroundColor: "rgba(250,248,242,0)" }, { backgroundColor: "rgba(250,248,242,0.92)", duration: 0.3, ease: "power2.out" }, at);
             tl.fromTo(W(sel), { opacity: 0, y: 16, filter: "blur(12px)" }, { opacity: 1, y: 0, filter: "blur(0px)", duration: 0.45, ease: "power3.out", stagger: st }, at);
             const sw = document.querySelector(sel + " .sw");
             if (sw) tl.fromTo(sw, { scaleX: 0 }, { scaleX: 1, duration: 0.45, ease: "expo.inOut" }, at + W(sel).length * st + 0.05);
           };
           const capOut = (sel, at) => {
             tl.to(W(sel), { opacity: 0, y: -12, filter: "blur(12px)", duration: 0.3, ease: "power2.in", stagger: 0.03 }, at);
-            if (pill(sel)) tl.to(sel, { backgroundColor: "rgba(250,248,242,0)", duration: 0.3, ease: "power2.in" }, at + 0.1);
           };
           // slot word-swap: widths measured once at setup
           const slot = (id, times) => {
@@ -410,7 +407,7 @@
           tl.fromTo("#uw-row", { opacity: 0, scale: 0.97 }, { opacity: 1, scale: 1, duration: 0.3, ease: "back.out(2)" }, S3 + 3.15);
           capOut("#cap3a", S3 + 3.3);
           // push into the conversation
-          camTo("#cam3", 1.85, 720, 290, 960, 680, S3 + 3.35, 1.0);
+          camTo("#cam3", 1.85, 720, 290, 960, 800, S3 + 3.35, 1.0);
           tl.to("#cur3", { x: 560, y: 600, opacity: 0, duration: 0.6, ease: "power2.in" }, S3 + 3.5);
           tl.fromTo("#uw-aibar", { opacity: 0, y: -12 }, { opacity: 1, y: 0, duration: 0.4, ease: "power3.out" }, S3 + 3.6);
           tl.fromTo("#uw-b1", { opacity: 0, y: 14, scale: 0.94, transformOrigin: "0% 100%" }, { opacity: 1, y: 0, scale: 1, duration: 0.4, ease: "back.out(1.8)" }, S3 + 3.9);
@@ -428,7 +425,7 @@
           click("#cur3", "#rip3", trk[0] - 4, trk[1] - 3, S3 + 6.65);
           tl.fromTo("#tracked", { opacity: 0, scale: 0.6 }, { opacity: 1, scale: 1, duration: 0.3, ease: "back.out(3)" }, S3 + 6.7);
           // pull back so the promise lands in the context panel
-          camTo("#cam3", 1.32, 720, 320, 960, 650, S3 + 6.9, 0.8);
+          camTo("#cam3", 1.32, 720, 320, 960, 680, S3 + 6.9, 0.8);
           tl.to("#cur3", { x: 1200, y: 700, opacity: 0, duration: 0.5, ease: "power2.in" }, S3 + 6.95);
           tl.fromTo("#uw-ctask", { opacity: 0, x: UW.promise[0] - UW.ctask[0] + 20, y: UW.promise[1] - UW.ctask[1] + 8, scale: 0.9 }, { opacity: 1, x: 0, y: 0, scale: 1, duration: 0.8, ease: "power3.inOut" }, S3 + 7.05);
           tl.fromTo("#uw-b3", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.4, ease: "back.out(1.8)" }, S3 + 7.4);

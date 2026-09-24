@@ -25,7 +25,7 @@
       /* ---------- captions ---------- */
       .cap {
         position: absolute; left: 50%; transform: translateX(-50%); width: max-content; max-width: 1000px; text-align: center;
-        padding: 16px 40px 26px; border-radius: 36px; background: rgba(250, 248, 242, 0);
+        padding: 16px 40px 26px; border-radius: 36px;
         font-family: "Inter", sans-serif; font-weight: 600; font-size: 104px; line-height: 1.02; letter-spacing: -0.042em; color: #10120f;
       }
       .cap.light { color: #f4f1ea; }
@@ -338,16 +338,13 @@
         function build() {
           const tl = gsap.timeline({ paused: true });
           const W = (sel) => gsap.utils.toArray(sel + " .w");
-          const pill = (sel) => !document.querySelector(sel).classList.contains("light") && sel !== "#cap7";
           const capIn = (sel, at, st = 0.08) => {
-            if (pill(sel)) tl.fromTo(sel, { backgroundColor: "rgba(250,248,242,0)" }, { backgroundColor: "rgba(250,248,242,0.92)", duration: 0.3, ease: "power2.out" }, at);
             tl.fromTo(W(sel), { opacity: 0, y: 18, filter: "blur(12px)" }, { opacity: 1, y: 0, filter: "blur(0px)", duration: 0.45, ease: "power3.out", stagger: st }, at);
             const sw = document.querySelector(sel + " .sw");
             if (sw) tl.fromTo(sw, { scaleX: 0 }, { scaleX: 1, duration: 0.45, ease: "expo.inOut" }, at + W(sel).length * st + 0.05);
           };
           const capOut = (sel, at) => {
             tl.to(W(sel), { opacity: 0, y: -14, filter: "blur(12px)", duration: 0.3, ease: "power2.in", stagger: 0.03 }, at);
-            if (pill(sel)) tl.to(sel, { backgroundColor: "rgba(250,248,242,0)", duration: 0.3, ease: "power2.in" }, at + 0.1);
           };
           const slot = (id, times) => {
             const s = document.getElementById(id);
@@ -457,7 +454,7 @@
           capIn("#cap4", 14.6, 0.09);
           tl.fromTo("#lp-glow", { opacity: 0 }, { opacity: 1, duration: 0.3 }, 15.0);
           tl.to("#lp-glow", { opacity: 0, duration: 0.7 }, 15.8);
-          camTo(1.55, 255, 540, 540, 1180, 14.9, 1.1);
+          camTo(1.55, 255, 540, 540, 1250, 14.9, 1.1);
           capOut("#cap4", 16.8);
           camTo(...S0, 16.9, 0.5);
 
