@@ -27,13 +27,17 @@ self-contained HyperFrames project; `index.html` is the whole composition
 
 ### Mobile cut
 
-Same arc, but one phone carries the whole middle: tap Maya → the chat pushes in
-and Claire finds the promise → tap Track → back to the inbox and the Promises
-tab → the Search tab, where Claire answers "What did Maya say about launch
-timing?" from three conversations → connected accounts → a 2×2 grid of phones
-("It all lives together"). Taps are shown as a touch indicator rather than a
-cursor. Screens push inside the phone's viewport while the bezel and status bar
-stay put.
+Same arc, but one phone carries the whole middle: tap Maya → the chat pushes in,
+and when you promise the deck Claire pins an **open loop** above the thread →
+tap View → the Loops tab → the Claire tab, where "What did Maya say about launch
+timing?" is typed and answered with its sources → Connections → a 2×2 grid of
+phones ("It all lives together"). Taps are shown as a touch indicator rather
+than a cursor. Screens push inside the phone's viewport while the bezel and
+status bar stay put.
+
+The phone screens come from the refreshed `.rf` screens in `app-mockups.html`
+(see `app-mockups-refresh.css`), which match the shipping app's Home, Inbox,
+chat, Loops, Ask Claire and Connections at the app's real type size.
 
 ## Render
 
@@ -73,7 +77,8 @@ node marketing/launch-video/mobile/scripts/capture-ui.cjs marketing/launch-video
 The scripts load `puppeteer-core` from the repo's `node_modules`; in a checkout
 without it, point `PUPPETEER_CORE` at another copy. The mobile status bar
 (`mobile/assets/ui/status.png`) is a crop of `ib-base.png`
-(`ffmpeg -i ib-base.png -vf crop=1474:195:30:30 status.png`).
+with the paper background keyed out, so each screen's colour shows through
+(`ffmpeg -i ib-base.png -vf "crop=1474:195:30:30,colorkey=0xFFFDF8:0.12:0.08,format=rgba" status.png`).
 
 ## Audio
 

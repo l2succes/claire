@@ -1,5 +1,6 @@
 // Captures the phone screens used by the mobile launch video from the
-// website's static mockups (apps/website/public/mockups/app-mockups.html).
+// website's static mockups (apps/website/public/mockups/app-mockups.html),
+// using the refreshed `.rf` screens that match the shipping app.
 //
 // Each screen is saved as a "base" with the animated parts hidden, plus every
 // animated part on its own, at 3x. Positions are phone-local CSS px and are
@@ -19,32 +20,32 @@ const OUT = path.resolve(process.argv[2] || path.join(__dirname, '../assets/ui')
 const SPECS = {
   'unified-inbox': {
     base: 'ib',
-    hide: ['.conversation-row'],
-    pieces: { r1: ['.conversation-row', 0], r2: ['.conversation-row', 1], r3: ['.conversation-row', 2], r4: ['.conversation-row', 3] },
+    hide: ['.rf-row'],
+    pieces: { r1: ['.rf-row', 0], r2: ['.rf-row', 1], r3: ['.rf-row', 2], r4: ['.rf-row', 3] },
   },
   chat: {
     base: 'ch',
-    hide: ['.ai-ribbon', '.bubble', '.promise-inline'],
-    pieces: { ribbon: ['.ai-ribbon', 0], b1: ['.bubble', 0], b2: ['.bubble', 1], promise: ['.promise-inline', 0], b3: ['.bubble', 2], track: ['.promise-inline button', 0] },
+    hide: ['.rf-openloop', '.rf-msg'],
+    pieces: { loop: ['.rf-openloop', 0], m1: ['.rf-msg', 0], m2: ['.rf-msg', 1], m3: ['.rf-msg', 2], view: ['.rf-openloop em', 0] },
   },
-  promises: {
-    base: 'pr',
-    hide: ['.promise-item'],
-    pieces: { p1: ['.promise-item', 0], p2: ['.promise-item', 1], p3: ['.promise-item', 2], p4: ['.promise-item', 3] },
+  loops: {
+    base: 'lp',
+    hide: ['.rf-looprow'],
+    pieces: { l1: ['.rf-looprow', 0], l2: ['.rf-looprow', 1], l3: ['.rf-looprow', 2], tabClaire: ['claire-mobile-tabs button', 2] },
   },
-  'search-results': {
-    base: 'sr',
-    hide: ['.result-query', '.result-count', '.answer-card', '.result-group'],
-    pieces: { query: ['.result-query', 0], count: ['.result-count', 0], answer: ['.answer-card', 0], g1: ['.result-group', 0], g2: ['.result-group', 1] },
+  'ask-claire': {
+    base: 'ak',
+    hide: ['.rf-q', '.rf-a', '.rf-sources', '.rf-srcs', '.rf-askbar > span:first-child'],
+    pieces: { q: ['.rf-q', 0], a: ['.rf-a', 0], src: ['.rf-sources', 0], cards: ['.rf-srcs', 0], input: ['.rf-askbar > span:first-child', 0], send: ['.rf-askbar .rf-cbtn', 0] },
   },
-  'connect-accounts': {
-    base: 'ca',
-    hide: ['.account-card', '.security-note'],
-    pieces: { a1: ['.account-card', 0], a2: ['.account-card', 1], a3: ['.account-card', 2], note: ['.security-note', 0] },
+  connections: {
+    base: 'cn',
+    hide: ['.rf-net'],
+    pieces: { n1: ['.rf-net', 0], n2: ['.rf-net', 1], n3: ['.rf-net', 2], n4: ['.rf-net', 3] },
   },
 };
 // Full, unmodified screens for the gallery shot.
-const FULL = ['daily-brief', 'unified-inbox', 'chat', 'ai-copilot', 'promises', 'relationship-memory'];
+const FULL = ['home', 'unified-inbox', 'chat', 'loops', 'ask-claire'];
 
 (async () => {
   const browser = await puppeteer.launch({ executablePath: CHROME, headless: 'new', args: ['--hide-scrollbars'] });
@@ -80,6 +81,9 @@ const FULL = ['daily-brief', 'unified-inbox', 'chat', 'ai-copilot', 'promises', 
       });
       await el.screenshot({ path: `${OUT}/${spec.base}-${name}.png` });
     }
+    // Screenshotting a piece that pokes below the fold scrolls the phone's
+    // overflow:hidden screen; undo that so the base lines up with the pieces.
+    await ph.evaluate((e) => e.querySelectorAll('*').forEach((x) => { x.scrollTop = 0; x.scrollLeft = 0; }));
     await ph.evaluate((e, hide) => hide.forEach((s) => e.querySelectorAll(s).forEach((x) => (x.style.visibility = 'hidden'))), spec.hide);
     await new Promise((r) => setTimeout(r, 150));
     await ph.screenshot({ path: `${OUT}/${spec.base}-base.png` });

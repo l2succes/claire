@@ -26,7 +26,7 @@
       .cap {
         position: absolute; left: 50%; transform: translateX(-50%); width: max-content; max-width: 1000px; text-align: center;
         padding: 16px 40px 26px; border-radius: 36px; background: rgba(250, 248, 242, 0);
-        font-family: "Inter", sans-serif; font-weight: 600; font-size: 92px; line-height: 1.04; letter-spacing: -0.04em; color: #10120f;
+        font-family: "Inter", sans-serif; font-weight: 600; font-size: 104px; line-height: 1.02; letter-spacing: -0.042em; color: #10120f;
       }
       .cap.light { color: #f4f1ea; }
       .cap .ln { display: block; white-space: nowrap; }
@@ -77,11 +77,10 @@
       .tapring { position: absolute; left: 0; top: 0; width: 60px; height: 60px; margin: -30px 0 0 -30px; border-radius: 50%; border: 3px solid #10120f; opacity: 0; z-index: 19; }
       .flash { position: absolute; border-radius: 18px; background: #dfff64; opacity: 0; mix-blend-mode: multiply; }
       .glow { position: absolute; border-radius: 16px; box-shadow: 0 0 0 3px #dfff64, 0 0 44px rgba(223, 255, 100, 0.95); opacity: 0; }
-      #tracked {
-        position: absolute; border-radius: 99px; background: #dfff64; color: #10120f; font-weight: 600; font-size: 11px;
-        display: flex; align-items: center; justify-content: center; gap: 3px; opacity: 0;
-      }
-      .qhalf { clip-path: inset(0 100% 0 0); }
+      /* typed question in the Ask Claire bar (app type is 17px at the mockup's 1.25 render scale) */
+      #typed { position: absolute; display: flex; align-items: center; font: 500 21.25px/1 "Public Sans", sans-serif; color: #10120f; }
+      #typed-text { display: block; overflow: hidden; white-space: nowrap; }
+      #typed-caret { width: 2px; height: 25px; background: #10120f; margin-left: 1px; }
 
       /* gallery phones */
       .gp { position: absolute; left: 0; top: 0; width: 511.25px; height: 1085px; border-radius: 67.5px; overflow: hidden; transform-origin: 0 0; box-shadow: 0 40px 90px rgba(16, 18, 15, 0.25); }
@@ -146,9 +145,9 @@
 
       <!-- S3–S6 · one continuous phone -->
       <div id="dev" class="clip" data-start="7.3" data-duration="21.9" data-track-index="1">
-        <div class="gp" id="gp1"><img src="assets/ui/full-daily-brief.png" alt="" /></div>
-        <div class="gp" id="gp2"><img src="assets/ui/full-ai-copilot.png" alt="" /></div>
-        <div class="gp" id="gp3"><img src="assets/ui/full-relationship-memory.png" alt="" /></div>
+        <div class="gp" id="gp1"><img src="assets/ui/full-home.png" alt="" /></div>
+        <div class="gp" id="gp2"><img src="assets/ui/full-ask-claire.png" alt="" /></div>
+        <div class="gp" id="gp3"><img src="assets/ui/full-loops.png" alt="" /></div>
         <div class="cam" id="cam">
           <div class="phone" id="phone">
             <img class="frame" src="assets/ui/ib-base.png" alt="" />
@@ -162,44 +161,40 @@
                 <img class="pc" id="ib-r4" src="assets/ui/ib-r4.png" alt="" />
                 <div class="flash" id="ib-flash"></div>
               </div>
-              <!-- promises -->
-              <div class="scr" id="scr-pr">
-                <img class="base" src="assets/ui/pr-base.png" alt="" />
-                <img class="pc" id="pr-p1" src="assets/ui/pr-p1.png" alt="" />
-                <img class="pc" id="pr-p2" src="assets/ui/pr-p2.png" alt="" />
-                <img class="pc" id="pr-p3" src="assets/ui/pr-p3.png" alt="" />
-                <img class="pc" id="pr-p4" src="assets/ui/pr-p4.png" alt="" />
-                <div class="glow" id="pr-glow"></div>
+              <!-- loops -->
+              <div class="scr" id="scr-lp">
+                <img class="base" src="assets/ui/lp-base.png" alt="" />
+                <img class="pc" id="lp-l1" src="assets/ui/lp-l1.png" alt="" />
+                <img class="pc" id="lp-l2" src="assets/ui/lp-l2.png" alt="" />
+                <img class="pc" id="lp-l3" src="assets/ui/lp-l3.png" alt="" />
+                <div class="glow" id="lp-glow"></div>
               </div>
               <!-- chat -->
               <div class="scr" id="scr-ch">
                 <img class="base" src="assets/ui/ch-base.png" alt="" />
-                <img class="pc" id="ch-ribbon" src="assets/ui/ch-ribbon.png" alt="" />
-                <img class="pc" id="ch-b1" src="assets/ui/ch-b1.png" alt="" />
-                <img class="pc" id="ch-b2" src="assets/ui/ch-b2.png" alt="" />
+                <img class="pc" id="ch-m1" src="assets/ui/ch-m1.png" alt="" />
+                <img class="pc" id="ch-m2" src="assets/ui/ch-m2.png" alt="" />
+                <img class="pc" id="ch-m3" src="assets/ui/ch-m3.png" alt="" />
                 <div class="glow" id="ch-glow"></div>
-                <img class="pc" id="ch-promise" src="assets/ui/ch-promise.png" alt="" />
-                <div id="tracked"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#10120F" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>Tracked</div>
-                <img class="pc" id="ch-b3" src="assets/ui/ch-b3.png" alt="" />
+                <img class="pc" id="ch-loop" src="assets/ui/ch-loop.png" alt="" />
               </div>
-              <!-- search results -->
-              <div class="scr" id="scr-sr">
-                <img class="base" src="assets/ui/sr-base.png" alt="" />
-                <img class="pc qhalf" id="sr-q1" src="assets/ui/sr-query.png" alt="" />
-                <img class="pc qhalf" id="sr-q2" src="assets/ui/sr-query.png" alt="" />
-                <img class="pc" id="sr-count" src="assets/ui/sr-count.png" alt="" />
-                <div class="glow" id="sr-glow"></div>
-                <img class="pc" id="sr-answer" src="assets/ui/sr-answer.png" alt="" />
-                <img class="pc" id="sr-g1" src="assets/ui/sr-g1.png" alt="" />
-                <img class="pc" id="sr-g2" src="assets/ui/sr-g2.png" alt="" />
+              <!-- ask claire -->
+              <div class="scr" id="scr-ak">
+                <img class="base" src="assets/ui/ak-base.png" alt="" />
+                <div id="typed"><span id="typed-text">What did Maya say about launch timing?</span><span id="typed-caret"></span></div>
+                <img class="pc" id="ak-q" src="assets/ui/ak-q.png" alt="" />
+                <div class="glow" id="ak-glow"></div>
+                <img class="pc" id="ak-a" src="assets/ui/ak-a.png" alt="" />
+                <img class="pc" id="ak-src" src="assets/ui/ak-src.png" alt="" />
+                <img class="pc" id="ak-cards" src="assets/ui/ak-cards.png" alt="" />
               </div>
-              <!-- connected accounts -->
-              <div class="scr" id="scr-ca">
-                <img class="base" src="assets/ui/ca-base.png" alt="" />
-                <img class="pc" id="ca-a1" src="assets/ui/ca-a1.png" alt="" />
-                <img class="pc" id="ca-a2" src="assets/ui/ca-a2.png" alt="" />
-                <img class="pc" id="ca-a3" src="assets/ui/ca-a3.png" alt="" />
-                <img class="pc" id="ca-note" src="assets/ui/ca-note.png" alt="" />
+              <!-- connections -->
+              <div class="scr" id="scr-cn">
+                <img class="base" src="assets/ui/cn-base.png" alt="" />
+                <img class="pc" id="cn-n1" src="assets/ui/cn-n1.png" alt="" />
+                <img class="pc" id="cn-n2" src="assets/ui/cn-n2.png" alt="" />
+                <img class="pc" id="cn-n3" src="assets/ui/cn-n3.png" alt="" />
+                <img class="pc" id="cn-n4" src="assets/ui/cn-n4.png" alt="" />
               </div>
               <img class="status" src="assets/ui/status.png" alt="" />
             </div>
@@ -214,7 +209,7 @@
         <div class="cap" id="cap3a" style="top: 150px"><span class="ln"><span class="w">Every</span> <span class="w">chat,</span></span><span class="ln"><span class="w">in</span> <span class="w hl"><span class="sw"></span>one inbox.</span></span></div>
         <div class="cap" id="cap3b" style="top: 150px"><span class="ln"><span class="w">You</span> <span class="w">make</span></span><span class="ln"><span class="w">a</span> <span class="w">promise.</span></span></div>
         <div class="cap" id="cap3c" style="top: 150px"><span class="ln"><span class="w">Claire</span></span><span class="ln"><span class="w hl"><span class="sw"></span>keeps track.</span></span></div>
-        <div class="cap" id="cap4" style="top: 150px"><span class="ln"><span class="w">Every</span> <span class="w">promise,</span></span><span class="ln"><span class="w">in</span> <span class="w hl"><span class="sw"></span>one place.</span></span></div>
+        <div class="cap" id="cap4" style="top: 150px"><span class="ln"><span class="w">Every</span> <span class="w">loop,</span></span><span class="ln"><span class="w">in</span> <span class="w hl"><span class="sw"></span>one place.</span></span></div>
         <div class="cap" id="cap5a" style="top: 150px"><span class="ln"><span class="w">Ask</span> <span class="w">anything,</span></span></div>
         <div class="cap" id="cap5b" style="top: 150px"><span class="ln"><span class="w">answered</span> <span class="w">from</span></span><span class="ln"><span class="w hl"><span class="sw"></span>every chat.</span></span></div>
         <div class="cap" id="cap6a" style="top: 150px"><span class="ln"><span class="w">Connect</span></span><span class="ln"><span class="w slot" id="slot6"><span style="color: #14823d">WhatsApp</span><span style="color: #1673a3">Telegram</span><span style="color: #c21f63">Instagram</span><span>every network.</span></span></span></div>
@@ -251,21 +246,22 @@
       <audio id="sfx-collapse" src="assets/sfx/whoosh-short.mp3" data-start="4.35" data-duration="0.57" data-volume="0.6"></audio>
       <audio id="sfx-icon" src="assets/sfx/sparkle.mp3" data-start="5.05" data-duration="1.8" data-volume="0.55"></audio>
       <audio id="sfx-zoom" src="assets/sfx/whoosh-cinematic.mp3" data-start="6.6" data-duration="2.2" data-volume="0.5"></audio>
-      <audio id="sfx-tap1" src="assets/sfx/click-soft.mp3" data-start="9.9" data-duration="0.37" data-volume="0.8"></audio>
+      <audio id="sfx-tap1" src="assets/sfx/click-soft.mp3" data-start="9.85" data-duration="0.37" data-volume="0.8"></audio>
       <audio id="sfx-push1" src="assets/sfx/whoosh-short.mp3" data-start="10.1" data-duration="0.57" data-volume="0.35"></audio>
-      <audio id="sfx-b" src="assets/sfx/click-soft.mp3" data-start="11.3" data-duration="0.37" data-volume="0.5"></audio>
-      <audio id="sfx-promise" src="assets/sfx/chime.mp3" data-start="12.5" data-duration="1.6" data-volume="0.45"></audio>
-      <audio id="sfx-tap2" src="assets/sfx/click-soft.mp3" data-start="13.6" data-duration="0.37" data-volume="0.8"></audio>
-      <audio id="sfx-tap3" src="assets/sfx/click-soft.mp3" data-start="15.2" data-duration="0.37" data-volume="0.8"></audio>
-      <audio id="sfx-tap4" src="assets/sfx/click-soft.mp3" data-start="15.95" data-duration="0.37" data-volume="0.8"></audio>
-      <audio id="sfx-pr" src="assets/sfx/pop.mp3" data-start="16.6" data-duration="0.72" data-volume="0.4"></audio>
-      <audio id="sfx-tap5" src="assets/sfx/click-soft.mp3" data-start="18.4" data-duration="0.37" data-volume="0.8"></audio>
-      <audio id="sfx-type" src="assets/sfx/typing.mp3" data-start="18.9" data-duration="1.2" data-volume="0.5"></audio>
-      <audio id="sfx-ans" src="assets/sfx/sparkle.mp3" data-start="20.3" data-duration="1.8" data-volume="0.5"></audio>
-      <audio id="sfx-push2" src="assets/sfx/whoosh.mp3" data-start="22.9" data-duration="0.57" data-volume="0.45"></audio>
-      <audio id="sfx-k1" src="assets/sfx/pop.mp3" data-start="23.5" data-duration="0.72" data-volume="0.45"></audio>
-      <audio id="sfx-k2" src="assets/sfx/pop.mp3" data-start="24.05" data-duration="0.72" data-volume="0.45"></audio>
-      <audio id="sfx-k3" src="assets/sfx/pop.mp3" data-start="24.6" data-duration="0.72" data-volume="0.45"></audio>
+      <audio id="sfx-m" src="assets/sfx/click-soft.mp3" data-start="11.3" data-duration="0.37" data-volume="0.5"></audio>
+      <audio id="sfx-loop" src="assets/sfx/chime.mp3" data-start="12.45" data-duration="1.6" data-volume="0.45"></audio>
+      <audio id="sfx-tap2" src="assets/sfx/click-soft.mp3" data-start="13.95" data-duration="0.37" data-volume="0.8"></audio>
+      <audio id="sfx-push-lp" src="assets/sfx/whoosh-short.mp3" data-start="14.15" data-duration="0.57" data-volume="0.35"></audio>
+      <audio id="sfx-lp" src="assets/sfx/pop.mp3" data-start="15.0" data-duration="0.72" data-volume="0.4"></audio>
+      <audio id="sfx-tap3" src="assets/sfx/click-soft.mp3" data-start="17.45" data-duration="0.37" data-volume="0.8"></audio>
+      <audio id="sfx-tap4" src="assets/sfx/click-soft.mp3" data-start="18.1" data-duration="0.37" data-volume="0.8"></audio>
+      <audio id="sfx-type" src="assets/sfx/typing.mp3" data-start="18.3" data-duration="1.15" data-volume="0.5"></audio>
+      <audio id="sfx-tap5" src="assets/sfx/click-soft.mp3" data-start="19.6" data-duration="0.37" data-volume="0.8"></audio>
+      <audio id="sfx-ans" src="assets/sfx/sparkle.mp3" data-start="20.15" data-duration="1.8" data-volume="0.5"></audio>
+      <audio id="sfx-push2" src="assets/sfx/whoosh.mp3" data-start="22.5" data-duration="0.57" data-volume="0.45"></audio>
+      <audio id="sfx-k1" src="assets/sfx/pop.mp3" data-start="23.1" data-duration="0.72" data-volume="0.45"></audio>
+      <audio id="sfx-k2" src="assets/sfx/pop.mp3" data-start="23.65" data-duration="0.72" data-volume="0.45"></audio>
+      <audio id="sfx-k3" src="assets/sfx/pop.mp3" data-start="24.2" data-duration="0.72" data-volume="0.45"></audio>
       <audio id="sfx-riser" src="assets/sfx/riser.mp3" data-start="25.6" data-duration="3.2" data-volume="0.35"></audio>
       <audio id="sfx-pix" src="assets/sfx/whoosh-cinematic.mp3" data-start="28" data-duration="2" data-volume="0.45"></audio>
       <audio id="sfx-wm" src="assets/sfx/impact-bass-1.mp3" data-start="31.9" data-duration="2.1" data-volume="0.6"></audio>
@@ -276,26 +272,23 @@
       (function () {
         // ------- positions measured from the website mockups (phone-local CSS px, 511.25×1085) -------
         const LAYOUT = {
-          ib: { r1: [35, 346.9, 441.3, 82.5], r2: [35, 475.6, 441.3, 81.3], r3: [35, 556.9, 441.3, 81.3], r4: [35, 638.1, 441.3, 81.3] },
-          ch: { ribbon: [26.3, 178.8, 458.8, 78.8], b1: [27.5, 304.4, 355.9, 83.1], b2: [152.2, 397.5, 331.5, 62.1], promise: [27.5, 469.5, 456.3, 61.3], b3: [27.5, 540.8, 355.9, 64.6], track: [424.1, 486.4, 45.9, 27.5] },
-          pr: { p1: [35, 381.9, 441.3, 85], p2: [35, 466.9, 441.3, 85], p3: [35, 598.1, 441.3, 85], p4: [35, 683.1, 441.3, 85] },
-          sr: { query: [35, 182.5, 441.3, 75], count: [35, 268.8, 441.3, 16.9], answer: [35, 304.4, 441.3, 151.9], g1: [35, 475, 441.3, 182.5], g2: [35, 673.8, 441.3, 106.3] },
-          ca: { a1: [35, 364.6, 441.3, 88.8], a2: [35, 464.6, 441.3, 88.8], a3: [35, 564.6, 441.3, 88.8], note: [35, 673.4, 441.3, 80.6] },
+          ib: { r1: [30, 582.2, 451.3, 88.6], r2: [30, 670.8, 451.3, 88.6], r3: [30, 759.4, 451.3, 88.6], r4: [30, 848, 451.3, 86.3] },
+          ch: { loop: [25, 175.3, 461.3, 88.2], m1: [25, 313.8, 350.5, 118.8], m2: [135.7, 442.5, 350.5, 118.8], m3: [25, 571.3, 350.5, 118.8] },
+          lp: { l1: [30, 403.2, 451.3, 135], l2: [30, 538.2, 451.3, 135], l3: [30, 673.2, 451.3, 135] },
+          ak: { q: [93.2, 203.8, 388.1, 92.5], a: [30, 311.3, 451.3, 162.5], src: [30, 488.8, 451.3, 33.8], cards: [30, 535, 471.3, 180.2] },
+          cn: { n1: [47.5, 586.1, 416.3, 115.3], n2: [47.5, 701.4, 416.3, 116.6], n3: [47.5, 874.1, 416.3, 115.3], n4: [47.5, 989.4, 416.3, 116.6] },
         };
-        // Tap targets not captured as pieces (read off the base screens).
-        const BACK = [47, 128], TAB_PROMISES = [353, 984], TAB_SEARCH = [449, 984];
+        // Tap targets and overlays measured alongside the pieces.
+        const VIEW = [422.3, 205.9, 45.2, 27], TAB_CLAIRE = [216.9, 950, 77.5, 62.5];
+        const AK_INPUT = [53.8, 880.7, 356.3, 28.7], AK_SEND = [422.5, 871.3, 47.5, 47.5];
 
         const place = (id, r) => { const e = document.getElementById(id); Object.assign(e.style, { left: r[0] + "px", top: r[1] + "px", width: r[2] + "px", height: r[3] + "px" }); };
-        Object.entries(LAYOUT).forEach(([scr, pieces]) => Object.entries(pieces).forEach(([k, r]) => {
-          if (scr === "ch" && k === "track") return;
-          if (scr === "sr" && k === "query") { place("sr-q1", r); place("sr-q2", r); return; }
-          place(scr + "-" + k, r);
-        }));
+        Object.entries(LAYOUT).forEach(([scr, pieces]) => Object.entries(pieces).forEach(([k, r]) => place(scr + "-" + k, r)));
         place("ib-flash", LAYOUT.ib.r1);
-        place("ch-glow", LAYOUT.ch.promise);
-        place("tracked", LAYOUT.ch.track);
-        place("pr-glow", LAYOUT.pr.p1);
-        place("sr-glow", LAYOUT.sr.answer);
+        place("ch-glow", LAYOUT.ch.loop);
+        place("lp-glow", LAYOUT.lp.l1);
+        place("ak-glow", LAYOUT.ak.a);
+        place("typed", AK_INPUT);
 
         // ------- S1 notifications -------
         const NOTES = [
@@ -379,9 +372,13 @@
             tl.to("#tap", { scale: 0.85, opacity: 0, duration: 0.3, ease: "power2.in" }, at + 0.22);
             tl.fromTo("#tapring", { x: x, y: y, scale: 0.8, opacity: 0.7 }, { scale: 1.8, opacity: 0, duration: 0.5, ease: "power2.out", immediateRender: false }, at + 0.05);
           };
+          // Each newly shown screen stacks above everything shown before it.
+          let depth = 1;
+          const raise = (sel, at) => tl.set(sel, { zIndex: ++depth }, at);
           const push = (inSel, outSel, at) => {
+            raise(inSel, at);
             tl.fromTo(inSel, { x: 511, opacity: 1 }, { x: 0, duration: 0.5, ease: "power3.inOut", immediateRender: false }, at);
-            if (outSel) tl.to(outSel, { x: -150, opacity: 0.4, duration: 0.5, ease: "power3.inOut" }, at);
+            if (outSel) tl.to(outSel, { x: -150, filter: "brightness(0.82)", duration: 0.5, ease: "power3.inOut" }, at);
           };
           const mid = (r) => [r[0] + r[2] / 2, r[1] + r[3] / 2];
           const S0 = [1.3, 255.6, 542, 540, 1150];
@@ -423,12 +420,12 @@
           tl.to("#lime-fill", { opacity: 1, duration: 0.15 }, 7.15);
           tl.to("#wall-dark", { opacity: 0, duration: 0.01 }, 7.3);
 
-          // ===== S3 · inbox → chat → promise (7.3 – 15.2) =====
+          // ===== S3 · inbox → chat → open loop (7.3 – 14.2) =====
           camSet(...S0);
-          gsap.set("#scr-pr, #scr-ch, #scr-sr, #scr-ca", { x: 511 });
-          gsap.set("#scr-pr", { x: 0, opacity: 0 });
+          gsap.set("#scr-lp, #scr-ch, #scr-ak, #scr-cn", { x: 511 });
+          gsap.set("#scr-ak", { x: 0, opacity: 0 });
           gsap.set(".gp", { opacity: 0 });
-          gsap.set("#ib-r1, #ib-r2, #ib-r3, #ib-r4, #ch-ribbon, #ch-b1, #ch-b2, #ch-promise, #ch-b3, #pr-p1, #pr-p2, #pr-p3, #pr-p4, #sr-count, #sr-answer, #sr-g1, #sr-g2, #ca-a1, #ca-a2, #ca-a3, #ca-note", { opacity: 0 });
+          gsap.set("#ib-r1, #ib-r2, #ib-r3, #ib-r4, #ch-m1, #ch-m2, #ch-m3, #ch-loop, #lp-l1, #lp-l2, #lp-l3, #ak-q, #ak-a, #ak-src, #ak-cards, #cn-n1, #cn-n2, #cn-n3, #cn-n4", { opacity: 0 });
           tl.fromTo("#phone", { y: 700, rotationX: 24, scale: 0.9, filter: "blur(18px)", transformPerspective: 2000, transformOrigin: "50% 0%" }, { y: 0, rotationX: 0, scale: 1, filter: "blur(0px)", duration: 1.1, ease: "expo.out" }, 7.3);
           capIn("#cap3a", 7.6, 0.1);
           tl.fromTo("#ib-r1, #ib-r2, #ib-r3, #ib-r4", { opacity: 0, x: -30 }, { opacity: 1, x: 0, duration: 0.45, ease: "expo.out", stagger: 0.09 }, 7.9);
@@ -438,63 +435,64 @@
           tl.fromTo("#ib-flash", { opacity: 0 }, { opacity: 0.55, duration: 0.1, yoyo: true, repeat: 1 }, 9.9);
           capOut("#cap3a", 10.0);
           push("#scr-ch", "#scr-ib", 10.1);
-          camTo(1.8, 255, 430, 540, 1180, 10.3, 1.0);
-          tl.fromTo("#ch-ribbon", { opacity: 0, y: -12 }, { opacity: 1, y: 0, duration: 0.4, ease: "power3.out" }, 10.6);
-          tl.fromTo("#ch-b1", { opacity: 0, y: 14, scale: 0.94, transformOrigin: "0% 100%" }, { opacity: 1, y: 0, scale: 1, duration: 0.4, ease: "back.out(1.8)" }, 10.9);
-          capIn("#cap3b", 11.0, 0.08);
-          tl.fromTo("#ch-b2", { opacity: 0, y: 14, scale: 0.94, transformOrigin: "100% 100%" }, { opacity: 1, y: 0, scale: 1, duration: 0.4, ease: "back.out(1.8)" }, 11.3);
+          camTo(1.75, 255, 430, 540, 1200, 10.3, 1.0);
+          tl.fromTo("#ch-m1", { opacity: 0, y: 16, scale: 0.94, transformOrigin: "0% 100%" }, { opacity: 1, y: 0, scale: 1, duration: 0.4, ease: "back.out(1.8)" }, 10.7);
+          capIn("#cap3b", 10.85, 0.08);
+          tl.fromTo("#ch-m2", { opacity: 0, y: 16, scale: 0.94, transformOrigin: "100% 100%" }, { opacity: 1, y: 0, scale: 1, duration: 0.4, ease: "back.out(1.8)" }, 11.3);
           capOut("#cap3b", 12.2);
-          tl.fromTo("#ch-promise", { opacity: 0, scale: 0.9, filter: "blur(10px)" }, { opacity: 1, scale: 1, filter: "blur(0px)", duration: 0.5, ease: "expo.out" }, 12.5);
+          // Claire hears the commitment and pins the open loop above the thread
+          tl.fromTo("#ch-loop", { opacity: 0, y: -40, scale: 0.94, filter: "blur(8px)" }, { opacity: 1, y: 0, scale: 1, filter: "blur(0px)", duration: 0.55, ease: "expo.out" }, 12.45);
           tl.fromTo("#ch-glow", { opacity: 0 }, { opacity: 1, duration: 0.25 }, 12.55);
-          tl.to("#ch-glow", { opacity: 0, duration: 0.6 }, 13.2);
-          capIn("#cap3c", 12.6, 0.1);
-          const trk = mid(LAYOUT.ch.track);
-          tap(trk[0], trk[1], 13.6);
-          tl.fromTo("#tracked", { opacity: 0, scale: 0.6 }, { opacity: 1, scale: 1, duration: 0.3, ease: "back.out(3)" }, 13.7);
-          tl.fromTo("#ch-b3", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.4, ease: "back.out(1.8)" }, 14.1);
-          camTo(...S0, 14.3, 0.8);
-          capOut("#cap3c", 14.9);
+          tl.to("#ch-glow", { opacity: 0, duration: 0.7 }, 13.2);
+          capIn("#cap3c", 12.55, 0.1);
+          tl.fromTo("#ch-m3", { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.4, ease: "back.out(1.8)" }, 13.3);
+          const vw = mid(VIEW);
+          tap(vw[0], vw[1], 13.95);
+          capOut("#cap3c", 14.0);
 
-          // ===== S4 · back → promises tab (15.2 – 18.3) =====
-          tap(BACK[0], BACK[1], 15.2);
-          tl.to("#scr-ch", { x: 511, duration: 0.45, ease: "power3.inOut" }, 15.3);
-          tl.to("#scr-ib", { x: 0, opacity: 1, duration: 0.45, ease: "power3.inOut" }, 15.3);
-          tap(TAB_PROMISES[0], TAB_PROMISES[1], 15.95);
-          tl.fromTo("#scr-pr", { opacity: 0, scale: 0.98 }, { opacity: 1, scale: 1, duration: 0.3, ease: "power2.out", immediateRender: false }, 16.05);
-          tl.fromTo("#pr-p1, #pr-p2, #pr-p3, #pr-p4", { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.4, ease: "expo.out", stagger: 0.08 }, 16.15);
-          capIn("#cap4", 16.1, 0.09);
-          tl.fromTo("#pr-glow", { opacity: 0 }, { opacity: 1, duration: 0.3 }, 16.6);
-          tl.to("#pr-glow", { opacity: 0, duration: 0.6 }, 17.3);
-          camTo(1.6, 255, 450, 540, 1160, 16.3, 1.1);
-          capOut("#cap4", 17.6);
-          camTo(...S0, 17.8, 0.55);
+          // ===== S4 · loops (14.2 – 17.4) =====
+          push("#scr-lp", "#scr-ch", 14.15);
+          camTo(...S0, 14.1, 0.7);
+          tl.fromTo("#lp-l1, #lp-l2, #lp-l3", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.45, ease: "expo.out", stagger: 0.1 }, 14.5);
+          capIn("#cap4", 14.6, 0.09);
+          tl.fromTo("#lp-glow", { opacity: 0 }, { opacity: 1, duration: 0.3 }, 15.0);
+          tl.to("#lp-glow", { opacity: 0, duration: 0.7 }, 15.8);
+          camTo(1.55, 255, 540, 540, 1180, 14.9, 1.1);
+          capOut("#cap4", 16.8);
+          camTo(...S0, 16.9, 0.5);
 
-          // ===== S5 · search tab: Claire answers (18.3 – 22.9) =====
-          tap(TAB_SEARCH[0], TAB_SEARCH[1], 18.4);
-          push("#scr-sr", "#scr-pr", 18.5);
-          capIn("#cap5a", 18.6, 0.12);
-          tl.fromTo("#sr-q1", { clipPath: "inset(0% 100% 50% 0%)" }, { clipPath: "inset(0% 0% 50% 0%)", duration: 0.6, ease: "steps(18)" }, 18.95);
-          tl.fromTo("#sr-q2", { clipPath: "inset(50% 100% 0% 0%)" }, { clipPath: "inset(50% 0% 0% 0%)", duration: 0.55, ease: "steps(20)" }, 19.55);
-          tl.fromTo("#sr-count", { opacity: 0 }, { opacity: 1, duration: 0.3 }, 20.1);
-          capOut("#cap5a", 20.15);
-          tl.fromTo("#sr-answer", { opacity: 0, y: 24, filter: "blur(12px)" }, { opacity: 1, y: 0, filter: "blur(0px)", duration: 0.6, ease: "expo.out" }, 20.3);
-          tl.fromTo("#sr-glow", { opacity: 0 }, { opacity: 1, duration: 0.3 }, 20.4);
-          tl.to("#sr-glow", { opacity: 0, duration: 0.7 }, 21.1);
-          capIn("#cap5b", 20.45, 0.1);
-          camTo(1.7, 255, 390, 540, 1170, 20.3, 1.0);
-          tl.fromTo("#sr-g1, #sr-g2", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.45, ease: "expo.out", stagger: 0.15 }, 20.9);
-          capOut("#cap5b", 22.4);
-          camTo(...S0, 22.5, 0.6);
+          // ===== S5 · Ask Claire (17.4 – 22.5) =====
+          const tc = mid(TAB_CLAIRE);
+          tap(tc[0], tc[1], 17.45);
+          raise("#scr-ak", 17.55);
+          tl.fromTo("#scr-ak", { opacity: 0, scale: 0.98 }, { opacity: 1, scale: 1, duration: 0.3, ease: "power2.out", immediateRender: false }, 17.55);
+          capIn("#cap5a", 17.7, 0.12);
+          tap(AK_INPUT[0] + 60, AK_INPUT[1] + 14, 18.1);
+          const tt = document.getElementById("typed-text");
+          const tw = tt.scrollWidth;
+          tl.fromTo(tt, { width: 0 }, { width: tw, duration: 1.15, ease: "steps(" + tt.textContent.length + ")" }, 18.3);
+          tl.fromTo("#typed-caret", { opacity: 1 }, { opacity: 0, duration: 0.01, repeat: 5, yoyo: true, repeatDelay: 0.2 }, 18.15);
+          const sd = mid(AK_SEND);
+          tap(sd[0], sd[1], 19.6);
+          tl.to("#typed", { opacity: 0, duration: 0.15 }, 19.7);
+          tl.fromTo("#ak-q", { opacity: 0, y: 30, scale: 0.94, transformOrigin: "100% 100%" }, { opacity: 1, y: 0, scale: 1, duration: 0.45, ease: "back.out(1.6)" }, 19.75);
+          capOut("#cap5a", 19.8);
+          camTo(1.6, 255, 400, 540, 1180, 20.0, 1.0);
+          tl.fromTo("#ak-a", { opacity: 0, y: 24, filter: "blur(12px)" }, { opacity: 1, y: 0, filter: "blur(0px)", duration: 0.6, ease: "expo.out" }, 20.15);
+          tl.fromTo("#ak-glow", { opacity: 0 }, { opacity: 1, duration: 0.3 }, 20.25);
+          tl.to("#ak-glow", { opacity: 0, duration: 0.7 }, 21.0);
+          capIn("#cap5b", 20.3, 0.1);
+          tl.fromTo("#ak-src", { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.4, ease: "power3.out" }, 20.65);
+          tl.fromTo("#ak-cards", { opacity: 0, x: 80 }, { opacity: 1, x: 0, duration: 0.6, ease: "expo.out" }, 20.85);
+          capOut("#cap5b", 22.0);
+          camTo(...S0, 22.1, 0.5);
 
-          // ===== S6 · connections → gallery → pixels (22.9 – 29.2) =====
-          push("#scr-ca", "#scr-sr", 22.9);
-          capIn("#cap6a", 23.1, 0.1);
-          slot("slot6", [24.0, 24.55, 25.1]);
-          tl.fromTo("#ca-a1", { opacity: 0, scale: 0.9, y: 20 }, { opacity: 1, scale: 1, y: 0, duration: 0.45, ease: "back.out(1.8)" }, 23.5);
-          tl.fromTo("#ca-a2", { opacity: 0, scale: 0.9, y: 20 }, { opacity: 1, scale: 1, y: 0, duration: 0.45, ease: "back.out(1.8)" }, 24.05);
-          tl.fromTo("#ca-a3", { opacity: 0, scale: 0.9, y: 20 }, { opacity: 1, scale: 1, y: 0, duration: 0.45, ease: "back.out(1.8)" }, 24.6);
-          tl.fromTo("#ca-note", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.4, ease: "power3.out" }, 25.2);
-          capOut("#cap6a", 25.8);
+          // ===== S6 · connections → gallery → pixels (22.5 – 29.2) =====
+          push("#scr-cn", "#scr-ak", 22.5);
+          capIn("#cap6a", 22.7, 0.1);
+          slot("slot6", [23.6, 24.15, 24.7]);
+          ["#cn-n1", "#cn-n2", "#cn-n3", "#cn-n4"].forEach((n, i) => tl.fromTo(n, { opacity: 0, scale: 0.92, y: 20 }, { opacity: 1, scale: 1, y: 0, duration: 0.45, ease: "back.out(1.8)" }, 23.1 + i * 0.55));
+          capOut("#cap6a", 25.6);
           // 2×2 gallery: this phone lands bottom-right, three more fan in
           const GS = 0.62, GP = [[205, 390], [562, 390], [205, 1104]];
           camTo(GS, 0, 0, 562, 1104, 26.0, 0.9, "expo.inOut");
