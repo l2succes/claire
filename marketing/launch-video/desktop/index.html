@@ -24,34 +24,35 @@
 
       /* ---------- captions ---------- */
       .cap {
-        position: absolute; left: 0; right: 0; text-align: center; white-space: nowrap;
-        font-family: "Inter", sans-serif; font-weight: 600; font-size: 58px; letter-spacing: -0.032em; color: #10120f;
+        position: absolute; left: 50%; transform: translateX(-50%); text-align: center; white-space: nowrap;
+        padding: 12px 36px 20px; border-radius: 30px; background: rgba(250, 248, 242, 0);
+        font-family: "Inter", sans-serif; font-weight: 600; font-size: 84px; letter-spacing: -0.035em; color: #10120f;
       }
       .cap.light { color: #f4f1ea; }
       .cap .w { display: inline-block; }
       .hl { position: relative; display: inline-block; z-index: 0; }
-      .hl .sw { position: absolute; left: -10px; right: -10px; top: 8%; bottom: 0%; border-radius: 10px; background: #dfff64; z-index: -1; transform-origin: 0 50%; }
+      .hl .sw { position: absolute; left: -12px; right: -12px; top: 8%; bottom: 0%; border-radius: 10px; background: #dfff64; z-index: -1; transform-origin: 0 50%; }
       .slot { position: relative; display: inline-block; height: 1.2em; vertical-align: top; }
       .slot > span { position: absolute; left: 0; top: 0; white-space: nowrap; }
 
       /* ---------- S1 notifications ---------- */
-      #nstack { position: absolute; left: 50%; top: 470px; width: 0; height: 0; }
+      #nstack { position: absolute; left: 50%; top: 500px; width: 0; height: 0; }
       .note {
-        position: absolute; left: -330px; top: 0; width: 660px; height: 112px; border-radius: 30px;
+        position: absolute; left: -420px; top: 0; width: 840px; height: 140px; border-radius: 36px;
         background: rgba(40, 43, 37, 0.96); box-shadow: 0 30px 60px rgba(0, 0, 0, 0.35), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
         display: flex; align-items: center; gap: 22px; padding: 0 26px; color: #f4f1ea;
       }
-      .note .ic { width: 64px; height: 64px; border-radius: 16px; flex: none; display: flex; align-items: center; justify-content: center; }
+      .note .ic { width: 82px; height: 82px; border-radius: 20px; flex: none; display: flex; align-items: center; justify-content: center; }
       .note .ic img { width: 58%; height: 58%; display: block; }
       .note .tx { flex: 1; min-width: 0; }
-      .note .row1 { display: flex; justify-content: space-between; font-size: 21px; color: #a9ada2; font-weight: 500; }
-      .note b { display: block; font-size: 25px; font-weight: 600; margin-top: 2px; }
-      .note p { font-size: 23px; color: #d9dcd2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .note .row1 { display: flex; justify-content: space-between; font-size: 26px; color: #a9ada2; font-weight: 500; }
+      .note b { display: block; font-size: 31px; font-weight: 600; margin-top: 2px; }
+      .note p { font-size: 29px; color: #d9dcd2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       .wa { background: #25d366; } .tg { background: #229ed9; } .ig { background: linear-gradient(135deg, #f58529, #dd2a7b 55%, #8134af); }
       .im { background: #34c759; } .sl { background: #4a154b; }
 
       /* ---------- S2 icon ---------- */
-      #icon-wrap { position: absolute; left: 50%; top: 430px; width: 0; height: 0; }
+      #icon-wrap { position: absolute; left: 50%; top: 400px; width: 0; height: 0; }
       #icon {
         position: absolute; left: -110px; top: -110px; width: 220px; height: 220px; border-radius: 56px; background: #dfff64;
         display: flex; align-items: center; justify-content: center; box-shadow: 0 0 120px rgba(223, 255, 100, 0.45);
@@ -97,11 +98,11 @@
       /* end card */
       #end { background: #0b0c0a; }
       #end i { position: absolute; width: 54px; height: 54px; background: #1a1d17; display: block; }
-      #end-mark { position: absolute; left: 50%; top: 330px; width: 150px; height: 150px; margin-left: -75px; border-radius: 40px; background: #dfff64; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 140px rgba(223, 255, 100, 0.35); }
+      #end-mark { position: absolute; left: 50%; top: 250px; width: 150px; height: 150px; margin-left: -75px; border-radius: 40px; background: #dfff64; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 140px rgba(223, 255, 100, 0.35); }
       #end-mark svg { width: 102px; height: 102px; }
-      #end-tag { position: absolute; left: 0; right: 0; top: 540px; text-align: center; font-family: "Inter"; font-weight: 600; font-size: 64px; letter-spacing: -0.035em; line-height: 1.12; color: #f4f1ea; }
+      #end-tag { position: absolute; left: 0; right: 0; top: 470px; text-align: center; font-family: "Inter"; font-weight: 600; font-size: 88px; letter-spacing: -0.04em; line-height: 1.08; color: #f4f1ea; }
       #end-tag .l { display: block; }
-      #end-url { position: absolute; left: 0; right: 0; top: 740px; text-align: center; font-family: "DM Mono"; font-weight: 500; font-size: 26px; letter-spacing: 0.06em; color: #8b8f85; }
+      #end-url { position: absolute; left: 0; right: 0; top: 720px; text-align: center; font-family: "DM Mono"; font-weight: 500; font-size: 34px; letter-spacing: 0.06em; color: #8b8f85; }
       #black { position: absolute; inset: 0; background: #000; opacity: 0; }
     </style>
   </head>
@@ -123,9 +124,9 @@
 
       <!-- S1 · hook -->
       <div id="s1" class="clip" data-start="0" data-duration="5" data-track-index="1">
-        <div class="cap light" id="cap1" style="top: 260px">
+        <div class="cap light" id="cap1" style="top: 250px">
           <span class="w">Your</span> <span class="w">people</span> <span class="w">are</span>
-          <span class="w slot" id="slot1"><span style="color: #f4f1ea">on <span style="color: #25d366">WhatsApp</span></span><span>on <span style="color: #36b3ef">Telegram</span></span><span>on <span style="color: #f0588f">Instagram</span></span><span>on <span style="color: #34c759">iMessage</span></span><span>on <span style="color: #ecb22e">Slack</span></span><span style="color: #dfff64">everywhere.</span></span>
+          <span class="w slot" id="slot1"><span style="color: #f4f1ea">on <span style="color: #3ee07e">WhatsApp</span></span><span>on <span style="color: #5cc6f7">Telegram</span></span><span>on <span style="color: #ff8ab4">Instagram</span></span><span>on <span style="color: #4fdc76">iMessage</span></span><span>on <span style="color: #f2c14e">Slack</span></span><span style="color: #dfff64">everywhere.</span></span>
         </div>
         <div id="nstack"></div>
       </div>
@@ -137,7 +138,7 @@
             <svg viewBox="0 0 64 64"><g transform="translate(64 0) scale(-1 1)"><path id="icon-path" pathLength="1" d="M10 34c0-13 9-22 22-22s22 8 22 20-9 20-21 20c-10 0-17-6-17-14 0-7 5-12 12-12 6 0 10 4 10 9 0 6-4 10-10 10" fill="none" stroke="#10120F" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="1 1" stroke-dashoffset="1" /><circle id="icon-dot" cx="10" cy="34" r="4.5" fill="#FFFDF8" /></g></svg>
           </div>
         </div>
-        <div class="cap light" id="cap2" style="top: 640px"><span class="w">Meet</span> <span class="w" style="color: #dfff64">Claire.</span></div>
+        <div class="cap light" id="cap2" style="top: 600px"><span class="w">Meet</span> <span class="w" style="color: #dfff64">Claire.</span></div>
         <div id="lime-fill"></div>
       </div>
 
@@ -210,7 +211,7 @@
       <!-- S6 · lime field + wordmark -->
       <div id="s6" class="clip" data-start="27.6" data-duration="4.4" data-track-index="1">
         <div id="field"></div>
-        <div class="cap" id="cap6" style="top: 500px; font-size: 44px"><span class="w">All</span> <span class="w">your</span> <span class="w">chats.</span> <span class="w">One</span> <span class="w">AI.</span></div>
+        <div class="cap" id="cap6" style="top: 470px; font-size: 80px"><span class="w">All</span> <span class="w">your</span> <span class="w">chats.</span> <span class="w">One</span> <span class="w">AI.</span></div>
         <div id="wordmark">
           <svg viewBox="0 0 64 64"><g transform="translate(64 0) scale(-1 1)"><path id="wm-path" pathLength="1" d="M10 34c0-13 9-22 22-22s22 8 22 20-9 20-21 20c-10 0-17-6-17-14 0-7 5-12 12-12 6 0 10 4 10 9 0 6-4 10-10 10" fill="none" stroke="#10120F" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="1 1" stroke-dashoffset="1" /><circle id="wm-dot" cx="10" cy="34" r="4.5" fill="#FFFDF8" /></g></svg>
           <span id="wm-text">Claire</span>
@@ -321,12 +322,17 @@
         function build() {
           const tl = gsap.timeline({ paused: true });
           const W = (sel) => gsap.utils.toArray(sel + " .w");
+          const pill = (sel) => !document.querySelector(sel).classList.contains("light") && sel !== "#cap6";
           const capIn = (sel, at, st = 0.08) => {
+            if (pill(sel)) tl.fromTo(sel, { backgroundColor: "rgba(250,248,242,0)" }, { backgroundColor: "rgba(250,248,242,0.92)", duration: 0.3, ease: "power2.out" }, at);
             tl.fromTo(W(sel), { opacity: 0, y: 16, filter: "blur(12px)" }, { opacity: 1, y: 0, filter: "blur(0px)", duration: 0.45, ease: "power3.out", stagger: st }, at);
             const sw = document.querySelector(sel + " .sw");
             if (sw) tl.fromTo(sw, { scaleX: 0 }, { scaleX: 1, duration: 0.45, ease: "expo.inOut" }, at + W(sel).length * st + 0.05);
           };
-          const capOut = (sel, at) => tl.to(W(sel), { opacity: 0, y: -12, filter: "blur(12px)", duration: 0.3, ease: "power2.in", stagger: 0.03 }, at);
+          const capOut = (sel, at) => {
+            tl.to(W(sel), { opacity: 0, y: -12, filter: "blur(12px)", duration: 0.3, ease: "power2.in", stagger: 0.03 }, at);
+            if (pill(sel)) tl.to(sel, { backgroundColor: "rgba(250,248,242,0)", duration: 0.3, ease: "power2.in" }, at + 0.1);
+          };
           // slot word-swap: widths measured once at setup
           const slot = (id, times) => {
             const s = document.getElementById(id);
@@ -394,7 +400,7 @@
           // ===== S3 · inbox + promise (7.3 – 15.7) =====
           const S3 = 7.3;
           tl.fromTo("#win3", { y: 380, rotationX: 22, scale: 0.9, filter: "blur(18px)", transformPerspective: 1800, transformOrigin: "50% 0%" }, { y: 0, rotationX: 0, scale: 1, filter: "blur(0px)", duration: 1.1, ease: "expo.out" }, S3);
-          camSet("#cam3", 1, 680, 382, 960, 637, 0);
+          camSet("#cam3", 1.22, 680, 300, 960, 640);
           capIn("#cap3a", S3 + 0.3, 0.1);
           gsap.set("#uw-row, #uw-aibar, #uw-b1, #uw-b2, #uw-promise, #uw-b3, #uw-ctask", { opacity: 0 });
           // cursor → Maya row
@@ -404,7 +410,7 @@
           tl.fromTo("#uw-row", { opacity: 0, scale: 0.97 }, { opacity: 1, scale: 1, duration: 0.3, ease: "back.out(2)" }, S3 + 3.15);
           capOut("#cap3a", S3 + 3.3);
           // push into the conversation
-          camTo("#cam3", 1.45, 720, 280, 960, 650, S3 + 3.35, 1.0);
+          camTo("#cam3", 1.85, 720, 290, 960, 680, S3 + 3.35, 1.0);
           tl.to("#cur3", { x: 560, y: 600, opacity: 0, duration: 0.6, ease: "power2.in" }, S3 + 3.5);
           tl.fromTo("#uw-aibar", { opacity: 0, y: -12 }, { opacity: 1, y: 0, duration: 0.4, ease: "power3.out" }, S3 + 3.6);
           tl.fromTo("#uw-b1", { opacity: 0, y: 14, scale: 0.94, transformOrigin: "0% 100%" }, { opacity: 1, y: 0, scale: 1, duration: 0.4, ease: "back.out(1.8)" }, S3 + 3.9);
@@ -422,7 +428,7 @@
           click("#cur3", "#rip3", trk[0] - 4, trk[1] - 3, S3 + 6.65);
           tl.fromTo("#tracked", { opacity: 0, scale: 0.6 }, { opacity: 1, scale: 1, duration: 0.3, ease: "back.out(3)" }, S3 + 6.7);
           // pull back so the promise lands in the context panel
-          camTo("#cam3", 1.12, 700, 382, 960, 640, S3 + 6.9, 0.8);
+          camTo("#cam3", 1.32, 720, 320, 960, 650, S3 + 6.9, 0.8);
           tl.to("#cur3", { x: 1200, y: 700, opacity: 0, duration: 0.5, ease: "power2.in" }, S3 + 6.95);
           tl.fromTo("#uw-ctask", { opacity: 0, x: UW.promise[0] - UW.ctask[0] + 20, y: UW.promise[1] - UW.ctask[1] + 8, scale: 0.9 }, { opacity: 1, x: 0, y: 0, scale: 1, duration: 0.8, ease: "power3.inOut" }, S3 + 7.05);
           tl.fromTo("#uw-b3", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.4, ease: "back.out(1.8)" }, S3 + 7.4);
@@ -431,7 +437,7 @@
 
           // ===== S4 · ask (15.5 – 22.5) =====
           const S4 = 15.5;
-          camSet("#cam4", 1.05, 680, 382, 960, 640, 0);
+          camSet("#cam4", 1.22, 680, 320, 960, 640);
           tl.fromTo("#win4", { x: 300, rotationY: -24, filter: "blur(20px)", opacity: 0, transformPerspective: 2000, transformOrigin: "0% 50%" }, { x: 0, rotationY: 0, filter: "blur(0px)", opacity: 1, duration: 1.0, ease: "expo.out" }, S4 + 0.05);
           capIn("#cap4a", S4 + 0.2, 0.12);
           gsap.set("#ak-sug, #ak-ev1, #ak-ev2, #ak-ev3", { opacity: 0 });
@@ -439,7 +445,7 @@
           tl.fromTo("#cur4", { x: 1000, y: 460 }, { x: inp[0], y: inp[1], duration: 0.9, ease: "power3.inOut" }, S4 + 0.3);
           click("#cur4", "#rip4", inp[0], inp[1], S4 + 1.25);
           capOut("#cap4a", S4 + 1.3);
-          camTo("#cam4", 1.6, 560, 700, 960, 700, S4 + 1.35, 1.0);
+          camTo("#cam4", 2.0, 600, 700, 960, 720, S4 + 1.35, 1.0);
           const tt = document.getElementById("typed-text");
           const tw = tt.scrollWidth;
           tl.fromTo(tt, { width: 0 }, { width: tw, duration: 1.2, ease: "steps(" + tt.textContent.length + ")" }, S4 + 1.45);
@@ -447,7 +453,7 @@
           const snd = mid(AK.send);
           tl.to("#cur4", { x: snd[0] - 3, y: snd[1] - 3, duration: 0.45, ease: "power3.inOut" }, S4 + 2.6);
           click("#cur4", "#rip4", snd[0] - 3, snd[1] - 3, S4 + 3.05);
-          camTo("#cam4", 1.12, 700, 330, 960, 610, S4 + 3.15, 0.9);
+          camTo("#cam4", 1.45, 720, 260, 960, 620, S4 + 3.15, 0.9);
           tl.to("#cur4", { x: 1180, y: 740, opacity: 0, duration: 0.5, ease: "power2.in" }, S4 + 3.2);
           tl.fromTo("#ak-sug", { opacity: 0, y: 24, filter: "blur(12px)" }, { opacity: 1, y: 0, filter: "blur(0px)", duration: 0.6, ease: "expo.out" }, S4 + 3.3);
           capIn("#cap4b", S4 + 3.45, 0.1);
@@ -458,7 +464,7 @@
 
           // ===== S5 · connections + gallery (22.3 – 27.6) =====
           const S5 = 22.3;
-          camSet("#cam5", 1.05, 680, 382, 960, 640, 0);
+          camSet("#cam5", 1.2, 680, 330, 960, 650);
           tl.fromTo("#win5", { y: 300, filter: "blur(18px)", opacity: 0, scale: 0.94 }, { y: 0, filter: "blur(0px)", opacity: 1, scale: 1, duration: 0.9, ease: "expo.out" }, S5);
           gsap.set(".cn, #cn-banner", { opacity: 0 });
           capIn("#cap5a", S5 + 0.25, 0.1);

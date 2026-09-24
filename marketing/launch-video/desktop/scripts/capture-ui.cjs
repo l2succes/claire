@@ -10,7 +10,7 @@
 //   (cd apps/website/public && python3 -m http.server 8765 --bind 127.0.0.1)
 //   node marketing/launch-video/desktop/scripts/capture-ui.cjs marketing/launch-video/desktop/assets/ui
 const path = require('path');
-const puppeteer = require(path.resolve(__dirname, '../../../../node_modules/puppeteer-core'));
+const puppeteer = require(process.env.PUPPETEER_CORE || path.resolve(__dirname, '../../../../node_modules/puppeteer-core'));
 
 const CHROME = process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const PAGE = process.env.MOCKUPS_URL || 'http://127.0.0.1:8765/mockups/desktop-mockups.html';
