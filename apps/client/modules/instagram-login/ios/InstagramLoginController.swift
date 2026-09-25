@@ -91,7 +91,7 @@ final class InstagramLoginController: UIViewController, WKNavigationDelegate, WK
   private let completion: ([String: Any]) -> Void
   private let embedded: Bool
   private let stack = UIStackView()
-  private let message = UILabel()
+  private var message = UILabel()
   private var fields: [String: UITextField] = [:]
   private var selections: [String: String] = [:]
   private var snapshot: [String: Any] = [:]
@@ -103,6 +103,7 @@ final class InstagramLoginController: UIViewController, WKNavigationDelegate, WK
   private var cancelRequested = false
   private var credentialRequestInFlight = false
   private var retryNeedsNewAttempt = false
+  private var autoAdvancedSingleChoice = false
   private var preservedUsername: String?
   private weak var credentialErrorLabel: UILabel?
   private weak var submitButton: UIButton?
@@ -170,8 +171,6 @@ final class InstagramLoginController: UIViewController, WKNavigationDelegate, WK
       loadingContent.leadingAnchor.constraint(greaterThanOrEqualTo: loadingOverlay.leadingAnchor, constant: 24),
       loadingContent.trailingAnchor.constraint(lessThanOrEqualTo: loadingOverlay.trailingAnchor, constant: -24)
     ])
-    message.numberOfLines = 0; message.font = ClaireLoginStyle.font(15); message.textColor = ClaireLoginStyle.muted
-    message.adjustsFontForContentSizeCategory = true
     privacyCover.backgroundColor = ClaireLoginStyle.cream
     NotificationCenter.default.addObserver(self, selector: #selector(hidePrivateContent), name: UIApplication.willResignActiveNotification, object: nil)
     NotificationCenter.default.addObserver(self, selector: #selector(showPrivateContent), name: UIApplication.didBecomeActiveNotification, object: nil)
@@ -204,7 +203,14 @@ final class InstagramLoginController: UIViewController, WKNavigationDelegate, WK
     heading.font = ClaireLoginStyle.font(28, bold: true); heading.textColor = ClaireLoginStyle.ink
     heading.adjustsFontForContentSizeCategory = true
     stack.addArrangedSubview(heading)
-    message.text = text; message.isHidden = text.isEmpty; stack.addArrangedSubview(message)
+    message = UILabel()
+    message.numberOfLines = 0
+    message.font = ClaireLoginStyle.font(15)
+    message.textColor = ClaireLoginStyle.muted
+    message.adjustsFontForContentSizeCategory = true
+    message.text = text
+    message.isHidden = text.isEmpty
+    stack.addArrangedSubview(message)
   }
   @discardableResult private func button(_ title: String, action: @escaping () -> Void) -> UIButton {
     let button = UIButton(type: .system)
@@ -226,6 +232,7 @@ final class InstagramLoginController: UIViewController, WKNavigationDelegate, WK
     view.bringSubviewToFront(loadingOverlay)
   }
   private func begin() {
+    autoAdvancedSingleChoice = false
     clearContent("", title: "Sign in to Instagram")
     showWorking("Opening Instagram…"); busy = true
     task = Task {
@@ -262,6 +269,13 @@ final class InstagramLoginController: UIViewController, WKNavigationDelegate, WK
     let singleConfirmation = specs?.count == 1
       && specs?.first?["type"] as? String == "select"
       && (specs?.first?["options"] as? [String])?.count == 1
+    if singleConfirmation, !autoAdvancedSingleChoice,
+       let id = specs?.first?["id"] as? String,
+       let option = (specs?.first?["options"] as? [String])?.first {
+      autoAdvancedSingleChoice = true
+      advance([id: option])
+      return
+    }
     let instructions = (step["instructions"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
     clearContent(credentialForm ? "" : (instructions?.isEmpty == false ? instructions! : singleConfirmation ? "Continue to Instagram verification." : "Choose how to verify your account."),
                  title: credentialForm ? "Sign in to Instagram" : "Verify your account")
