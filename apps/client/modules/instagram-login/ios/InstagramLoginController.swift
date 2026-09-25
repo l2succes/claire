@@ -259,7 +259,11 @@ final class InstagramLoginController: UIViewController, WKNavigationDelegate, WK
     credentialRequestInFlight = false
     let specs = (step["user_input"] as? [String: Any])?["fields"] as? [[String: Any]]
     let credentialForm = specs?.contains(where: { $0["type"] as? String == "password" }) == true
-    clearContent(credentialForm ? "" : (step["instructions"] as? String ?? "Continue with Instagram."),
+    let singleConfirmation = specs?.count == 1
+      && specs?.first?["type"] as? String == "select"
+      && (specs?.first?["options"] as? [String])?.count == 1
+    let instructions = (step["instructions"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+    clearContent(credentialForm ? "" : (instructions?.isEmpty == false ? instructions! : singleConfirmation ? "Continue to Instagram verification." : "Choose how to verify your account."),
                  title: credentialForm ? "Sign in to Instagram" : "Verify your account")
     switch type {
     case "user_input":
@@ -270,15 +274,41 @@ final class InstagramLoginController: UIViewController, WKNavigationDelegate, WK
         if type == "select", let options = spec["options"] as? [String], options.count == 1 {
           selections[id] = options[0]
         } else if type == "select", let options = spec["options"] as? [String], !options.isEmpty {
-          let chooser = UIButton(type: .system); chooser.setTitle("Choose \(name)", for: .normal); chooser.showsMenuAsPrimaryAction = true
-          chooser.contentHorizontalAlignment = .leading; chooser.tintColor = ClaireLoginStyle.ink
-          chooser.backgroundColor = ClaireLoginStyle.paper; chooser.layer.cornerRadius = 13
-          chooser.layer.borderWidth = 1; chooser.layer.borderColor = ClaireLoginStyle.border.cgColor
-          chooser.contentEdgeInsets = UIEdgeInsets(top: 0, left: 14, bottom: 0, right: 14)
-          chooser.menu = UIMenu(children: options.map { option in
-            UIAction(title: option) { [weak self, weak chooser] _ in self?.selections[id] = option; chooser?.setTitle(option, for: .normal) }
-          })
-          chooser.heightAnchor.constraint(greaterThanOrEqualToConstant: 48).isActive = true; stack.addArrangedSubview(chooser)
+          let group = UIStackView()
+          group.axis = .vertical
+          group.spacing = 9
+          let label = UILabel()
+          label.text = name
+          label.font = ClaireLoginStyle.font(13, bold: true)
+          label.textColor = ClaireLoginStyle.ink
+          group.addArrangedSubview(label)
+          let choices = UIStackView()
+          choices.axis = .vertical
+          choices.spacing = 8
+          group.addArrangedSubview(choices)
+          for option in options {
+            let choice = UIButton(type: .system)
+            choice.setTitle(option, for: .normal)
+            choice.contentHorizontalAlignment = .leading
+            choice.tintColor = ClaireLoginStyle.ink
+            choice.backgroundColor = ClaireLoginStyle.paper
+            choice.layer.cornerRadius = 13
+            choice.layer.borderWidth = 1
+            choice.layer.borderColor = ClaireLoginStyle.border.cgColor
+            choice.contentEdgeInsets = UIEdgeInsets(top: 0, left: 14, bottom: 0, right: 14)
+            choice.heightAnchor.constraint(greaterThanOrEqualToConstant: 52).isActive = true
+            choice.addAction(UIAction { [weak self, weak choices] _ in
+              self?.selections[id] = option
+              for case let button as UIButton in choices?.arrangedSubviews ?? [] {
+                let selected = button === choice
+                button.backgroundColor = selected ? ClaireLoginStyle.lime : ClaireLoginStyle.paper
+                button.layer.borderColor = (selected ? ClaireLoginStyle.ink : ClaireLoginStyle.border).cgColor
+                button.accessibilityTraits = selected ? [.button, .selected] : .button
+              }
+            }, for: .touchUpInside)
+            choices.addArrangedSubview(choice)
+          }
+          stack.addArrangedSubview(group)
         } else {
           let field = UITextField(); field.borderStyle = .none; field.placeholder = name; field.accessibilityLabel = name
           field.font = ClaireLoginStyle.font(16); field.adjustsFontForContentSizeCategory = true
@@ -317,7 +347,7 @@ final class InstagramLoginController: UIViewController, WKNavigationDelegate, WK
       } else {
         retryNeedsNewAttempt = false
       }
-      submitButton = button("Continue") { [weak self] in self?.submitFields() }
+      submitButton = button(singleConfirmation ? "Continue with Instagram" : "Continue") { [weak self] in self?.submitFields() }
       let note = UILabel(); note.numberOfLines = 0; note.font = ClaireLoginStyle.font(12); note.textColor = ClaireLoginStyle.muted
       note.text = credentialForm ? "Your password isn’t saved in Claire." : "Verification codes aren’t saved in Claire."
       stack.addArrangedSubview(note)
