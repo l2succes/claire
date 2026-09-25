@@ -9,6 +9,7 @@ const mockQuery: any = {
   update: mock().mockReturnThis(),
   delete: mock().mockReturnThis(),
   eq: mock().mockReturnThis(),
+  lte: mock().mockReturnThis(),
   order: mock().mockReturnThis(),
   range: mock().mockReturnThis(),
   single: mock(),
@@ -51,6 +52,7 @@ function resetMocks() {
   mockQuery.update.mockReturnThis();
   mockQuery.delete.mockReturnThis();
   mockQuery.eq.mockReturnThis();
+  mockQuery.lte.mockReturnThis();
   mockQuery.order.mockReturnThis();
   mockQuery.range.mockReturnThis();
 }
@@ -341,5 +343,49 @@ describe('DELETE /loops/:id', () => {
     mockQuery.single.mockResolvedValueOnce({ data: null, error: null }); // null = not owned
     const res = await request(app).delete(`/loops/${VALID_UUID}`);
     expect(res.status).toBe(404);
+  });
+});
+
+
+describe('GET /loops/attention', () => {
+  beforeEach(resetMocks);
+  const item = (index: number, overrides = {}) => ({
+    loop_id: `loop-${index}`, row_version: 1,
+    loop: { id: `loop-${index}`, row_version: 1, status: 'open', visibility: 'surfaced', ...overrides },
+  });
+
+  it('returns the entire review queue beyond 100 and past a database page', async () => {
+    mockQuery.range.mockResolvedValueOnce({ data: Array.from({ length: 200 }, (_, i) => item(i)), error: null });
+    mockQuery.range.mockResolvedValueOnce({ data: [item(200), item(201)], error: null });
+    const res = await request(app).get('/loops/attention');
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(202);
+    expect(mockQuery.range).toHaveBeenNthCalledWith(1, 0, 199);
+    expect(mockQuery.range).toHaveBeenNthCalledWith(2, 200, 399);
+  });
+
+  it('excludes closed, snoozed, hidden, reviewed and superseded queue versions', async () => {
+    mockQuery.range.mockResolvedValueOnce({ data: [
+      item(0), item(1, { status: 'done' }), item(2, { status: 'snoozed' }),
+      item(3, { visibility: 'suppressed' }), item(4, { reviewed_at: new Date().toISOString() }),
+      item(5, { row_version: 2 }),
+    ], error: null });
+    const res = await request(app).get('/loops/attention');
+    expect(res.body.data.map((entry: any) => entry.loop_id)).toEqual(['loop-0']);
+  });
+
+  it('continues past a full page of stale attention entries', async () => {
+    mockQuery.range.mockResolvedValueOnce({ data: Array.from({ length: 200 }, (_, i) => item(i, { status: 'done' })), error: null });
+    mockQuery.range.mockResolvedValueOnce({ data: [item(200)], error: null });
+    const res = await request(app).get('/loops/attention');
+    expect(res.body.data.map((entry: any) => entry.loop_id)).toEqual(['loop-200']);
+  });
+
+  it('fails instead of presenting a partial total when a later page fails', async () => {
+    mockQuery.range.mockResolvedValueOnce({ data: Array.from({ length: 200 }, (_, i) => item(i)), error: null });
+    mockQuery.range.mockResolvedValueOnce({ data: null, error: { message: 'db error' } });
+    const res = await request(app).get('/loops/attention');
+    expect(res.status).toBe(500);
+    expect(res.body.data).toBeUndefined();
   });
 });
