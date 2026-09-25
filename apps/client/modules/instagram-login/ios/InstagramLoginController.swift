@@ -353,6 +353,11 @@ final class InstagramLoginController: UIViewController, WKNavigationDelegate, WK
       do {
         let fresh = try await api.request("start", body: [:])
         snapshot = fresh
+        if cancelRequested {
+          busy = false
+          cancel()
+          return
+        }
         let step = fresh["step"] as? [String: Any]
         let specs = (step?["user_input"] as? [String: Any])?["fields"] as? [[String: Any]] ?? []
         let newIDs = Set(specs.compactMap { $0["id"] as? String })
