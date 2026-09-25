@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { router } from 'expo-router';
+import { getActiveScreen } from './active-screen';
 
 let refreshInFlight: Promise<string | null> | null = null;
 
@@ -17,6 +18,7 @@ async function refreshAccessToken(): Promise<string | null> {
 
 function withBearerToken(init: RequestInit, token: string | null): RequestInit {
   const headers = new Headers(init.headers);
+  headers.set('X-Claire-Screen', getActiveScreen());
   if (token) headers.set('Authorization', `Bearer ${token}`);
   else headers.delete('Authorization');
   return { ...init, headers };

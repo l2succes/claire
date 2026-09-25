@@ -75,6 +75,7 @@ import { mockBridgeAdapter } from './adapters/mock';
 import { transcodeVoiceToM4aOnce } from './services/audio-transcoder';
 import { applyIncomingMessageEdit } from './services/message-edits';
 import { isWhatsAppStatusUpdate } from './services/whatsapp-status';
+import { operatorEmailAlerts } from './services/operator-email-alerts';
 
 // Initialise Sentry as early as possible (no-op when SENTRY_DSN is unset)
 initSentry();
@@ -200,6 +201,37 @@ app.use(
     { stream }
   )
 );
+
+// Email a compact operator alert for failed API requests. Never include query
+// strings, request bodies, or error payloads because they can hold user data.
+function requestScreen(pathname: string, supplied: string | undefined): string {
+  const safeScreen = supplied?.replace(/[^\p{L}\p{N} /._·-]/gu, '').trim().slice(0, 80);
+  if (safeScreen) return safeScreen;
+  if (pathname.startsWith('/platforms')) return 'Connections';
+  if (pathname.startsWith('/messages') || pathname.startsWith('/conversations')) return 'Chat / Inbox';
+  if (pathname.startsWith('/ai')) return 'Ask Claire';
+  if (pathname.startsWith('/loops')) return 'Loops';
+  if (pathname.startsWith('/contacts')) return 'Contacts';
+  if (pathname.startsWith('/auth')) return 'Sign in';
+  return 'Unknown';
+}
+
+app.use((req, res, next) => {
+  res.on('finish', () => {
+    if (res.statusCode >= 500) {
+      const routePath = typeof req.route?.path === 'string' ? `${req.baseUrl}${req.route.path}` : req.path;
+      void operatorEmailAlerts.serverError(
+        req.method,
+        routePath.slice(0, 200),
+        res.statusCode,
+        req.user?.id,
+        req.user?.email,
+        requestScreen(req.path, req.get('x-claire-screen')),
+      );
+    }
+  });
+  next();
+});
 
 // Routes
 app.use('/auth', authRateLimit, authRoutes);
@@ -428,6 +460,29 @@ function withDemoSupport(adapter: IPlatformAdapter): IPlatformAdapter {
 
 // Initialize platform adapters
 async function initializePlatforms() {
+  platformManager.onEvent('session_ready', async (event) => {
+    try {
+      const adapter = platformManager.getAdapter(event.platform);
+      const session = await adapter?.getSession(event.sessionId);
+      if (!session) return;
+      const { data } = await supabase.auth.admin.getUserById(session.userId);
+      void operatorEmailAlerts.platformConnected(event.platform, data.user?.email, session.userId, session.id);
+    } catch (error) {
+      logger.error('Could not prepare platform connection alert', error);
+    }
+  });
+  platformManager.onEvent('auth_failure', async (event) => {
+    try {
+      const adapter = platformManager.getAdapter(event.platform);
+      const session = await adapter?.getSession(event.sessionId);
+      if (!session) return;
+      const { data } = await supabase.auth.admin.getUserById(session.userId);
+      void operatorEmailAlerts.platformFailed(event.platform, data.user?.email, session.userId, session.id);
+    } catch (error) {
+      logger.error('Could not prepare platform failure alert', error);
+    }
+  });
+
   if (demoConfig.enabled) {
     logger.info('DEMO_MODE_ENABLED=true — demo accounts will receive synthetic sessions and in-character replies');
     demoResponder.configure((message) => platformManager.ingestMessage(message));

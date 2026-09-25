@@ -9,14 +9,18 @@ updates:
     schedule:
       interval: weekly
   - package-ecosystem: npm
-    directory: /server
+    directory: /apps/server
     schedule:
       interval: weekly
   - package-ecosystem: npm
-    directory: /mobile
+    directory: /apps/client
     schedule:
       interval: weekly
   - package-ecosystem: npm
-    directory: /website
+    directory: /apps/website
+    schedule:
+      interval: weekly
+  - package-ecosystem: npm
+    directory: /apps/desktop
     schedule:
       interval: weekly

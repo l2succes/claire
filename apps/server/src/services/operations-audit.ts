@@ -11,7 +11,8 @@ type OperationsAuditAction =
   | 'telemetry_viewed'
   | 'bridges_viewed'
   | 'bridge_session_retired'
-  | 'users_viewed';
+  | 'users_viewed'
+  | 'alert_viewed';
 
 export async function recordOperationsAudit(input: {
   actorUserId: string;

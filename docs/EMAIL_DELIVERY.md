@@ -111,6 +111,33 @@ The next implementation step is an `email_outbox` table plus a server worker:
 This keeps password reset and security mail reliable while making product email
 auditable and respectful.
 
+## Operator alerts
+
+The Claire API can send operational email and iOS push alerts for new account
+signups, successfully connected platforms, failed platform authentication, and
+HTTP 5xx responses. Email goes to the configured alert address and Operations
+owners/operators. Push goes to their registered, enabled iOS devices. Configure
+these variables on the Railway **Claire API** service (separate from the
+Gotrue Auth service above):
+
+```text
+RESEND_API_KEY=re_…
+OPERATOR_ALERT_EMAIL=<your inbox>
+OPERATOR_ALERT_FROM=Claire Alerts <alerts@<verified domain>>
+```
+
+`OPERATOR_ALERT_FROM` can be omitted when `RESEND_FROM_EMAIL` is already set.
+Email alerts are disabled unless the API key and sender are present; push
+delivery uses the existing Operations access list and registered iOS devices.
+Repeated failures for the same request or session are grouped for 15 minutes;
+signup notices are deduplicated by user ID. Error notices include the request
+method, path, status, user ID when available, and time; they exclude request
+bodies, query strings, credentials, and message content. Tapping an iOS alert
+opens a protected in-app Operations report with the user, originating screen,
+endpoint template, status, service, and timestamp. The report API is restricted
+to Operations owners and operators; its backing table is added by
+`20260924100000_operations_alert_reports.sql`.
+
 ## References
 
 - [React Email rendering](https://react.email/docs/utilities/render)

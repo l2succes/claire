@@ -9,6 +9,7 @@ import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios';
 import { supabase } from './supabase';
 import { clientSafeMessage, PlatformRequestError } from './api-errors';
 import { requestConnectionRecovery } from './connection-recovery-signal';
+import { getActiveScreen } from './active-screen';
 import {
   Platform,
   PlatformStatus,
@@ -24,6 +25,15 @@ import {
 } from '../types/platform';
 
 export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001';
+
+export type OutgoingMediaUpload = {
+  uri: string;
+  fileName?: string;
+  mimeType: string;
+  kind: 'voice';
+  durationMs: number;
+  waveform?: number[];
+};
 
 export interface PlatformDefinition {
   id: string;
@@ -99,6 +109,7 @@ async function currentAccessToken(): Promise<string | null> {
 
 // Add auth token to all requests
 api.interceptors.request.use(async (config) => {
+  config.headers['X-Claire-Screen'] = getActiveScreen();
   const accessToken = await currentAccessToken();
   if (accessToken) {
     config.headers.Authorization = `Bearer ${accessToken}`;

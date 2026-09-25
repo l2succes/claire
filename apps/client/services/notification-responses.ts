@@ -14,13 +14,14 @@ export interface ClaireNotificationData {
   chatName?: unknown;
   platform?: unknown;
   isGroup?: unknown;
+  alertId?: unknown;
 }
 
 export interface NotificationResponseOpeners {
   openChat: (data: ClaireNotificationData, draft?: string) => void;
   openLoop: (loopId: string) => void;
   openLoops?: () => void;
-  openOperations: (url: string) => void;
+  openOperations: (url: string, alertId?: string) => void;
 }
 
 const handledResponses = new Set<string>();
@@ -50,11 +51,12 @@ export async function handleNotificationResponse(
   const data = (response.notification.request.content.data || {}) as ClaireNotificationData;
   const action = response.actionIdentifier;
 
-  if (data.type === 'operations_incident') {
+  if (data.type === 'operations_incident' || data.type === 'operations_alert') {
     openers.openOperations(
       typeof data.url === 'string' && data.url.startsWith('https://')
         ? data.url
-        : 'https://useclaire.co/ops'
+        : 'https://useclaire.co/ops',
+      typeof data.alertId === 'string' ? data.alertId : undefined,
     );
     return;
   }

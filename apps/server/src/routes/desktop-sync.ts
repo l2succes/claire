@@ -23,7 +23,7 @@ router.get('/bootstrap', requireAuth, async (req: Request, res: Response) => {
     const userId = req.user?.id as string;
     const [chatsResult, loopsResult, preferencesResult, cursorResult] = await Promise.all([
       supabase.from('chats').select('*, contact:contacts(*)').eq('user_id', userId).order('last_message_at', { ascending: false, nullsFirst: false }),
-      supabase.from('loops').select('*, contact:contacts(*), chat:chats(*)').eq('user_id', userId).in('status', ['open', 'waiting', 'snoozed']).order('updated_at', { ascending: false }).limit(200),
+      supabase.from('loops').select('*, contact:contacts!loops_contact_id_fkey(*), chat:chats!loops_chat_id_fkey(*)').eq('user_id', userId).in('status', ['open', 'waiting', 'snoozed']).order('updated_at', { ascending: false }).limit(200),
       supabase.from('user_preferences').select('*').eq('user_id', userId).maybeSingle(),
       supabase.from('desktop_sync_events').select('cursor').eq('user_id', userId).order('cursor', { ascending: false }).limit(1).maybeSingle(),
     ]);
