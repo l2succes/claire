@@ -1,4 +1,5 @@
 import { Platform } from '../../types/platform';
+import { hasInstagramMobileLogin } from '../../modules/instagram-login';
 
 export type ConnectionSource = 'onboarding' | 'settings';
 export type ConnectionSetupSurface = 'phone' | 'desktop' | 'mac';
@@ -26,8 +27,8 @@ export const CONNECTION_PLATFORM_CONFIG: Record<Platform, ConnectionPlatformConf
   [Platform.INSTAGRAM]: {
     platform: Platform.INSTAGRAM,
     name: 'Instagram',
-    detail: 'One-time setup in Claire Desktop',
-    setupSurface: 'desktop',
+    detail: hasInstagramMobileLogin ? 'Sign in and verify on your iPhone' : 'One-time setup in Claire Desktop',
+    setupSurface: hasInstagramMobileLogin ? 'phone' : 'desktop',
   },
   [Platform.IMESSAGE]: {
     platform: Platform.IMESSAGE,
@@ -37,8 +38,10 @@ export const CONNECTION_PLATFORM_CONFIG: Record<Platform, ConnectionPlatformConf
   },
 };
 
-export const PHONE_CONNECTION_PLATFORMS = [Platform.WHATSAPP, Platform.TELEGRAM] as const;
-export const COMPANION_CONNECTION_PLATFORMS = [Platform.INSTAGRAM, Platform.IMESSAGE] as const;
+export const PHONE_CONNECTION_PLATFORMS = hasInstagramMobileLogin
+  ? [Platform.WHATSAPP, Platform.TELEGRAM, Platform.INSTAGRAM] : [Platform.WHATSAPP, Platform.TELEGRAM];
+export const COMPANION_CONNECTION_PLATFORMS = hasInstagramMobileLogin
+  ? [Platform.IMESSAGE] : [Platform.INSTAGRAM, Platform.IMESSAGE];
 
 export function connectionRoute(platform: Platform, source: ConnectionSource) {
   return {

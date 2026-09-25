@@ -1,4 +1,5 @@
 export type { ChatMessage, ReactionRow, ReactionChip } from './types';
+export { visualMediaForMessage, fitMediaSize, type VisualMedia } from './visual-media';
 export {
   isLocalSend,
   mergeChatMessage,

@@ -4,11 +4,15 @@
  * happen on a real sign-out and at no other time.
  */
 const mockClearMobileCache = jest.fn(() => Promise.resolve(undefined));
+const mockResetPlatformStore = jest.fn();
 
 jest.mock('../services/mobile-cache', () => ({ clearMobileCache: (...args: unknown[]) => mockClearMobileCache(...(args as [])) }));
 jest.mock('../services/query-client', () => ({ resetQueryClient: jest.fn() }));
 jest.mock('../services/notifications', () => ({ deregisterNotificationDevice: jest.fn(async () => undefined) }));
-jest.mock('../stores/platformStore', () => ({ usePlatformStore: { persist: { clearStorage: () => Promise.resolve() } } }));
+jest.mock('../stores/platformStore', () => ({ usePlatformStore: {
+  getState: () => ({ reset: mockResetPlatformStore }),
+  persist: { clearStorage: () => Promise.resolve() },
+} }));
 
 let authListener: ((event: string, session: unknown) => void) | null = null;
 jest.mock('../services/supabase', () => ({
@@ -49,5 +53,16 @@ describe('local data is only cleared by a real sign-out', () => {
     await Promise.resolve();
 
     expect(mockClearMobileCache).toHaveBeenCalledWith('user-1');
+  });
+
+  it('drops previous connection state when a different account signs in directly', () => {
+    authListener?.('SIGNED_IN', {
+      access_token: 'new-token',
+      user: { id: 'user-2', email: 'other@example.test', user_metadata: {}, created_at: '2025-01-01T00:00:00.000Z' },
+    });
+
+    expect(mockResetPlatformStore).toHaveBeenCalledTimes(1);
+    expect(useAuthStore.getState().user?.id).toBe('user-2');
+    expect(mockClearMobileCache).not.toHaveBeenCalled();
   });
 });

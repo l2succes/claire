@@ -22,6 +22,8 @@
       "env": {
         "APP_VARIANT": "staging",
         "EXPO_PUBLIC_ENV": "staging",
+        "EXPO_PUBLIC_API_URL": "https://ig-mobile-api-production.up.railway.app",
+        "EXPO_PUBLIC_INSTAGRAM_MOBILE_LOGIN": "true",
         "EXPO_PUBLIC_REVENUECAT_STORE": "test"
       },
       "channel": "staging"

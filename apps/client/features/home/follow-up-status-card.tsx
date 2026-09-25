@@ -9,7 +9,7 @@ export function FollowUpStatusCard() {
   if (!message && !isError) return null;
   const isPushIssue = issue === 'push';
   return (
-    <View style={{ flexDirection: 'row', gap: space[3], padding: space[4], borderWidth: 1, borderColor: colors.neutral[200], borderRadius: radius.card, backgroundColor: colors.paper }}>
+    <View testID="follow-up-status-card" style={{ flexDirection: 'row', gap: space[3], padding: space[4], borderWidth: 1, borderColor: colors.neutral[200], borderRadius: radius.card, backgroundColor: colors.paper }}>
       {isPushIssue ? <BellOff size={21} color={colors.ink} /> : <AlertCircle size={21} color={colors.ink} />}
       <View style={{ flex: 1, gap: space[2] }}>
         <Text style={{ ...mobileType.bodySmall, fontWeight: '800', color: colors.ink }}>{isPushIssue ? 'Push alerts need attention' : 'Follow-up status'}</Text>

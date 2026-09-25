@@ -1,0 +1,11 @@
+{
+  "name": "expo-instagram-login",
+  "version": "1.0.0",
+  "description": "Native Instagram connection broker",
+  "main": "index.ts",
+  "types": "index.ts",
+  "license": "MIT",
+  "author": "Claire",
+  "homepage": "https://github.com/l2succes/claire",
+  "peerDependencies": { "expo": "*", "react-native": "*" }
+}
