@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
+import { Alert, FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
 import { Check, RotateCcw, XCircle } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -11,7 +11,7 @@ import { cacheLoop, cachedLoops, replaceCachedLoops } from '../../services/mobil
 import { useLocalFirstQuery } from '../../hooks/useLocalFirstQuery';
 import { useScreenLoadMark } from '../../hooks/useScreenLoadMark';
 import { useAuthStore } from '../../stores/authStore';
-import { supabase } from '../../services/supabase';
+import { fetchLoopList } from '../../services/loop-list';
 import { LoopsSkeleton } from '../../components/claire/skeleton';
 import { LoopRow } from './loop-row';
 import { reviewLoop, snoozeLoop, updateLoop } from '../../services/loops';
@@ -27,27 +27,6 @@ import {
 } from '../../services/loop-query-cache';
 
 type LoopFilter = 'for_you' | 'done' | 'waiting' | 'all';
-
-const LOOP_SELECT = `
-  *,
-  contact:contacts!loops_contact_id_fkey(name, inferred_name, avatar_url),
-  chat:chats!loops_chat_id_fkey(
-    name, is_group, platform,
-    contact:contacts!chats_contact_id_fkey(name, inferred_name, avatar_url)
-  )
-`;
-
-async function fetchLoops(userId: string): Promise<LoopItem[]> {
-  const { data, error } = await supabase
-    .from('loops')
-    .select(LOOP_SELECT)
-    .eq('user_id', userId)
-    .order('priority_score', { ascending: false, nullsFirst: false })
-    .order('last_evidence_at', { ascending: false, nullsFirst: false })
-    .limit(200);
-  if (error) throw error;
-  return (data ?? []) as LoopItem[];
-}
 
 const LIVE_STATUSES: LoopItem['status'][] = ['open', 'waiting', 'snoozed'];
 
@@ -114,7 +93,7 @@ export function LoopsScreen() {
   const query = useLocalFirstQuery<LoopItem[]>({
     queryKey: loopsQueryKey,
     enabled: !!user?.id,
-    queryFn: () => fetchLoops(user!.id),
+    queryFn: () => fetchLoopList(user!.id),
     staleTime: 60_000,
     local: {
       enabled: !!user?.id,
@@ -131,6 +110,7 @@ export function LoopsScreen() {
       await Promise.all([
         queryClient.cancelQueries({ queryKey: loopsQueryKey }),
         queryClient.cancelQueries({ queryKey: ['mobile-home-loops', user?.id] }),
+        queryClient.cancelQueries({ queryKey: ['loop-attention', user?.id] }),
       ]);
       const snapshot = snapshotLoopQueries(queryClient, user?.id, id);
       patchLoopQueries(queryClient, user?.id, id, next);
@@ -138,6 +118,7 @@ export function LoopsScreen() {
     },
     onError: (_error, _variables, context) => {
       if (context?.snapshot) restoreLoopQueries(queryClient, user?.id, _variables.id, context.snapshot);
+      Alert.alert('Could not update loop', userFacingErrorMessage(_error));
     },
     onSuccess: async (updated) => {
       patchLoopQueries(queryClient, user?.id, updated.id, updated);
@@ -151,6 +132,7 @@ export function LoopsScreen() {
       await Promise.all([
         queryClient.cancelQueries({ queryKey: loopsQueryKey }),
         queryClient.cancelQueries({ queryKey: ['mobile-home-loops', user?.id] }),
+        queryClient.cancelQueries({ queryKey: ['loop-attention', user?.id] }),
       ]);
       const snapshot = snapshotLoopQueries(queryClient, user?.id, id);
       patchLoopQueries(queryClient, user?.id, id, { status: 'snoozed', snoozed_until: until });
@@ -159,6 +141,7 @@ export function LoopsScreen() {
     },
     onError: (_error, variables, context) => {
       if (context?.snapshot) restoreLoopQueries(queryClient, user?.id, variables.id, context.snapshot);
+      Alert.alert('Could not postpone loop', userFacingErrorMessage(_error));
     },
     onSuccess: async (updated) => {
       patchLoopQueries(queryClient, user?.id, updated.id, updated);
@@ -172,6 +155,7 @@ export function LoopsScreen() {
       await Promise.all([
         queryClient.cancelQueries({ queryKey: loopsQueryKey }),
         queryClient.cancelQueries({ queryKey: ['mobile-home-loops', user?.id] }),
+        queryClient.cancelQueries({ queryKey: ['loop-attention', user?.id] }),
       ]);
       const snapshot = snapshotLoopQueries(queryClient, user?.id, id);
       const reviewedAt = new Date().toISOString();
@@ -194,8 +178,8 @@ export function LoopsScreen() {
 
   // One pass, memoised. These were six chained filters recomputed on every
   // render -- including every chip tap and every optimistic status toggle --
-  // over as many as two hundred loops.
-  const { open, completed, waiting, today, forYou, needsAttention } = useMemo(() => {
+  // over the complete loop collection.
+  const { open, completed, waiting, today, forYou } = useMemo(() => {
     const items = query.data ?? [];
     const todayKey = new Date().toDateString();
     const openItems: LoopItem[] = [];
@@ -203,7 +187,6 @@ export function LoopsScreen() {
     const waitingItems: LoopItem[] = [];
     const forYouItems: LoopItem[] = [];
     let dueToday = 0;
-    let attention = 0;
     for (const item of items) {
       if (['done', 'dropped', 'superseded'].includes(item.status)) completedItems.push(item);
       if (!LIVE_STATUSES.includes(item.status)) continue;
@@ -217,9 +200,8 @@ export function LoopsScreen() {
       if (item.owner ? item.owner === 'them' : !item.from_me) waitingItems.push(item);
       if (item.owner === 'me' || (!item.owner && item.from_me)) forYouItems.push(item);
       if (item.deadline && new Date(item.deadline).toDateString() === todayKey) dueToday += 1;
-      if ((item.priority_score ?? 0) >= 80) attention += 1;
     }
-    return { open: openItems, completed: completedItems, waiting: waitingItems, today: dueToday, forYou: forYouItems, needsAttention: attention };
+    return { open: openItems, completed: completedItems, waiting: waitingItems, today: dueToday, forYou: forYouItems };
   }, [query.data]);
   const visible = filter === 'done' ? completed : filter === 'waiting' ? waiting : filter === 'for_you' ? forYou : open;
   const reviewCandidates = useMemo(
@@ -229,8 +211,8 @@ export function LoopsScreen() {
   const reviewTarget = reviewCandidates[0] ?? null;
 
   useEffect(() => {
-    if (reviewOpen && !reviewTarget) setReviewOpen(false);
-  }, [reviewOpen, reviewTarget]);
+    if (reviewOpen && !reviewTarget && !review.isPending && !review.error) setReviewOpen(false);
+  }, [reviewOpen, reviewTarget, review.isPending, review.error]);
 
   useScreenLoadMark('loops', { hasData: !query.isCold, isFetching: query.isFetching, source: query.isFetching ? 'cache' : 'network' });
 
@@ -239,7 +221,7 @@ export function LoopsScreen() {
       <MobileHeader title="Loops" subtitle="Follow through without losing the conversation." safeArea />
       <View style={{ paddingHorizontal: space[4], gap: space[3], paddingBottom: space[3] }}>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space[2] }}>
-          <View style={{ flex: 1, padding: space[4], borderRadius: radius.card, backgroundColor: colors.lime }}><Text style={{ ...mobileType.screenTitle, color: colors.ink, fontVariant: ['tabular-nums'] }}>{attentionQuery.data?.length ?? needsAttention}</Text><Text style={{ ...mobileType.monoLabel, color: colors.ink }}>NEED ATTENTION</Text></View>
+          <View style={{ flex: 1, padding: space[4], borderRadius: radius.card, backgroundColor: colors.lime }}><Text style={{ ...mobileType.screenTitle, color: colors.ink, fontVariant: ['tabular-nums'] }}>{attentionQuery.data?.length ?? '—'}</Text><Text style={{ ...mobileType.monoLabel, color: colors.ink }}>NEED ATTENTION</Text></View>
           <View style={{ flex: 1, padding: space[4], borderRadius: radius.card, backgroundColor: colors.sky }}><Text style={{ ...mobileType.screenTitle, color: colors.ink, fontVariant: ['tabular-nums'] }}>{today}</Text><Text style={{ ...mobileType.monoLabel, color: colors.ink }}>DUE TODAY</Text></View>
         </View>
         <View style={{ flexDirection: 'row', gap: space[2] }}>
@@ -280,7 +262,7 @@ export function LoopsScreen() {
         ) : null}
       </View>
       {query.isCold ? <LoopsSkeleton /> : (
-        <FlatList testID="loops-list" data={visible} renderItem={({ item }) => <LoopRow item={item} onOpen={() => router.push({ pathname: '/loops/[id]', params: { id: item.id } })} onToggle={() => patch.mutate({ id: item.id, status: isLoopClosed(item) ? 'open' : 'done' })} onWait={isLoopClosed(item) ? undefined : () => patch.mutate({ id: item.id, owner: item.owner === 'them' ? 'me' : 'them', status: item.owner === 'them' ? 'open' : 'waiting' })} onSnooze={isLoopClosed(item) ? undefined : () => setSnoozeTarget(item)} />} keyExtractor={item => item.id} contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ paddingHorizontal: space[4], paddingBottom: 112 }} refreshControl={<RefreshControl refreshing={query.isRefetching} onRefresh={() => void query.refetch()} tintColor={colors.ink} />} ListEmptyComponent={<MobileState title={filter === 'done' ? 'Nothing closed yet' : filter === 'waiting' ? "You're not waiting on anyone" : 'No open loops'} message="Claire will surface commitments from your conversations here." />} />
+        <FlatList testID="loops-list" data={visible} renderItem={({ item }) => <LoopRow item={item} onOpen={() => router.push({ pathname: '/loops/[id]', params: { id: item.id } })} onToggle={() => patch.mutate({ id: item.id, status: isLoopClosed(item) ? 'open' : 'done' })} onWait={isLoopClosed(item) ? undefined : () => patch.mutate({ id: item.id, owner: item.owner === 'them' ? 'me' : 'them', status: item.owner === 'them' ? 'open' : 'waiting' })} onSnooze={isLoopClosed(item) ? undefined : () => setSnoozeTarget(item)} />} keyExtractor={item => item.id} contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ paddingBottom: 112 }} refreshControl={<RefreshControl refreshing={query.isRefetching || attentionQuery.isRefetching} onRefresh={() => { void query.refetch(); void attentionQuery.refetch(); }} tintColor={colors.ink} />} ListEmptyComponent={<MobileState title={filter === 'done' ? 'Nothing closed yet' : filter === 'waiting' ? "You're not waiting on anyone" : 'No open loops'} message="Claire will surface commitments from your conversations here." />} />
       )}
 
       <BottomSheet
@@ -312,7 +294,7 @@ export function LoopsScreen() {
       </BottomSheet>
 
       <BottomSheet
-        visible={reviewOpen && !!reviewTarget}
+        visible={reviewOpen}
         title="Review follow-ups"
         onClose={() => setReviewOpen(false)}
         testID="loop-review-sheet"
