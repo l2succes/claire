@@ -84,7 +84,10 @@ export default function ConnectionsScreen() {
   }, [load]));
 
   const connectedPlatforms = useMemo(() => new Set(sessions.filter(session => session.status === PlatformStatus.CONNECTED).map(session => session.platform)), [sessions]);
-  const canConnectOnMobile = (definition: PlatformDefinition) => definition.setupSurface === 'phone' && Object.values(Platform).includes(definition.id as Platform);
+  const setupSurfaceFor = (platform: Platform) => CONNECTION_PLATFORM_CONFIG[platform].setupSurface;
+  const canConnectOnMobile = (definition: PlatformDefinition) => definition.id === Platform.INSTAGRAM
+    ? setupSurfaceFor(Platform.INSTAGRAM) === 'phone'
+    : definition.setupSurface === 'phone' && Object.values(Platform).includes(definition.id as Platform);
   const { available, otherAvailable, roadmap } = useMemo(() => {
     const availableItems = definitions.filter(item => item.supportStatus === 'available' || item.supportStatus === 'beta');
     return {
@@ -179,7 +182,8 @@ export default function ConnectionsScreen() {
         const platform = resolvePlatform(definition.id)!;
         const config = CONNECTION_PLATFORM_CONFIG[platform];
         const platformSessions = sessions.filter((session) => session.platform === platform);
-        let state: ConnectionRowState = config.setupSurface === 'desktop' ? 'desktop' : config.setupSurface === 'mac' ? 'mac' : 'available';
+        const setupSurface = setupSurfaceFor(platform);
+        let state: ConnectionRowState = setupSurface === 'desktop' ? 'desktop' : setupSurface === 'mac' ? 'mac' : 'available';
         if (platformSessions.some((session) => session.status === PlatformStatus.CONNECTED)) state = 'connected';
         else if (platformSessions.some((session) => isPendingPlatformStatus(session.status))) state = 'pending';
         return (
@@ -231,21 +235,21 @@ export default function ConnectionsScreen() {
               <Text style={{ ...mobileType.sectionTitle, color: colors.paper }}>One inbox, your choice of networks</Text>
               <Text style={{ ...mobileType.bodySmall, color: colors.neutral[300] }}>Phone-safe setup happens here. Desktop-only connectors tell you when Claire Desktop is required.</Text>
             </View>
-            {available.some((item) => resolvePlatform(item.id) && CONNECTION_PLATFORM_CONFIG[resolvePlatform(item.id)!].setupSurface === 'phone') ? (
+            {available.some((item) => resolvePlatform(item.id) && setupSurfaceFor(resolvePlatform(item.id)!) === 'phone') ? (
               <View>
                 <SectionLabel title="Connect on this phone" />
                 {renderConnectionRows(available.filter((item) => {
                   const platform = resolvePlatform(item.id);
-                  return platform ? CONNECTION_PLATFORM_CONFIG[platform].setupSurface === 'phone' : false;
+                  return platform ? setupSurfaceFor(platform) === 'phone' : false;
                 }))}
               </View>
             ) : null}
-            {available.some((item) => resolvePlatform(item.id) && CONNECTION_PLATFORM_CONFIG[resolvePlatform(item.id)!].setupSurface !== 'phone') ? (
+            {available.some((item) => resolvePlatform(item.id) && setupSurfaceFor(resolvePlatform(item.id)!) !== 'phone') ? (
               <View>
                 <SectionLabel title="Finish on another device" />
                 {renderConnectionRows(available.filter((item) => {
                   const platform = resolvePlatform(item.id);
-                  return platform ? CONNECTION_PLATFORM_CONFIG[platform].setupSurface !== 'phone' : false;
+                  return platform ? setupSurfaceFor(platform) !== 'phone' : false;
                 }))}
               </View>
             ) : null}

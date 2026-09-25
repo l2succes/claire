@@ -27,7 +27,7 @@ export const CONNECTION_PLATFORM_CONFIG: Record<Platform, ConnectionPlatformConf
   [Platform.INSTAGRAM]: {
     platform: Platform.INSTAGRAM,
     name: 'Instagram',
-    detail: hasInstagramMobileLogin ? 'Sign in on your iPhone · Preview' : 'One-time setup in Claire Desktop',
+    detail: hasInstagramMobileLogin ? 'Sign in and verify on your iPhone' : 'One-time setup in Claire Desktop',
     setupSurface: hasInstagramMobileLogin ? 'phone' : 'desktop',
   },
   [Platform.IMESSAGE]: {

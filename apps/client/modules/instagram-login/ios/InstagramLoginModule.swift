@@ -20,7 +20,13 @@ public class InstagramLoginModule: Module {
       }
       self.controller = controller
       let navigation = UINavigationController(rootViewController: controller)
-      navigation.modalPresentationStyle = .fullScreen
+      // Keep Claire's Connections screen visible behind the secure native form.
+      navigation.modalPresentationStyle = .pageSheet
+      if let sheet = navigation.sheetPresentationController {
+        sheet.detents = [.large()]
+        sheet.prefersGrabberVisible = true
+        sheet.preferredCornerRadius = 28
+      }
       presenter.present(navigation, animated: true)
       }
     }.runOnQueue(.main)
