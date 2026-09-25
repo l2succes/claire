@@ -1,13 +1,13 @@
 # Instagram mobile connection handoff
 
-Checkpoint: September 24, 2026. The user requested a commit and a continuation prompt before hosted provisioning was complete.
+Checkpoint: September 25, 2026. The production backend and mobile release configuration are prepared for a real Instagram sign-in test. The production flow is still disabled until it is allowlisted to the user's exact Claire account, and the internal iOS build is waiting on Apple credential renewal.
 
 ## User decisions
 
-- Implement mobile Instagram connection so users do not need Claire Desktop.
-- The user will sign in themselves. Never request or enter their password.
-- **Prepare isolated hosted staging** for the live account test (explicitly authorized).
-- Keep possible upstream fixes separate. No upstream issue/PR has been published.
+- Build Instagram connection inside Claire's iOS connection flow.
+- The user will enter their Instagram credentials and verification code themselves. Never request or enter their password in chat.
+- Test against production after reviewing the deployment and mobile build. The user will complete Apple sign-in directly in the opened EAS terminal.
+- Avoid synthetic login fixtures and 1Password for the live production sign-in path. The previous fixture was local-only and did not authenticate with Instagram.
 
 Read [the research review](instagram-mobile-connection-review.md) and [the implementation plan and validation](instagram-mobile-implementation-plan.md) first.
 
@@ -15,41 +15,39 @@ Read [the research review](instagram-mobile-connection-review.md) and [the imple
 
 - Authenticated `/platforms/instagram/mobile-login` API with an exact one-user allowlist, explicit flow selection, expiration, cancellation, serialization, revision-based duplicate suppression, start rate limiting, and curated responses. Secrets and bridge IDs are not returned to React. Attempts are in memory: run one API replica.
 - Native Expo iOS module: UIKit forms, OTP/account choices, approval waits, ephemeral URLSession, isolated cookie-only WKWebView challenge handling, app-switcher cover, cancellation and recovery of lost responses. No arbitrary bridge JavaScript or client HTTP forwarding. Unsupported CAPTCHA/passkey/extraction steps stop explicitly.
-- Feature-gated connection entry point; Android/old binaries retain desktop setup. Legacy desktop explicitly chooses the `instagram` cookie flow so an upgraded bridge's reordered flows do not break it.
+- Feature-gated Claire connection entry point; Android/old binaries retain desktop setup. Instagram sign-in and verification steps are pushed inside the same modal navigation stack.
+- The API now supports the production bridge's advertised `instagram` login flow, in addition to the implemented Android and password flows. The mobile app asks the bridge for advertised capabilities and does not assume flow order.
 - Initial history sync can run after durable session registration; authentication and sync are separate stages.
-- A development-only synthetic Simulator route (`/instagram-login-preview`) and loopback fixture server. The synthetic completion screen does **not** prove live authentication.
-- Experimental hosted Docker contexts under `infra/railway/instagram-mobile/`: pinned upstream bridge commit and pinned locally tested Synapse image. Single-user Synapse uses its own SQLite volume and no federation. These new contexts have only had syntax checks, not hosted validation.
-- `scripts/secrets/provision-instagram-mobile-staging.ts`: dry-run by default; `--apply` prepares dedicated staging secrets/services/volumes, leaves login disabled, and does not deploy. The script was adapted from the attempted local preparation; **the apply path remains unverified**.
+- A local synthetic Simulator preview and loopback fixture were used during development only. They are not evidence of a real Instagram sign-in and are not used by the production flow.
 
-## Hosted state — precise boundary
+## Current production state
 
-Railway CLI authentication works. The isolated project is `claire-staging`, ID `03f719da-7c4a-4bdb-9e17-0137924c024b`. Its only environment is named `production`, ID `693e23c1-f815-4a85-b427-91ba351f48bf`; that name is inside the separate staging project and is not Claire production.
-
-Staging already has its Supabase topology, Redis, and fixture-only `claire-api`. Leave those existing services unchanged. Proposed new names: `ig-mobile-api`, `ig-mobile-synapse`, `ig-mobile-bridge`. The new API uses staging Auth/data and Redis logical database 12 to separate sessions from the fixture API. Bridge/Synapse secrets must be fresh, stored in `Claire — Staging` → `Instagram Mobile / Staging` before configuration.
-
-**No hosted service, volume, secret item, deployment, domain or build was created.** The attempted preparation script failed at `op item list`, before its first mutation. `op signin` had returned successfully, but authentication did not carry into the later script process. Resolve the 1Password CLI session in the same operator environment; don't copy credentials into chat or terminal arguments. Consult `docs/operations/secrets.md` and existing `scripts/secrets/` workflows.
+- Branch: `codex/instagram-production-release`, rebased on current `origin/main` (`980d09c65`). Release changes are committed through `fe0d8d837` (`fix(instagram): select bridge-advertised production login flow`).
+- Railway production API service `claire` has been deployed at `https://api.useclaire.co`. The current release deployment is `2722ae16-4db6-455c-b9b4-512c20d05e1d`; Railway reported it Online and `/healthz` returned HTTP 200.
+- The live bridge advertises flow `instagram`; the server and app now select it explicitly.
+- `INSTAGRAM_MOBILE_LOGIN_ENABLED` and `INSTAGRAM_MOBILE_LOGIN_USER_ID` are not configured in production. Therefore the feature remains disabled. Before enabling, identify the user's exact Claire production Auth UUID and set the one-user allowlist, feature flag, and `INSTAGRAM_MOBILE_LOGIN_FLOW=instagram`. Do not enable for all users or guess the UUID.
+- The iOS production EAS profile sets `EXPO_PUBLIC_INSTAGRAM_MOBILE_LOGIN=true` and uses the production API configuration. No successful production Instagram authentication or conversation import has been verified yet.
+- EAS authentication succeeded, but the internal iOS build stopped because the Apple provisioning profile expired. An interactive EAS terminal is open and waiting for the user to sign into Apple and complete 2FA themselves. Resume that same terminal session; do not ask for or handle credentials in chat.
+- This is an internal install build for testing, not an App Store submission. Do not submit it unless the user asks.
 
 ## Next steps
 
-1. Review and run the staging provisioning script's dry run. Establish an active 1Password CLI session, then use `--apply`. Check actual service/volume bindings rather than assuming the CLI's volume-list filtering. Keep secrets out of output.
-2. Deploy only the two new Docker contexts to their matching staging services with `/data` volumes. The Synapse bootstrap creates a dedicated `claire_bot` and writes its token privately at `/data/claire-bot-token`. Retrieve that token through a private operator channel, store it in the staging vault and set the new API's `MATRIX_ADMIN_TOKEN`. Never print it. The bootstrap reuses a valid saved token across restarts.
-3. Prepare a clean API deployment payload from Git plus this commit, excluding unrelated dirty files. Deploy the new `ig-mobile-api` only. Production and the existing fixture API must remain untouched. Generate its HTTPS Railway domain after health checks.
-4. Identify or create the user's **staging Auth identity**, with their participation. Set its exact ID as `INSTAGRAM_MOBILE_LOGIN_USER_ID`, then enable `INSTAGRAM_MOBILE_LOGIN_ENABLED=true` and use `INSTAGRAM_MOBILE_LOGIN_FLOW=android`. Keep one replica. Verify the authenticated capability endpoint against the hosted bridge.
-5. Build a new internal iOS staging binary with `EXPO_PUBLIC_INSTAGRAM_MOBILE_LOGIN=true` and the new API URL, using staging Supabase values. Do not enable the synthetic preview flag. A release/internal build avoids development network inspection during real credential entry. OTA cannot add this native module.
-6. Hand off sign-in to the user. Test real authentication and conversation import, then agree on recipient/content before any outbound DM. Check app close/reopen, background sync and bridge restart. Don't report unsupported challenge paths as working.
+1. Continue the open EAS iOS build after the user completes Apple account sign-in in the terminal. If EAS needs an Apple team or device/provisioning choice, keep the user in control of Apple authentication and device registration. Record the EAS build URL and result.
+2. Once the app can sign into production Claire, resolve the signed-in Claire user's exact Auth UUID. Ask for the production Claire account email only if necessary; do not infer identity from Git metadata. Set the production one-user allowlist and enable the Instagram mobile flow only for that UUID.
+3. Install the internal build and have the user complete the Instagram sign-in and any OTP/approval step in-app. Verify session durability, bridge state, and conversation import. Do not send outbound Instagram messages as part of validation.
+4. If real sign-in fails, capture a redacted error/state and bridge logs without printing session cookies, passwords, OTP values, or bridge secrets. Check challenge type and bridge-advertised login flow before changing the UX.
+5. Consider an upstream packaging contribution only after the production path is validated. No upstream issue or PR has been published.
 
-## Local verification and artifacts
+## Verification already completed
 
-- Server tests: `bun test apps/server/tests/services/instagram-mobile-login.test.ts` (HTTP tests need local sockets outside the filesystem sandbox).
-- Client regression: `bun x jest tests/connection-flow.test.tsx --runInBand` from `apps/client`.
-- Type checks: `bun run typecheck` in server; `bun x tsc --noEmit` in client.
-- Fixture: `bun apps/server/scripts/instagram-mobile-fixture.ts`, bound only to `127.0.0.1:3309`. Accepts only username/password `fixture` and code `123456`; never contacts Instagram.
-- Preview Metro: enable both `EXPO_PUBLIC_INSTAGRAM_MOBILE_LOGIN=true` and `EXPO_PUBLIC_INSTAGRAM_LOGIN_PREVIEW=true`. `NODE_OPTIONS=--dns-result-order=ipv4first` was necessary with `--localhost` because Metro otherwise bound IPv6 while the manifest advertised IPv4.
-- Simulator: iPhone 17 Pro, UDID `6C6955AC-4A9D-4119-9C43-7D44B9E98EC5`; app `com.claire.app.dev`; new native module built and installed. Build artifacts/log: `/tmp/claire-instagram-build`, `/tmp/claire-instagram-build.log`.
-- Temporary local Docker stack: `/tmp/claire-instagram-mobile-stack/compose.yaml`, project `claire-instagram-mobile-test`; bridge port 29329 and Synapse port 18018 on loopback. No Instagram account is linked. Its credentials are local temporary files, never commit them.
-- Upstream source image: `claire-instagram-mobile:bd10396`. `Dockerfile.ig` installs `mautrix-instagram` but the upstream default launcher calls `mautrix-meta`; local tests override the executable. The new hosted context invokes the correct binary directly. This is a possible packaging contribution, not yet investigated/published upstream.
-- A clean pre-commit API payload exists at `/tmp/claire-instagram-hosted/api`; prefer recreating from the committed state. Temporary provisioning metadata/credential files under `/tmp/claire-instagram-*` are local only, not portable and not for sharing.
+- Server typecheck and client TypeScript check passed.
+- The Instagram mobile login service/API tests passed during implementation; HTTP tests require local sockets outside the filesystem sandbox.
+- Production API Docker image built successfully, and frozen Bun dependency installation succeeded using the Railway Bun image.
+- Railway health check passed after deployment.
+- Production bridge capability query returned HTTP 200 and advertised `instagram`.
 
-## Workspace hygiene
+## Historical implementation artifacts
 
-The checkout already contained unrelated loop/notification, website and other work. Commit only the Instagram implementation, its docs/tests, native module, fixture and staging preparation. No push or PR is required by the user's checkpoint request. Preserve all unrelated changes.
+- The local fixture accepts only `fixture` / `123456`, binds to loopback, and never contacts Instagram. It is not part of the production test path.
+- Earlier staging-provisioning scripts, experimental Docker contexts, and the local fixture are historical development artifacts. The production deployment used the existing API service; no new staging bridge or 1Password integration is required to validate the live account flow.
+- Native iOS sign-in depends on the module included in the new binary; an OTA update cannot add it to an older installed app.
