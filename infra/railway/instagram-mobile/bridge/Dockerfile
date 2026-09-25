@@ -11,5 +11,4 @@ COPY --from=builder /build/mautrix-instagram /usr/bin/mautrix-instagram
 COPY config.template.yaml /config.template.yaml
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
-VOLUME /data
 ENTRYPOINT ["/entrypoint.sh"]
