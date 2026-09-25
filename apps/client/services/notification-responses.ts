@@ -50,7 +50,7 @@ export async function handleNotificationResponse(
   const data = (response.notification.request.content.data || {}) as ClaireNotificationData;
   const action = response.actionIdentifier;
 
-  if (data.type === 'operations_incident') {
+  if (data.type === 'operations_incident' || data.type === 'operations_alert') {
     openers.openOperations(
       typeof data.url === 'string' && data.url.startsWith('https://')
         ? data.url
@@ -64,7 +64,7 @@ export async function handleNotificationResponse(
     return;
   }
 
-  if (data.type === 'loop_reminder' && typeof data.loopId === 'string') {
+  if ((data.type === 'loop_reminder' || data.type === 'loop_created') && typeof data.loopId === 'string') {
     try {
       if (action === notificationActions.completeLoop) {
         await updateLoop(data.loopId, { status: 'done' });

@@ -19,6 +19,7 @@ import { cachedLoops } from '../../services/mobile-cache';
 import { useLocalFirstQuery } from '../../hooks/useLocalFirstQuery';
 import { useScreenLoadMark } from '../../hooks/useScreenLoadMark';
 import { belongsInHomeLoops } from '../../services/loop-query-cache';
+import { FollowUpStatusCard } from './follow-up-status-card';
 
 const HOME_LOOP_SELECT = 'id, content, title, state_summary, deadline, chat_id, status, from_me, owner, priority_score, chat:chats!loops_chat_id_fkey(name, platform, is_group)';
 
@@ -138,6 +139,7 @@ export function HomeScreen() {
       />
 
       <View style={{ paddingHorizontal: space[4], gap: space[4] }}>
+        <FollowUpStatusCard />
         {inbox.isCold && loops.isCold ? (
           <HomeSkeleton />
         ) : (

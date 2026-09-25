@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, SectionList, Text, View } from 'react-native';
-import { Check, ChevronLeft, ListFilter, Search } from 'lucide-react-native';
+import { InteractionManager, Pressable, ScrollView, SectionList, Text, View } from 'react-native';
+import { Check, ListFilter, Search } from 'lucide-react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { colors, mobileType, space, useIsDesktopLayout } from '@claire/design-system';
 import { useAuthStore } from '../../stores/authStore';
-import { MobileAvatar, MobileChip, MobileHeader, MobileIconButton, MobileSearchField, MobileState } from '../../components/mobile/claire-mobile';
+import { MobileAvatar, MobileChip, MobileSearchField, MobileState } from '../../components/mobile/claire-mobile';
 import { BottomSheet } from '../../components/mobile/bottom-sheet';
 import { PlatformIcon, PlatformName } from '../../components/PlatformIcon';
 import { Platform, platformLabel } from '../../types/platform';
@@ -17,6 +17,8 @@ import { contactsApi, mergeDirectoryPage, type PeopleFilter, type PersonContact 
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { displayPersonDetails, displayPersonName, isDeadEndContact } from '../../services/contact-display';
 import { isPhoneNumberFallback } from '../../services/phone-numbers';
+import { useScrollSettledHeader } from '../../hooks/useScrollSettledHeader';
+import { ContactsCollapsingHeader } from '../../features/people/contacts-collapsing-header';
 
 type PlatformFilter = 'all' | Platform;
 
@@ -66,8 +68,6 @@ function personDetails(contact: PersonContact): string | null {
   return displayPersonDetails(displayIdentity(contact));
 }
 
-type PeopleSection = { title: string; data: PersonContact[] };
-
 // One collator for the whole screen. localeCompare with options builds a new
 // one on every call, which is the expensive part of comparing two names.
 const collator = new Intl.Collator(undefined, { sensitivity: 'base' });
@@ -91,6 +91,7 @@ export default function ContactsScreen({ showBack = false }: { showBack?: boolea
   const [platform, setPlatform] = useState<PlatformFilter>('all');
   const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
   const [showPlatformFilter, setShowPlatformFilter] = useState(false);
+  const [directoryReady, setDirectoryReady] = useState(false);
   const user = useAuthStore(state => state.user);
   const requestedIdentitySyncFor = useRef<string | null>(null);
   const peopleListRef = useRef<SectionList<PersonContact>>(null);
@@ -102,6 +103,14 @@ export default function ContactsScreen({ showBack = false }: { showBack?: boolea
   // decides if a partial walk is worth persisting. See the early write below.
   const cacheWasEmptyRef = useRef(true);
   const debouncedSearchQuery = useDebouncedValue(searchQuery);
+  const headerMotion = useScrollSettledHeader();
+
+  // A warm directory can contain tens of thousands of contacts. Let the
+  // navigation transition finish before its first sort and section pass.
+  useEffect(() => {
+    const task = InteractionManager.runAfterInteractions(() => setDirectoryReady(true));
+    return () => task.cancel();
+  }, []);
 
   useEffect(() => {
     setSearchQuery(params.q || params.query || '');
@@ -218,7 +227,7 @@ export default function ContactsScreen({ showBack = false }: { showBack?: boolea
   // walk published. Now each contact's name and letter are computed once, and
   // the comparator only compares strings.
   const { contacts, sections, hiddenCount } = useMemo(() => {
-    const all = peopleQuery.data?.contacts || [];
+    const all = directoryReady ? peopleQuery.data?.contacts || [] : [];
     // Dropped in the same pass that already walks the directory, so this costs
     // nothing measurable. Filtering here rather than server-side also means the
     // residue disappears from directories already cached on the device, without
@@ -254,10 +263,10 @@ export default function ContactsScreen({ showBack = false }: { showBack?: boolea
       })
       .map(([title, data]) => ({ title, data }));
     return { contacts: ordered, sections: built, hiddenCount: all.length - visible.length };
-  }, [peopleQuery.data]);
+  }, [directoryReady, peopleQuery.data]);
 
   useScreenLoadMark('people', {
-    hasData: !peopleQuery.isCold,
+    hasData: directoryReady && !peopleQuery.isCold,
     isFetching: peopleQuery.isFetching,
     source: peopleQuery.isFetching ? 'cache' : 'network',
   });
@@ -341,7 +350,7 @@ export default function ContactsScreen({ showBack = false }: { showBack?: boolea
       contacts={contacts}
       selected={selected}
       searchQuery={searchQuery}
-      loading={peopleQuery.isCold}
+      loading={!directoryReady || peopleQuery.isCold}
       onSearch={setSearchQuery}
       onSelect={setSelectedContactId}
       onOpen={openContact}
@@ -352,21 +361,12 @@ export default function ContactsScreen({ showBack = false }: { showBack?: boolea
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.paper }} testID="contacts-screen">
-      <MobileHeader
-        title="People"
-        subtitle="The people behind your conversations"
-        safeArea
-        leading={showBack ? <MobileIconButton label="Back" onPress={() => router.back()}><ChevronLeft size={20} color={colors.ink} /></MobileIconButton> : undefined}
-        actions={!isDesktop ? (
-          <MobileIconButton
-            label="Filter by platform"
-            selected={platform !== 'all'}
-            onPress={() => setShowPlatformFilter(true)}
-            testID="people-platform-filter"
-          >
-            <ListFilter size={18} color={colors.ink} />
-          </MobileIconButton>
-        ) : undefined}
+      <ContactsCollapsingHeader
+        progress={headerMotion.progress}
+        showBack={showBack}
+        filtered={platform !== 'all'}
+        onBack={() => router.back()}
+        onFilter={() => setShowPlatformFilter(true)}
       />
       <View style={{ paddingHorizontal: space[4], paddingBottom: space[3], gap: space[3] }}>
         <MobileSearchField icon={<Search size={18} color={colors.neutral[600]} />} placeholder="Search people" value={searchQuery} onChangeText={setSearchQuery} testID="contacts-search-input" />
@@ -384,7 +384,7 @@ export default function ContactsScreen({ showBack = false }: { showBack?: boolea
           />
         </ScrollView>
       </View>
-        {peopleQuery.isCold ? <View style={{ paddingHorizontal: space[4] }}><PeopleSkeleton /></View> : (
+        {!directoryReady || peopleQuery.isCold ? <View style={{ paddingHorizontal: space[4] }}><PeopleSkeleton /></View> : (
         <View style={{ flex: 1, minHeight: 0 }}>
         <SectionList
           ref={peopleListRef}
@@ -394,6 +394,10 @@ export default function ContactsScreen({ showBack = false }: { showBack?: boolea
           style={{ backgroundColor: colors.paper }}
           contentContainerStyle={{ paddingLeft: space[4], paddingRight: 30, paddingBottom: 104 }}
           stickySectionHeadersEnabled={false}
+          onScrollBeginDrag={headerMotion.onScrollBeginDrag}
+          onScrollEndDrag={headerMotion.onScrollEndDrag}
+          onMomentumScrollBegin={headerMotion.onMomentumScrollBegin}
+          onMomentumScrollEnd={headerMotion.onMomentumScrollEnd}
           onScrollToIndexFailed={handleScrollToIndexFailed}
           ItemSeparatorComponent={() => <View style={{ height: 1, backgroundColor: colors.neutral[200] }} />}
           renderSectionHeader={({ section }) => (
@@ -534,7 +538,7 @@ function DesktopPeopleWorkspace({ contacts, selected, searchQuery, loading, onSe
   const selectedPlatformLabel = selected ? platformLabel(contactPlatform(selected)) : 'No conversation selected';
   return <View style={{ flex: 1, flexDirection: 'row', minHeight: 0, backgroundColor: colors.cream }} testID="desktop-people-screen">
     <View style={{ width: 274, flexShrink: 0, backgroundColor: colors.paper, borderRightWidth: 1, borderColor: colors.neutral[200], padding: space[3] }}>
-      <Text style={{ ...mobileType.screenTitle, color: colors.ink, marginBottom: space[3] }}>People</Text>
+      <Text style={{ ...mobileType.screenTitle, color: colors.ink, marginBottom: space[3] }}>Contacts</Text>
       <MobileSearchField icon={<Search size={17} color={colors.neutral[600]} />} placeholder="Search people" value={searchQuery} onChangeText={onSearch} testID="contacts-search-input" />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space[2], paddingTop: space[3] }}>
         <MobileChip label="All" active={platform === 'all'} onPress={() => onPlatformChange('all')} testID="people-platform-all" />

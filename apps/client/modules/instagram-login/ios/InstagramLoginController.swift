@@ -16,6 +16,31 @@ private enum ClaireLoginStyle {
   }
 }
 
+private final class InstagramLoginMark: UIView {
+  override init(frame: CGRect) {
+    super.init(frame: frame)
+    backgroundColor = UIColor(red: 214/255, green: 41/255, blue: 118/255, alpha: 1)
+    layer.cornerRadius = 17
+    layer.masksToBounds = true
+    isAccessibilityElement = false
+  }
+
+  required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+  override func draw(_ rect: CGRect) {
+    ClaireLoginStyle.paper.setStroke()
+    let camera = UIBezierPath(roundedRect: CGRect(x: 11, y: 11, width: 32, height: 32), cornerRadius: 9)
+    camera.lineWidth = 3.5
+    camera.stroke()
+    let lens = UIBezierPath(ovalIn: CGRect(x: 20, y: 20, width: 14, height: 14))
+    lens.lineWidth = 3.5
+    lens.stroke()
+    let flash = UIBezierPath(ovalIn: CGRect(x: 35, y: 16, width: 4, height: 4))
+    ClaireLoginStyle.paper.setFill()
+    flash.fill()
+  }
+}
+
 @MainActor
 final class InstagramLoginController: UIViewController, WKNavigationDelegate, WKHTTPCookieStoreObserver {
   private let api: InstagramLoginAPI
@@ -79,11 +104,7 @@ final class InstagramLoginController: UIViewController, WKNavigationDelegate, WK
   private func clearContent(_ text: String, title: String = "Sign in to Instagram") {
     fields.values.forEach { $0.text = nil }; fields.removeAll(); selections.removeAll(); closeBrowser()
     stack.arrangedSubviews.forEach { stack.removeArrangedSubview($0); $0.removeFromSuperview() }
-    let mark = UILabel()
-    mark.text = "IG"; mark.textAlignment = .center
-    mark.font = ClaireLoginStyle.font(18, bold: true)
-    mark.textColor = ClaireLoginStyle.paper; mark.backgroundColor = UIColor(red: 214/255, green: 41/255, blue: 118/255, alpha: 1)
-    mark.layer.cornerRadius = 17; mark.clipsToBounds = true
+    let mark = InstagramLoginMark()
     mark.widthAnchor.constraint(equalToConstant: 54).isActive = true
     mark.heightAnchor.constraint(equalToConstant: 54).isActive = true
     let markRow = UIView()

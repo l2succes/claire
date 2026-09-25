@@ -98,6 +98,37 @@ describe('notification actions', () => {
     expect(target.openLoop).not.toHaveBeenCalled();
   });
 
+  it('opens a newly created loop on tap, including a duplicate cold-start response', async () => {
+    const target = openers();
+    const event = response('created-loop-tap', 'expo.modules.notifications.actions.DEFAULT', {
+      type: 'loop_created', loopId: 'new-loop', chatId: 'source-chat',
+    });
+    await handleNotificationResponse(event, target);
+    await handleNotificationResponse(event, target);
+    expect(target.openLoop).toHaveBeenCalledWith('new-loop');
+    expect(target.openLoop).toHaveBeenCalledTimes(1);
+    expect(target.openChat).not.toHaveBeenCalled();
+    expect(updateLoop).not.toHaveBeenCalled();
+  });
+
+  it('supports completing a newly created loop from the notification', async () => {
+    const target = openers();
+    await handleNotificationResponse(response('created-loop-complete', 'claire_complete_loop', {
+      type: 'loop_created', loopId: 'new-loop',
+    }), target);
+    expect(updateLoop).toHaveBeenCalledWith('new-loop', { status: 'done' });
+    expect(target.openLoop).not.toHaveBeenCalled();
+  });
+
+  it('supports snoozing a newly created loop from the notification', async () => {
+    const target = openers();
+    await handleNotificationResponse(response('created-loop-snooze', 'claire_snooze_loop', {
+      type: 'loop_created', loopId: 'new-loop',
+    }), target);
+    expect(snoozeLoop).toHaveBeenCalledWith('new-loop', expect.any(String));
+    expect(target.openLoop).not.toHaveBeenCalled();
+  });
+
   it('ignores the duplicate cold-start delivery of one response', async () => {
     const target = openers();
     const event = response(

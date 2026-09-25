@@ -1,22 +1,21 @@
 import { useEffect, useMemo, useState } from 'react';
-import { FlatList, Modal, Pressable, RefreshControl, Text, TextInput, View } from 'react-native';
-import { Check, Plus, RotateCcw, X, XCircle } from 'lucide-react-native';
+import { Alert, FlatList, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { Check, RotateCcw, XCircle } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import Animated, { FadeInRight, FadeOutLeft } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, { Extrapolation, FadeInRight, FadeOutLeft, interpolate, runOnJS, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { colors, mobileType, radius, space } from '@claire/design-system';
-import { MobileChip, MobileHeader, MobileIconButton, MobileState } from '../../components/mobile/claire-mobile';
-import { FeedbackPressable } from '../../components/mobile/pressable-feedback';
+import { MobileChip, MobileHeader, MobileState } from '../../components/mobile/claire-mobile';
 import type { LoopItem } from '../../services/loop-types';
 import { cacheLoop, cachedLoops, replaceCachedLoops } from '../../services/mobile-cache';
 import { useLocalFirstQuery } from '../../hooks/useLocalFirstQuery';
 import { useScreenLoadMark } from '../../hooks/useScreenLoadMark';
 import { useAuthStore } from '../../stores/authStore';
-import { supabase } from '../../services/supabase';
+import { fetchLoopList } from '../../services/loop-list';
 import { LoopsSkeleton } from '../../components/claire/skeleton';
-import { LoopHealthCard } from './loop-health-card';
 import { LoopRow } from './loop-row';
-import { createLoop, reviewLoop, snoozeLoop, updateLoop } from '../../services/loops';
+import { reviewLoop, snoozeLoop, updateLoop } from '../../services/loops';
 import { BottomSheet } from '../../components/mobile/bottom-sheet';
 import { isLoopDeferred, isLoopClosed } from '../../services/loop-display';
 import { useLoopAttention } from '../../hooks/useLoopAttention';
@@ -30,28 +29,31 @@ import {
 
 type LoopFilter = 'for_you' | 'done' | 'waiting' | 'all';
 
-const LOOP_SELECT = `
-  *,
-  contact:contacts!loops_contact_id_fkey(name, inferred_name, avatar_url),
-  chat:chats!loops_chat_id_fkey(
-    name, is_group, platform,
-    contact:contacts!chats_contact_id_fkey(name, inferred_name, avatar_url)
-  )
-`;
-
-async function fetchLoops(userId: string): Promise<LoopItem[]> {
-  const { data, error } = await supabase
-    .from('loops')
-    .select(LOOP_SELECT)
-    .eq('user_id', userId)
-    .order('priority_score', { ascending: false, nullsFirst: false })
-    .order('last_evidence_at', { ascending: false, nullsFirst: false })
-    .limit(200);
-  if (error) throw error;
-  return (data ?? []) as LoopItem[];
-}
-
 const LIVE_STATUSES: LoopItem['status'][] = ['open', 'waiting', 'snoozed'];
+const AnimatedLoopList = Animated.createAnimatedComponent(FlatList<LoopItem>);
+
+function LoopsFilters({ filter, forYou, waiting, open, onChange }: {
+  filter: LoopFilter;
+  forYou: number;
+  waiting: number;
+  open: number;
+  onChange: (filter: LoopFilter) => void;
+}) {
+  return (
+    <View style={{ height: 60, justifyContent: 'center', backgroundColor: colors.cream }}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ alignItems: 'center', gap: space[2], paddingHorizontal: space[4] }}
+      >
+        <MobileChip label="For you" active={filter === 'for_you'} count={forYou} onPress={() => onChange('for_you')} testID="loops-tab-open" />
+        <MobileChip label="Closed" active={filter === 'done'} onPress={() => onChange('done')} testID="loops-tab-done" />
+        <MobileChip label="I'm waiting" active={filter === 'waiting'} count={waiting} onPress={() => onChange('waiting')} testID="loops-tab-waiting" />
+        <MobileChip label="All" active={filter === 'all'} count={open} onPress={() => onChange('all')} testID="loops-tab-all" />
+      </ScrollView>
+    </View>
+  );
+}
 
 function ReviewButton({
   label,
@@ -105,11 +107,11 @@ function ReviewButton({
 // deadline the user actually committed to.
 export function LoopsScreen() {
   const user = useAuthStore(state => state.user);
+  const { top: safeTop } = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const attentionQuery = useLoopAttention();
   const [filter, setFilter] = useState<LoopFilter>('for_you');
-  const [showCreate, setShowCreate] = useState(false);
-  const [newLoop, setNewLoop] = useState('');
+  const [showPinnedFilters, setShowPinnedFilters] = useState(false);
   const [snoozeTarget, setSnoozeTarget] = useState<LoopItem | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
   const loopsQueryKey = useMemo(() => ['mobile-loops', user?.id] as const, [user?.id]);
@@ -118,7 +120,7 @@ export function LoopsScreen() {
   const query = useLocalFirstQuery<LoopItem[]>({
     queryKey: loopsQueryKey,
     enabled: !!user?.id,
-    queryFn: () => fetchLoops(user!.id),
+    queryFn: () => fetchLoopList(user!.id),
     staleTime: 60_000,
     local: {
       enabled: !!user?.id,
@@ -135,6 +137,7 @@ export function LoopsScreen() {
       await Promise.all([
         queryClient.cancelQueries({ queryKey: loopsQueryKey }),
         queryClient.cancelQueries({ queryKey: ['mobile-home-loops', user?.id] }),
+        queryClient.cancelQueries({ queryKey: ['loop-attention', user?.id] }),
       ]);
       const snapshot = snapshotLoopQueries(queryClient, user?.id, id);
       patchLoopQueries(queryClient, user?.id, id, next);
@@ -142,6 +145,7 @@ export function LoopsScreen() {
     },
     onError: (_error, _variables, context) => {
       if (context?.snapshot) restoreLoopQueries(queryClient, user?.id, _variables.id, context.snapshot);
+      Alert.alert('Could not update loop', userFacingErrorMessage(_error));
     },
     onSuccess: async (updated) => {
       patchLoopQueries(queryClient, user?.id, updated.id, updated);
@@ -155,6 +159,7 @@ export function LoopsScreen() {
       await Promise.all([
         queryClient.cancelQueries({ queryKey: loopsQueryKey }),
         queryClient.cancelQueries({ queryKey: ['mobile-home-loops', user?.id] }),
+        queryClient.cancelQueries({ queryKey: ['loop-attention', user?.id] }),
       ]);
       const snapshot = snapshotLoopQueries(queryClient, user?.id, id);
       patchLoopQueries(queryClient, user?.id, id, { status: 'snoozed', snoozed_until: until });
@@ -163,6 +168,7 @@ export function LoopsScreen() {
     },
     onError: (_error, variables, context) => {
       if (context?.snapshot) restoreLoopQueries(queryClient, user?.id, variables.id, context.snapshot);
+      Alert.alert('Could not postpone loop', userFacingErrorMessage(_error));
     },
     onSuccess: async (updated) => {
       patchLoopQueries(queryClient, user?.id, updated.id, updated);
@@ -170,22 +176,13 @@ export function LoopsScreen() {
     },
     onSettled: (_data, _error, variables) => invalidateLoopQueries(queryClient, user?.id, variables.id),
   });
-  const create = useMutation({
-    mutationFn: createLoop,
-    onSuccess: () => {
-      setNewLoop('');
-      setShowCreate(false);
-      void queryClient.invalidateQueries({ queryKey: ['mobile-loops', user?.id] });
-      void queryClient.invalidateQueries({ queryKey: ['mobile-home-loops', user?.id] });
-    },
-  });
-
   const review = useMutation({
     mutationFn: ({ id, ...input }: { id: string } & Parameters<typeof reviewLoop>[1]) => reviewLoop(id, input),
     onMutate: async ({ id, action }) => {
       await Promise.all([
         queryClient.cancelQueries({ queryKey: loopsQueryKey }),
         queryClient.cancelQueries({ queryKey: ['mobile-home-loops', user?.id] }),
+        queryClient.cancelQueries({ queryKey: ['loop-attention', user?.id] }),
       ]);
       const snapshot = snapshotLoopQueries(queryClient, user?.id, id);
       const reviewedAt = new Date().toISOString();
@@ -208,8 +205,8 @@ export function LoopsScreen() {
 
   // One pass, memoised. These were six chained filters recomputed on every
   // render -- including every chip tap and every optimistic status toggle --
-  // over as many as two hundred loops.
-  const { open, completed, waiting, today, forYou, needsAttention } = useMemo(() => {
+  // over the complete loop collection.
+  const { open, completed, waiting, today, forYou } = useMemo(() => {
     const items = query.data ?? [];
     const todayKey = new Date().toDateString();
     const openItems: LoopItem[] = [];
@@ -217,7 +214,6 @@ export function LoopsScreen() {
     const waitingItems: LoopItem[] = [];
     const forYouItems: LoopItem[] = [];
     let dueToday = 0;
-    let attention = 0;
     for (const item of items) {
       if (['done', 'dropped', 'superseded'].includes(item.status)) completedItems.push(item);
       if (!LIVE_STATUSES.includes(item.status)) continue;
@@ -231,9 +227,8 @@ export function LoopsScreen() {
       if (item.owner ? item.owner === 'them' : !item.from_me) waitingItems.push(item);
       if (item.owner === 'me' || (!item.owner && item.from_me)) forYouItems.push(item);
       if (item.deadline && new Date(item.deadline).toDateString() === todayKey) dueToday += 1;
-      if ((item.priority_score ?? 0) >= 80) attention += 1;
     }
-    return { open: openItems, completed: completedItems, waiting: waitingItems, today: dueToday, forYou: forYouItems, needsAttention: attention };
+    return { open: openItems, completed: completedItems, waiting: waitingItems, today: dueToday, forYou: forYouItems };
   }, [query.data]);
   const visible = filter === 'done' ? completed : filter === 'waiting' ? waiting : filter === 'for_you' ? forYou : open;
   const reviewCandidates = useMemo(
@@ -241,62 +236,110 @@ export function LoopsScreen() {
     [attentionQuery.data],
   );
   const reviewTarget = reviewCandidates[0] ?? null;
+  const scrollY = useSharedValue(0);
+  const overviewHeight = useSharedValue(280);
+  const filtersPinned = useSharedValue(false);
+  const onScroll = useAnimatedScrollHandler((event) => {
+    scrollY.value = Math.max(0, event.contentOffset.y);
+    const shouldPin = scrollY.value >= overviewHeight.value;
+    if (shouldPin !== filtersPinned.value) {
+      filtersPinned.value = shouldPin;
+      runOnJS(setShowPinnedFilters)(shouldPin);
+    }
+  });
+  const overviewStyle = useAnimatedStyle(() => {
+    const fadeEnd = Math.max(overviewHeight.value * 0.85, 1);
+    return {
+      opacity: interpolate(scrollY.value, [0, fadeEnd], [1, 0], Extrapolation.CLAMP),
+      transform: [{ scale: interpolate(scrollY.value, [0, fadeEnd], [1, 0.9], Extrapolation.CLAMP) }],
+    };
+  });
+  const pinnedFiltersStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(
+      scrollY.value,
+      [Math.max(0, overviewHeight.value - 60), overviewHeight.value],
+      [0, 1],
+      Extrapolation.CLAMP,
+    ),
+  }));
 
   useEffect(() => {
-    if (reviewOpen && !reviewTarget) setReviewOpen(false);
-  }, [reviewOpen, reviewTarget]);
+    if (reviewOpen && !reviewTarget && !review.isPending && !review.error) setReviewOpen(false);
+  }, [reviewOpen, reviewTarget, review.isPending, review.error]);
 
   useScreenLoadMark('loops', { hasData: !query.isCold, isFetching: query.isFetching, source: query.isFetching ? 'cache' : 'network' });
 
   return (
     <View testID="loops-screen" style={{ flex: 1, backgroundColor: colors.cream }}>
-      <MobileHeader title="Loops" subtitle="Follow through without losing the conversation." safeArea actions={<MobileIconButton label="Add a loop" testID="loops-add" onPress={() => setShowCreate(true)}><Plus size={21} color={colors.ink} /></MobileIconButton>} />
-      <View style={{ paddingHorizontal: space[4], gap: space[3], paddingBottom: space[3] }}>
-        <LoopHealthCard />
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space[2] }}>
-          <View style={{ flex: 1, padding: space[4], borderRadius: radius.card, backgroundColor: colors.lime }}><Text style={{ ...mobileType.screenTitle, color: colors.ink, fontVariant: ['tabular-nums'] }}>{attentionQuery.data?.length ?? needsAttention}</Text><Text style={{ ...mobileType.monoLabel, color: colors.ink }}>NEED ATTENTION</Text></View>
-          <View style={{ flex: 1, padding: space[4], borderRadius: radius.card, backgroundColor: colors.sky }}><Text style={{ ...mobileType.screenTitle, color: colors.ink, fontVariant: ['tabular-nums'] }}>{today}</Text><Text style={{ ...mobileType.monoLabel, color: colors.ink }}>DUE TODAY</Text></View>
-        </View>
-        <View style={{ flexDirection: 'row', gap: space[2] }}>
-          <MobileChip label="For you" active={filter === 'for_you'} count={forYou.length} onPress={() => setFilter('for_you')} testID="loops-tab-open" />
-          <MobileChip label="Closed" active={filter === 'done'} onPress={() => setFilter('done')} testID="loops-tab-done" />
-          <MobileChip label="I'm waiting" active={filter === 'waiting'} count={waiting.length} onPress={() => setFilter('waiting')} testID="loops-tab-waiting" />
-          <MobileChip label="All" active={filter === 'all'} count={open.length} onPress={() => setFilter('all')} testID="loops-tab-all" />
-        </View>
-        {reviewCandidates.length ? (
-          <Pressable
-            testID="loops-review-old"
-            accessibilityRole="button"
-            accessibilityLabel={`Review ${reviewCandidates.length} ${reviewCandidates.length === 1 ? 'loop' : 'loops'}`}
-            onPress={() => setReviewOpen(true)}
-            style={{
-              minHeight: 52,
-              paddingHorizontal: space[3],
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: space[2],
-              borderRadius: radius.control,
-              borderWidth: 1,
-              borderColor: colors.ink,
-              backgroundColor: colors.sky,
-            }}
-          >
-            <RotateCcw size={17} color={colors.ink} />
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={{ ...mobileType.bodySmall, fontWeight: '700', color: colors.ink }}>
-                Review follow-ups
-              </Text>
-              <Text numberOfLines={1} style={{ ...mobileType.label, color: colors.neutral[600] }}>
-                {reviewCandidates.length} {reviewCandidates.length === 1 ? 'item needs' : 'items need'} your attention
-              </Text>
-            </View>
-            <Text style={{ ...mobileType.label, fontWeight: '700', color: colors.ink }}>Review</Text>
-          </Pressable>
-        ) : null}
-      </View>
-      {query.isCold ? <LoopsSkeleton /> : (
-        <FlatList testID="loops-list" data={visible} renderItem={({ item }) => <LoopRow item={item} onOpen={() => router.push({ pathname: '/loops/[id]', params: { id: item.id } })} onToggle={() => patch.mutate({ id: item.id, status: isLoopClosed(item) ? 'open' : 'done' })} onWait={isLoopClosed(item) ? undefined : () => patch.mutate({ id: item.id, owner: item.owner === 'them' ? 'me' : 'them', status: item.owner === 'them' ? 'open' : 'waiting' })} onSnooze={isLoopClosed(item) ? undefined : () => setSnoozeTarget(item)} />} keyExtractor={item => item.id} contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ paddingHorizontal: space[4], paddingBottom: 112 }} refreshControl={<RefreshControl refreshing={query.isRefetching} onRefresh={() => void query.refetch()} tintColor={colors.ink} />} ListEmptyComponent={<MobileState title={filter === 'done' ? 'Nothing closed yet' : filter === 'waiting' ? "You're not waiting on anyone" : 'No open loops'} message="Claire will surface commitments from your conversations here." />} />
-      )}
+      <AnimatedLoopList
+        testID="loops-list"
+        data={query.isCold ? [] : visible}
+        ListHeaderComponent={
+          <View>
+            <Animated.View
+              onLayout={(event) => { overviewHeight.value = event.nativeEvent.layout.height; }}
+              style={overviewStyle}
+            >
+              <MobileHeader title="Loops" subtitle="Follow through without losing the conversation." />
+              <View style={{ paddingHorizontal: space[4], gap: space[3], paddingBottom: space[3] }}>
+              <View style={{ flexDirection: 'row', gap: space[2] }}>
+                <View style={{ flex: 1, padding: space[4], borderRadius: radius.card, backgroundColor: colors.lime }}><Text style={{ ...mobileType.screenTitle, color: colors.ink, fontVariant: ['tabular-nums'] }}>{attentionQuery.data?.length ?? '—'}</Text><Text style={{ ...mobileType.monoLabel, color: colors.ink }}>NEED ATTENTION</Text></View>
+                <View style={{ flex: 1, padding: space[4], borderRadius: radius.card, backgroundColor: colors.sky }}><Text style={{ ...mobileType.screenTitle, color: colors.ink, fontVariant: ['tabular-nums'] }}>{today}</Text><Text style={{ ...mobileType.monoLabel, color: colors.ink }}>DUE TODAY</Text></View>
+              </View>
+              {reviewCandidates.length ? (
+                <Pressable
+                  testID="loops-review-old"
+                  accessibilityRole="button"
+                  accessibilityLabel={`Review ${reviewCandidates.length} ${reviewCandidates.length === 1 ? 'loop' : 'loops'}`}
+                  onPress={() => setReviewOpen(true)}
+                  style={{
+                    minHeight: 52,
+                    paddingHorizontal: space[3],
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: space[2],
+                    borderRadius: radius.control,
+                    borderWidth: 1,
+                    borderColor: colors.ink,
+                    backgroundColor: colors.sky,
+                  }}
+                >
+                  <RotateCcw size={17} color={colors.ink} />
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={{ ...mobileType.bodySmall, fontWeight: '700', color: colors.ink }}>
+                      Review follow-ups
+                    </Text>
+                    <Text numberOfLines={1} style={{ ...mobileType.label, color: colors.neutral[600] }}>
+                      {reviewCandidates.length} {reviewCandidates.length === 1 ? 'item needs' : 'items need'} your attention
+                    </Text>
+                  </View>
+                  <Text style={{ ...mobileType.label, fontWeight: '700', color: colors.ink }}>Review</Text>
+                </Pressable>
+              ) : null}
+              </View>
+            </Animated.View>
+            <LoopsFilters filter={filter} forYou={forYou.length} waiting={waiting.length} open={open.length} onChange={setFilter} />
+          </View>
+        }
+        renderItem={({ item }) => <LoopRow item={item} onOpen={() => router.push({ pathname: '/loops/[id]', params: { id: item.id } })} onToggle={() => patch.mutate({ id: item.id, status: isLoopClosed(item) ? 'open' : 'done' })} onWait={isLoopClosed(item) ? undefined : () => patch.mutate({ id: item.id, owner: item.owner === 'them' ? 'me' : 'them', status: item.owner === 'them' ? 'open' : 'waiting' })} onSnooze={isLoopClosed(item) ? undefined : () => setSnoozeTarget(item)} />}
+        keyExtractor={item => item.id}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+        contentInsetAdjustmentBehavior="automatic"
+        contentContainerStyle={{ paddingBottom: 112 }}
+        refreshControl={<RefreshControl refreshing={query.isRefetching || attentionQuery.isRefetching} onRefresh={() => { void query.refetch(); void attentionQuery.refetch(); }} tintColor={colors.ink} />}
+        ListEmptyComponent={query.isCold
+          ? <LoopsSkeleton />
+          : <MobileState title={filter === 'done' ? 'Nothing closed yet' : filter === 'waiting' ? "You're not waiting on anyone" : 'No open loops'} message="Claire will surface commitments from your conversations here." />}
+      />
+      <Animated.View
+        pointerEvents={showPinnedFilters ? 'auto' : 'none'}
+        accessibilityElementsHidden={!showPinnedFilters}
+        importantForAccessibility={showPinnedFilters ? 'auto' : 'no-hide-descendants'}
+        style={[{ position: 'absolute', top: 0, left: 0, right: 0, height: safeTop + 60, paddingTop: safeTop, backgroundColor: colors.cream }, pinnedFiltersStyle]}
+      >
+        <LoopsFilters filter={filter} forYou={forYou.length} waiting={waiting.length} open={open.length} onChange={setFilter} />
+      </Animated.View>
 
       <BottomSheet
         visible={!!snoozeTarget}
@@ -327,7 +370,7 @@ export function LoopsScreen() {
       </BottomSheet>
 
       <BottomSheet
-        visible={reviewOpen && !!reviewTarget}
+        visible={reviewOpen}
         title="Review follow-ups"
         onClose={() => setReviewOpen(false)}
         testID="loop-review-sheet"
@@ -394,16 +437,6 @@ export function LoopsScreen() {
         ) : null}
       </BottomSheet>
 
-      <Modal visible={showCreate} transparent animationType="slide" onRequestClose={() => setShowCreate(false)}>
-        <View style={{ flex: 1, backgroundColor: 'rgba(16,18,15,0.35)', justifyContent: 'flex-end' }}>
-          <View style={{ backgroundColor: colors.paper, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: space[5], paddingBottom: 36, gap: space[4] }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}><Text style={{ ...mobileType.sectionTitle, flex: 1, color: colors.ink }}>Add a loop</Text><MobileIconButton label="Close" onPress={() => setShowCreate(false)}><X size={19} color={colors.ink} /></MobileIconButton></View>
-            <TextInput autoFocus multiline value={newLoop} onChangeText={setNewLoop} placeholder="What do you want to remember?" placeholderTextColor={colors.neutral[400]} style={{ minHeight: 110, textAlignVertical: 'top', padding: space[4], borderRadius: radius.card, borderWidth: 1, borderColor: colors.neutral[200], backgroundColor: colors.cream, ...mobileType.body, color: colors.ink }} />
-            {create.error ? <Text selectable style={{ ...mobileType.bodySmall, color: colors.danger }}>{userFacingErrorMessage(create.error)}</Text> : null}
-            <FeedbackPressable disabled={!newLoop.trim() || create.isPending} onPress={() => create.mutate(newLoop.trim())} style={({ pressed }) => ({ minHeight: 50, borderRadius: radius.control, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center', opacity: !newLoop.trim() || create.isPending ? 0.42 : pressed ? 0.78 : 1 })}><Text style={{ ...mobileType.body, fontWeight: '700', color: colors.paper }}>{create.isPending ? 'Adding…' : 'Add loop'}</Text></FeedbackPressable>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }

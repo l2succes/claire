@@ -216,6 +216,7 @@ export function LoopDetailScreen() {
       queryClient.cancelQueries({ queryKey: ['loop-detail', loopId] }),
       queryClient.cancelQueries({ queryKey: ['mobile-loops', user?.id] }),
       queryClient.cancelQueries({ queryKey: ['mobile-home-loops', user?.id] }),
+      queryClient.cancelQueries({ queryKey: ['loop-attention', user?.id] }),
     ]);
     const snapshot = snapshotLoopQueries(queryClient, user?.id, loopId);
     patchLoopQueries(queryClient, user?.id, loopId, next);
@@ -253,6 +254,7 @@ export function LoopDetailScreen() {
         queryClient.cancelQueries({ queryKey: ['loop-detail', loopId] }),
         queryClient.cancelQueries({ queryKey: ['mobile-loops', user?.id] }),
         queryClient.cancelQueries({ queryKey: ['mobile-home-loops', user?.id] }),
+        queryClient.cancelQueries({ queryKey: ['loop-attention', user?.id] }),
       ]);
       const snapshot = snapshotLoopQueries(queryClient, user?.id, loopId);
       removeLoopFromQueries(queryClient, user?.id, loopId);
@@ -263,6 +265,7 @@ export function LoopDetailScreen() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['mobile-loops', user?.id] }),
         queryClient.invalidateQueries({ queryKey: ['mobile-home-loops', user?.id] }),
+        queryClient.invalidateQueries({ queryKey: ['loop-attention', user?.id] }),
       ]);
       router.back();
     },

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { AlertCircle, Check, XCircle, Clock3, RotateCcw, UsersRound, UserRound } from 'lucide-react-native';
-import { colors, mobileType } from '@claire/design-system';
+import { colors, mobileType, space } from '@claire/design-system';
 import { isLoopClosed } from '../../services/loop-display';
 import type { LoopItem } from '../../services/loop-types';
 import { SwipeActionRow } from '../../components/mobile/swipe-action-row';
@@ -78,7 +78,7 @@ export function LoopRow({
       onPressOut={() => setPressed(false)}
       accessibilityActions={[
         { name: 'toggle', label: isLoopClosed(item) ? 'Reopen' : 'Mark as closed' },
-        ...(onWait ? [{ name: 'wait', label: 'Move to waiting' }] : []),
+        ...(onWait ? [{ name: 'wait', label: item.owner === 'them' ? 'Move to for me' : 'Move to waiting' }] : []),
         ...(onSnooze ? [{ name: 'snooze', label: 'Postpone' }] : []),
       ]}
       onAccessibilityAction={(event) => {
@@ -86,14 +86,14 @@ export function LoopRow({
         if (event.nativeEvent.actionName === 'wait') onWait?.();
         if (event.nativeEvent.actionName === 'snooze') onSnooze?.();
       }}
-      style={{ flexDirection: 'row', gap: 11, minHeight: 104, paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: colors.neutral[200], backgroundColor: colors.cream, opacity: pressed ? 0.66 : 1 }}
+      style={{ flexDirection: 'row', gap: 11, minHeight: 104, paddingHorizontal: space[4], paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: colors.neutral[200], backgroundColor: colors.cream, opacity: pressed ? 0.66 : 1 }}
     >
       <Pressable
         testID={`loop-toggle-${item.id}`}
         accessibilityRole="checkbox"
         accessibilityState={{ checked: isLoopClosed(item) }}
         accessibilityLabel={`${isLoopClosed(item) ? 'Reopen' : 'Mark as closed'} ${title}`}
-        onPress={onToggle}
+        onPress={(event) => { event.stopPropagation(); onToggle(); }}
         style={{ width: 28, height: 28, marginTop: 1, borderRadius: 14, borderWidth: 1.5, borderColor: overdue ? colors.danger : colors.ink, backgroundColor: isLoopClosed(item) ? colors.lime : overdue ? colors.blush : colors.paper, alignItems: 'center', justifyContent: 'center' }}
       >
         {isLoopClosed(item) ? item.status === 'done' ? <Check size={16} color={colors.ink} /> : <XCircle size={16} color={colors.ink} /> : overdue ? <AlertCircle size={15} color={colors.danger} /> : null}

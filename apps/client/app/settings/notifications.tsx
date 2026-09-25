@@ -401,8 +401,8 @@ export default function NotificationsSettingsScreen() {
           />
           <ToggleRow
             divided
-            label="Loop reminders"
-            description="Timed around urgency, deadlines, and who owes the next move."
+            label="Loops"
+            description="New loops as they're created, plus reminders timed around urgency and deadlines."
             value={prefs.notify_loops}
             onValueChange={(v) => update({ notify_loops: v })}
             testID="notif-toggle-loops"

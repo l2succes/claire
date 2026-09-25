@@ -250,11 +250,27 @@ router.get(
 router.get('/attention', requireAuth, async (req, res) => {
   const userId = req.user?.id;
   if (!userId) return res.status(401).json({ error: 'User not authenticated' });
-  const { data, error } = await supabase.from('loop_attention')
-    .select('*,loop:loops(*)').eq('user_id', userId).lte('due_at', new Date().toISOString())
-    .order('due_at').limit(100);
-  if (error) return res.status(500).json({ error: 'Could not load attention' });
-  return res.json({ success: true, data: (data ?? []).filter((item: any) => item.loop?.row_version === item.row_version && ['open','waiting'].includes(item.loop.status)) });
+  // The client uses this collection as both the review queue and its count.
+  // A capped first page appears stuck as each action pulls in a replacement.
+  const now = Date.now();
+  const pageSize = 200;
+  const attention = [];
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await supabase.from('loop_attention')
+      .select('*,loop:loops(*)').eq('user_id', userId).lte('due_at', new Date(now).toISOString())
+      .order('due_at').order('loop_id').range(offset, offset + pageSize - 1);
+    if (error) return res.status(500).json({ error: 'Could not load attention' });
+    const page = data ?? [];
+    attention.push(...page.filter((item: any) => {
+      const loop = item.loop;
+      return loop?.row_version === item.row_version
+        && ['open', 'waiting'].includes(loop.status)
+        && loop.visibility === 'surfaced'
+        && (!loop.reviewed_at || Date.parse(loop.reviewed_at) <= now - 48 * 60 * 60 * 1000);
+    }));
+    if (page.length < pageSize) break;
+  }
+  return res.json({ success: true, data: attention });
 });
 
 router.get('/health', requireAuth, async (req, res) => {
