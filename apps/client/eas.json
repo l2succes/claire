@@ -36,6 +36,7 @@
       "env": {
         "APP_VARIANT": "production",
         "EXPO_PUBLIC_ENV": "production",
+        "EXPO_PUBLIC_INSTAGRAM_MOBILE_LOGIN": "true",
         "EXPO_PUBLIC_REVENUECAT_STORE": "platform"
       },
       "channel": "production"

@@ -21,7 +21,7 @@ type Attempt = {
 const TTL = 15 * 60_000;
 const fail = (status: number, message: string): never => { throw new InstagramMobileLoginError(status, message); };
 
-/** Staging-only, one process and one allowlisted user. No submitted secrets are retained. */
+/** One process and one allowlisted user. No submitted secrets are retained. */
 export class InstagramMobileLogin {
   private attempts = new Map<string, Attempt>();
   private starting = false;
