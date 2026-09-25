@@ -12,8 +12,18 @@ export const metadata: Metadata = {
   alternates: { canonical: '/subscribe' },
 };
 
-export default function SubscribePage() {
+type PageProps = {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
+
+function first(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+export default async function SubscribePage({ searchParams }: PageProps) {
+  const params = await searchParams;
   const publicApiKey = process.env.NEXT_PUBLIC_REVENUECAT_WEB_API_KEY?.trim() ?? '';
+  const initialDiscountCode = first(params.discount_code)?.trim().toUpperCase() ?? '';
 
   return (
     <main className={styles.page}>
@@ -43,7 +53,7 @@ export default function SubscribePage() {
           </ul>
         </div>
 
-        <Checkout publicApiKey={publicApiKey} />
+        <Checkout initialDiscountCode={initialDiscountCode} publicApiKey={publicApiKey} />
       </section>
 
       <SiteFooter note="One calm place for every conversation." />
