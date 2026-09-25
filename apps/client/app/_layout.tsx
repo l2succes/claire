@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AppState, InteractionManager, Linking, Platform, View } from 'react-native';
-import { Stack, router } from 'expo-router';
+import { Stack, router, usePathname } from 'expo-router';
 import * as Notifications from 'expo-notifications';
 import { QueryClientProvider } from '@tanstack/react-query';
 import * as SplashScreen from 'expo-splash-screen';
@@ -31,6 +31,7 @@ import { API_BASE_URL } from '../services/platforms';
 import { queryClient } from '../services/query-client';
 import { appMark } from '../services/perf-marks';
 import { useConnectionRecovery } from '../hooks/useConnectionRecovery';
+import { setActiveScreen } from '../services/active-screen';
 import { BillingBridge } from '../components/BillingBridge';
 import '../global.css';
 
@@ -77,6 +78,7 @@ function NotificationFeedBridge() {
 
 export default function RootLayout() {
   useConnectionRecovery();
+  const pathname = usePathname();
   const [initialized, setInitialized] = useState(false);
   // Electron already owns a native startup experience. Replaying the large
   // lime reveal inside its renderer makes desktop feel slower and obscures the
@@ -91,6 +93,8 @@ export default function RootLayout() {
   const token = useAuthStore((state) => state.token);
   const initializePlatforms = usePlatformStore((state) => state.initialize);
   const fetchConnectedSessions = usePlatformStore((state) => state.fetchConnectedSessions);
+
+  useEffect(() => setActiveScreen(pathname), [pathname]);
 
   useEffect(() => {
     async function init() {
@@ -187,7 +191,11 @@ export default function RootLayout() {
         openChat,
         openLoops: () => router.push('/(tabs)/loops'),
         openLoop: (loopId) => router.push({ pathname: '/loops/[id]', params: { id: loopId } }),
-        openOperations: (url) => {
+        openOperations: (url, alertId) => {
+          if (alertId) {
+            router.push({ pathname: '/operations/alert/[alertId]', params: { alertId } });
+            return;
+          }
           void Linking.openURL(url).catch((error) => {
             console.warn('Could not open the operations dashboard:', error);
           });

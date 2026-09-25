@@ -133,7 +133,10 @@ Repeated failures for the same request or session are grouped for 15 minutes;
 signup notices are deduplicated by user ID. Error notices include the request
 method, path, status, user ID when available, and time; they exclude request
 bodies, query strings, credentials, and message content. Tapping an iOS alert
-opens the Operations dashboard.
+opens a protected in-app Operations report with the user, originating screen,
+endpoint template, status, service, and timestamp. The report API is restricted
+to Operations owners and operators; its backing table is added by
+`20260924100000_operations_alert_reports.sql`.
 
 ## References
 

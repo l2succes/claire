@@ -5,6 +5,17 @@ import { type DbRow, supabase } from './supabase';
 type OperatorAlert = {
   subject: string;
   lines: string[];
+  report: {
+    eventType: 'signup' | 'platform_connected' | 'platform_failed' | 'server_error';
+    userId?: string;
+    userEmail?: string;
+    screen?: string;
+    requestMethod?: string;
+    requestPath?: string;
+    httpStatus?: number;
+    platform?: string;
+    sessionId?: string;
+  };
   dedupeKey?: string;
   dedupeSeconds?: number;
 };
@@ -37,10 +48,35 @@ export class OperatorEmailAlerts {
       }
     }
 
+    const alertId = await this.storeReport(alert);
+
     await Promise.allSettled([
       apiKey && from ? this.sendEmail(alert, apiKey, from) : Promise.resolve(),
-      this.sendIosPush(alert),
+      this.sendIosPush(alert, alertId),
     ]);
+  }
+
+  private async storeReport(alert: OperatorAlert): Promise<string | undefined> {
+    try {
+      const { data, error } = await supabase.from('operations_alert_reports').insert({
+        event_type: alert.report.eventType,
+        title: alert.subject,
+        summary: alert.lines[0] || alert.subject,
+        user_id: alert.report.userId || null,
+        user_email: alert.report.userEmail || null,
+        screen: alert.report.screen || null,
+        request_method: alert.report.requestMethod || null,
+        request_path: alert.report.requestPath || null,
+        http_status: alert.report.httpStatus || null,
+        platform: alert.report.platform || null,
+        session_id: alert.report.sessionId || null,
+      }).select('id').single();
+      if (error) throw error;
+      return data?.id as string | undefined;
+    } catch (error) {
+      logger.error('Could not store Operations alert report', error);
+      return undefined;
+    }
   }
 
   private async getRecipients(): Promise<{ emails: string[]; userIds: string[] }> {
@@ -80,7 +116,7 @@ export class OperatorEmailAlerts {
     }
   }
 
-  private async sendIosPush(alert: OperatorAlert): Promise<void> {
+  private async sendIosPush(alert: OperatorAlert, alertId?: string): Promise<void> {
     try {
       const { userIds } = await this.getRecipients();
       if (userIds.length === 0) return;
@@ -106,6 +142,7 @@ export class OperatorEmailAlerts {
         data: {
           type: 'operations_alert',
           version: 1,
+          ...(alertId ? { alertId } : {}),
           url: 'https://useclaire.co/ops',
         },
       };
@@ -126,6 +163,7 @@ export class OperatorEmailAlerts {
     return this.send({
       subject: 'New signup',
       lines: [`Email: ${email}`, `User ID: ${userId}`, `Time: ${new Date().toISOString()}`],
+      report: { eventType: 'signup', userId, userEmail: email },
       dedupeKey: `signup:${userId}`,
       dedupeSeconds: 60 * 60 * 24 * 30,
     });
@@ -135,6 +173,7 @@ export class OperatorEmailAlerts {
     return this.send({
       subject: `${platform} connected`,
       lines: [`Platform: ${platform}`, `Email: ${email || 'unavailable'}`, `User ID: ${userId}`, `Session: ${sessionId}`, `Time: ${new Date().toISOString()}`],
+      report: { eventType: 'platform_connected', platform, userId, userEmail: email, sessionId, screen: 'Connections' },
       dedupeKey: `connected:${sessionId}`,
     });
   }
@@ -143,15 +182,17 @@ export class OperatorEmailAlerts {
     return this.send({
       subject: `${platform} connection failed`,
       lines: [`Platform: ${platform}`, `Email: ${email || 'unavailable'}`, `User ID: ${userId}`, `Session: ${sessionId}`, `Time: ${new Date().toISOString()}`],
+      report: { eventType: 'platform_failed', platform, userId, userEmail: email, sessionId, screen: 'Connections' },
       dedupeKey: `platform-failed:${sessionId}`,
     });
   }
 
-  serverError(method: string, path: string, status: number, userId?: string): Promise<void> {
+  serverError(method: string, path: string, status: number, userId?: string, userEmail?: string, screen?: string): Promise<void> {
     return this.send({
       subject: `Server error (${status})`,
-      lines: [`Request: ${method} ${path}`, `Status: ${status}`, `User ID: ${userId || 'anonymous'}`, `Time: ${new Date().toISOString()}`],
-      dedupeKey: `server-error:${method}:${path}:${status}`,
+      lines: [`Request: ${method} ${path}`, `Status: ${status}`, `Screen: ${screen || 'Unknown'}`, `User ID: ${userId || 'anonymous'}`, `Time: ${new Date().toISOString()}`],
+      report: { eventType: 'server_error', requestMethod: method, requestPath: path, httpStatus: status, userId, userEmail, screen },
+      dedupeKey: `server-error:${userId || 'anonymous'}:${method}:${path}:${status}`,
     });
   }
 }
