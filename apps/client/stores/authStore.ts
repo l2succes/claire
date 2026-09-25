@@ -7,6 +7,7 @@ import { clearMobileCache } from '../services/mobile-cache';
 import { resetQueryClient } from '../services/query-client';
 import { usePlatformStore } from './platformStore';
 import { appMark } from '../services/perf-marks';
+import { reportNewSignup } from '../services/operator-alerts';
 
 interface User {
   id: string;
@@ -125,6 +126,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             token: session.access_token,
             user: userFromSession(session),
           });
+          if (event === 'SIGNED_IN' && Date.now() - Date.parse(session.user.created_at || '') < 24 * 60 * 60 * 1000) {
+            reportNewSignup(session.user.id);
+          }
         } else {
           const previousUserId = get().user?.id;
           set({ 
@@ -198,6 +202,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (error) throw error;
 
       if (data.user) {
+        reportNewSignup(data.user.id);
+
         // Create user profile
         await supabase.from('users').insert({
           id: data.user.id,
