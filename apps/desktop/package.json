@@ -25,7 +25,7 @@
     "clean": "rm -rf dist-main renderer release"
   },
   "devDependencies": {
-    "electron": "43.4.0",
+    "electron": "44.4.3",
     "electron-builder": "^26.15.3",
     "typescript": "^5.3.3",
     "@types/node": "^22.10.0"
