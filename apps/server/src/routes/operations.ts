@@ -28,6 +28,14 @@ function requireOperationsOwner(req: Request, res: Response, next: () => void): 
   next();
 }
 
+function requireOperationsOperator(req: Request, res: Response, next: () => void): void {
+  if (req.user?.operationsRole !== 'owner' && req.user?.operationsRole !== 'operator') {
+    res.status(403).json({ error: 'Operator access is required to view alert reports' });
+    return;
+  }
+  next();
+}
+
 router.get('/snapshot', requireAuth, requireOperationsAccess, (_req: Request, res: Response) => {
   if (_req.user?.id) void recordOperationsAudit({ actorUserId: _req.user.id, action: 'snapshot_viewed' });
   res.json(operationsMonitor.getSnapshot());
@@ -46,6 +54,18 @@ router.get('/incidents', requireAuth, requireOperationsAccess, async (_req: Requ
   if (error) return res.status(500).json({ error: 'Could not load operations incidents' });
   if (_req.user?.id) void recordOperationsAudit({ actorUserId: _req.user.id, action: 'incidents_viewed' });
   return res.json({ incidents: (data || []).map((row: DbRow) => row) });
+});
+
+router.get('/alerts/:alertId', requireAuth, requireOperationsAccess, requireOperationsOperator, async (req: Request, res: Response) => {
+  const { data, error } = await supabase
+    .from('operations_alert_reports')
+    .select('id,event_type,title,summary,user_id,user_email,screen,request_method,request_path,http_status,platform,session_id,created_at')
+    .eq('id', req.params.alertId)
+    .maybeSingle();
+  if (error) return res.status(500).json({ error: 'Could not load the Operations alert report' });
+  if (!data) return res.status(404).json({ error: 'Operations alert report was not found' });
+  if (req.user?.id) void recordOperationsAudit({ actorUserId: req.user.id, action: 'alert_viewed', target: req.params.alertId, metadata: { eventType: String(data.event_type) } });
+  return res.json({ alert: data });
 });
 
 router.get('/telemetry', requireAuth, requireOperationsAccess, async (req: Request, res: Response) => {
