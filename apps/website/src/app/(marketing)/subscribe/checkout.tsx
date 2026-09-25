@@ -19,6 +19,7 @@ const CLAIRE_PRODUCT_ID = 'claire_pro_monthly';
 type CheckoutPhase = 'loading' | 'ready' | 'purchasing' | 'success' | 'error';
 
 type CheckoutProps = {
+  initialDiscountCode?: string;
   publicApiKey: string;
 };
 
@@ -68,12 +69,6 @@ export function selectClairePackage(offering: Offering | null): RevenueCatPackag
   );
 }
 
-function initialDiscountCode(): string {
-  if (typeof window === 'undefined') return '';
-  const requested = new URLSearchParams(window.location.search).get('discount_code');
-  return requested?.trim().toUpperCase() ?? '';
-}
-
 function errorMessage(error: unknown): string {
   if (error instanceof PurchasesError) {
     if (error.errorCode === ErrorCode.NetworkError) {
@@ -87,14 +82,14 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Checkout could not be opened. Please try again.';
 }
 
-export function Checkout({ publicApiKey }: CheckoutProps) {
+export function Checkout({ initialDiscountCode = '', publicApiKey }: CheckoutProps) {
   const [phase, setPhase] = useState<CheckoutPhase>(publicApiKey ? 'loading' : 'error');
   const [plan, setPlan] = useState<RevenueCatPackage | null>(null);
   const [message, setMessage] = useState(
     publicApiKey ? '' : 'Web checkout is being connected. Please check back shortly.'
   );
   const [discountCode, setDiscountCode] = useState(initialDiscountCode);
-  const [showDiscount, setShowDiscount] = useState(() => Boolean(initialDiscountCode()));
+  const [showDiscount, setShowDiscount] = useState(Boolean(initialDiscountCode));
   const [success, setSuccess] = useState<CheckoutSuccess | null>(null);
   const checkoutTarget = useRef<HTMLDivElement>(null);
 
