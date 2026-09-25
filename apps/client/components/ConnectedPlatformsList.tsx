@@ -18,6 +18,7 @@ import {
   PLATFORM_DISPLAY,
 } from '../types/platform';
 import { usePlatformStore } from '../stores/platformStore';
+import { userFacingErrorMessage } from '../services/api-errors';
 
 interface ConnectedPlatformsListProps {
   className?: string;
@@ -190,7 +191,7 @@ function PlatformSessionCard({
 
           {session.error && (
             <Text className="text-xs text-red-500 mt-1" numberOfLines={1}>
-              {session.error}
+              {userFacingErrorMessage(session.error)}
             </Text>
           )}
         </View>

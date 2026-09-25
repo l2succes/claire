@@ -108,6 +108,28 @@ export function incomingContactId(message: Pick<UnifiedMessage, 'platform' | 'is
 }
 
 /**
+ * Which contact a stored message belongs to.
+ *
+ * An incoming message resolves its own sender. An outbound one has no remote
+ * sender -- incomingContactId returns null for it -- so it takes the chat's
+ * linked contact instead. That linkage is what the People "Contacted" filter
+ * counts, and leaving it null meant the filter could never return anyone.
+ *
+ * A group has no single counterpart and "contacted" means direct messages
+ * only, so groups deliberately stay unlinked.
+ */
+export function messageContactId(input: {
+  senderContactId: string | null;
+  isFromMe: boolean;
+  isGroup: boolean;
+  chatContactId: string | null | undefined;
+}): string | null {
+  if (input.senderContactId) return input.senderContactId;
+  if (!input.isFromMe || input.isGroup) return null;
+  return input.chatContactId ?? null;
+}
+
+/**
  * Ghost MXID → platform contact id. Kept in one place so adding a bridge does
  * not require finding every copy of this regex.
  */

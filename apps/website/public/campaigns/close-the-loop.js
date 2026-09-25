@@ -10,7 +10,7 @@ const scenes = {
     phoneContext: 'Friday',
     phoneTitle: 'It’s our anniversary.',
     phoneNotice: 'Read 2h ago',
-    caption: 'The moment you remember,<br />just a little too late.',
+    caption: 'The moment you remember,<br />a little too late.',
   },
   dinner: {
     counter: 'SCENE 02 / 04',
@@ -30,7 +30,7 @@ const scenes = {
     duration: '00:20 — 00:30',
     kicker: 'THE OPEN LOOP',
     title: 'Forgot to follow up with the client?',
-    body: 'The six-figure deal did not disappear because you were careless. Its thread just disappeared into every other thread.',
+    body: 'The six-figure deal got buried under every other thread.',
     line: '“Some loops cost more than others.”',
     visual: 'is-client',
     phoneContext: 'David · proposal',

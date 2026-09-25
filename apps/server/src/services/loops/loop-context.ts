@@ -18,6 +18,7 @@ import { loopSemanticsFor, type LoopSensitivity } from '@claire/platform-catalog
 
 import { logger } from '../../utils/logger';
 import { supabase } from '../supabase';
+import { chatAiProcessingEnabled } from '../ai-policy';
 import type { OpenLoopSummary } from './loop-prompts';
 import { normalizeAlias, type ParticipantRef, type WindowMessage } from './relevance';
 
@@ -27,7 +28,7 @@ export const WINDOW_OVERLAP = 6;
 /** Hard caps so one busy channel cannot blow the prompt budget. */
 export const WINDOW_MAX_MESSAGES = 40;
 export const WINDOW_MAX_CHARS = 6000;
-const MAX_OPEN_LOOPS = 20;
+const MAX_OPEN_LOOPS = 100;
 const MAX_ROSTER = 25;
 
 const LIVE_STATUSES = ['open', 'waiting', 'snoozed'] as const;
@@ -55,11 +56,29 @@ export interface LoopContext {
   openLoops: OpenLoopSummary[];
   settings: ChatLoopSettings;
   detectionEnabled: boolean;
+  /**
+   * Effective per-chat AI scope: groups are opt-in. Resolved here rather than
+   * at the call site so cron, replay, and manual re-runs cannot route around
+   * it by simply not asking.
+   */
+  aiEnabled: boolean;
   timezone: string;
   consecutiveEmpty: number;
   /** Cursor position to advance to if the pass succeeds. */
   cursorTimestamp: string | null;
   cursorMessageId: string | null;
+  cursorIngestSeq: number;
+}
+
+export interface BuildLoopContextOptions {
+  maxIngestSeq?: number;
+  /**
+   * An exact, bounded historical slice. Supplying ids avoids using the live
+   * cursor as a pagination mechanism and keeps a backfill chronological.
+   */
+  messageIds?: string[];
+  /** Treat a supplied historical slice as new work regardless of live cursor. */
+  treatWindowAsDelta?: boolean;
 }
 
 interface RosterRow {
@@ -70,6 +89,8 @@ interface RosterRow {
 }
 
 interface OpenLoopRow {
+  row_version: number;
+  status: string;
   id: string;
   title: string | null;
   content: string | null;
@@ -81,6 +102,8 @@ interface OpenLoopRow {
 }
 
 interface MessageRow {
+  loop_ingest_seq: number;
+  is_deleted: boolean;
   id: string;
   content: string | null;
   timestamp: string;
@@ -113,10 +136,14 @@ function defaultSensitivity(platform: string, isGroup: boolean, userDefault: Loo
  * Returns null when the chat cannot be read at all — the caller treats that as
  * "skip", never as "no loops here".
  */
-export async function buildLoopContext(userId: string, chatId: string): Promise<LoopContext | null> {
+export async function buildLoopContext(
+  userId: string,
+  chatId: string,
+  options: BuildLoopContextOptions = {},
+): Promise<LoopContext | null> {
   const { data: chat, error: chatError } = await supabase
     .from('chats')
-    .select('id, name, platform, is_group, member_count, platform_chat_id')
+    .select('id, name, platform, is_group, member_count, platform_chat_id, ai_enabled')
     .eq('id', chatId)
     .eq('user_id', userId)
     .maybeSingle();
@@ -129,7 +156,7 @@ export async function buildLoopContext(userId: string, chatId: string): Promise<
   const [cursorResult, settingsResult, prefsResult] = await Promise.all([
     supabase
       .from('chat_loop_cursors')
-      .select('last_message_timestamp, last_message_id, consecutive_empty')
+      .select('last_message_timestamp, last_message_id, last_ingest_seq, consecutive_empty')
       .eq('user_id', userId)
       .eq('chat_id', chatId)
       .maybeSingle(),
@@ -141,11 +168,13 @@ export async function buildLoopContext(userId: string, chatId: string): Promise<
       .maybeSingle(),
     supabase
       .from('user_preferences')
-      .select('timezone, loop_detection_enabled, default_group_sensitivity')
+      .select('timezone, loop_detection_enabled, default_group_sensitivity, preferences')
       .eq('user_id', userId)
       .maybeSingle(),
   ]);
 
+  for (const result of [cursorResult, settingsResult, prefsResult]) { if (result.error) throw result.error; }
+  const ingestSeq = Number(cursorResult.data?.last_ingest_seq ?? 0);
   const cursorTimestamp: string | null = cursorResult.data?.last_message_timestamp ?? null;
   const consecutiveEmpty: number = cursorResult.data?.consecutive_empty ?? 0;
 
@@ -158,7 +187,7 @@ export async function buildLoopContext(userId: string, chatId: string): Promise<
     watchTerms: settingsResult.data?.watch_terms ?? [],
   };
 
-  const rows = await fetchWindowRows(userId, chatId, cursorTimestamp);
+  const rows = await fetchWindowRows(userId, chatId, ingestSeq, options.messageIds, options.maxIngestSeq);
   if (!rows.length) {
     logger.debug('[loops] empty window', { chatId });
   }
@@ -168,9 +197,9 @@ export async function buildLoopContext(userId: string, chatId: string): Promise<
 
   // The delta is what the gate scores: everything strictly newer than the
   // cursor. The overlap tail is context for the model, not new information.
-  const delta = cursorTimestamp
-    ? window.filter((m) => m.at > cursorTimestamp)
-    : window;
+  const delta = options.treatWindowAsDelta
+    ? window
+    : window.filter((_, i) => rows[i].loop_ingest_seq > ingestSeq);
 
   const [roster, openLoops] = await Promise.all([
     fetchRoster(userId, chatId, window),
@@ -192,11 +221,13 @@ export async function buildLoopContext(userId: string, chatId: string): Promise<
     roster,
     openLoops,
     settings,
+    aiEnabled: prefsResult.data?.preferences?.ai_enabled !== false && chatAiProcessingEnabled(chat),
     detectionEnabled: prefsResult.data?.loop_detection_enabled ?? true,
     timezone: prefsResult.data?.timezone || 'UTC',
     consecutiveEmpty,
     cursorTimestamp: newest?.timestamp ?? cursorTimestamp,
     cursorMessageId: newest?.id ?? null,
+    cursorIngestSeq: rows.length ? Math.max(ingestSeq, ...rows.map(row => Number(row.loop_ingest_seq ?? 0))) : options.maxIngestSeq ?? ingestSeq,
   };
 }
 
@@ -204,56 +235,52 @@ export async function buildLoopContext(userId: string, chatId: string): Promise<
  * Read the window with keyset pagination, then trim to the caps from the newest
  * end — the most recent messages are the ones that resolve open loops.
  */
-async function fetchWindowRows(
-  userId: string,
-  chatId: string,
-  cursorTimestamp: string | null,
-): Promise<MessageRow[]> {
-  const select =
-    'id, content, timestamp, from_me, contact_name, contact_id, mentions, mentions_room, reply_to_message_id, thread_root_platform_id';
-
-  let query = supabase
-    .from('messages')
-    .select(select)
-    .eq('user_id', userId)
-    .eq('chat_id', chatId)
-    .eq('is_deleted', false)
-    .order('timestamp', { ascending: false })
-    .limit(WINDOW_MAX_MESSAGES + WINDOW_OVERLAP);
-
-  // Read a little before the cursor so a loop spanning the boundary stays whole.
-  if (cursorTimestamp) {
-    const overlapStart = new Date(new Date(cursorTimestamp).getTime() - 1000 * 60 * 60 * 6).toISOString();
-    query = query.gte('timestamp', overlapStart);
-  }
-
-  const { data, error } = await query;
-  if (error) {
-    logger.warn('[loops] window read failed', { chatId, error: error.message });
-    return [];
-  }
-
-  // Restore chronological order and drop anything with no text to reason about.
-  const rows = ((data ?? []) as MessageRow[])
-    .reverse()
-    .filter((row) => (row.content ?? '').trim().length > 0);
-
+export function boundWindowRows<T extends { content: string | null }>(rows: T[]): T[] {
   let budget = WINDOW_MAX_CHARS;
-  const kept: MessageRow[] = [];
-  for (let i = rows.length - 1; i >= 0 && kept.length < WINDOW_MAX_MESSAGES; i -= 1) {
-    const row = rows[i];
+  const kept: T[] = [];
+  for (const row of rows) {
+    if (kept.length >= WINDOW_MAX_MESSAGES) break;
     const cost = (row.content ?? '').length;
-    if (cost > budget && kept.length > 0) break;
+    if (cost > budget && kept.length) break;
+    // Never acknowledge a partially read message. An oversized first message
+    // is processed alone; provider limits surface as retryable failures.
+    kept.push(row);
     budget -= cost;
-    kept.unshift(row);
+    if (budget <= 0) break;
   }
-
   return kept;
+}
+
+async function fetchWindowRows(
+  userId: string, chatId: string, ingestSeq: number, messageIds?: string[], maxIngestSeq?: number,
+): Promise<MessageRow[]> {
+  const select = 'id, content, timestamp, from_me, contact_name, contact_id, mentions, mentions_room, reply_to_message_id, thread_root_platform_id, loop_ingest_seq, is_deleted';
+  let query = supabase.from('messages').select(select).eq('user_id', userId).eq('chat_id', chatId);
+  if (messageIds?.length) query = query.in('id', messageIds).order('timestamp', { ascending: true }).order('id', { ascending: true });
+  else {
+    query = query.gt('loop_ingest_seq', ingestSeq).order('loop_ingest_seq', { ascending: true }).limit(WINDOW_MAX_MESSAGES - WINDOW_OVERLAP);
+    if (maxIngestSeq !== undefined) query = query.lte('loop_ingest_seq', maxIngestSeq);
+  }
+  const { data, error } = await query;
+  if (error) throw error;
+  // Keep cursor entries for deleted/blank messages too. A deletion is evidence
+  // invalidation, never evidence that an obligation was fulfilled.
+  const fresh = boundWindowRows(((data ?? []) as MessageRow[]).map(row => ({ ...row, content: row.is_deleted ? '[message deleted; prior claims from this message are no longer evidence]' : row.content })));
+  if (messageIds?.length || !fresh.length) return fresh;
+  const { data: overlap, error: overlapError } = await supabase.from('messages').select(select)
+    .eq('user_id', userId).eq('chat_id', chatId).lte('loop_ingest_seq', ingestSeq)
+    .eq('is_deleted', false).order('timestamp', { ascending: false }).limit(WINDOW_OVERLAP);
+  if (overlapError) throw overlapError;
+  const remaining = WINDOW_MAX_CHARS - fresh.reduce((n, row) => n + (row.content?.length ?? 0), 0);
+  let used = 0;
+  const tail = ((overlap ?? []) as MessageRow[]).filter(row => { used += row.content?.length ?? 0; return used <= remaining; }).reverse();
+  return [...tail, ...fresh];
 }
 
 function toWindowMessage(row: MessageRow, index: number, selfName: string): WindowMessage {
   return {
     id: row.id,
+    ingestSeq: Number(row.loop_ingest_seq ?? 0),
     ref: `m${index + 1}`,
     senderName: row.from_me ? selfName : row.contact_name || 'Unknown',
     isSelf: row.from_me,
@@ -262,6 +289,7 @@ function toWindowMessage(row: MessageRow, index: number, selfName: string): Wind
     mentions: row.mentions ?? undefined,
     mentionsRoom: row.mentions_room ?? undefined,
     replyToId: row.reply_to_message_id ?? undefined,
+    threadRoot: row.thread_root_platform_id ?? undefined,
   };
 }
 
@@ -308,10 +336,10 @@ async function fetchRoster(userId: string, chatId: string, window: WindowMessage
 async function fetchOpenLoops(userId: string, chatId: string): Promise<OpenLoopSummary[]> {
   const { data, error } = await supabase
     .from('loops')
-    .select('id, title, content, state_summary, owner, deadline, deadline_precision, thread_state')
+    .select('id, title, content, state_summary, owner, deadline, deadline_precision, thread_state, row_version, status')
     .eq('user_id', userId)
     .eq('chat_id', chatId)
-    .eq('visibility', 'surfaced')
+    .in('visibility', ['surfaced', 'suppressed'])
     .in('status', LIVE_STATUSES)
     .order('last_evidence_at', { ascending: false, nullsFirst: false })
     .limit(MAX_OPEN_LOOPS);
@@ -324,6 +352,8 @@ async function fetchOpenLoops(userId: string, chatId: string): Promise<OpenLoopS
 
   return ((data ?? []) as OpenLoopRow[]).map((row) => ({
     id: row.id,
+    rowVersion: row.row_version,
+    status: row.status,
     title: row.title || row.content || 'Untitled',
     state: row.thread_state ?? null,
     stateSummary: row.state_summary ?? null,

@@ -1,6 +1,6 @@
 import { View, Text, TouchableOpacity, Linking, Platform as RNPlatform } from 'react-native';
 import {
-  MapPin, Plane, Calendar, Bell, Sparkles, X,
+  MapPin, Plane, Calendar, Bell, ArrowRight, X,
 } from 'lucide-react-native';
 import type { SmartCard as SmartCardType, SmartCardType as CardType } from '../types/conversationSettings';
 
@@ -17,7 +17,7 @@ const CARD_ICONS: Record<CardType, typeof MapPin> = {
   flight: Plane,
   datetime: Calendar,
   reminder: Bell,
-  action: Sparkles,
+  action: ArrowRight,
 };
 
 interface SmartCardProps {
@@ -30,7 +30,7 @@ interface SmartCardProps {
 
 export function SmartCard({ card, compact, onDismiss, onDraftMessage, onActed }: SmartCardProps) {
   const color = CARD_COLORS[card.card_type] || '#6366f1';
-  const Icon = CARD_ICONS[card.card_type] || Sparkles;
+  const Icon = CARD_ICONS[card.card_type] || ArrowRight;
   const payload = card.payload as Record<string, any>;
 
   const handleCTA = () => {

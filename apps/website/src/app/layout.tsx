@@ -28,12 +28,28 @@ const dmMono = DM_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.CLAIRE_SITE_URL ?? 'https://useclaire.co'),
   title: {
     default: 'Claire — All your chats. One AI.',
     template: '%s — Claire',
   },
   description:
     'Claire is the AI-native multi-chat client for WhatsApp, Telegram, Instagram, and more—search, reply, and follow through from one place.',
+  alternates: { canonical: '/' },
+  openGraph: {
+    type: 'website',
+    url: '/',
+    siteName: 'Claire',
+    title: 'Claire — All your chats. One AI.',
+    description:
+      'An AI-native multi-chat client, built in public. Join the early list and follow the road to launch.',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Claire — All your chats. One AI.',
+    description:
+      'An AI-native multi-chat client, built in public. Join the early list and follow the road to launch.',
+  },
   icons: { icon: '/favicon.svg' },
 };
 

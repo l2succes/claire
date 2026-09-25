@@ -1,8 +1,9 @@
-import { Pressable, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { Image } from 'expo-image';
-import { Check, CheckCheck, Clock, Pin, Sparkles, UserRound, UsersRound } from 'lucide-react-native';
+import { BellOff, Check, CheckCheck, Clock, Pin, Reply, UserRound, UsersRound } from 'lucide-react-native';
 import { colors, mobileType, space } from '@claire/design-system';
 import { useState } from 'react';
+import { FeedbackPressable } from './mobile/pressable-feedback';
 import { PlatformBadge } from './PlatformIcon';
 import { Platform } from '../types/platform';
 import { formatInboxTimestamp } from '../utils/messageTimestamp';
@@ -23,6 +24,7 @@ interface MessageCardProps {
     has_open_loop?: boolean;
     platform?: Platform;
     is_pinned?: boolean;
+    is_muted?: boolean;
   };
   variant?: 'default' | 'pinned' | 'recent';
   onPress: () => void;
@@ -45,11 +47,11 @@ export function MessageCard({ message, variant = 'default', onPress, onLongPress
           : null;
 
   return (
-    <Pressable
+    <FeedbackPressable
       onPress={onPress}
       onLongPress={onLongPress}
       accessibilityRole="button"
-      accessibilityLabel={`${name}${message.unread_count ? `, ${message.unread_count} unread` : ''}`}
+      accessibilityLabel={`${name}${message.is_muted ? ', notifications muted' : ''}${message.unread_count ? `, ${message.unread_count} unread` : ''}`}
       testID={`message-card-${message.id}`}
       style={({ pressed }) => ({
         minHeight: isPinnedPresentation ? 82 : 70,
@@ -89,6 +91,7 @@ export function MessageCard({ message, variant = 'default', onPress, onLongPress
           <Text selectable numberOfLines={1} style={{ ...mobileType.bodySmall, flex: 1, color: message.unread_count ? colors.neutral[800] : colors.neutral[600], fontWeight: message.unread_count ? '600' : '400' }}>
             {isCompactPresentation ? '' : message.from_me ? 'You: ' : ''}{message.content || 'Media'}
           </Text>
+          {message.is_muted ? <View testID={`message-card-muted-${message.id}`}><BellOff size={14} color={colors.neutral[600]} strokeWidth={1.8} /></View> : null}
           {message.unread_count ? (
             <View style={{ minWidth: 20, height: 20, paddingHorizontal: 5, borderRadius: 10, backgroundColor: colors.lime, alignItems: 'center', justifyContent: 'center' }}>
               <Text style={{ ...mobileType.label, color: colors.ink, fontVariant: ['tabular-nums'] }}>{message.unread_count}</Text>
@@ -98,10 +101,10 @@ export function MessageCard({ message, variant = 'default', onPress, onLongPress
         {variant === 'default' && (message.has_open_loop || message.has_ai_response) ? (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2], paddingTop: 2 }}>
             {message.has_open_loop ? <Text testID={`message-card-loop-badge-${message.id}`} style={{ ...mobileType.monoLabel, color: colors.warning }}>OPEN LOOP</Text> : null}
-            {message.has_ai_response ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}><Sparkles size={11} color={colors.focus} /><Text style={{ ...mobileType.monoLabel, color: colors.focus }}>REPLY READY</Text></View> : null}
+            {message.has_ai_response ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}><Reply size={11} color={colors.focus} /><Text style={{ ...mobileType.monoLabel, color: colors.focus }}>REPLY READY</Text></View> : null}
           </View>
         ) : null}
       </View>
-    </Pressable>
+    </FeedbackPressable>
   );
 }

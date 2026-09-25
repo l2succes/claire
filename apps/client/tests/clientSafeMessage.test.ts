@@ -1,0 +1,69 @@
+import {
+  clientSafeMessage,
+  GENERIC_REQUEST_ERROR,
+  GENERIC_SERVER_ERROR,
+  SESSION_ERROR,
+  UNREACHABLE_ERROR,
+  userFacingErrorMessage,
+  type FailedRequest,
+} from '../services/api-errors';
+
+const failure = (status: number | undefined, body?: { error?: string; message?: string }): FailedRequest => ({
+  response: status === undefined ? undefined : { status, data: body ?? {} },
+});
+
+describe('clientSafeMessage', () => {
+  it('never surfaces a 5xx body, however specific it looks', () => {
+    // The exact string that reached the chat composer during reaction testing.
+    const leak =
+      'duplicate key value violates unique constraint "message_reactions_user_id_message_id_reactor_id_emoji_key"';
+    const shown = clientSafeMessage(failure(500, { error: leak }));
+    expect(shown).not.toContain('duplicate key');
+    expect(shown).not.toContain('message_reactions');
+    expect(shown).toBe(GENERIC_SERVER_ERROR);
+  });
+
+  it('suppresses 5xx detail even when the server used the message field', () => {
+    expect(clientSafeMessage(failure(503, { message: 'ECONNREFUSED 10.0.0.4:5432' }))).not.toContain(
+      'ECONNREFUSED',
+    );
+  });
+
+  it('relays a 4xx body, which the server wrote for the person', () => {
+    expect(clientSafeMessage(failure(400, { error: 'Session not connected' }))).toBe(
+      'Session not connected',
+    );
+    expect(clientSafeMessage(failure(404, { error: 'Conversation not found' }))).toBe(
+      'Conversation not found',
+    );
+  });
+
+  it('falls back when a 4xx carries no body', () => {
+    expect(clientSafeMessage(failure(400))).toBe(GENERIC_REQUEST_ERROR);
+  });
+
+  it('never exposes raw token validation errors', () => {
+    expect(clientSafeMessage(failure(401, { error: 'Invalid token' }))).toBe(SESSION_ERROR);
+  });
+
+  it('explains a request that never reached the server', () => {
+    expect(clientSafeMessage(failure(undefined))).toContain('Check your connection');
+  });
+
+  it('never renders the native network-connection-lost description', () => {
+    expect(userFacingErrorMessage(new Error('The network connection was lost.'))).toBe(
+      UNREACHABLE_ERROR,
+    );
+    expect(userFacingErrorMessage({ message: 'Network connection has been lost' })).toBe(
+      UNREACHABLE_ERROR,
+    );
+    expect(clientSafeMessage(failure(400, { error: 'The network connection was lost.' }))).toBe(
+      UNREACHABLE_ERROR,
+    );
+  });
+
+  it('preserves useful non-network copy and honors its fallback', () => {
+    expect(userFacingErrorMessage(new Error('Conversation not found'))).toBe('Conversation not found');
+    expect(userFacingErrorMessage(null, 'Try again later.')).toBe('Try again later.');
+  });
+});

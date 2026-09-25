@@ -21,6 +21,7 @@ export type LoopThreadState =
   | 'resolved';
 
 export type DeadlinePrecision = 'exact' | 'day' | 'week' | 'month' | 'none';
+export type LoopReminderReason = 'snooze_ended' | 'act_now' | 'deadline_soon' | 'follow_up';
 
 export interface LoopConversationRef {
   name?: string | null;
@@ -30,7 +31,12 @@ export interface LoopConversationRef {
 }
 
 export interface LoopItem {
+  row_version?: number;
+  next_review_at?: string | null;
+  reminder_quiet_reason?: string | null;
   id: string;
+  created_at?: string | null;
+  updated_at?: string | null;
   content: string;
   title?: string | null;
   state_summary?: string | null;
@@ -41,7 +47,16 @@ export interface LoopItem {
   priority: 'low' | 'medium' | 'high';
   status: LoopStatus;
   owner?: LoopOwner;
+  requester?: LoopOwner;
+  priority_score?: number | null;
+  priority_breakdown?: Record<string, number | boolean> | null;
+  priority_override?: number | null;
   snoozed_until?: string | null;
+  next_reminder_at?: string | null;
+  reminder_plan_state?: 'pending' | 'scheduled' | 'quiet' | 'enqueued' | 'sent';
+  reminder_reason?: LoopReminderReason | null;
+  reminder_revision?: number | null;
+  reminder_count?: number | null;
   from_me: boolean;
   chat_id?: string | null;
   platform?: string | null;
@@ -51,6 +66,10 @@ export interface LoopItem {
   relevance_signals?: RelevanceSignals | null;
   suppressed_reason?: string | null;
   evidence_count?: number | null;
+  last_evidence_at?: string | null;
+  reviewed_at?: string | null;
+  visibility?: 'surfaced' | 'suppressed' | 'shadow' | null;
+  resolution?: 'fulfilled' | 'cancelled' | 'expired' | 'superseded' | 'merged' | 'user_dismissed' | 'false_positive' | null;
   source?: string | null;
   chat?: LoopConversationRef | null;
   contact?: { name?: string | null; inferred_name?: string | null; avatar_url?: string | null } | null;
@@ -101,6 +120,7 @@ export interface LoopParticipant {
 }
 
 export interface LoopDetail extends LoopItem {
+  chat_generation?: number;
   events?: LoopEvent[];
   participants?: LoopParticipant[];
   /** Present only when a plugin has contributed to this loop. */
@@ -120,6 +140,14 @@ export interface LoopAgentResult {
   toolsUsed: string[];
   proposal: LoopProposal | null;
   stoppedBecause: 'completed' | 'step_limit' | 'no_provider' | 'error';
+}
+
+export type LoopReviewAction = 'done' | 'dismiss' | 'keep_open';
+
+export interface LoopReviewInput {
+  action: LoopReviewAction;
+  resolution?: 'fulfilled' | 'cancelled' | 'expired' | 'superseded';
+  suggestionEventId?: string;
 }
 
 /**

@@ -5,6 +5,8 @@ import { type DbRow, supabase } from '../services/supabase';
 import { recordOperationsAudit } from '../services/operations-audit';
 import { operationsTelemetry } from '../services/operations-telemetry';
 import { getOperationsBridgeSnapshot } from '../services/operations-bridges';
+import { getOperationsUserDirectory } from '../services/operations-users';
+import { pseudonymousOperationsRef } from '../services/operations-privacy';
 
 const router = Router();
 
@@ -66,6 +68,57 @@ router.get('/bridges', requireAuth, requireOperationsAccess, async (req: Request
   } catch {
     return res.status(500).json({ error: 'Could not load platform bridge health' });
   }
+});
+
+router.get('/users', requireAuth, requireOperationsAccess, requireOperationsOwner, async (req: Request, res: Response) => {
+  try {
+    const directory = await getOperationsUserDirectory();
+    if (req.user?.id) void recordOperationsAudit({ actorUserId: req.user.id, action: 'users_viewed', metadata: { userCount: directory.totals.users } });
+    return res.json(directory);
+  } catch {
+    return res.status(500).json({ error: 'Could not load the user directory' });
+  }
+});
+
+router.post('/bridges/retire', requireAuth, requireOperationsAccess, requireOperationsOwner, async (req: Request, res: Response) => {
+  const accountRef = typeof req.body?.accountRef === 'string' ? req.body.accountRef.trim() : '';
+  if (!/^[a-f0-9]{16}$/.test(accountRef)) return res.status(400).json({ error: 'A valid account reference is required' });
+
+  const { data, error } = await supabase
+    .from('platform_sessions')
+    .select('id,session_id,user_id,platform,status,operations_retired_at')
+    .limit(1000);
+  if (error) return res.status(500).json({ error: 'Could not inspect platform connections' });
+
+  const target = (data || []).find((row: DbRow) => (
+    pseudonymousOperationsRef(`${String(row.user_id)}:${String(row.session_id)}`) === accountRef
+  ));
+  if (!target) return res.status(404).json({ error: 'That platform connection was not found' });
+  if (target.status === 'connected') return res.status(409).json({ error: 'Disconnect the active account from Claire before retiring it from monitoring' });
+  if (target.status !== 'disconnected' && target.status !== 'failed') return res.status(409).json({ error: 'Only disconnected or failed connections can be retired from monitoring' });
+  if (target.operations_retired_at) return res.json({ retired: true });
+
+  const retiredAt = new Date().toISOString();
+  const { data: retiredRows, error: updateError } = await supabase
+    .from('platform_sessions')
+    .update({ operations_retired_at: retiredAt, operations_retired_by: req.user?.id || null })
+    .eq('user_id', target.user_id)
+    .eq('platform', target.platform)
+    .in('status', ['disconnected', 'failed'])
+    .is('operations_retired_at', null)
+    .select('id');
+  if (updateError) return res.status(500).json({ error: 'Could not retire the platform connection' });
+
+  if (req.user?.id) {
+    await recordOperationsAudit({
+      actorUserId: req.user.id,
+      action: 'bridge_session_retired',
+      target: `${String(target.user_id)}:${String(target.session_id)}`,
+      metadata: { platform: String(target.platform), retiredCount: retiredRows?.length || 0 },
+    });
+  }
+  await operationsMonitor.runNow();
+  return res.json({ retired: true, retiredAt, retiredCount: retiredRows?.length || 0 });
 });
 
 router.get('/admins', requireAuth, requireOperationsAccess, async (_req: Request, res: Response) => {

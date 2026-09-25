@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import { supabase } from '../services/supabase';
+import { cacheConversationSettings, cachedConversationSettings, usesNativeMobileCache } from '../services/mobile-cache';
+import { useAuthStore } from './authStore';
 import { API_BASE_URL } from '../services/platforms';
 import type { ChatCategory, ContactProfile, SmartCard } from '../types/conversationSettings';
 
@@ -38,12 +40,42 @@ export const useConversationSettingsStore = create<ConversationSettingsState>((s
   settings: {},
 
   fetchSettings: async (chatId: string) => {
+    const userId = useAuthStore.getState().user?.id;
+    const alreadyLoaded = !!get().settings[chatId];
+
     set((state) => ({
       settings: {
         ...state.settings,
         [chatId]: { ...(state.settings[chatId] || defaultSettings), isLoading: true },
       },
     }));
+
+    // Paint the last known answer while the three queries below run. These
+    // change when the user edits them or Claire learns something new — never
+    // while a chat is being opened — so the cached copy is almost always the
+    // same answer the network is about to return. Skipped once this chat has
+    // been loaded in-session: memory is already fresher than disk.
+    if (userId && !alreadyLoaded && usesNativeMobileCache()) {
+      void cachedConversationSettings(userId, chatId).then((cached) => {
+        if (!cached) return;
+        // The network may have won the race; never overwrite a settled result.
+        if (!get().settings[chatId]?.isLoading) return;
+        set((state) => ({
+          settings: {
+            ...state.settings,
+            [chatId]: {
+              ...(state.settings[chatId] || defaultSettings),
+              category: (cached.category as ChatCategory | null) ?? null,
+              profile: (cached.profile as ContactProfile | null) ?? null,
+              smartCards: (cached.smartCards as SmartCard[]) ?? [],
+              clarificationDismissed: state.settings[chatId]?.clarificationDismissed ?? false,
+              // Still loading: this is a starting picture, not the answer.
+              isLoading: true,
+            },
+          },
+        }));
+      }).catch(() => undefined);
+    }
 
     try {
       const [categoryRes, profileRes, cardsRes] = await Promise.all([
@@ -65,6 +97,14 @@ export const useConversationSettingsStore = create<ConversationSettingsState>((s
           .order('priority', { ascending: false }),
       ]);
 
+      if (userId) {
+        void cacheConversationSettings(userId, chatId, {
+          category: categoryRes.data?.category ?? null,
+          profile: profileRes.data ?? null,
+          smartCards: cardsRes.data ?? [],
+        }).catch(() => undefined);
+      }
+
       set((state) => ({
         settings: {
           ...state.settings,
@@ -73,9 +113,7 @@ export const useConversationSettingsStore = create<ConversationSettingsState>((s
             profile: profileRes.data ?? null,
             smartCards: cardsRes.data ?? [],
             isLoading: false,
-            // Preserve dismissal state: if profile now has relationship_context, keep dismissed
-            clarificationDismissed: (profileRes.data?.relationship_context != null)
-              || (state.settings[chatId]?.clarificationDismissed ?? false),
+            clarificationDismissed: state.settings[chatId]?.clarificationDismissed ?? false,
           },
         },
       }));
@@ -95,7 +133,11 @@ export const useConversationSettingsStore = create<ConversationSettingsState>((s
     set((state) => ({
       settings: {
         ...state.settings,
-        [chatId]: { ...(state.settings[chatId] || defaultSettings), category },
+        [chatId]: {
+          ...(state.settings[chatId] || defaultSettings),
+          category,
+          clarificationDismissed: true,
+        },
       },
     }));
 
@@ -125,8 +167,10 @@ export const useConversationSettingsStore = create<ConversationSettingsState>((s
             profile: current.profile
               ? { ...current.profile, ...updates }
               : { id: '', user_id: userId, contact_id: null, chat_id: chatId, display_name: null, email: null, phone_number: null, location: null, key_facts: [], relationship_context: null, ai_instruction: null, created_at: '', updated_at: '', ...updates } as ContactProfile,
-            // Once the relationship is saved, dismiss the card
-            clarificationDismissed: updates.relationship_context !== undefined ? true : current.clarificationDismissed,
+            // Saving relationship context changes the card into a concise
+            // confirmation of what Claire will remember. Only an explicit
+            // dismissal removes that surface.
+            clarificationDismissed: current.clarificationDismissed,
           },
         },
       };

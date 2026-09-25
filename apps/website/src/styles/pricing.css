@@ -89,11 +89,6 @@
   background-position: 0 26px;
 }
 
-.pr-hero h1 {
-  font-size: clamp(2.6rem, 5.6vw, 5.2rem);
-  line-height: 0.92;
-}
-
 .pr-hero .hero-actions {
   margin-bottom: 44px;
 }
@@ -101,7 +96,7 @@
 /* Cadence dial: the ladder in one glance, directly under the hero claim. */
 .pr-dial {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
   text-align: left;
 }
@@ -277,12 +272,13 @@
 /* ---------- personal tiers ---------- */
 
 .pr-tiers {
-  padding: 128px 0 0;
+  padding: 72px 0 0;
 }
 
 .pr-tier-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 560px);
+  justify-content: center;
   align-items: stretch;
   gap: 14px;
 }
@@ -414,14 +410,15 @@
 
 .pr-tier .button {
   width: 100%;
-  margin-top: auto;
+  margin: 2px 0 24px;
   justify-content: center;
   gap: 14px;
 }
 
 .pr-tier-note {
   display: block;
-  margin-top: 14px;
+  margin-top: auto;
+  padding-top: 14px;
   color: var(--neutral-600);
   font-size: 9.5px;
   line-height: 1.45;

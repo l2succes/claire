@@ -27,6 +27,7 @@ RUN apt-get update && apt-get install -y \
     curl \
     build-essential \
     python3 \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
@@ -40,6 +41,9 @@ WORKDIR /app
 # @claire/platform-catalog dependency without copying the whole repository.
 FROM base AS manifests
 COPY package.json bun.lockb ./
+# Bun resolves every root-level patchedDependency before applying the workspace
+# filter, so the patch sources must be present in both install stages.
+COPY patches ./patches
 COPY apps/client/package.json ./apps/client/package.json
 COPY apps/desktop/package.json ./apps/desktop/package.json
 COPY apps/server/package.json ./apps/server/package.json

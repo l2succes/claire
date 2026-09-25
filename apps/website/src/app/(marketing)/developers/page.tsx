@@ -96,7 +96,7 @@ const lanes = [
   {
     tint: 'lane-lavender',
     number: '04',
-    icon: 'sparkles',
+    icon: 'chat',
     title: 'AI and plugins',
     body: 'Provider-neutral inference, Ask Claire, typed tools, permissions, approvals, and auditable automation.',
     tags: ['Typed tools', 'Receipts', 'BYO model'],
@@ -142,7 +142,7 @@ export default function DevelopersPage() {
               <span className="status-dot" />
               Open product reference
             </div>
-            <h1>
+            <h1 className="marketing-title">
               Build the place
               <br />
               where conversations
@@ -152,7 +152,7 @@ export default function DevelopersPage() {
             <p>
               Claire is an AI-native, multi-network messenger with open references for mobile,
               desktop, connectors, and conversation plugins. Clone it, run the whole stack in mock
-              mode, and make one part dramatically better.
+              mode, and improve one part at a time.
             </p>
             <div className="dev-hero-actions">
               <a className="button button-dark" href="#start">
@@ -217,7 +217,7 @@ export default function DevelopersPage() {
             </div>
             <div className="dev-float dev-float-two">
               <span className="dev-float-mark is-lime">
-                <HeroIcon name="sparkles" />
+                <HeroIcon name="chat" />
               </span>
               <div>
                 <b>Plugin approved</b>
@@ -509,7 +509,7 @@ export default function DevelopersPage() {
               <article className="dev-approval">
                 <header>
                   <span className="dev-approval-mark">
-                    <HeroIcon name="sparkles" />
+                    <HeroIcon name="chat" />
                   </span>
                   <div>
                     <small>CLAIRE WANTS TO RUN AN ACTION</small>
@@ -618,7 +618,7 @@ export default function DevelopersPage() {
                   </article>
                   <i aria-hidden="true" />
                   <article className="accent">
-                    <HeroIcon name="sparkles" />
+                    <HeroIcon name="chat" />
                     <span>Approved action</span>
                   </article>
                 </div>
@@ -725,7 +725,7 @@ export default function DevelopersPage() {
               <span className="claire-underline">Operate with care.</span>
             </h2>
             <p>
-              The community can make Claire broader and more trustworthy: connectors for underserved
+              The community can make Claire more useful and more trustworthy: connectors for underserved
               networks, local-first deployments, plugins for real workflows, translations,
               accessibility, and deeper platform-native experiences.
             </p>

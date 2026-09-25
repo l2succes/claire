@@ -10,6 +10,8 @@ export default function AuthLayout() {
           presentation: 'modal'
         }} 
       />
+      <Stack.Screen name="connections/[platform]" options={{ headerShown: false }} />
+      <Stack.Screen name="legal" options={{ headerShown: false, presentation: 'modal' }} />
     </Stack>
   );
 }

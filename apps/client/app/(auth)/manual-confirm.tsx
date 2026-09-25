@@ -2,6 +2,7 @@ import { View, Text, TextInput, TouchableOpacity, Alert } from 'react-native';
 import { useState } from 'react';
 import { router } from 'expo-router';
 import { supabase } from '../../services/supabase';
+import { userFacingErrorMessage } from '../../services/api-errors';
 
 export default function ManualConfirmScreen() {
   const [accessToken, setAccessToken] = useState('');
@@ -22,7 +23,7 @@ export default function ManualConfirmScreen() {
       });
 
       if (error) {
-        Alert.alert('Error', error.message);
+        Alert.alert('Error', userFacingErrorMessage(error, 'Failed to confirm'));
         return;
       }
 
@@ -30,8 +31,8 @@ export default function ManualConfirmScreen() {
         Alert.alert('Success', 'Email confirmed and logged in!');
         router.replace('/(auth)/login');
       }
-    } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to confirm');
+    } catch (error) {
+      Alert.alert('Error', userFacingErrorMessage(error, 'Failed to confirm'));
     } finally {
       setLoading(false);
     }

@@ -1,9 +1,10 @@
 import { useEffect } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
-import { Check, ChevronLeft, MessageCircle, Sparkles } from 'lucide-react-native';
+import { ScrollView, Text, View } from 'react-native';
+import { Check, ChevronLeft, ListChecks, MessageCircle } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { colors, mobileType, radius, space } from '@claire/design-system';
 import { MobileHeader, MobileIconButton, SectionLabel } from '../../components/mobile/claire-mobile';
+import { FeedbackPressable } from '../../components/mobile/pressable-feedback';
 import { useChatPreferencesStore, type ChatPlusDefault } from '../../stores/chatPreferencesStore';
 
 const options: { value: ChatPlusDefault; title: string; detail: string }[] = [
@@ -31,7 +32,7 @@ export default function ChatSettingsScreen() {
           {options.map(option => {
             const selected = plusDefault === option.value;
             return (
-              <Pressable
+              <FeedbackPressable
                 key={option.value}
                 testID={`chat-plus-default-${option.value}`}
                 accessibilityRole="button"
@@ -50,14 +51,14 @@ export default function ChatSettingsScreen() {
                 })}
               >
                 <View style={{ width: 40, height: 40, borderRadius: 13, backgroundColor: option.value === 'reply-options' ? colors.lavender : colors.neutral[100], alignItems: 'center', justifyContent: 'center' }}>
-                  {option.value === 'reply-options' ? <Sparkles size={18} color={colors.ink} /> : <MessageCircle size={18} color={colors.ink} />}
+                  {option.value === 'reply-options' ? <ListChecks size={18} color={colors.ink} /> : <MessageCircle size={18} color={colors.ink} />}
                 </View>
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>{option.title}</Text>
                   <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{option.detail}</Text>
                 </View>
                 {selected ? <Check size={18} color={colors.ink} /> : null}
-              </Pressable>
+              </FeedbackPressable>
             );
           })}
         </View>

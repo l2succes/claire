@@ -6,6 +6,7 @@ import { colors, mobileType, radius, space } from '@claire/design-system';
 import { supabase } from '../../services/supabase';
 import { platformsApi } from '../../services/platforms';
 import { PlatformStatus } from '../../types/platform';
+import { userFacingErrorMessage } from '../../services/api-errors';
 
 type Step = 'email' | 'code';
 
@@ -33,7 +34,7 @@ export function EmailOtpForm() {
       setEmail(normalizedEmail);
       setStep('code');
     } catch (error) {
-      Alert.alert('Could not send a code', error instanceof Error ? error.message : 'Please try again.');
+      Alert.alert('Could not send a code', userFacingErrorMessage(error, 'Please try again.'));
     } finally {
       setLoading(false);
     }
@@ -64,7 +65,7 @@ export function EmailOtpForm() {
         router.replace('/(auth)/login');
       }
     } catch (error) {
-      Alert.alert('That code did not work', error instanceof Error ? error.message : 'Request a new code and try again.');
+      Alert.alert('That code did not work', userFacingErrorMessage(error, 'Request a new code and try again.'));
     } finally {
       setLoading(false);
     }

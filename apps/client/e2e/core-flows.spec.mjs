@@ -44,6 +44,11 @@ test.describe('Core loop — mock backend', () => {
     await page.goto('/signin');
 
     await expect(page.getByTestId('signin-screen')).toBeVisible();
+    await expect(page.getByTestId('welcome-previous')).toHaveCount(0);
+    await expect(page.getByTestId('welcome-next')).toHaveCount(0);
+    await expect(page.getByTestId('welcome-indicator-0')).toBeVisible();
+    await expect(page.getByTestId('welcome-indicator-1')).toBeVisible();
+    await expect(page.getByTestId('welcome-indicator-2')).toBeVisible();
     await expect(page.getByTestId('google-sign-in-signin')).toBeVisible();
     await page.getByTestId('signin-use-email').click();
     await expect(page.getByTestId('signin-email-input')).toBeVisible();
@@ -302,45 +307,162 @@ test.describe('Core loop — mock backend', () => {
     );
   });
 
-  test('Ask Claire explains the conversation without sending a message', async ({ page }) => {
+  test('conversation Ask Claire keeps actions scoped to one chat', async ({ page }) => {
     await signIn(page);
-    await page.locator('[data-testid^="message-card-"]').first().click();
-    await expect(page.getByTestId('chat-screen')).toBeVisible({ timeout: 10_000 });
-
-    await page.getByTestId('ask-claire-button').click();
-    await expect(page.getByTestId('conversation-explanation')).toContainText('Alice is confirming the report timeline.');
-    await expect(page.getByTestId('chat-input')).toHaveValue('');
+    const scopedRequests = [];
+    await page.route(/\/ai\/assistant\/conversations\/mock-chat-wa-alice(?:\/messages)?(?:\?|$)/, async (route) => {
+      const request = route.request();
+      if (request.method() === 'GET') {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data: { thread: null, turns: [] } }) });
+        return;
+      }
+      const body = JSON.parse(request.postData() || '{}');
+      scopedRequests.push(body);
+      const answer = 'Alice is confirming the report timeline.';
+      const result = { answer, citations: [], actions: [], indexing: { status: 'ready', indexedCount: 1, totalCount: 1 }, assistantTurn: { id: 'scoped-answer', role: 'assistant', content: answer, citations: [], actions: [], status: 'completed', created_at: new Date().toISOString() } };
+      await route.fulfill({ status: 200, contentType: 'text/event-stream', body: `data: ${JSON.stringify({ type: 'data-claire-result', data: result })}\n\n` });
+    });
+    await page.goto('/chat/assistant/mock-chat-wa-alice?name=Alice%20(WA)');
+    await expect(page.getByTestId('conversation-assistant-screen')).toBeVisible();
+    await expect(page.getByTestId('conversation-assistant-scope')).toContainText('Only Alice (WA)');
+    await expect(page.getByTestId('conversation-assistant-catch-me-up')).toBeVisible();
+    await expect(page.getByTestId('conversation-assistant-open-loops')).toBeVisible();
+    await expect(page.getByTestId('conversation-assistant-tone')).toBeVisible();
+    await expect(page.getByTestId('conversation-assistant-find')).toHaveCount(0);
+    await page.getByTestId('conversation-assistant-catch-me-up').click();
+    await expect(page.getByTestId('conversation-assistant-screen')).toContainText('Alice is confirming the report timeline.');
+    expect(scopedRequests).toHaveLength(1);
+    expect(scopedRequests[0].question).toContain('this conversation');
   });
 
   test('global Ask Claire searches messages and opens a cited source', async ({ page }) => {
     await signIn(page);
-    await expect(page.getByTestId('open-ask-claire')).toBeVisible({ timeout: 8_000 });
-    await page.getByTestId('open-ask-claire').click();
+    await page.goto('/ask-claire');
 
     await expect(page.getByTestId('assistant-screen')).toBeVisible({ timeout: 8_000 });
+    await page.getByTestId('assistant-new-thread').click();
     await page.getByTestId('assistant-input').fill('Where did I mention meeting Alice?');
     await page.getByTestId('assistant-send').click();
 
     await expect(page.getByTestId('assistant-turn-list')).toContainText('You discussed meeting Alice after the report is sent.');
-    await expect(page.getByTestId('assistant-sources')).toContainText("Hi! I'll send you the report by Friday");
-    await expect(page.locator('[data-testid^="assistant-source-"]')).toHaveCount(3);
+    await expect(page.getByTestId('assistant-sources')).toContainText('Sources');
     await page.getByTestId('assistant-sources-toggle').click();
-    await expect(page.locator('[data-testid^="assistant-source-"]')).toHaveCount(5);
+    await expect(page.getByTestId('assistant-sources')).toContainText("Hi! I'll send you the report by Friday");
+    await expect(page.locator('[data-testid^="assistant-source-"]')).toHaveCount(1);
     await page.getByTestId('assistant-source-chatmsg-1').click();
     await expect(page.getByTestId('chat-screen')).toBeVisible({ timeout: 8_000 });
     await expect(page).toHaveURL(/highlightMessageId=chatmsg-1/);
     await expect(page.getByTestId('message-bubble-chatmsg-1-incoming')).toHaveCSS('border-top-width', '2px');
   });
 
+  test('an untouched Ask Claire draft never appears in Recent', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 320 });
+    await signIn(page);
+    await page.goto('/ask-claire');
+    await expect(page.getByTestId('assistant-home')).toBeVisible();
+    await expect(page.getByTestId('claire-tool-attention')).toHaveCount(1);
+    await expect(page.getByTestId('claire-tool-find')).toHaveCount(1);
+    await expect(page.getByTestId('claire-tool-catch-me-up')).toHaveCount(0);
+    await expect(page.getByTestId('claire-tool-tone')).toHaveCount(0);
+    await expect(page.getByTestId('assistant-recommendations')).toHaveCount(0);
+    const homeScroll = page.getByTestId('assistant-home');
+    await homeScroll.evaluate((element) => { element.scrollTop = 200; });
+    await expect.poll(() => homeScroll.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+
+    let createRequests = 0;
+    page.on('request', (request) => {
+      if (request.method() === 'POST' && new URL(request.url()).pathname.endsWith('/ai/assistant/threads')) createRequests += 1;
+    });
+    await page.getByTestId('assistant-new-thread').click();
+    await expect(page.getByTestId('assistant-turn-list')).toBeVisible();
+    await expect(page.getByTestId('assistant-answer-bubble')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Back to Ask Claire' }).click();
+    await expect(page.getByTestId('assistant-home')).toBeVisible();
+    await expect(page.locator('[data-testid^="assistant-thread-"]')).toHaveCount(0);
+    expect(createRequests).toBe(0);
+
+    await page.getByTestId('assistant-new-thread').click();
+    await page.getByTestId('assistant-input').fill('What happened here?');
+    await page.getByTestId('assistant-send').click();
+    await expect(page.getByTestId('assistant-answer-bubble')).toHaveCount(1);
+    await expect(page.getByTestId('assistant-answer-bubble')).toContainText('You discussed meeting Alice');
+    await page.getByRole('button', { name: 'Back to Ask Claire' }).click();
+    await expect(page.locator('[data-testid^="assistant-thread-"]')).toHaveCount(1);
+  });
+
+  test('Ask Claire conversation header compacts on scroll and skips empty answers', async ({ page }) => {
+    const thread = { id: 'test-long-thread', title: 'What commitments are still unresolved?', chat_id: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+    const turns = Array.from({ length: 12 }, (_, index) => [
+      { id: `question-${index}`, role: 'user', content: `Question ${index + 1}`, citations: [], created_at: new Date().toISOString() },
+      { id: `answer-${index}`, role: 'assistant', content: `Answer ${index + 1} with context from the conversation.`, citations: [], created_at: new Date().toISOString() },
+    ]).flat();
+    turns.push({ id: 'empty-answer', role: 'assistant', content: '', citations: [], created_at: new Date().toISOString() });
+    await page.route('**/ai/assistant/threads', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data: [thread] }) });
+    });
+    await page.route('**/ai/assistant/threads/test-long-thread', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data: { thread, turns } }) });
+    });
+
+    await signIn(page);
+    await page.goto('/ask-claire');
+    await page.getByTestId(`assistant-thread-${thread.id}`).click();
+    const title = page.getByText(thread.title, { exact: true });
+    await expect(title).toBeVisible();
+    await expect(page.getByTestId('assistant-answer-bubble')).toHaveCount(12);
+    const expandedSize = await title.evaluate((element) => parseFloat(getComputedStyle(element).fontSize));
+    await page.getByTestId('assistant-turn-list').evaluate((element) => { element.scrollTop = 360; });
+    await expect.poll(() => title.evaluate((element) => parseFloat(getComputedStyle(element).fontSize))).toBeLessThan(expandedSize);
+    await page.getByTestId('assistant-turn-list').evaluate((element) => { element.scrollTop = 0; });
+    await expect.poll(() => title.evaluate((element) => parseFloat(getComputedStyle(element).fontSize))).toBe(expandedSize);
+  });
+
+  test('an Ask Claire home tool starts and saves a conversation', async ({ page }) => {
+    await signIn(page);
+    await page.goto('/ask-claire');
+    await page.getByTestId('claire-tool-attention').click();
+    await expect(page.getByTestId('assistant-answer-bubble')).toContainText('You discussed meeting Alice');
+    await page.getByRole('button', { name: 'Back to Ask Claire' }).click();
+    await expect(page.locator('[data-testid^="assistant-thread-"]')).toHaveCount(1);
+  });
+
+  test('global Find opens a draft and sends an evidence-seeking question only after submission', async ({ page }) => {
+    await signIn(page);
+    await page.goto('/ask-claire');
+    await expect(page.getByTestId('assistant-home')).toBeVisible();
+
+    const questions = [];
+    page.on('request', (request) => {
+      if (request.method() === 'POST' && new URL(request.url()).pathname.endsWith('/ai/assistant/messages')) {
+        questions.push(JSON.parse(request.postData() || '{}'));
+      }
+    });
+    await page.getByTestId('claire-tool-find').click();
+    await expect(page.getByTestId('assistant-scope')).toContainText('All conversations');
+    await expect(page.getByTestId('assistant-input')).toHaveAttribute('placeholder', 'Describe what you’re looking for…');
+    expect(questions).toHaveLength(0);
+
+    await page.getByTestId('assistant-input').fill('the plan to meet Alice');
+    await page.getByTestId('assistant-send').click();
+    await expect(page.getByTestId('assistant-answer-bubble')).toContainText('You discussed meeting Alice');
+    expect(questions).toHaveLength(1);
+    expect(questions[0].question).toContain('the plan to meet Alice');
+    expect(questions[0].question).toContain('Cite the exact messages');
+    expect(questions[0].chatIds).toEqual([]);
+  });
+
   test('Ask Claire @ targeting sends the selected conversation scope', async ({ page }) => {
     await signIn(page);
-    await page.getByTestId('open-ask-claire').click();
+    await page.goto('/ask-claire');
     await expect(page.getByTestId('assistant-screen')).toBeVisible({ timeout: 8_000 });
+    await page.getByTestId('assistant-new-thread').click();
 
     await page.getByTestId('assistant-input').fill('@');
     await expect(page.getByTestId('assistant-mention-candidate-mock-chat-wa-alice')).toBeVisible({ timeout: 5_000 });
     await page.getByTestId('assistant-mention-candidate-mock-chat-wa-alice').click();
     await expect(page.getByTestId('assistant-mention-mock-chat-wa-alice')).toBeVisible();
+    await expect(page.getByTestId('assistant-scope')).toContainText('Only Alice (WA)');
+    await expect(page.getByTestId('assistant-input')).toHaveValue('');
 
     await page.getByTestId('assistant-input').fill('What did we decide?');
     await page.getByTestId('assistant-send').click();
@@ -923,6 +1045,8 @@ const MOCK_IG_SESSION_CONNECTED = {
  * Must be called AFTER mockBackend() since Playwright routes match last-registered first.
  */
 async function mockConnectFlow(page, platformOverrides = {}) {
+  let telegramStarted = false;
+  let telegramVerified = false;
   // Override the generic platforms/** catch-all with a more specific handler
   // that handles connect/verify/status sub-paths correctly.
   await page.route('**/platforms/**', async (route) => {
@@ -931,6 +1055,7 @@ async function mockConnectFlow(page, platformOverrides = {}) {
 
     // Telegram connect — returns awaiting_auth + authData to trigger code step
     if (url.includes('/telegram/connect') && method === 'POST') {
+      telegramStarted = true;
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -945,6 +1070,9 @@ async function mockConnectFlow(page, platformOverrides = {}) {
 
     // Telegram verify — returns connected session
     if (url.includes('/telegram/verify') && method === 'POST') {
+      // This is intentionally an E2E mock boundary: the production Telegram
+      // POST /verify bridge route is still tracked as a server follow-up.
+      telegramVerified = true;
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -956,12 +1084,12 @@ async function mockConnectFlow(page, platformOverrides = {}) {
       return;
     }
 
-    // Telegram status — returns connected after verify
+    // Telegram status — disconnected before start, pending during entry, then connected.
     if (url.includes('/telegram/status')) {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ sessions: [MOCK_TG_SESSION_CONNECTED] }),
+        body: JSON.stringify({ sessions: telegramVerified ? [MOCK_TG_SESSION_CONNECTED] : telegramStarted ? [MOCK_TG_SESSION_CONNECTING] : [] }),
       });
       return;
     }
@@ -1030,9 +1158,47 @@ test.describe('Platform connect flows — mock backend', () => {
     // The default fixture has an already-connected WhatsApp session.
     await page.getByTestId('platform-selector-whatsapp').click();
 
-    await expect(page.getByTestId('platform-connection-status')).toBeVisible({ timeout: 5_000 });
-    await expect(page.getByText('Already connected')).toBeVisible();
-    await expect(page.getByText('Requesting pairing code...')).not.toBeVisible();
+    await expect(page.getByTestId('connection-flow-whatsapp')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId('connection-success')).toBeVisible();
+    await expect(page.getByText('WhatsApp is connected')).toBeVisible();
+    await expect(page.getByText('Getting your link code…')).not.toBeVisible();
+  });
+
+  test('WhatsApp connect flow — validates, copies, and explains phone linking', async ({ page }) => {
+    let started = false;
+    const waitingSession = {
+      id: 'wa-session-2',
+      user_id: MOCK_USER_ID,
+      platform: 'whatsapp',
+      status: 'awaiting_auth',
+      created_at: new Date().toISOString(),
+      authData: { sessionId: 'wa-session-2', pairingCode: 'ABCD-EFGH' },
+    };
+    await page.route('**/platforms/whatsapp/**', async (route) => {
+      const url = route.request().url();
+      if (url.includes('/connect')) {
+        started = true;
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, session: waitingSession, authData: waitingSession.authData }) });
+        return;
+      }
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ sessions: started ? [waitingSession] : [] }) });
+    });
+
+    await page.goto('/login');
+    await page.getByTestId('platform-selector-whatsapp').click();
+    await expect(page.getByTestId('connection-flow-whatsapp')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByText('Enter your WhatsApp number')).toBeVisible();
+
+    await page.getByTestId('connection-phone-input').fill('123');
+    await page.getByRole('button', { name: 'Get link code' }).click();
+    await expect(page.getByTestId('connection-phone-error')).toBeVisible();
+
+    await page.getByTestId('connection-phone-input').fill('+15550001234');
+    await page.getByRole('button', { name: 'Get link code' }).click();
+    await expect(page.getByTestId('whatsapp-pairing-code')).toHaveText('ABCD EFGH');
+    await expect(page.getByText(/Link with phone number instead/).first()).toBeVisible();
+    await page.getByTestId('whatsapp-copy-code').click();
+    await expect(page.getByText('Copied')).toBeVisible();
   });
 
   // TG-1. Telegram connect: phone step renders
@@ -1040,16 +1206,14 @@ test.describe('Platform connect flows — mock backend', () => {
     await page.goto('/login');
     await expect(page.getByTestId('platform-login-screen')).toBeVisible();
 
-    // Click Telegram tile to open auth modal
+    // Open the full-screen Telegram flow.
     await page.getByTestId('platform-selector-telegram').click();
 
-    // Auth modal opens
-    await expect(page.getByTestId('platform-auth-modal')).toBeVisible({ timeout: 5_000 });
-
     // Phone entry step should be visible
-    await expect(page.getByTestId('telegram-phone-step')).toBeVisible({ timeout: 5_000 });
-    await expect(page.getByTestId('telegram-phone-input')).toBeVisible();
-    await expect(page.getByTestId('telegram-send-code-button')).toBeVisible();
+    await expect(page.getByTestId('connection-flow-telegram')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByText('Enter your Telegram number')).toBeVisible();
+    await expect(page.getByTestId('connection-phone-input')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Send verification code' })).toBeVisible();
   });
 
   // TG-2. Telegram connect: phone → code → connected
@@ -1081,25 +1245,25 @@ test.describe('Platform connect flows — mock backend', () => {
     await page.goto('/login');
     await expect(page.getByTestId('platform-login-screen')).toBeVisible();
 
-    // Open Telegram auth modal
+    // Open Telegram connection guide.
     await page.getByTestId('platform-selector-telegram').click();
-    await expect(page.getByTestId('platform-auth-modal')).toBeVisible({ timeout: 5_000 });
-    await expect(page.getByTestId('telegram-phone-step')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId('connection-flow-telegram')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByText('Enter your Telegram number')).toBeVisible({ timeout: 5_000 });
 
     // Enter phone number and tap Send Code
-    await page.getByTestId('telegram-phone-input').fill('+15550001234');
-    await page.getByTestId('telegram-send-code-button').click();
+    await page.getByTestId('connection-phone-input').fill('+15550001234');
+    await page.getByRole('button', { name: 'Send verification code' }).click();
 
     // Code entry step should appear (mock returns awaiting_auth with authData)
-    await expect(page.getByTestId('telegram-code-step')).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByText('Check Telegram for your code')).toBeVisible({ timeout: 8_000 });
     await expect(page.getByTestId('telegram-code-input')).toBeVisible();
 
     // Enter 6-digit verification code
     await page.getByTestId('telegram-code-input').fill('123456');
-    await page.getByTestId('telegram-verify-button').click();
+    await page.getByRole('button', { name: 'Verify and connect' }).click();
 
     // Success state should appear (mock returns connected)
-    await expect(page.getByTestId('platform-auth-success')).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByTestId('connection-success')).toBeVisible({ timeout: 8_000 });
   });
 
   // IG-1. Instagram connect: desktop companion guidance renders
@@ -1108,50 +1272,71 @@ test.describe('Platform connect flows — mock backend', () => {
     await expect(page.getByTestId('platform-login-screen')).toBeVisible();
 
     await page.getByTestId('platform-selector-instagram').click();
-    await expect(page.getByTestId('platform-auth-modal')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId('connection-flow-instagram')).toBeVisible({ timeout: 5_000 });
 
     await expect(page.getByTestId('instagram-companion-required')).toBeVisible({ timeout: 5_000 });
-    await expect(
-      page.getByTestId('instagram-companion-required').getByText('Connect with Claire Desktop')
-    ).toBeVisible();
-    await expect(page.getByText(/never ask you to paste a browser cookie/i)).toBeVisible();
+    await expect(page.getByText('Finish once in Claire Desktop')).toBeVisible();
+    await expect(page.getByText(/never ask you to paste browser cookies/i)).toBeVisible();
   });
 
   // IG-2. Instagram connect: companion instructions replace bridge credential UI
   test('Instagram connect flow — does not expose the legacy credential path', async ({ page }) => {
     await page.goto('/login');
     await page.getByTestId('platform-selector-instagram').click();
-    await expect(page.getByTestId('platform-auth-modal')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId('connection-flow-instagram')).toBeVisible({ timeout: 5_000 });
 
     await expect(page.getByTestId('instagram-login-trigger')).toHaveCount(0);
     await expect(page.getByTestId('instagram-cookie-input')).toHaveCount(0);
     await expect(page.getByTestId('instagram-credentials-form')).toHaveCount(0);
-    await expect(page.getByTestId('instagram-companion-refresh-button')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'I’ve finished — check connection' })).toBeVisible();
   });
 
   // IG-3. Instagram connect: users can return to the refreshed platform state
-  test('Instagram connect flow — refresh action returns to platform state', async ({ page }) => {
+  test('Instagram connect flow — check action preserves the guidance while disconnected', async ({ page }) => {
     await page.goto('/login');
     await page.getByTestId('platform-selector-instagram').click();
-    await expect(page.getByTestId('platform-auth-modal')).toBeVisible({ timeout: 5_000 });
-    await page.getByTestId('instagram-companion-refresh-button').click();
-    await expect(page.getByTestId('platform-auth-modal')).toHaveCount(0);
+    await expect(page.getByTestId('connection-flow-instagram')).toBeVisible({ timeout: 5_000 });
+    await page.getByRole('button', { name: 'I’ve finished — check connection' }).click();
+    await expect(page.getByTestId('instagram-companion-required')).toBeVisible();
   });
 
   test('iMessage connect flow — requires the Mac companion instead of a generic QR code', async ({ page }) => {
     await page.goto('/login');
     await page.getByTestId('platform-selector-imessage').click();
-    await expect(page.getByTestId('platform-auth-modal')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId('connection-flow-imessage')).toBeVisible({ timeout: 5_000 });
 
     await expect(page.getByTestId('imessage-companion-required')).toBeVisible({ timeout: 5_000 });
-    await expect(page.getByText(/Claire Desktop on your Mac/i)).toBeVisible();
+    await expect(page.getByText(/Claire Desktop on a Mac/i)).toBeVisible();
     await expect(page.getByTestId('qr-code-display')).toHaveCount(0);
-    await expect(page.getByTestId('imessage-companion-refresh-button')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'I’ve finished — check connection' })).toBeVisible();
   });
 
   // ---------------------------------------------------------------------------
   // Auto-reply rules (#40)
   // ---------------------------------------------------------------------------
+
+  test('Profile destinations open Connections, People, and Auto-Reply Rules', async ({ page }) => {
+    await page.route('**/auto-reply**', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ rules: [] }) });
+    });
+
+    await signIn(page);
+    await page.click('text=Settings');
+    await expect(page.getByTestId('settings-screen')).toBeVisible({ timeout: 8_000 });
+
+    await page.getByTestId('settings-connections').click();
+    await expect(page.getByTestId('connections-screen')).toBeVisible({ timeout: 8_000 });
+    await page.getByRole('button', { name: 'Back to Profile' }).click();
+    await expect(page.getByTestId('settings-screen')).toBeVisible();
+
+    await page.getByTestId('settings-relationships').click();
+    await expect(page.getByTestId('contacts-screen')).toBeVisible({ timeout: 8_000 });
+    await page.getByRole('button', { name: 'Back', exact: true }).click();
+    await expect(page.getByTestId('settings-screen')).toBeVisible();
+
+    await page.getByTestId('settings-auto-reply').click();
+    await expect(page.getByTestId('auto-reply-settings-screen')).toBeVisible({ timeout: 8_000 });
+  });
 
   test('auto-reply rules screen renders from settings', async ({ page }) => {
     const MOCK_RULES = [];

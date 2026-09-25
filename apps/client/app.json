@@ -2,7 +2,7 @@
   "expo": {
     "name": "Claire",
     "slug": "claire",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -19,7 +19,12 @@
       "bundleIdentifier": "com.claire.app",
       "infoPlist": {
         "NSCameraUsageDescription": "This app uses the camera to scan QR codes for WhatsApp login.",
+        "NSUserActivityTypes": ["INSendMessageIntent"],
         "ITSAppUsesNonExemptEncryption": false
+      },
+      "entitlements": {
+        "com.apple.developer.siri": true,
+        "com.apple.developer.usernotifications.communication": true
       },
       "appleTeamId": "T74H9G4334"
     },
@@ -40,6 +45,15 @@
     "plugins": [
       "expo-dev-client",
       "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#DFFF64",
+          "image": "./assets/splash.png",
+          "imageWidth": 128,
+          "resizeMode": "contain"
+        }
+      ],
       [
         "expo-notifications",
         {
@@ -78,12 +92,16 @@
           "useSQLCipher": true
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      "@bacons/apple-targets"
     ],
     "experiments": {
       "typedRoutes": true
     },
-    "scheme": "claire",
+    "scheme": [
+      "claire",
+      "rc-682e02411e"
+    ],
     "extra": {
       "router": {},
       "eas": {

@@ -50,6 +50,7 @@ router.put('/', requireAuth, validateRequest(deviceSchema), async (req: Request,
     logger.error('Unable to register notification device', error);
     return res.status(500).json({ error: 'Failed to register notification device' });
   }
+  // Device changes replan unsent episodes in the same database transaction.
   return res.json({ success: true, data });
 });
 

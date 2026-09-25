@@ -1,29 +1,37 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { Image } from 'expo-image';
-import { Check, ChevronRight, Laptop, Plus, RefreshCw, Smartphone } from 'lucide-react-native';
-import { router } from 'expo-router';
+import { Check, ChevronLeft, ChevronRight, Laptop, Plus, RefreshCw, Smartphone } from 'lucide-react-native';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { colors, mobileType, radius, space, useIsDesktopLayout } from '@claire/design-system';
 import { host } from '@claire/host';
 import { API_BASE_URL, platformsApi, type PlatformDefinition } from '../../services/platforms';
-import { usePlatformStore } from '../../stores/platformStore';
+import { isPendingPlatformStatus, usePlatformStore } from '../../stores/platformStore';
 import { Platform, PlatformStatus, resolvePlatform } from '../../types/platform';
-import { PlatformIcon } from '../../components/PlatformIcon';
-import { PlatformAuthModal } from '../../components/PlatformAuthModal';
+import { PlatformAuthModal } from '../../features/connections/legacy-platform-auth-modal';
 import { MobileHeader, MobileIconButton, MobileState, SectionLabel } from '../../components/mobile/claire-mobile';
+import { FeedbackPressable } from '../../components/mobile/pressable-feedback';
 import { ConnectionsSkeleton } from '../../components/claire/skeleton';
 import { useAuthStore } from '../../stores/authStore';
+import { readQuerySnapshot, writeQuerySnapshot } from '../../services/mobile-cache';
+import { ConnectionPlatformMark } from '../../features/connections/connection-platform-mark';
+import { ConnectionRow, type ConnectionRowState } from '../../features/connections/connection-row';
+import { RoadmapConnectionRow } from '../../features/connections/roadmap-connection-row';
+import { CONNECTION_PLATFORM_CONFIG, connectionRoute } from '../../features/connections/connection-platform-config';
+import { userFacingErrorMessage } from '../../services/api-errors';
 
 function ConnectionMark({ definition }: { definition: PlatformDefinition }) {
   const platform = resolvePlatform(definition.id);
+  if (platform) return <ConnectionPlatformMark platform={platform} size={46} />;
   return (
     <View style={{ width: 46, height: 46, flexShrink: 0, borderRadius: 15, backgroundColor: definition.accent, alignItems: 'center', justifyContent: 'center' }}>
-      {platform ? <PlatformIcon platform={platform} size={22} color="#FFFFFF" /> : definition.iconUrl ? <Image source={{ uri: definition.iconUrl }} style={{ width: 22, height: 22 }} contentFit="contain" /> : <Text style={{ ...mobileType.label, color: colors.paper }}>{definition.mark}</Text>}
+      {definition.iconUrl ? <Image source={{ uri: definition.iconUrl }} style={{ width: 22, height: 22 }} contentFit="contain" /> : <Text style={{ ...mobileType.label, color: colors.paper }}>{definition.mark}</Text>}
     </View>
   );
 }
 
 export default function ConnectionsScreen() {
+  const { from } = useLocalSearchParams<{ from?: string }>();
   const isDesktop = useIsDesktopLayout();
   const sessions = usePlatformStore(state => state.connectedSessions);
   const fetchSessions = usePlatformStore(state => state.fetchConnectedSessions);
@@ -35,7 +43,7 @@ export default function ConnectionsScreen() {
   const accessToken = useAuthStore(state => state.token);
   const user = useAuthStore(state => state.user);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setError(null);
     try {
       const [catalog, interests] = await Promise.all([
@@ -45,20 +53,54 @@ export default function ConnectionsScreen() {
       ]);
       setDefinitions(catalog);
       setRequested(interests);
+      const userId = useAuthStore.getState().user?.id;
+      if (userId) void writeQuerySnapshot(userId, 'platform-definitions', catalog).catch(() => undefined);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not load connections.');
+      setError(userFacingErrorMessage(cause, 'Could not load connections.'));
     } finally {
       setLoading(false);
     }
-  };
-  useEffect(() => { void load(); }, []);
+  }, [fetchSessions]);
+  // The catalog is effectively static between releases, but this screen threw
+  // it away on every unmount and showed a skeleton again on the way back in.
+  // Seed from the last known answer, then let the focus refresh correct it
+  // behind the rendered list.
+  useEffect(() => {
+    const userId = useAuthStore.getState().user?.id;
+    if (!userId) return;
+    let active = true;
+    void readQuerySnapshot<PlatformDefinition[]>(userId, 'platform-definitions')
+      .then((snapshot) => {
+        if (!active || !snapshot?.data?.length) return;
+        setDefinitions((current) => (current.length ? current : snapshot.data));
+        setLoading(false);
+      })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, []);
+
+  useFocusEffect(useCallback(() => {
+    void load();
+  }, [load]));
 
   const connectedPlatforms = useMemo(() => new Set(sessions.filter(session => session.status === PlatformStatus.CONNECTED).map(session => session.platform)), [sessions]);
   const canConnectOnMobile = (definition: PlatformDefinition) => definition.setupSurface === 'phone' && Object.values(Platform).includes(definition.id as Platform);
-  const available = definitions.filter(item => item.supportStatus === 'available' || item.supportStatus === 'beta');
-  const roadmap = definitions.filter(item => item.supportStatus === 'planned' || item.supportStatus === 'unavailable');
+  const { available, otherAvailable, roadmap } = useMemo(() => {
+    const availableItems = definitions.filter(item => item.supportStatus === 'available' || item.supportStatus === 'beta');
+    return {
+      available: availableItems,
+      otherAvailable: availableItems.filter(item => !resolvePlatform(item.id)),
+      roadmap: definitions.filter(item => item.supportStatus === 'planned' || item.supportStatus === 'unavailable'),
+    };
+  }, [definitions]);
 
   const act = async (definition: PlatformDefinition) => {
+    const platform = resolvePlatform(definition.id);
+    const supportedNow = definition.supportStatus === 'available' || definition.supportStatus === 'beta';
+    if (!isDesktop && platform && (supportedNow || connectedPlatforms.has(platform))) {
+      router.push(connectionRoute(platform, 'settings'));
+      return;
+    }
     if (connectedPlatforms.has(definition.id as Platform)) return;
     if (canConnectOnMobile(definition)) {
       setSelected(definition.id as Platform);
@@ -67,7 +109,7 @@ export default function ConnectionsScreen() {
     if (definition.id === Platform.INSTAGRAM && host.name === 'electron' && accessToken) {
       setError(null);
       const result = await host.startInstagramLogin({ apiUrl: API_BASE_URL, accessToken });
-      if (!result.success) setError(result.error || 'Instagram sign-in did not finish.');
+      if (!result.success) setError(userFacingErrorMessage(result.error, 'Instagram sign-in did not finish.'));
       else await load();
       return;
     }
@@ -79,7 +121,7 @@ export default function ConnectionsScreen() {
           return;
         }
         const result = await host.configureCompanion({ apiUrl: API_BASE_URL, accessToken, userId: user.id });
-        if (!result.success) setError(result.error || 'Could not start iMessage sync.');
+        if (!result.success) setError(userFacingErrorMessage(result.error, 'Could not start iMessage sync.'));
         else { setError(null); await load(); }
       } else if (status.imessage === 'needs_permission') {
         await host.openSystemSettings('full_disk_access');
@@ -90,8 +132,12 @@ export default function ConnectionsScreen() {
       return;
     }
     if (definition.supportStatus === 'planned' || definition.supportStatus === 'unavailable') {
-      await platformsApi.requestPlatformInterest(definition.id);
-      setRequested(current => current.includes(definition.id) ? current : [...current, definition.id]);
+      try {
+        await platformsApi.requestPlatformInterest(definition.id);
+        setRequested(current => current.includes(definition.id) ? current : [...current, definition.id]);
+      } catch (cause) {
+        setError(userFacingErrorMessage(cause, `Could not request ${definition.name}.`));
+      }
     }
   };
 
@@ -103,7 +149,7 @@ export default function ConnectionsScreen() {
     const actionLabel = connected ? 'Connected' : isRequested ? 'Requested' : mobileSetup || desktopConnectable ? 'Connect' : definition.setupSurface === 'desktop' || definition.setupSurface === 'mac' ? 'Claire Desktop' : 'Join waitlist';
     return (
       <View key={definition.id}>
-        <Pressable
+        <FeedbackPressable
           accessibilityRole="button"
           accessibilityLabel={`${definition.name}. ${actionLabel}`}
           onPress={() => void act(definition)}
@@ -121,11 +167,35 @@ export default function ConnectionsScreen() {
             </View>
             <ChevronRight size={18} color={colors.neutral[400]} />
           </View>
-        </Pressable>
+        </FeedbackPressable>
         {isLast ? null : <View style={{ height: 1, backgroundColor: colors.neutral[200] }} />}
       </View>
     );
   };
+
+  const renderConnectionRows = (items: PlatformDefinition[]) => (
+    <View style={{ marginTop: space[2], paddingHorizontal: space[3], borderRadius: radius.card, backgroundColor: colors.paper }}>
+      {items.map((definition, index) => {
+        const platform = resolvePlatform(definition.id)!;
+        const config = CONNECTION_PLATFORM_CONFIG[platform];
+        const platformSessions = sessions.filter((session) => session.platform === platform);
+        let state: ConnectionRowState = config.setupSurface === 'desktop' ? 'desktop' : config.setupSurface === 'mac' ? 'mac' : 'available';
+        if (platformSessions.some((session) => session.status === PlatformStatus.CONNECTED)) state = 'connected';
+        else if (platformSessions.some((session) => isPendingPlatformStatus(session.status))) state = 'pending';
+        return (
+          <ConnectionRow
+            key={platform}
+            platform={platform}
+            name={config.name}
+            detail={config.detail}
+            state={state}
+            isLast={index === items.length - 1}
+            onPress={() => void act(definition)}
+          />
+        );
+      })}
+    </View>
+  );
 
   if (isDesktop) {
     return <View style={{ flex: 1, minHeight: 0, flexDirection: 'row', backgroundColor: colors.cream }} testID="desktop-connections-screen">
@@ -142,11 +212,12 @@ export default function ConnectionsScreen() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.cream }}>
+    <View style={{ flex: 1, backgroundColor: colors.cream }} testID="connections-screen">
       <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ paddingBottom: 48 }}>
         <MobileHeader
           title="Connections"
           subtitle="Bring your conversations into Claire."
+          leading={from === 'settings' ? <MobileIconButton label="Back to Profile" onPress={() => router.back()}><ChevronLeft size={20} color={colors.ink} /></MobileIconButton> : undefined}
           actions={<MobileIconButton label="Refresh connections" onPress={() => void load()}><RefreshCw size={18} color={colors.ink} /></MobileIconButton>}
         />
         {loading ? (
@@ -160,30 +231,51 @@ export default function ConnectionsScreen() {
               <Text style={{ ...mobileType.sectionTitle, color: colors.paper }}>One inbox, your choice of networks</Text>
               <Text style={{ ...mobileType.bodySmall, color: colors.neutral[300] }}>Phone-safe setup happens here. Desktop-only connectors tell you when Claire Desktop is required.</Text>
             </View>
-            <View>
-              <SectionLabel title="Connect now" />
-              <View style={{ backgroundColor: colors.paper, borderRadius: radius.card, paddingHorizontal: space[3], marginTop: space[2] }}>
-                {available.map((item, index) => renderRow(item, index === available.length - 1))}
+            {available.some((item) => resolvePlatform(item.id) && CONNECTION_PLATFORM_CONFIG[resolvePlatform(item.id)!].setupSurface === 'phone') ? (
+              <View>
+                <SectionLabel title="Connect on this phone" />
+                {renderConnectionRows(available.filter((item) => {
+                  const platform = resolvePlatform(item.id);
+                  return platform ? CONNECTION_PLATFORM_CONFIG[platform].setupSurface === 'phone' : false;
+                }))}
               </View>
-            </View>
+            ) : null}
+            {available.some((item) => resolvePlatform(item.id) && CONNECTION_PLATFORM_CONFIG[resolvePlatform(item.id)!].setupSurface !== 'phone') ? (
+              <View>
+                <SectionLabel title="Finish on another device" />
+                {renderConnectionRows(available.filter((item) => {
+                  const platform = resolvePlatform(item.id);
+                  return platform ? CONNECTION_PLATFORM_CONFIG[platform].setupSurface !== 'phone' : false;
+                }))}
+              </View>
+            ) : null}
+            {otherAvailable.length ? (
+              <View>
+                <SectionLabel title="Other connections" />
+                <View style={{ backgroundColor: colors.paper, borderRadius: radius.card, paddingHorizontal: space[3], marginTop: space[2] }}>
+                  {otherAvailable.map((item, index) => renderRow(item, index === otherAvailable.length - 1))}
+                </View>
+              </View>
+            ) : null}
             {roadmap.length ? (
               <View>
-                <SectionLabel title="On the roadmap" detail="Vote with a tap" />
+                <SectionLabel title="On the roadmap" detail="Request the networks you want next" />
                 <View style={{ backgroundColor: colors.paper, borderRadius: radius.card, paddingHorizontal: space[3], marginTop: space[2] }}>
-                  {roadmap.map((item, index) => renderRow(item, index === roadmap.length - 1))}
+                  {roadmap.map((item, index) => (
+                    <RoadmapConnectionRow
+                      key={item.id}
+                      definition={item}
+                      requested={requested.includes(item.id)}
+                      isLast={index === roadmap.length - 1}
+                      onRequest={() => void act(item)}
+                    />
+                  ))}
                 </View>
               </View>
             ) : null}
           </View>
         )}
       </ScrollView>
-      <PlatformAuthModal
-        platform={selected}
-        visible={!!selected}
-        onClose={() => setSelected(null)}
-        onSuccess={() => { setSelected(null); void load(); }}
-        existingSession={selected ? sessions.find(session => session.platform === selected && session.status === PlatformStatus.CONNECTED) || null : null}
-      />
     </View>
   );
 }

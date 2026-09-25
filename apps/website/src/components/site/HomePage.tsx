@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 import Link from 'next/link';
 import { HeroIcon } from '@/components/site/HeroIcon';
+import { HeroMobilePreview, MobileStatusBar } from '@/components/site/HeroMobilePreview';
 import { PlatformCatalog, PlatformRail } from '@/components/site/PlatformCatalog';
 import { SiteFooter } from '@/components/site/SiteFooter';
 import { SiteHeader } from '@/components/site/SiteHeader';
+import { WaitlistForm } from '@/components/site/WaitlistForm';
 
 export function HomePage() {
   return (
@@ -13,53 +15,36 @@ export function HomePage() {
         <section className="hero shell">
           <div className="eyebrow">
             <span className="status-dot" />
-            The AI-native multi-chat client
+            Building Claire in public
           </div>
-          <h1>
+          <h1 className="marketing-title">
             All your chats.
             <br />
-            <span>One AI.</span>
+            <span className="claire-underline">One AI.</span>
           </h1>
           <p className="hero-copy">
-            Bring WhatsApp, Telegram, Instagram, and more into one intelligent client. Search every
-            conversation, get relationship-aware help, and never lose track of what you promised.
+            Bring WhatsApp, Telegram, Instagram, and more into one client. Search your conversations,
+            get help that understands the relationship, and keep track of what you promised.
           </p>
-          <div className="hero-actions">
-            <Link className="button button-dark" href="#start">
-              Download
-            </Link>
+          <div className="hero-actions" id="waitlist">
+            <WaitlistForm source="homepage_hero" />
           </div>
           <div className="hero-art" aria-label="Claire application preview">
             <div className="orbit orbit-one" />
             <div className="orbit orbit-two" />
-            <div className="float-note note-one">
-              <span className="platform whatsapp">
-                <img src="https://cdn.simpleicons.org/whatsapp/ffffff" alt="" />
-              </span>
-              <span>
-                <strong>Maya</strong>
-                <small>Can you send that deck?</small>
-              </span>
-            </div>
-            <div className="float-note note-two">
-              <span className="platform claire-ai">
-                <HeroIcon name="sparkles" />
-              </span>
-              <span>
-                <strong>AI found a promise</strong>
-                <small>“I&apos;ll send it tomorrow.”</small>
-              </span>
-            </div>
             <article className="app-window">
               <aside className="app-sidebar">
                 <div className="mini-brand is-logo">
-                  <img src="/assets/brand/claire-app-icon-lime.svg" alt="" />
+                  <img src="/assets/brand/claire-kept-thread-flipped-paper-dot.svg" alt="Claire" />
                 </div>
                 <button className="nav-icon active" aria-label="Home">
                   <HeroIcon name="home" />
                 </button>
                 <button className="nav-icon" aria-label="Inbox">
                   <HeroIcon name="inbox" />
+                </button>
+                <button className="nav-icon" aria-label="Ask Claire">
+                  <img src="/assets/brand/claire-kept-thread-flipped-reverse.svg" alt="" width={24} height={24} style={{ display: 'block', margin: 'auto' }} />
                 </button>
                 <button className="nav-icon" aria-label="Promises">
                   <HeroIcon name="promises" />
@@ -130,7 +115,7 @@ export function HomePage() {
                   <div className="bubble outgoing">Absolutely. I’ll send the updated deck before 10.</div>
                   <div className="promise-card">
                     <span>
-                      <HeroIcon name="sparkles" />
+                      <HeroIcon name="chat" />
                     </span>
                     <div>
                       <small>CLAIRE CAUGHT A PROMISE</small>
@@ -155,7 +140,7 @@ export function HomePage() {
                 <h3>Ask across every conversation.</h3>
                 <div className="brief">
                   <span className="spark">
-                    <HeroIcon name="sparkles" />
+                    <HeroIcon name="chat" />
                   </span>
                   <p>
                     <b>AI brief</b>
@@ -176,6 +161,7 @@ export function HomePage() {
                 <button className="outline-button">View contact memory</button>
               </aside>
             </article>
+            <HeroMobilePreview />
           </div>
         </section>
 
@@ -191,13 +177,78 @@ export function HomePage() {
           </div>
         </section>
 
+        <section className="features shell" id="product">
+          <div className="section-heading">
+            <div>
+              <div className="kicker">ONE CLIENT. A USEFUL AI.</div>
+              <h2>
+                Your chats become one
+                <br />
+                intelligent system.
+              </h2>
+            </div>
+            <p>
+              Claire brings your chat networks together and gives its AI the context to help you find,
+              understand, reply, and follow through.
+            </p>
+          </div>
+          <div className="feature-grid">
+            <article className="feature-card card-lime">
+              <span className="card-number">01</span>
+              <div className="inbox-stack">
+                <div />
+                <div />
+                <div />
+                <span>12</span>
+              </div>
+              <div>
+                <h3>Every network, one client.</h3>
+                <p>Read and reply across connected platforms from one consistent inbox.</p>
+              </div>
+            </article>
+            <article className="feature-card card-sky">
+              <span className="card-number">02</span>
+              <div className="ai-demo">
+                <span>
+                  <HeroIcon name="chat" />
+                </span>
+                <p>“Tell Maya the deck is ready and ask if 11 still works.”</p>
+                <button>Use reply</button>
+              </div>
+              <div>
+                <h3>An AI that knows the thread.</h3>
+                <p>Search across chats and get contextual replies shaped by the conversation.</p>
+              </div>
+            </article>
+            <article className="feature-card card-blush">
+              <span className="card-number">03</span>
+              <div className="promise-demo">
+                <span>
+                  <HeroIcon name="check-circle" />
+                </span>
+                <div>
+                  <small>UP NEXT</small>
+                  <b>Send Q3 deck</b>
+                  <p>Maya · tomorrow, 10:00</p>
+                </div>
+              </div>
+              <div>
+                <h3>Keep promises moving.</h3>
+                <p>
+                  Claire notices commitments in your chats and turns them into gentle follow-through.
+                </p>
+              </div>
+            </article>
+          </div>
+        </section>
+
         <section className="connections shell" id="connections">
           <div className="connections-heading">
             <div>
               <div className="kicker">EVERYONE IS SOMEWHERE DIFFERENT</div>
               <h2>
                 Your people aren’t all in one app.
-                <br />
+                {' '}
                 <span>Claire can be.</span>
               </h2>
             </div>
@@ -342,230 +393,6 @@ export function HomePage() {
             </div>
           </div>
 
-          <div className="hosting-modes" aria-labelledby="hosting-title">
-            <div className="hosting-heading">
-              <div>
-                <div className="kicker">CHOOSE WHERE CLAIRE RUNS</div>
-                <h2 id="hosting-title">Choose how Claire stays online.</h2>
-              </div>
-              <p>
-                Hosting location and device requirements are separate. A desktop may only authorize a
-                cloud connection, or it may be the machine that keeps a local bridge alive.
-              </p>
-            </div>
-            <div className="hosting-grid">
-              <article className="hosting-card hosting-cloud">
-                <div className="hosting-card-top">
-                  <span className="hosting-symbol">
-                    <HeroIcon name="cloud" />
-                  </span>
-                  <span className="status-pill available">AVAILABLE WHERE SUPPORTED</span>
-                </div>
-                <h3>Claire Cloud</h3>
-                <p>
-                  Managed bridges, storage, search, and optional AI stay online when your computer
-                  closes.
-                </p>
-                <ul>
-                  <li>Fastest setup</li>
-                  <li>Automatic bridge updates</li>
-                  <li>Computer can close after setup*</li>
-                </ul>
-              </article>
-              <article className="hosting-card hosting-self">
-                <div className="hosting-card-top">
-                  <span className="hosting-symbol">
-                    <HeroIcon name="server" />
-                  </span>
-                  <span className="status-pill builder">FOR BUILDERS</span>
-                </div>
-                <h3>Self-hosted</h3>
-                <p>
-                  Run Claire’s Bun server, Matrix bridges, Supabase, and Redis on infrastructure you
-                  control.
-                </p>
-                <ul>
-                  <li>Existing Docker workflow</li>
-                  <li>Your host controls availability</li>
-                  <li>Your AI provider remains your choice</li>
-                </ul>
-              </article>
-              <article className="hosting-card hosting-local">
-                <div className="hosting-card-top">
-                  <span className="hosting-symbol">
-                    <HeroIcon name="desktop" />
-                  </span>
-                  <span className="status-pill planned">IN DEVELOPMENT</span>
-                </div>
-                <h3>Private desktop-only</h3>
-                <p>
-                  A future verified mode for local storage, search, and AI with external processing
-                  disabled.
-                </p>
-                <ul>
-                  <li>No guarantee is claimed yet</li>
-                  <li>Offline recovery must pass</li>
-                  <li>Egress will be independently verified</li>
-                </ul>
-              </article>
-            </div>
-            <div className="data-disclosure">
-              <span className="disclosure-icon" aria-hidden="true">
-                <HeroIcon name="info" />
-              </span>
-              <div>
-                <h3>What “local” means today</h3>
-                <p>
-                  Self-hosting keeps Claire’s message store on infrastructure you control. The
-                  original messaging networks still process their messages, and configured external AI
-                  providers may receive selected conversation content. We will not claim “never stored
-                  in the cloud” until desktop-only mode has passed its security and network-egress
-                  review.
-                </p>
-              </div>
-            </div>
-            <p className="hosting-footnote">
-              * iMessage needs its Mac host available. Google Messages depends on the paired Android
-              phone.
-            </p>
-          </div>
-
-          <div className="setup-paths" id="start" aria-labelledby="setup-paths-title">
-            <div className="setup-paths-heading">
-              <div>
-                <div className="kicker">START WITH THE RIGHT HOST</div>
-                <h2 id="setup-paths-title">Cloud convenience or your own stack.</h2>
-              </div>
-              <p>
-                Choose once for your Claire account. Device-dependent connections still state what
-                must remain available, whichever host you use.
-              </p>
-            </div>
-            <div className="setup-path-grid">
-              <article className="setup-path setup-path-cloud">
-                <span className="setup-path-icon">
-                  <HeroIcon name="cloud" />
-                </span>
-                <span className="status-pill available">MANAGED</span>
-                <h3>Start in Claire Cloud</h3>
-                <p>
-                  Best when you want bridges, storage, search, and your selected AI option to stay
-                  online without operating a host.
-                </p>
-                <ol>
-                  <li>
-                    <b>1</b>
-                    <span>Create your Claire account and choose its AI provider.</span>
-                  </li>
-                  <li>
-                    <b>2</b>
-                    <span>Pair phone networks or sign in once with Claire Desktop.</span>
-                  </li>
-                  <li>
-                    <b>3</b>
-                    <span>Keep only device-dependent networks, such as iMessage, awake.</span>
-                  </li>
-                </ol>
-              </article>
-              <article className="setup-path setup-path-local">
-                <span className="setup-path-icon">
-                  <HeroIcon name="server" />
-                </span>
-                <span className="status-pill builder">SELF-HOSTED</span>
-                <h3>Run Claire yourself</h3>
-                <p>
-                  Best when you want to operate the existing Docker stack on hardware or
-                  infrastructure you control.
-                </p>
-                <ol>
-                  <li>
-                    <b>1</b>
-                    <span>Clone Claire and configure Supabase, Matrix, Redis, and bridges.</span>
-                  </li>
-                  <li>
-                    <b>2</b>
-                    <span>Choose your model provider and keep its credentials in your host environment.</span>
-                  </li>
-                  <li>
-                    <b>3</b>
-                    <span>Run the Docker stack and keep that host available for connected bridges.</span>
-                  </li>
-                </ol>
-              </article>
-            </div>
-            <p className="setup-path-note">
-              <HeroIcon name="info" />
-              <span>
-                You can use Claire Desktop for setup in either mode. It authorizes a connection; it
-                is not automatically the machine that runs the bridge.
-              </span>
-            </p>
-          </div>
-        </section>
-
-        <section className="features shell" id="product">
-          <div className="section-heading">
-            <div>
-              <div className="kicker">ONE CLIENT. A USEFUL AI.</div>
-              <h2>
-                Your chats become one
-                <br />
-                intelligent system.
-              </h2>
-            </div>
-            <p>
-              Claire connects your chat networks, then gives its AI the context to help you find,
-              understand, reply, and follow through—without losing the human thread.
-            </p>
-          </div>
-          <div className="feature-grid">
-            <article className="feature-card card-lime">
-              <span className="card-number">01</span>
-              <div className="inbox-stack">
-                <div />
-                <div />
-                <div />
-                <span>12</span>
-              </div>
-              <div>
-                <h3>Every network, one client.</h3>
-                <p>Read and reply across connected platforms from one consistent inbox.</p>
-              </div>
-            </article>
-            <article className="feature-card card-sky">
-              <span className="card-number">02</span>
-              <div className="ai-demo">
-                <span>
-                  <HeroIcon name="sparkles" />
-                </span>
-                <p>“Tell Maya the deck is ready and ask if 11 still works.”</p>
-                <button>Use reply</button>
-              </div>
-              <div>
-                <h3>An AI that knows the thread.</h3>
-                <p>Search across chats and get contextual replies shaped by the conversation.</p>
-              </div>
-            </article>
-            <article className="feature-card card-blush">
-              <span className="card-number">03</span>
-              <div className="promise-demo">
-                <span>
-                  <HeroIcon name="check-circle" />
-                </span>
-                <div>
-                  <small>UP NEXT</small>
-                  <b>Send Q3 deck</b>
-                  <p>Maya · tomorrow, 10:00</p>
-                </div>
-              </div>
-              <div>
-                <h3>Conversation becomes follow-through.</h3>
-                <p>
-                  Claire notices commitments in your chats and turns them into gentle follow-through.
-                </p>
-              </div>
-            </article>
-          </div>
         </section>
 
         <section className="preview-section shell">
@@ -599,11 +426,7 @@ export function HomePage() {
           </div>
           <div className="phone-wrap">
             <div className="phone">
-              <div className="phone-top">
-                <span>9:41</span>
-                <i />
-                <span>● ◒</span>
-              </div>
+              <MobileStatusBar className="phone-top" />
               <div className="phone-greeting">
                 <small>CLAIRE AI · ALL CHATS</small>
                 <h3>What did I promise Maya?</h3>
@@ -611,7 +434,7 @@ export function HomePage() {
               </div>
               <div className="phone-card urgent">
                 <span className="ai-mark">
-                  <HeroIcon name="sparkles" />
+                  <HeroIcon name="chat" />
                 </span>
                 <div>
                   <small>ANSWER WITH SOURCES</small>
@@ -647,7 +470,7 @@ export function HomePage() {
               </div>
               <div className="phone-card recap">
                 <span className="ai-mark">
-                  <HeroIcon name="sparkles" />
+                  <HeroIcon name="chat" />
                 </span>
                 <div>
                   <small>NEXT STEP</small>
@@ -662,7 +485,7 @@ export function HomePage() {
                   <HeroIcon name="inbox" />
                 </span>
                 <span className="phone-tab-ask">
-                  <HeroIcon name="sparkles" />
+                  <img src="/assets/brand/claire-mark-ink.svg" alt="Ask Claire" className="ask-claire-mark" />
                 </span>
                 <span>
                   <HeroIcon name="promises" />
@@ -675,10 +498,95 @@ export function HomePage() {
           </div>
         </section>
 
+        <section className="pricing shell" id="pricing">
+          <div className="pricing-heading">
+            <div>
+              <div className="kicker">ONE ACCOUNT. CLEAR COSTS.</div>
+              <h2>
+                Three plans.
+                <br />
+                <span className="claire-underline">One Loop.</span>
+              </h2>
+            </div>
+            <p>
+              Claire’s Loop reads every connected conversation and tells you what is still open. Your
+              plan decides how often it runs.
+            </p>
+          </div>
+          <div className="pricing-teaser-grid">
+            <article className="pricing-teaser-card">
+              <small>FREE</small>
+              <strong>$0</strong>
+              <b>
+                <HeroIcon name="check-circle" />1 Loop run per week
+              </b>
+              <p>Up to five networks in one inbox, with search and reminders.</p>
+              <Link className="button pricing-teaser-action" href="/#waitlist">
+                Join free <HeroIcon name="arrow-right" />
+              </Link>
+            </article>
+            <article className="pricing-teaser-card is-featured">
+              <div className="pricing-teaser-flag">MOST POPULAR</div>
+              <small>PLUS</small>
+              <strong>
+                $10<em>/mo</em>
+              </strong>
+              <b>
+                <HeroIcon name="check-circle" />
+                Up to 3 Loop runs per day
+              </b>
+              <p>Every network, the full AI, and a monthly Claire AI credit allowance.</p>
+              <a
+                className="button pricing-teaser-action"
+                href="mailto:hello@claire.app?subject=Claire%20Plus"
+              >
+                Get Plus <HeroIcon name="arrow-right" />
+              </a>
+            </article>
+            <article className="pricing-teaser-card">
+              <small>PRO</small>
+              <strong>
+                $20<em>/mo</em>
+              </strong>
+              <b>
+                <HeroIcon name="check-circle" />A Loop every morning
+              </b>
+              <p>Claire runs the Loop for you, on the best model tier, without being asked.</p>
+              <a
+                className="button pricing-teaser-action"
+                href="mailto:hello@claire.app?subject=Claire%20Pro"
+              >
+                Get Pro <HeroIcon name="arrow-right" />
+              </a>
+            </article>
+            <article className="pricing-teaser-card is-business">
+              <small>ULTIMATE</small>
+              <strong>Business</strong>
+              <b>
+                <HeroIcon name="check-circle" />
+                Continuous Loop, with agents
+              </b>
+              <p>Plugins that act on what customers say—calendar, CRM, payments, and more.</p>
+              <Link className="button pricing-teaser-action" href="/pricing#ultimate">
+                Talk to us <HeroIcon name="arrow-right" />
+              </Link>
+            </article>
+          </div>
+          <div className="pricing-teaser-foot">
+            <p>
+              AI use is metered separately from the subscription, with a visible balance and a hard
+              cap, so model costs stay predictable.
+            </p>
+            <Link className="button button-dark" href="/pricing">
+              Compare all plans <HeroIcon name="arrow-right" />
+            </Link>
+          </div>
+        </section>
+
         <section className="stories" id="stories">
           <div className="shell">
             <div className="kicker">PEOPLE HAVE ENOUGH TO JUGGLE</div>
-            <h2>Claire keeps the human things close.</h2>
+            <h2>Keep the people who matter in view.</h2>
             <div className="quotes">
               <blockquote>
                 <p>
@@ -761,73 +669,6 @@ export function HomePage() {
           </div>
         </section>
 
-        <section className="pricing shell" id="pricing">
-          <div className="pricing-heading">
-            <div>
-              <div className="kicker">ONE ACCOUNT. CLEAR COSTS.</div>
-              <h2>
-                Three plans.
-                <br />
-                <span className="claire-underline">One Loop.</span>
-              </h2>
-            </div>
-            <p>
-              Claire’s Loop reads every connected conversation and tells you what is still open. Your
-              plan decides how often it runs.
-            </p>
-          </div>
-          <div className="pricing-teaser-grid">
-            <article className="pricing-teaser-card">
-              <small>FREE</small>
-              <strong>$0</strong>
-              <b>
-                <HeroIcon name="sparkles" />1 Loop run per week
-              </b>
-              <p>Up to five networks in one inbox, with search and reminders.</p>
-            </article>
-            <article className="pricing-teaser-card is-featured">
-              <div className="pricing-teaser-flag">MOST POPULAR</div>
-              <small>PLUS</small>
-              <strong>
-                $10<em>/mo</em>
-              </strong>
-              <b>
-                <HeroIcon name="sparkles" />
-                Up to 3 Loop runs per day
-              </b>
-              <p>Every network, the full AI, and a monthly Claire AI credit allowance.</p>
-            </article>
-            <article className="pricing-teaser-card">
-              <small>PRO</small>
-              <strong>
-                $20<em>/mo</em>
-              </strong>
-              <b>
-                <HeroIcon name="sparkles" />A Loop every morning
-              </b>
-              <p>Claire runs the Loop for you, on the best model tier, without being asked.</p>
-            </article>
-            <article className="pricing-teaser-card is-business">
-              <small>ULTIMATE</small>
-              <strong>Business</strong>
-              <b>
-                <HeroIcon name="sparkles" />
-                Continuous Loop, with agents
-              </b>
-              <p>Plugins that act on what customers say—calendar, CRM, payments, and more.</p>
-            </article>
-          </div>
-          <div className="pricing-teaser-foot">
-            <p>
-              AI use is metered separately from the subscription, with a visible balance and a hard
-              cap. Model costs never become a surprise.
-            </p>
-            <Link className="button button-dark" href="/pricing">
-              Compare all plans <HeroIcon name="arrow-right" />
-            </Link>
-          </div>
-        </section>
-
         <section className="security-teaser shell" id="security" aria-labelledby="security-title">
           <div className="security-teaser-copy">
             <div className="kicker">SECURITY WITH CLEAR BOUNDARIES</div>
@@ -865,7 +706,7 @@ export function HomePage() {
               </article>
               <span className="security-flow-line" aria-hidden="true" />
               <article>
-                <HeroIcon name="sparkles" />
+                <HeroIcon name="chat" />
                 <small>AI, WHEN USED</small>
                 <b>Only selected context goes to the active AI mode.</b>
               </article>
@@ -880,20 +721,18 @@ export function HomePage() {
           </div>
         </section>
 
-        <section className="final-cta shell">
+        <section className="final-cta shell" aria-labelledby="final-cta-title">
           <div>
-            <span className="asterisk">
-              <HeroIcon name="sparkles" />
-            </span>
-            <h2>
-              Give every chat
+            <h2 id="final-cta-title">
+              Follow the build
               <br />
-              one intelligent home.
+              from here.
             </h2>
-            <p>A multi-chat client with an AI that helps you remember, reply, and follow through.</p>
-            <Link className="button button-dark" href="/pricing">
-              See the plans <HeroIcon name="arrow-right" />
-            </Link>
+            <p>
+              I’m documenting the road to launch—the decisions, rough edges, releases, and lessons.
+              Join early and help shape Claire as it becomes real.
+            </p>
+            <WaitlistForm source="homepage_footer" tone="transparent" />
           </div>
         </section>
       </main>

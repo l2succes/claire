@@ -106,10 +106,6 @@
 
 .dev-hero h1 {
   margin: 22px 0 24px;
-  font-size: clamp(2.5rem, 4.2vw, 4rem);
-  font-weight: 600;
-  line-height: 0.94;
-  letter-spacing: -0.065em;
 }
 
 .dev-hero-copy > p {

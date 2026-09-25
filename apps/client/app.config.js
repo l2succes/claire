@@ -14,6 +14,7 @@ function appName() {
 }
 
 module.exports = ({ config }) => {
+  const appScheme = staging ? 'claire-staging' : development ? 'claire-dev' : 'claire';
   const plugins = (config.plugins ?? []).map((plugin) => {
     if (plugin === 'expo-dev-client') {
       return ['expo-dev-client', { addGeneratedScheme: development }];
@@ -25,7 +26,7 @@ module.exports = ({ config }) => {
   return {
     ...config,
     name: appName(),
-    scheme: staging ? 'claire-staging' : development ? 'claire-dev' : 'claire',
+    scheme: [appScheme, 'rc-682e02411e'],
     plugins,
     ios: {
       ...config.ios,

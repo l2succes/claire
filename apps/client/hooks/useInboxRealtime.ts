@@ -1,4 +1,6 @@
+import { requestConnectionRecovery } from '../services/connection-recovery-signal';
 import { useEffect } from 'react';
+import { AppState } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../services/supabase';
 import { notifyWebMessageUpdate } from '../services/notifications';
@@ -9,6 +11,7 @@ import {
   patchInboxRealtimeMessage,
   type InboxRealtimeRow,
 } from './useInboxMessages';
+import { patchChatTimelineMessage, removeChatTimelineMessage } from './useChatTimeline';
 import { Platform } from '../types/platform';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001';
@@ -58,6 +61,12 @@ export function useInboxRealtime(userId?: string) {
     };
 
     startFallback(60_000);
+    // Realtime is suspended while iOS backgrounds the app. Invalidate on
+    // return so an own-device read receipt can clear a cached unread badge
+    // without waiting for the next polling interval.
+    const appState = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void queryClient.invalidateQueries({ queryKey: inboxQueryPrefix(userId) });
+    });
     dropInboxChannels(userId);
 
     const topic = `inbox-feed:${userId}:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 8)}`;
@@ -73,12 +82,23 @@ export function useInboxRealtime(userId?: string) {
         );
       }
       patchInboxRealtimeMessage(queryClient, userId, message);
+      // This is what makes a conversation current *before* the user opens it.
+      // The row is passed raw rather than as an InboxRealtimeRow because that
+      // type omits the media and reply columns the payload actually carries.
+      patchChatTimelineMessage(queryClient, userId, row as Record<string, unknown>);
     });
     channel.on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages', filter: `user_id=eq.${userId}` }, ({ new: row }) => {
-      patchInboxRealtimeMessage(queryClient, userId, row as InboxRealtimeRow);
+      patchInboxRealtimeMessage(queryClient, userId, row as InboxRealtimeRow, { event: 'update' });
+      patchChatTimelineMessage(queryClient, userId, row as Record<string, unknown>);
+    });
+    channel.on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'messages', filter: `user_id=eq.${userId}` }, ({ old: row }) => {
+      removeChatTimelineMessage(queryClient, userId, row as Record<string, unknown>);
+      // If the deleted row was the latest preview, the preceding message has
+      // to be selected from the server; the delete payload cannot supply it.
+      void queryClient.invalidateQueries({ queryKey: inboxQueryPrefix(userId) });
     });
     channel.on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'chats', filter: `user_id=eq.${userId}` }, ({ new: row }) => {
-      const chat = row as { id: string; platform?: Platform; unread_count?: number; is_pinned?: boolean };
+      const chat = row as { id: string; platform?: Platform; unread_count?: number; is_pinned?: boolean; is_muted?: boolean };
       patchInboxChat(queryClient, userId, chat);
     });
     channel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ai_suggestions', filter: `user_id=eq.${userId}` }, ({ new: row }) => {
@@ -88,6 +108,7 @@ export function useInboxRealtime(userId?: string) {
     channel.subscribe((status, error) => {
       if (cancelled) return;
       console.info('[Inbox] realtime:status', { status, hasError: !!error });
+      requestConnectionRecovery();
       if (status === 'SUBSCRIBED') {
         void reportClientState('connected');
         startFallback(60_000);
@@ -100,6 +121,7 @@ export function useInboxRealtime(userId?: string) {
 
     return () => {
       cancelled = true;
+      appState.remove();
       if (fallbackTimer) clearInterval(fallbackTimer);
       void reportClientState('disconnected');
       void supabase.removeChannel(channel);

@@ -6,8 +6,32 @@ import { supabase } from '../services/supabase';
 import { validateRequest } from '../middleware/validation';
 import { requireAuth } from '../middleware/auth';
 import { logger } from '../utils/logger';
+import { operatorEmailAlerts } from '../services/operator-email-alerts';
 
 const router = Router();
+
+/**
+ * POST /auth/notify-signup
+ * Client signal for Supabase Auth signups, which happen directly from the app.
+ * Resolve the ID through Supabase Admin so callers cannot spoof signup details.
+ */
+router.post('/notify-signup', async (req: Request, res: Response) => {
+  const userId = z.string().uuid().safeParse(req.body?.userId);
+  if (!userId.success) return res.status(204).end();
+
+  try {
+    const { data, error } = await supabase.auth.admin.getUserById(userId.data);
+    const user = data.user;
+    const createdAt = user?.created_at ? Date.parse(user.created_at) : NaN;
+    if (error || !user?.email || !Number.isFinite(createdAt) || Date.now() - createdAt > 24 * 60 * 60 * 1000) {
+      return res.status(204).end();
+    }
+    void operatorEmailAlerts.signup(user.email, user.id);
+  } catch (error) {
+    logger.error('Could not verify signup alert', error);
+  }
+  return res.status(204).end();
+});
 
 // Schema validators
 const createSessionSchema = z.object({
@@ -365,6 +389,10 @@ router.post('/signup', async (req: Request, res: Response) => {
 
     if (error) {
       return res.status(400).json({ error: error.message });
+    }
+
+    if (data.user?.email && data.user.identities?.length) {
+      void operatorEmailAlerts.signup(data.user.email, data.user.id);
     }
 
     return res.json({

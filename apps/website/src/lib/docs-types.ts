@@ -86,7 +86,7 @@ export const sectionDescriptions: Record<DocsSection, string> = {
 };
 
 export const sectionIcons: Record<DocsSection, HeroIconName> = {
-  'get-started': 'sparkles',
+  'get-started': 'chat',
   'build-claire': 'desktop',
   'deploy-operate': 'server',
   product: 'inbox',

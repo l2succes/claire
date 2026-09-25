@@ -2,13 +2,17 @@
 export const primaryNavigation = [
   { href: '/#product', label: 'Product' },
   { href: '/pricing', label: 'Pricing' },
-  { href: '/security', label: 'Security' },
+  { href: '/business', label: 'Business' },
   { href: '/developers', label: 'Developers' },
 ] as const;
 
 export const moreLinks = [
-  { href: '/lab', title: 'Claire Lab', body: 'The visual system, product references, and working explorations.' },
-  { href: '/business', title: 'Business', body: 'A shared inbox for customer teams.' },
+  { href: '/lab', title: 'Claire Lab', body: 'The visual system, product references, and work in progress.' },
+  {
+    href: '/security',
+    title: 'Security',
+    body: 'Current privacy boundaries, controls, and the security roadmap.',
+  },
   {
     href: '/campaigns/close-the-loop',
     title: 'Campaign',
@@ -16,29 +20,39 @@ export const moreLinks = [
   },
   { href: '/docs', title: 'Docs', body: 'Set up the repo and run Claire yourself.' },
   { href: '/#open-source', title: 'Open source', body: 'Licenses, GitHub, and self-hosting.' },
+  { href: '/about', title: 'About', body: 'Who builds Claire, what it does, and the key facts.' },
   { href: '/faq', title: 'FAQ', body: 'Product, hosting, and contributor questions.' },
 ] as const;
 
-export const downloadOptions = [
-  { id: 'macos', name: 'Mac', href: '/#start', available: true },
-  { id: 'ios', name: 'iOS', href: '/#start', available: true },
-  { id: 'windows', name: 'Windows', href: null, available: false },
-  { id: 'android', name: 'Android', href: null, available: false },
-] as const;
-
-export const footerLinks = [
-  { href: 'https://github.com/l2succes/claire', label: 'GitHub' },
-  { href: '/docs', label: 'Docs' },
-  { href: '/pricing', label: 'Pricing' },
-  { href: '/security', label: 'Security' },
-  { href: '/business', label: 'Business' },
-  { href: '/developers', label: 'Developers' },
-  { href: '/faq', label: 'FAQ' },
-  { href: '/mockups/mobile', label: 'Mobile' },
-  { href: '/mockups/desktop', label: 'Desktop' },
-  { href: '/campaigns/close-the-loop', label: 'Campaign' },
-  { href: '/legal/privacy', label: 'Privacy' },
-  { href: '/legal/terms', label: 'Terms' },
+export const footerColumns = [
+  {
+    title: 'Product',
+    links: [
+      { href: '/pricing', label: 'Pricing' },
+      { href: '/business', label: 'Business' },
+      { href: '/security', label: 'Security' },
+      { href: '/mockups/mobile', label: 'Mobile' },
+      { href: '/mockups/desktop', label: 'Desktop' },
+    ],
+  },
+  {
+    title: 'Resources',
+    links: [
+      { href: '/docs', label: 'Docs' },
+      { href: '/developers', label: 'Developers' },
+      { href: '/faq', label: 'FAQ' },
+      { href: 'https://github.com/l2succes/claire', label: 'GitHub' },
+    ],
+  },
+  {
+    title: 'Company',
+    links: [
+      { href: '/about', label: 'About' },
+      { href: '/campaigns/close-the-loop', label: 'Campaign' },
+      { href: '/legal/privacy', label: 'Privacy' },
+      { href: '/legal/terms', label: 'Terms' },
+    ],
+  },
 ] as const;
 
 export const faqGroups = [

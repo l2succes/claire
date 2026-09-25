@@ -10,8 +10,14 @@ import {
   UnifiedMessage,
   MessageContentType,
 } from '../types';
-import { MatrixMessageContent, MatrixMessageType } from './types';
+import { MatrixMessageContent } from './types';
 import { MatrixUserMapper } from './user-mapper';
+
+interface MatrixRelation {
+  'm.in_reply_to'?: { event_id?: string };
+  rel_type?: string;
+  event_id?: string;
+}
 
 export class MatrixEventConverter {
   constructor(private userMapper: MatrixUserMapper) {}
@@ -33,8 +39,35 @@ export class MatrixEventConverter {
     matrixUserId?: string
   ): Promise<UnifiedMessage> {
     const content = event.getContent() as MatrixMessageContent;
+    // Relations stay in the wire content for encrypted rooms, while getContent
+    // returns the decrypted payload. getRelation() is therefore authoritative.
+    const relatesTo = this.relationForEvent(event, content);
+    const directEditTarget =
+      relatesTo?.rel_type === 'm.replace' &&
+      typeof relatesTo.event_id === 'string' &&
+      content['m.new_content']
+        ? relatesTo.event_id
+        : undefined;
+    // During initial sync matrix-js-sdk can aggregate the latest replacement
+    // onto the original event. In that shape getContent() already returns the
+    // final text; preserve the original identity and attach the edit revision.
+    const aggregatedEditEventId = directEditTarget
+      ? undefined
+      : this.replacingEventId(event);
+    const originalEventId = event.getId() || `unknown-${Date.now()}`;
+    const editOfPlatformMessageId = directEditTarget;
+    // Never render Matrix's fallback "* edited text" body. m.new_content is
+    // the complete final content, including resolved mentions and formatting.
+    const effectiveContent = directEditTarget
+      ? content['m.new_content']!
+      : content;
     const sender = event.getSender() || '';
-    const eventId = event.getId() || `unknown-${Date.now()}`;
+    const eventId = originalEventId;
+    const editedAt = directEditTarget
+      ? event.getDate() || new Date()
+      : aggregatedEditEventId
+        ? this.replacingEventDate(event)
+        : undefined;
 
     // Get sender info
     const senderMember = room.getMember(sender);
@@ -60,24 +93,23 @@ export class MatrixEventConverter {
     const chatId = this.extractChatId(room, platform, selfGhostIds);
 
     // Convert content type
-    const contentType = this.matrixMsgTypeToContentType(content.msgtype);
+    const contentType = this.matrixMsgTypeToContentType(effectiveContent);
 
     // Extract reply info
-    const replyToMessageId = content['m.relates_to']?.['m.in_reply_to']?.event_id;
+    const replyToMessageId = relatesTo?.['m.in_reply_to']?.event_id;
 
     // Native threads (Slack, Discord) arrive as an `m.thread` relation whose
     // event_id is the thread root. Reply-only platforms never set this.
-    const relatesTo = content['m.relates_to'];
     const threadRootId = relatesTo?.rel_type === 'm.thread' ? relatesTo.event_id : undefined;
 
     // Structured mentions. `body` renders these differently on every platform —
     // WhatsApp writes the phone number, Telegram the handle, Slack the display
     // name — so text matching does not generalize and this is the real signal.
-    const mentions = content['m.mentions']?.user_ids;
-    const mentionsRoom = content['m.mentions']?.room === true;
+    const mentions = effectiveContent['m.mentions']?.user_ids;
+    const mentionsRoom = effectiveContent['m.mentions']?.room === true;
 
     // Check for media
-    const hasMedia = this.hasMediaContent(content);
+    const hasMedia = this.hasMediaContent(effectiveContent);
 
     return {
       id: `matrix-${eventId}-${Date.now()}`,
@@ -85,7 +117,7 @@ export class MatrixEventConverter {
       platform,
       sessionId,
       userId: sessionUserId,
-      content: content.body || '',
+      content: effectiveContent.body || '',
       contentType,
       senderId: sender,
       senderName,
@@ -108,32 +140,85 @@ export class MatrixEventConverter {
       isRead: false,
       hasMedia,
       replyToMessageId,
+      editOfPlatformMessageId,
+      latestEditPlatformMessageId: aggregatedEditEventId,
+      editedAt,
       threadRootId,
       mentions: mentions?.length ? mentions : undefined,
       mentionsRoom: mentionsRoom || undefined,
-      formattedBody: content.formatted_body,
+      formattedBody: effectiveContent.formatted_body,
       memberCount: this.roomMemberCount(room),
       platformMetadata: {
         matrixRoomId: room.roomId,
         matrixEventId: eventId,
+        ...(aggregatedEditEventId
+          ? { matrixLatestEditEventId: aggregatedEditEventId }
+          : {}),
         matrixSenderId: sender,
         senderDetection: isFromMe
           ? (selfGhostIds.includes(sender) ? 'self-ghost' : 'double-puppet')
           : 'remote-sender',
-        msgtype: content.msgtype,
-        format: content.format,
+        msgtype: effectiveContent.msgtype,
+        format: effectiveContent.format,
         // Plain media uses `url`; encrypted media uses `file.url`.
-        mediaUrl: content.url || content.file?.url,
-        mediaInfo: content.info,
+        mediaUrl: effectiveContent.url || effectiveContent.file?.url,
+        mediaInfo: effectiveContent.info,
+        ...(editOfPlatformMessageId
+          ? { matrixEditTargetEventId: editOfPlatformMessageId }
+          : {}),
+        ...(effectiveContent.msgtype === 'm.audio'
+          ? {
+              audio: {
+                durationMs:
+                  effectiveContent['org.matrix.msc1767.audio']?.duration ||
+                  effectiveContent.info?.duration ||
+                  undefined,
+                waveform: this.sanitizeWaveform(
+                  effectiveContent['org.matrix.msc1767.audio']?.waveform
+                ),
+                isVoice: effectiveContent['org.matrix.msc3245.voice'] !== undefined,
+              },
+            }
+          : {}),
       },
     };
   }
 
   /**
+   * Invalid replacement events are not ordinary messages. If Matrix marks an
+   * event as m.replace but omits either its target or m.new_content, the Matrix
+   * specification requires clients to ignore it completely.
+   */
+  isSupportedMessageEvent(event: MatrixEvent): boolean {
+    const content = event.getContent() as MatrixMessageContent;
+    const relation = this.relationForEvent(event, content);
+    if (relation?.rel_type !== 'm.replace') return true;
+    return typeof relation.event_id === 'string' && !!content['m.new_content'];
+  }
+
+  private relationForEvent(
+    event: MatrixEvent,
+    content: MatrixMessageContent
+  ): MatrixRelation | undefined {
+    const sdkEvent = event as MatrixEvent & { getRelation?: () => MatrixRelation | null };
+    return sdkEvent.getRelation?.() || content['m.relates_to'];
+  }
+
+  private replacingEventId(event: MatrixEvent): string | undefined {
+    const sdkEvent = event as MatrixEvent & { replacingEventId?: () => string | undefined };
+    return sdkEvent.replacingEventId?.();
+  }
+
+  private replacingEventDate(event: MatrixEvent): Date | undefined {
+    const sdkEvent = event as MatrixEvent & { replacingEventDate?: () => Date | undefined };
+    return sdkEvent.replacingEventDate?.();
+  }
+
+  /**
    * Convert Matrix message type to UnifiedMessage content type
    */
-  private matrixMsgTypeToContentType(msgtype: MatrixMessageType): MessageContentType {
-    switch (msgtype) {
+  private matrixMsgTypeToContentType(content: MatrixMessageContent): MessageContentType {
+    switch (content.msgtype) {
       case 'm.text':
       case 'm.notice':
       case 'm.emote':
@@ -143,7 +228,9 @@ export class MatrixEventConverter {
       case 'm.video':
         return MessageContentType.VIDEO;
       case 'm.audio':
-        return MessageContentType.AUDIO;
+        return content['org.matrix.msc3245.voice'] !== undefined
+          ? MessageContentType.VOICE
+          : MessageContentType.AUDIO;
       case 'm.file':
         return MessageContentType.DOCUMENT;
       case 'm.location':
@@ -151,6 +238,14 @@ export class MatrixEventConverter {
       default:
         return MessageContentType.TEXT;
     }
+  }
+
+  private sanitizeWaveform(value?: number[]): number[] {
+    if (!Array.isArray(value)) return [];
+    return value
+      .slice(0, 128)
+      .filter((sample) => Number.isFinite(sample))
+      .map((sample) => Math.round(Math.min(255, Math.max(0, sample))));
   }
 
   /**

@@ -58,6 +58,11 @@ class RedisService {
     await this.client.setex(key, seconds, value);
   }
 
+  async claimOnce(key: string, seconds: number): Promise<boolean> {
+    if (!this.client) throw new Error('Redis not connected');
+    return (await this.client.set(key, '1', 'EX', seconds, 'NX')) === 'OK';
+  }
+
   async del(key: string): Promise<void> {
     if (!this.client) throw new Error('Redis not connected');
     await this.client.del(key);

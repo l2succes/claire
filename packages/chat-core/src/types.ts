@@ -7,12 +7,21 @@ export interface ChatMessage {
   id: string;
   content: string;
   timestamp: string;
+  edited_at?: string | null;
   from_me: boolean;
   contact_name?: string;
   contact_phone?: string;
   content_type?: string;
   media_url?: string;
   media_mime_type?: string;
+  metadata?: {
+    audio?: {
+      durationMs?: number;
+      waveform?: number[];
+      isVoice?: boolean;
+    };
+    [key: string]: unknown;
+  } | null;
   platform_message_id?: string;
   /** The local source row when the quoted message is already synced. */
   reply_to_message_id?: string | null;

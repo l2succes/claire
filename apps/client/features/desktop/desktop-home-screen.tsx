@@ -3,7 +3,7 @@ import { Pressable, ScrollView } from 'react-native';
 import { router } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { Text, View, useMedia } from '@tamagui/core';
-import { ArrowUpRight, CheckCircle2, MessageCircle, Sparkles } from 'lucide-react-native';
+import { ArrowUpRight, CheckCircle2, MessageCircle } from 'lucide-react-native';
 import { colors, type } from '@claire/design-system';
 import { useAuthStore } from '../../stores/authStore';
 import { useInboxMessages } from '../../hooks/useInboxMessages';
@@ -111,7 +111,7 @@ export function DesktopHomeScreen() {
       rowTitle: 'Ask Claire for a quick catch-up',
       rowDetail: 'Review recent conversations, people, and open context.',
       action: 'Ask Claire',
-      icon: <Sparkles size={18} color={colors.ink} />,
+      icon: <MessageCircle size={18} color={colors.ink} />,
       onPress: () => router.push('/ask-claire'),
     };
   }, [handoff.data, latest, needsReply.length, loops.data]);

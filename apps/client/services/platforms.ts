@@ -7,6 +7,8 @@
 
 import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios';
 import { supabase } from './supabase';
+import { clientSafeMessage, PlatformRequestError } from './api-errors';
+import { requestConnectionRecovery } from './connection-recovery-signal';
 import {
   Platform,
   PlatformStatus,
@@ -104,6 +106,7 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
+
 // Handle response errors
 api.interceptors.response.use(
   (response) => response,
@@ -118,12 +121,10 @@ api.interceptors.response.use(
       }
     }
 
-    const message = error.response?.data?.error
-      || error.response?.data?.message
-      || error.message
-      || 'An unexpected error occurred';
-
-    return Promise.reject(new Error(message));
+    const failure = new PlatformRequestError(clientSafeMessage(error), error.response?.status,
+      error.response?.data?.error);
+    if (failure.retryable) requestConnectionRecovery();
+    return Promise.reject(failure);
   }
 );
 
@@ -134,7 +135,7 @@ export const platformsApi = {
   async getPlatformDefinitions(): Promise<PlatformDefinition[]> {
     try {
       const response = await api.get<{ success: boolean; platforms: PlatformDefinition[] }>('/platforms/definitions');
-      return response.data.platforms;
+      return Array.isArray(response.data?.platforms) ? response.data.platforms : FALLBACK_PLATFORM_DEFINITIONS;
     } catch (error) {
       if (isMissingRoute(error)) return FALLBACK_PLATFORM_DEFINITIONS;
       throw error;
@@ -144,7 +145,7 @@ export const platformsApi = {
   async getPlatformInterests(): Promise<string[]> {
     try {
       const response = await api.get<{ success: boolean; platformIds: string[] }>('/platforms/interests');
-      return response.data.platformIds;
+      return Array.isArray(response.data?.platformIds) ? response.data.platformIds : [];
     } catch (error) {
       if (isMissingRoute(error)) return [];
       throw error;
@@ -175,16 +176,12 @@ export const platformsApi = {
    */
   async getAllSessions(): Promise<PlatformSession[]> {
     const platforms = Object.values(Platform);
-    const sessionsPromises = platforms.map(async (platform) => {
-      try {
-        const sessions = await this.getPlatformStatus(platform);
-        return sessions;
-      } catch {
-        return [];
-      }
-    });
-
-    const allSessions = await Promise.all(sessionsPromises);
+    // A failed status request is not an authoritative empty response. Let the
+    // store preserve its last-known sessions until every platform status can
+    // be reconciled successfully.
+    const allSessions = await Promise.all(
+      platforms.map((platform) => this.getPlatformStatus(platform)),
+    );
     const flat = allSessions.flat();
     // Deduplicate by session ID (in Matrix mode, all platforms share one adapter)
     const seen = new Set<string>();
@@ -223,6 +220,10 @@ export const platformsApi = {
 
   /**
    * Submit verification code (for Telegram phone verification)
+   *
+   * Server follow-up: Matrix mode does not yet expose POST /verify for
+   * Telegram. Keep this client contract unchanged; E2E completion is mocked
+   * explicitly until that bridge route ships.
    */
   async submitVerificationCode(
     platform: Platform,
@@ -261,6 +262,12 @@ export const platformsApi = {
     return response.data;
   },
 
+  async recoverPlatform(platform: Platform, sessionId: string): Promise<{ session: PlatformSession }> {
+    const response = await api.post<{ session: PlatformSession }>(`/platforms/${platform}/recover`,
+      { sessionId });
+    return response.data;
+  },
+
   /**
    * Send a message via a platform
    */
@@ -269,11 +276,12 @@ export const platformsApi = {
     sessionId: string,
     chatId: string,
     content: string,
-    replyToMessageId?: string
+    replyToMessageId?: string,
+    clientRequestId?: string
   ): Promise<{ success: boolean; message: unknown }> {
     const response = await api.post<{ success: boolean; message: unknown }>(
-      `/platforms/${platform}/send`,
-      { sessionId, chatId, content, replyToMessageId }
+      `/platforms/${platform}/${clientRequestId ? 'outbox/send' : 'send'}`,
+      { sessionId, chatId, content, replyToMessageId, clientRequestId }
     );
     return response.data;
   },
@@ -284,11 +292,12 @@ export const platformsApi = {
     sessionId: string,
     chatId: string,
     messageId: string,
-    emoji: string
+    emoji: string,
+    clientRequestId?: string
   ): Promise<{ success: boolean; reaction: unknown; alreadyReacted?: boolean }> {
     const response = await api.post<{ success: boolean; reaction: unknown; alreadyReacted?: boolean }>(
-      `/platforms/${platform}/reactions`,
-      { sessionId, chatId, messageId, emoji }
+      `/platforms/${platform}/${clientRequestId ? 'outbox/reactions' : 'reactions'}`,
+      { sessionId, chatId, messageId, emoji, clientRequestId }
     );
     return response.data;
   },
@@ -302,7 +311,7 @@ export const platformsApi = {
     platform: Platform,
     sessionId: string,
     chatId: string,
-    voice: { uri: string; mimeType: string; durationSeconds: number },
+    voice: { uri: string; mimeType: string; durationMs: number; waveform: number[] },
     replyToMessageId?: string
   ): Promise<{ success: boolean; message: unknown }> {
     const localFile = await fetch(voice.uri);
@@ -315,8 +324,18 @@ export const platformsApi = {
       `/platforms/${platform}/voice`,
       audio,
       {
-        params: { sessionId, chatId, replyToMessageId, durationSeconds: voice.durationSeconds },
-        headers: { 'Content-Type': voice.mimeType },
+        params: {
+          sessionId,
+          chatId,
+          replyToMessageId,
+          // Keep the legacy parameter during a server-first rolling deploy.
+          durationSeconds: voice.durationMs / 1000,
+        },
+        headers: {
+          'Content-Type': voice.mimeType,
+          'X-Claire-Audio-Duration-Ms': String(Math.max(0, Math.round(voice.durationMs))),
+          'X-Claire-Audio-Waveform': voice.waveform.slice(0, 128).join(','),
+        },
       }
     );
     return response.data;

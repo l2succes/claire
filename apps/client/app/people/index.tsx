@@ -1,7 +1,7 @@
-import { Redirect } from 'expo-router';
+import ContactsScreen from '../(tabs)/contacts';
 
-// People is launched from the More sheet. Keep it inside the tab navigator so
-// the persistent tab bar is available as the exit affordance.
-export default function PeopleRedirect() {
-  return <Redirect href="/(tabs)/contacts" />;
+// The native tab bar does not expose People as a navigable tab. Render the
+// directory as a stack destination when opened from Profile or More.
+export default function PeopleScreen() {
+  return <ContactsScreen showBack />;
 }

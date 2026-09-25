@@ -10,6 +10,7 @@ import { PlatformBadge } from '../../components/PlatformIcon';
 import { SearchResultsSkeleton } from '../../components/claire/skeleton';
 import { useAuthStore } from '../../stores/authStore';
 import { searchApi, type SearchScope } from '../../services/search';
+import { userFacingErrorMessage } from '../../services/api-errors';
 import type { AssistantCitation } from '../../services/conversationAssistant';
 import { resolvePlatform } from '../../types/platform';
 
@@ -155,7 +156,7 @@ export function SearchScreen() {
             <SectionLabel title="Best matches" detail={`${resultCount}`} />
           </View>}
           renderItem={({ item }) => <SearchResultRow item={item} />}
-          ListEmptyComponent={<MobileState error={!!exact.error} title={exact.error ? 'Search is unavailable' : 'No matches'} message={exact.error ? exact.error.message : 'Try a different phrase or search Everything for a semantic answer.'} />}
+          ListEmptyComponent={<MobileState error={!!exact.error} title={exact.error ? 'Search is unavailable' : 'No matches'} message={exact.error ? userFacingErrorMessage(exact.error) : 'Try a different phrase or search Everything for a semantic answer.'} />}
         />
         )}
       </View>

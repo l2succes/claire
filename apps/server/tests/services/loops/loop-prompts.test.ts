@@ -22,6 +22,7 @@ const VALID_CREATE = {
   title: 'Send Maya the Q3 deck',
   kind: 'commitment',
   owner: 'me',
+  requester: 'them',
   owner_name: null,
   state: 'agreed',
   state_summary: 'Due Friday',

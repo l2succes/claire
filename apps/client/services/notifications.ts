@@ -10,7 +10,22 @@ import { supabase, type DbRow } from './supabase';
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001';
 const DEVICE_ID_KEY = 'claire.notification.device-id';
 let registeredToken: string | null = null;
+let registrationInFlight: Promise<string | null> | null = null;
 let activeNotificationChatId: string | undefined;
+
+export const notificationCategories = {
+  message: 'claire_message',
+  loop: 'claire_loop',
+} as const;
+
+export const notificationActions = {
+  reply: 'claire_reply',
+  markRead: 'claire_mark_read',
+  openMessage: 'claire_open_message',
+  completeLoop: 'claire_complete_loop',
+  snoozeLoop: 'claire_snooze_loop',
+  openLoop: 'claire_open_loop',
+} as const;
 
 if (platformCapabilities.supportsNativeNotifications) {
   Notifications.setNotificationHandler({
@@ -47,36 +62,21 @@ export function notifyWebMessageUpdate(title: string, body: string, data?: Recor
   new globalThis.Notification(title, { body, data });
 }
 
-export async function setupNotifications() {
+export async function setupNotifications(devicePushToken?: Notifications.DevicePushToken) {
   if (!platformCapabilities.supportsNativeNotifications) {
     logWebNoop('setupNotifications');
     return null;
   }
 
-  if (!Device.isDevice) {
-    console.log('Push notifications only work on physical devices');
-    return null;
-  }
-
-  if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync('messages', {
-      name: 'Messages',
-      importance: Notifications.AndroidImportance.HIGH,
-      sound: 'default',
-      vibrationPattern: [0, 250, 250, 250],
-    });
-  }
+  await setupNotificationCategories();
 
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
-  let finalStatus = existingStatus;
-
-  if (existingStatus !== 'granted') {
-    const { status } = await Notifications.requestPermissionsAsync();
-    finalStatus = status;
-  }
-
-  if (finalStatus !== 'granted') {
-    console.log('Failed to get push token for notifications');
+  // Registration runs during authenticated startup and retries in the
+  // background. Only an explicit onboarding/settings action may show the OS
+  // permission prompt.
+  if (existingStatus !== 'granted') return null;
+  if (!Device.isDevice) {
+    console.log('Push notifications only work on physical devices');
     return null;
   }
 
@@ -90,9 +90,10 @@ export async function setupNotifications() {
       return null;
     }
 
-    const token = await Notifications.getExpoPushTokenAsync({
-      projectId,
-    });
+    // A token rotation listener already receives the new native token. Passing
+    // it through prevents getExpoPushTokenAsync from fetching it again, which
+    // would re-trigger the listener and create an unbounded registration loop.
+    const token = await Notifications.getExpoPushTokenAsync({ projectId, devicePushToken });
 
     console.log('Push token:', token.data);
     return token.data;
@@ -102,10 +103,76 @@ export async function setupNotifications() {
   }
 }
 
+/** Register actions on every launch, before any push can be acted on. */
+export async function setupNotificationCategories(): Promise<void> {
+  if (!platformCapabilities.supportsNativeNotifications) return;
+  await Promise.all([
+    Notifications.setNotificationCategoryAsync(notificationCategories.message, [
+      {
+        identifier: notificationActions.reply,
+        buttonTitle: 'Reply',
+        textInput: { submitButtonTitle: 'Open draft', placeholder: 'Write a reply' },
+        options: { opensAppToForeground: true, isAuthenticationRequired: true },
+      },
+      {
+        identifier: notificationActions.markRead,
+        buttonTitle: 'Mark read',
+        options: { opensAppToForeground: true, isAuthenticationRequired: true },
+      },
+      {
+        identifier: notificationActions.openMessage,
+        buttonTitle: 'Open',
+        options: { opensAppToForeground: true },
+      },
+    ], {
+      intentIdentifiers: ['INSendMessageIntent'],
+      categorySummaryFormat: '%u more messages',
+    }),
+    Notifications.setNotificationCategoryAsync(notificationCategories.loop, [
+      {
+        identifier: notificationActions.completeLoop,
+        buttonTitle: 'Done',
+        options: { opensAppToForeground: true, isAuthenticationRequired: true },
+      },
+      {
+        identifier: notificationActions.snoozeLoop,
+        buttonTitle: 'Snooze 1 hr',
+        options: { opensAppToForeground: true, isAuthenticationRequired: true },
+      },
+      {
+        identifier: notificationActions.openLoop,
+        buttonTitle: 'Open',
+        options: { opensAppToForeground: true },
+      },
+    ]),
+    ...(Platform.OS === 'android' ? [
+      Notifications.setNotificationChannelAsync('messages', {
+        name: 'Messages',
+        importance: Notifications.AndroidImportance.HIGH,
+        sound: 'default',
+        vibrationPattern: [0, 250, 250, 250],
+      }),
+      Notifications.setNotificationChannelAsync('loops', {
+        name: 'Loop reminders',
+        importance: Notifications.AndroidImportance.DEFAULT,
+        sound: 'default',
+      }),
+    ] : []),
+  ]);
+}
+
 export async function getNativeNotificationPermission(): Promise<string> {
   if (!platformCapabilities.supportsNativeNotifications) return 'unsupported';
   const permission = await Notifications.getPermissionsAsync();
   return permission.status;
+}
+
+export async function requestNativeNotificationPermission(): Promise<string> {
+  if (!platformCapabilities.supportsNativeNotifications) return 'unsupported';
+  const existing = await Notifications.getPermissionsAsync();
+  if (existing.status !== 'undetermined') return existing.status;
+  const requested = await Notifications.requestPermissionsAsync();
+  return requested.status;
 }
 
 async function getDeviceId(): Promise<string> {
@@ -134,24 +201,38 @@ async function authenticatedRequest(path: string, accessToken: string, init: Req
   throw lastError instanceof Error ? lastError : new Error('Notification request failed');
 }
 
-export async function registerNotificationDevice(accessToken: string): Promise<string | null> {
-  const token = await setupNotifications();
-  if (!token) return null;
-  const deviceId = await getDeviceId();
-  const response = await authenticatedRequest('/notification-devices', accessToken, {
-    method: 'PUT',
-    body: JSON.stringify({
-      deviceId,
-      platform: Platform.OS,
-      provider: 'expo',
-      token,
-      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
-      appVersion: Constants.expoConfig?.version,
-    }),
+export function registerNotificationDevice(
+  accessToken: string,
+  devicePushToken?: Notifications.DevicePushToken,
+): Promise<string | null> {
+  if (!devicePushToken && registeredToken) return Promise.resolve(registeredToken);
+  if (registrationInFlight) return registrationInFlight;
+
+  registrationInFlight = (async () => {
+    const token = await setupNotifications(devicePushToken);
+    if (!token) return null;
+    if (token === registeredToken) return token;
+
+    const deviceId = await getDeviceId();
+    const response = await authenticatedRequest('/notification-devices', accessToken, {
+      method: 'PUT',
+      body: JSON.stringify({
+        deviceId,
+        platform: Platform.OS,
+        provider: 'expo',
+        token,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+        appVersion: Constants.expoConfig?.version,
+      }),
+    });
+    if (!response.ok) throw new Error(`Notification device registration failed with status ${response.status}`);
+    registeredToken = token;
+    return token;
+  })().finally(() => {
+    registrationInFlight = null;
   });
-  if (!response.ok) throw new Error(`Notification device registration failed with status ${response.status}`);
-  registeredToken = token;
-  return token;
+
+  return registrationInFlight;
 }
 
 export async function updateNotificationPresence(accessToken: string, state: 'foreground' | 'background', chatId?: string): Promise<void> {
@@ -173,14 +254,17 @@ export async function deregisterNotificationDevice(accessToken: string): Promise
 
 export function addPushTokenRotationListener(accessToken: string) {
   if (!platformCapabilities.supportsNativeNotifications) return { remove: () => undefined };
-  return Notifications.addPushTokenListener(() => {
-    registerNotificationDevice(accessToken).catch((error) => console.warn('Push token refresh registration failed:', error));
+  return Notifications.addPushTokenListener((devicePushToken) => {
+    registerNotificationDevice(accessToken, devicePushToken).catch((error) => console.warn('Push token refresh registration failed:', error));
   });
 }
 
 export async function syncNotificationBadge(): Promise<void> {
   if (!platformCapabilities.supportsNativeNotifications) return;
-  const { data } = await supabase.from('chats').select('unread_count');
+  // Only unread rows can move the badge, and this runs on every chat open, so
+  // filter in the database rather than fetching every conversation to sum a
+  // column that is zero for nearly all of them. Mirrors useUnreadBadge.
+  const { data } = await supabase.from('chats').select('unread_count').gt('unread_count', 0);
   const unread = (data || []).reduce((sum: number, chat: DbRow) => sum + Math.max(0, chat.unread_count || 0), 0);
   await Notifications.setBadgeCountAsync(unread);
 }

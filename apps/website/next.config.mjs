@@ -3,7 +3,7 @@
 /** @type {import('next').NextConfig} */
 const config = {
   reactStrictMode: true,
-  transpilePackages: ['@claire/design-system'],
+  transpilePackages: ['@claire/design-system', '@claire/emails'],
   turbopack: {
     resolveAlias: {
       'react-native': 'react-native-web',

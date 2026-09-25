@@ -5,6 +5,7 @@ import { googleAuth } from '../services/googleAuth';
 import { platformsApi } from '../services/platforms';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, mobileType } from '@claire/design-system';
+import { userFacingErrorMessage } from '../services/api-errors';
 
 interface GoogleSignInButtonProps {
   mode: 'signin' | 'signup';
@@ -21,7 +22,7 @@ export function GoogleSignInButton({ mode, variant = 'default' }: GoogleSignInBu
 
       if (error) {
         if (error.message !== 'User cancelled login') {
-          Alert.alert('Error', error.message);
+          Alert.alert('Error', userFacingErrorMessage(error, 'Failed to sign in with Google'));
         }
         return;
       }
@@ -38,8 +39,8 @@ export function GoogleSignInButton({ mode, variant = 'default' }: GoogleSignInBu
           router.replace('/(auth)/login');
         }
       }
-    } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to sign in with Google');
+    } catch (error) {
+      Alert.alert('Error', userFacingErrorMessage(error, 'Failed to sign in with Google'));
     } finally {
       setLoading(false);
     }
@@ -63,9 +64,9 @@ export function GoogleSignInButton({ mode, variant = 'default' }: GoogleSignInBu
         {loading ? (
           <ActivityIndicator size="small" color={colors.paper} />
         ) : (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 20, paddingVertical: 12 }}>
             <Ionicons name="logo-google" size={20} color={colors.paper} />
-            <Text style={{ ...mobileType.body, color: colors.paper, fontWeight: '700' }}>Continue with Google</Text>
+            <Text style={{ ...mobileType.body, color: colors.paper, fontWeight: '700', flexShrink: 1, textAlign: 'center' }}>Continue with Google</Text>
           </View>
         )}
       </TouchableOpacity>

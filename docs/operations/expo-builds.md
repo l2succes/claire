@@ -7,12 +7,12 @@ not committed.
 
 ## Build targets
 
-| Profile | App on device | iOS bundle ID / Android package | Backend environment | Distribution |
-| --- | --- | --- | --- | --- |
-| `development` | Claire Dev | `com.claire.app.dev` | local development | development client |
-| `staging` | Claire Staging | `com.claire.app.staging` | EAS `preview` / Claire staging | private internal build |
-| `production` | Claire | `com.claire.app` | EAS `production` / Claire production | private internal build |
-| `production-store` | Claire | `com.claire.app` | EAS `production` / Claire production | App Store / TestFlight only |
+| Profile | App on device | iOS bundle ID / Android package | Backend environment | Update channel | Distribution |
+| --- | --- | --- | --- | --- | --- |
+| `development` | Claire Dev | `com.claire.app.dev` | local development | — | development client |
+| `staging` | Claire Staging | `com.claire.app.staging` | EAS `preview` / Claire staging | `staging` | private internal build |
+| `production` | Claire | `com.claire.app` | EAS `production` / Claire production | `production` | private internal build |
+| `production-store` | Claire | `com.claire.app` | EAS `production` / Claire production | `production` | App Store / TestFlight only |
 
 The production and staging apps are deliberately separate apps. Install both
 on one phone to switch environments; do not add an in-app server switch to a
@@ -92,6 +92,33 @@ App Store:
 ```sh
 bunx eas build --platform ios --profile production-store
 ```
+
+## Publish an over-the-air update
+
+EAS Update is enabled for the staging and production release profiles. The
+TestFlight build made with `production-store` also listens to the `production`
+channel. It checks for an update on launch, downloads it in the background, and
+applies it on the next app restart. Publish only after the change is committed:
+
+```sh
+cd apps/client
+bun run update:staging
+# Test the staging update, then:
+bun run update:production
+```
+
+The exact direct command for the TestFlight/production channel is:
+
+```sh
+cd apps/client
+bunx eas update --channel production --environment production --auto
+```
+
+An OTA update can contain JavaScript and assets only. Adding or changing a
+native module, permission, app-config plugin, Expo config, or native code
+requires a new EAS build instead. Claire uses the Expo app version as its EAS
+Update runtime version, so increment `expo.version` in `app.json` before a new
+native release; builds only receive updates for their matching runtime.
 
 ## Local builds with Prebuild
 

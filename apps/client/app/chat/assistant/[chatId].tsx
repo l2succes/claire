@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
-import { ArrowUpRight, ExternalLink, List, Search, SendHorizontal, Smile, Sparkles, X } from 'lucide-react-native';
+import { ArrowUpRight, ExternalLink, List, MessageCircle, SendHorizontal, Smile, Square, X } from 'lucide-react-native';
 import { router, useLocalSearchParams } from 'expo-router';
+import * as Crypto from 'expo-crypto';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, mobileType, radius, space } from '@claire/design-system';
 import { conversationAssistantApi, type AssistantCitation, type AssistantTurn } from '../../../services/conversationAssistant';
@@ -9,20 +10,14 @@ import { platformsApi } from '../../../services/platforms';
 import { supabase } from '../../../services/supabase';
 import { useAuthStore } from '../../../stores/authStore';
 import { MobileIconButton, MobileSearchField } from '../../../components/mobile/claire-mobile';
+import { FeedbackPressable } from '../../../components/mobile/pressable-feedback';
+import { AssistantAnswerActions } from '../../../components/claire/assistant-answer-actions';
+import { AssistantRichText } from '../../../components/claire/assistant-rich-text';
+import { useAssistantStream } from '../../../hooks/useAssistantStream';
+import { userFacingErrorMessage } from '../../../services/api-errors';
+import { CONVERSATION_ASK_ACTIONS } from '../../../features/assistant/ask-actions';
 
-type QuickAction = {
-  label: string;
-  description: string;
-  icon: typeof List;
-  prompt?: string;
-};
-
-const quickActions: QuickAction[] = [
-  { label: 'Catch me up', description: 'Summarize the conversation.', icon: List, prompt: 'Catch me up on this conversation. Keep it concise and cite the important moments.' },
-  { label: 'Find open loops', description: 'Open loops and questions.', icon: ArrowUpRight, prompt: 'What commitments, questions, or open loops are still unresolved in this conversation?' },
-  { label: 'Check the tone', description: 'Warm, direct, or playful.', icon: Smile, prompt: 'What is the tone of this conversation lately? Separate observations from inference and suggest a constructive next step.' },
-  { label: 'Find something', description: 'Search just this chat.', icon: Search },
-];
+const quickActionIcons = { 'catch-me-up': List, 'open-loops': ArrowUpRight, tone: Smile } as const;
 
 export default function ConversationAssistantScreen() {
   const { chatId, name = 'this chat' } = useLocalSearchParams<{ chatId: string; name?: string }>();
@@ -32,7 +27,7 @@ export default function ConversationAssistantScreen() {
   const [turns, setTurns] = useState<AssistantTurn[]>([]);
   const [question, setQuestion] = useState('');
   const [loading, setLoading] = useState(true);
-  const [asking, setAsking] = useState(false);
+  const { start: startStream, stop: stopStream, isStreaming: asking, phase: streamPhase } = useAssistantStream();
   const [error, setError] = useState<string | null>(null);
   const [suggestion, setSuggestion] = useState<string | null>(null);
   const [suggestionLoading, setSuggestionLoading] = useState(false);
@@ -41,7 +36,7 @@ export default function ConversationAssistantScreen() {
     if (!chatId) return;
     conversationAssistantApi.getConversation(chatId)
       .then(result => setTurns(result?.turns || []))
-      .catch(cause => setError(cause instanceof Error ? cause.message : 'Claire could not load this chat.'))
+      .catch(cause => setError(userFacingErrorMessage(cause, 'Claire could not load this chat.')))
       .finally(() => setLoading(false));
   }, [chatId]);
 
@@ -77,20 +72,24 @@ export default function ConversationAssistantScreen() {
     const clean = value.trim();
     if (!clean || !chatId || asking) return;
     setQuestion('');
-    setAsking(true);
     setError(null);
-    const optimistic: AssistantTurn = { id: `question-${Date.now()}`, role: 'user', content: clean, citations: [], created_at: new Date().toISOString() };
-    setTurns(current => [...current, optimistic]);
+    const requestId = Crypto.randomUUID();
+    const optimistic: AssistantTurn = { id: `question-${requestId}`, role: 'user', content: clean, citations: [], status: 'completed', request_id: requestId, created_at: new Date().toISOString() };
+    const streamingTurn: AssistantTurn = { id: `assistant-${requestId}`, role: 'assistant', content: '', citations: [], actions: [], status: 'streaming', request_id: requestId, created_at: new Date().toISOString() };
+    setTurns(current => [...current, optimistic, streamingTurn]);
     try {
-      const result = await conversationAssistantApi.askConversation(chatId, clean);
-      setTurns(result.turns);
+      const result = await startStream(
+        { kind: 'conversation', chatId, question: clean, requestId },
+        { onDelta: (delta) => setTurns((current) => current.map((turn) => turn.id === streamingTurn.id ? { ...turn, content: turn.content + delta } : turn)) },
+      );
+      setTurns((current) => current.map((turn) => turn.id === streamingTurn.id
+        ? result.assistantTurn || { ...turn, content: result.answer, citations: result.citations, actions: result.actions, status: 'completed' }
+        : turn));
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 40);
     } catch (cause) {
-      setTurns(current => current.filter(turn => turn.id !== optimistic.id));
-      setQuestion(clean);
-      setError(cause instanceof Error ? cause.message : 'Claire could not answer right now.');
-    } finally {
-      setAsking(false);
+      const message = userFacingErrorMessage(cause, 'Claire could not answer right now.');
+      setTurns(current => current.map(turn => turn.id === streamingTurn.id ? { ...turn, status: message === 'Answer stopped.' ? 'cancelled' : 'failed' } : turn));
+      setError(message);
     }
   };
 
@@ -122,20 +121,20 @@ export default function ConversationAssistantScreen() {
               <Text style={{ ...mobileType.monoLabel, color: colors.ink, letterSpacing: 1.2 }}>SUGGESTED REPLY · NATURAL + DIRECT</Text>
               {suggestionLoading ? <View style={{ minHeight: 72, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator color={colors.ink} /></View> : <Text selectable style={{ ...mobileType.sectionTitle, color: colors.ink, lineHeight: 28 }}>{suggestion ? `“${suggestion}”` : 'Claire will suggest a reply when there is a recent message to respond to.'}</Text>}
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space[2] }}>
-                <Pressable disabled={!suggestion} onPress={useSuggestion} style={({ pressed }) => ({ minHeight: 42, paddingHorizontal: space[3], alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill, backgroundColor: colors.ink, opacity: !suggestion || pressed ? 0.65 : 1 })}><Text style={{ ...mobileType.label, color: colors.paper }}>Use reply</Text></Pressable>
-                <Pressable onPress={() => void loadSuggestion(true, 'Make it shorter while preserving the same intent, language, and voice.')} style={({ pressed }) => ({ minHeight: 42, paddingHorizontal: space[3], alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill, borderWidth: 1.5, borderColor: colors.ink, opacity: pressed ? 0.65 : 1 })}><Text style={{ ...mobileType.label, color: colors.ink }}>Make shorter</Text></Pressable>
-                <Pressable onPress={() => void loadSuggestion(true)} style={({ pressed }) => ({ minHeight: 42, paddingHorizontal: space[3], alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill, borderWidth: 1.5, borderColor: colors.ink, opacity: pressed ? 0.65 : 1 })}><Text style={{ ...mobileType.label, color: colors.ink }}>Try again</Text></Pressable>
+                <FeedbackPressable disabled={!suggestion} onPress={useSuggestion} style={({ pressed }) => ({ minHeight: 42, paddingHorizontal: space[3], alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill, backgroundColor: colors.ink, opacity: !suggestion || pressed ? 0.65 : 1 })}><Text style={{ ...mobileType.label, color: colors.paper }}>Use reply</Text></FeedbackPressable>
+                <FeedbackPressable onPress={() => void loadSuggestion(true, 'Make it shorter while preserving the same intent, language, and voice.')} style={({ pressed }) => ({ minHeight: 42, paddingHorizontal: space[3], alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill, borderWidth: 1.5, borderColor: colors.ink, opacity: pressed ? 0.65 : 1 })}><Text style={{ ...mobileType.label, color: colors.ink }}>Make shorter</Text></FeedbackPressable>
+                <FeedbackPressable onPress={() => void loadSuggestion(true)} style={({ pressed }) => ({ minHeight: 42, paddingHorizontal: space[3], alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill, borderWidth: 1.5, borderColor: colors.ink, opacity: pressed ? 0.65 : 1 })}><Text style={{ ...mobileType.label, color: colors.ink }}>Try again</Text></FeedbackPressable>
               </View>
             </View>
 
             <Text style={{ ...mobileType.monoLabel, color: colors.ink, letterSpacing: 1.4, paddingTop: space[1] }}>MORE WAYS I CAN HELP</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space[3] }}>
-              {quickActions.map(action => {
-                const Icon = action.icon;
-                return <Pressable key={action.label} testID={`conversation-assistant-${action.label.toLowerCase().replace(/\s+/g, '-')}`} onPress={() => action.prompt ? void ask(action.prompt) : setQuestion('Find ')} style={({ pressed }) => ({ width: '47.8%', minHeight: 154, padding: space[3], justifyContent: 'space-between', borderRadius: 24, borderWidth: 1, borderColor: colors.neutral[400], backgroundColor: colors.paper, opacity: pressed ? 0.7 : 1 })}>
+              {CONVERSATION_ASK_ACTIONS.map(action => {
+                const Icon = quickActionIcons[action.id];
+                return <FeedbackPressable key={action.id} testID={`conversation-assistant-${action.id}`} onPress={() => void ask(action.prompt)} style={({ pressed }) => ({ width: action.id === 'tone' ? '100%' : '47.8%', minHeight: action.id === 'tone' ? 110 : 154, padding: space[3], justifyContent: 'space-between', borderRadius: 24, borderWidth: 1, borderColor: colors.neutral[400], backgroundColor: colors.paper, opacity: pressed ? 0.7 : 1 })}>
                   <Icon size={25} color={colors.ink} strokeWidth={2.2} />
                   <View style={{ gap: 4 }}><Text style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>{action.label}</Text><Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{action.description}</Text></View>
-                </Pressable>;
+                </FeedbackPressable>;
               })}
             </View>
             {error ? <Text style={{ ...mobileType.bodySmall, color: colors.danger }}>{error}</Text> : null}
@@ -146,21 +145,25 @@ export default function ConversationAssistantScreen() {
             data={turns}
             keyExtractor={item => item.id}
             contentContainerStyle={{ flexGrow: 1, paddingHorizontal: space[5], paddingBottom: space[4], gap: space[3] }}
-            renderItem={({ item }) => item.role === 'user' ? (
+            renderItem={({ item }) => item.role === 'assistant' && !item.content.trim() && !(item.actions?.length || item.citations?.length) ? null : item.role === 'user' ? (
               <View style={{ alignSelf: 'flex-end', maxWidth: '86%', paddingHorizontal: space[4], paddingVertical: space[3], borderRadius: radius.card, borderBottomRightRadius: 6, backgroundColor: colors.ink }}><Text selectable style={{ ...mobileType.body, color: colors.paper }}>{item.content}</Text></View>
             ) : (
               <View style={{ gap: space[2] }}>
-                <View style={{ alignSelf: 'flex-start', maxWidth: '94%', padding: space[4], borderRadius: radius.card, borderBottomLeftRadius: 6, backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.neutral[300] }}><Text selectable style={{ ...mobileType.body, color: colors.ink }}>{item.content}</Text></View>
-                {item.citations?.slice(0, 3).map(citation => <Pressable key={`${item.id}-${citation.messageId}`} onPress={() => openCitation(citation)} style={({ pressed }) => ({ padding: space[3], borderRadius: radius.control, borderWidth: 1, borderColor: colors.neutral[300], backgroundColor: pressed ? colors.paper : 'rgba(255,255,255,0.48)', gap: 3 })}><View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}><Text style={{ ...mobileType.label, color: colors.ink, flex: 1 }}>{citation.senderName} · {new Date(citation.timestamp).toLocaleDateString()}</Text><ExternalLink size={14} color={colors.neutral[600]} /></View><Text numberOfLines={2} style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{citation.excerpt}</Text></Pressable>)}
+                {item.content.trim() ? <View style={{ alignSelf: 'flex-start', maxWidth: '94%', padding: space[4], borderRadius: radius.card, borderBottomLeftRadius: 6, backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.neutral[300] }}><AssistantRichText content={item.content} style={{ ...mobileType.body, color: colors.ink }} /></View> : null}
+                <AssistantAnswerActions actions={item.actions} />
+                {item.citations?.slice(0, 3).map(citation => <FeedbackPressable key={`${item.id}-${citation.messageId}`} onPress={() => openCitation(citation)} style={({ pressed }) => ({ padding: space[3], borderRadius: radius.control, borderWidth: 1, borderColor: colors.neutral[300], backgroundColor: pressed ? colors.paper : 'rgba(255,255,255,0.48)', gap: 3 })}><View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}><Text style={{ ...mobileType.label, color: colors.ink, flex: 1 }}>{citation.senderName} · {new Date(citation.timestamp).toLocaleDateString()}</Text><ExternalLink size={14} color={colors.neutral[600]} /></View><Text numberOfLines={2} style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{citation.excerpt}</Text></FeedbackPressable>)}
               </View>
             )}
-            ListFooterComponent={asking ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2], padding: space[3] }}><Sparkles size={16} color={colors.focus} /><Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>Claire is reading this conversation…</Text></View> : null}
+            ListFooterComponent={asking ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2], padding: space[3] }}><MessageCircle size={16} color={colors.focus} /><Text style={{ ...mobileType.bodySmall, color: colors.neutral[600], flex: 1 }}>{streamPhase === 'planning' ? 'Understanding your question…' : streamPhase === 'saving' ? 'Saving the answer…' : 'Reading this conversation…'}</Text><Pressable accessibilityRole="button" accessibilityLabel="Stop Claire" onPress={stopStream} style={{ minWidth: 44, minHeight: 36, alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill, borderWidth: 1, borderColor: colors.neutral[400] }}><Square size={13} color={colors.ink} /></Pressable></View> : null}
           />
         )}
         {error && turns.length > 0 ? <Text style={{ ...mobileType.bodySmall, color: colors.danger, paddingHorizontal: space[4], paddingBottom: space[2] }}>{error}</Text> : null}
-        <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: space[2], paddingHorizontal: space[4], paddingTop: space[2], paddingBottom: Math.max(insets.bottom, space[3]), borderTopWidth: 1, borderTopColor: 'rgba(16,18,15,0.12)', backgroundColor: colors.sky }}>
-          <MobileSearchField value={question} onChangeText={setQuestion} placeholder={`Ask about ${name}…`} multiline style={{ flex: 1, minHeight: 44, backgroundColor: colors.paper, borderColor: colors.neutral[300] }} inputStyle={{ maxHeight: 88, paddingVertical: 9 }} />
-          <Pressable accessibilityRole="button" accessibilityLabel="Ask Claire" disabled={!question.trim() || asking} onPress={() => void ask()} style={({ pressed }) => ({ width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: question.trim() ? colors.ink : colors.neutral[200], opacity: pressed ? 0.75 : 1 })}><SendHorizontal size={18} color={question.trim() ? colors.paper : colors.neutral[400]} /></Pressable>
+        <View style={{ paddingHorizontal: space[4], paddingTop: space[2], paddingBottom: Math.max(insets.bottom, space[3]), borderTopWidth: 1, borderTopColor: 'rgba(16,18,15,0.12)', backgroundColor: colors.sky }}>
+          <View testID="conversation-assistant-scope" style={{ alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 5, marginBottom: space[2], borderRadius: radius.pill, borderWidth: 1, borderColor: colors.neutral[300], backgroundColor: colors.paper }}><Text numberOfLines={1} style={{ ...mobileType.label, color: colors.ink }}>Only {name}</Text></View>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: space[2] }}>
+            <MobileSearchField value={question} onChangeText={setQuestion} placeholder={`Ask about ${name}…`} multiline style={{ flex: 1, minHeight: 44, backgroundColor: colors.paper, borderColor: colors.neutral[300] }} inputStyle={{ maxHeight: 88, paddingVertical: 9 }} />
+            <FeedbackPressable accessibilityRole="button" accessibilityLabel="Ask Claire" disabled={!question.trim() || asking} onPress={() => void ask()} style={({ pressed }) => ({ width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: question.trim() ? colors.ink : colors.neutral[200], opacity: pressed ? 0.75 : 1 })}><SendHorizontal size={18} color={question.trim() ? colors.paper : colors.neutral[400]} /></FeedbackPressable>
+          </View>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>

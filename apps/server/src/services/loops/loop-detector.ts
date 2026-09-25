@@ -12,6 +12,7 @@
  * See /docs/plans/loops-revamp §5.
  */
 
+import { transitionLoop } from './loop-transition';
 import { logger } from '../../utils/logger';
 import { NoProviderError, callStructuredList } from '../ai/structured';
 import { buildLoopContext, type LoopContext } from './loop-context';
@@ -25,7 +26,6 @@ import {
 import {
   planOps,
   resolveEvidence,
-  isActionable,
   type ReconcileContext,
 } from './loop-reconciler';
 import {
@@ -38,6 +38,7 @@ import {
   upsertLoopParticipants,
 } from './loop-store';
 import { resolveSelfIdentity, isWeakIdentity } from './identity';
+import { calculateLoopPriority } from './loop-priority';
 
 export type DetectionMode = 'queue' | 'inline' | 'off';
 
@@ -61,6 +62,14 @@ export interface DetectionResult {
   provider: string | null;
 }
 
+export interface DetectionRunOptions {
+  maxIngestSeq?: number;
+  /** A bounded historical slice selected by a backfill runner. */
+  messageIds?: string[];
+  /** Historical slices must not move the live cursor until the scan finishes. */
+  advanceCursor?: boolean;
+}
+
 const EMPTY_RESULT: DetectionResult = {
   ran: false,
   skipReason: null,
@@ -78,32 +87,41 @@ const EMPTY_RESULT: DetectionResult = {
 /**
  * Run detection for one chat.
  *
- * Never throws: a detection failure must not take down message ingestion. The
+ * Failures throw to the worker and remain durable retryable work. The
  * cursor is only advanced on a pass that actually completed, so a transient
  * model outage means the window is retried rather than skipped.
  */
-export async function detectLoopsForChat(userId: string, chatId: string): Promise<DetectionResult> {
+export async function detectLoopsForChat(
+  userId: string,
+  chatId: string,
+  options: DetectionRunOptions = {},
+): Promise<DetectionResult> {
   if (detectionMode() === 'off') {
     return { ...EMPTY_RESULT, skipReason: 'detection_mode_off' };
   }
 
   let context: LoopContext | null;
   try {
-    context = await buildLoopContext(userId, chatId);
+    context = await buildLoopContext(userId, chatId, {
+      messageIds: options.messageIds,
+      maxIngestSeq: options.maxIngestSeq,
+      treatWindowAsDelta: !!options.messageIds,
+    });
   } catch (error) {
     logger.warn('[loops] context build failed', {
       chatId,
       error: error instanceof Error ? error.message : String(error),
     });
-    return { ...EMPTY_RESULT, skipReason: 'context_error' };
+    throw error;
   }
 
-  if (!context) return { ...EMPTY_RESULT, skipReason: 'no_context' };
+  if (!context) throw new Error('Loop context unavailable');
 
   const gate = evaluateGate({
     platform: context.platform,
     sensitivity: context.settings.sensitivity,
     detectionEnabled: context.detectionEnabled,
+    aiEnabled: context.aiEnabled,
     delta: context.delta,
     openLoopCount: context.openLoops.length,
     watchTerms: context.settings.watchTerms,
@@ -113,7 +131,9 @@ export async function detectLoopsForChat(userId: string, chatId: string): Promis
   if (!gate.run) {
     // Still advance the cursor: these messages have been considered and must not
     // be re-read forever. `producedOps: false` feeds the backoff.
-    await advanceCursor(userId, chatId, context.cursorTimestamp, context.cursorMessageId, false, gate.skipReason ?? 'skip');
+    if (options.advanceCursor !== false && !['detection_disabled','ai_disabled','sensitivity_off'].includes(gate.skipReason ?? '')) {
+      await advanceCursor(userId, chatId, context.cursorTimestamp, context.cursorMessageId, false, gate.skipReason ?? 'skip', context.cursorIngestSeq);
+    }
     return { ...EMPTY_RESULT, gate, skipReason: gate.skipReason };
   }
 
@@ -150,22 +170,31 @@ export async function detectLoopsForChat(userId: string, chatId: string): Promis
       listKey: 'ops',
       schemaName: 'loop_operations',
       schemaDescription: 'Operations that bring open loops in line with the transcript.',
+      // On reasoning models the cap includes internal work. Leave room for a
+      // complete JSON operation list rather than truncating before emission.
+      maxOutputTokens: 3_500,
     });
 
-    ops = response.items;
+    if (response.dropped.length) throw new Error('Invalid loop operations; retry before advancing the cursor');
+    ops = response.items.filter((op) => {
+      if (op.op !== 'create') return true;
+      const title = normalizeLoopText(op.title);
+      const summary = normalizeLoopText(op.state_summary);
+      const usable = Boolean(title && summary && title !== summary);
+      if (!usable) logger.warn('[loops] discarded create with non-distinct summary', { chatId });
+      return usable;
+    });
     inputTokens = response.inputTokens;
     outputTokens = response.outputTokens;
     provider = response.provider;
   } catch (error) {
-    if (error instanceof NoProviderError) {
-      return { ...EMPTY_RESULT, gate, skipReason: 'no_ai_provider' };
-    }
+    if (error instanceof NoProviderError) throw error;
     logger.warn('[loops] extraction failed', {
       chatId,
       error: error instanceof Error ? error.message : String(error),
     });
     // Do NOT advance the cursor: retry this window on the next pass.
-    return { ...EMPTY_RESULT, gate, skipReason: 'extraction_failed' };
+    throw error;
   }
 
   const reconcileContext: ReconcileContext = {
@@ -199,6 +228,16 @@ export async function detectLoopsForChat(userId: string, chatId: string): Promis
 
     const evidence = resolveEvidence(op.evidence_refs, context.window);
     const newest = evidence[evidence.length - 1];
+    const priority = calculateLoopPriority({
+      status: outcome.status,
+      visibility: process.env.LOOP_DETECTION_SHADOW === 'true' ? 'shadow' : outcome.visibility,
+      owner: op.owner,
+      state: op.state,
+      deadline: normalizeDeadline(op.deadline),
+      confidence: op.confidence,
+      relevance: outcome.relevance.score,
+      lastEvidenceAt: newest?.at ?? null,
+    });
 
     const stored = await createLoop({
       userId,
@@ -225,41 +264,42 @@ export async function detectLoopsForChat(userId: string, chatId: string): Promis
         hardPass: outcome.relevance.hardPass,
         addressed: outcome.relevance.addressed,
       },
-      visibility: outcome.visibility,
+      visibility: process.env.LOOP_DETECTION_SHADOW === 'true' ? 'shadow' : outcome.visibility,
       suppressedReason: outcome.relevance.suppressedReason,
       dedupeKey: outcome.dedupeKey,
       confidence: op.confidence,
+      requester: op.requester,
+      priorityScore: priority.score,
+      priorityBreakdown: priority.breakdown,
     });
 
-    if (!stored) continue;
+    if (!stored || stored.terminal || !stored.created && process.env.LOOP_DETECTION_SHADOW === 'true') continue;
 
     if (stored.created) {
-      await recordEvent({
-        loopId: stored.id,
-        userId,
-        kind: outcome.visibility === 'suppressed' ? 'suppressed' : 'created',
-        summary: op.state_summary || op.title,
-        confidence: op.confidence,
-        payload: {
-          threadState: op.state,
-          actionable: isActionable(op.state),
-          relevance: outcome.relevance.score,
-          suppressedReason: outcome.relevance.suppressedReason,
-        },
-      });
-
       await upsertLoopParticipants(
         stored.id,
         userId,
-        buildParticipants(op.participants, context, op.owner_name ?? null),
+        buildParticipants(op.participants, context, op.owner, op.owner_name ?? null),
       );
-    } else {
-      // Lost a race, or the same intent restated: fold it into the live loop.
+    } else if (process.env.LOOP_DETECTION_SHADOW !== 'true') {
+      // Only change an existing loop the model actually saw at this version.
+      const snapshot = context.openLoops.find(loop => loop.id === stored.id);
+      if (!snapshot?.rowVersion) {
+        await attachEvidence(stored.id, userId, evidence.map(m => ({ id: m.id, at: m.at, content: m.content })));
+        continue;
+      }
       await updateLoop({
+        expectedVersion: snapshot.rowVersion,
+        visibility: outcome.visibility,
         loopId: stored.id,
         userId,
         stateSummary: op.state_summary,
         threadState: op.state,
+        owner: op.owner,
+        requester: op.requester,
+        deadline: normalizeDeadline(op.deadline),
+        deadlinePrecision: op.deadline_precision,
+        evidenceGeneration: Math.max(0, ...evidence.map(m => m.ingestSeq ?? 0)),
         latestMessageId: newest?.id ?? null,
         lastEvidenceAt: newest?.at ?? null,
         confidence: op.confidence,
@@ -280,7 +320,7 @@ export async function detectLoopsForChat(userId: string, chatId: string): Promis
   }
 
   for (const { op, outcome } of plan.updates) {
-    if (outcome.action !== 'update') continue;
+    if (outcome.action !== 'update' || process.env.LOOP_DETECTION_SHADOW === 'true') continue;
 
     const evidence = resolveEvidence(op.evidence_refs, context.window);
     const newest = evidence[evidence.length - 1];
@@ -288,27 +328,21 @@ export async function detectLoopsForChat(userId: string, chatId: string): Promis
     const applied = await updateLoop({
       loopId: op.loop_id,
       userId,
+      evidenceGeneration: Math.max(0, ...evidence.map(m => m.ingestSeq ?? 0)),
+      expectedVersion: context.openLoops.find(l => l.id === op.loop_id)?.rowVersion,
       stateSummary: op.state_summary,
       threadState: op.state ?? null,
       status: op.status ?? null,
       owner: op.owner ?? null,
-      deadline: op.deadline === undefined ? undefined : normalizeDeadline(op.deadline),
-      deadlinePrecision: op.deadline_precision ?? null,
+      requester: op.requester ?? null,
+      deadline: op.deadline_action === 'clear' ? null : op.deadline_action === 'set' ? normalizeDeadline(op.deadline) : undefined,
+      deadlinePrecision: op.deadline_action === 'clear' ? 'none' : op.deadline_action === 'set' ? op.deadline_precision : null,
       latestMessageId: newest?.id ?? null,
       lastEvidenceAt: newest?.at ?? null,
       confidence: op.confidence,
     });
 
-    if (!applied) continue;
-
-    await recordEvent({
-      loopId: op.loop_id,
-      userId,
-      kind: 'state_change',
-      summary: op.change_reason,
-      confidence: op.confidence,
-      payload: { threadState: op.state, status: op.status },
-    });
+    if (!applied) throw new Error('Loop changed while applying detection');
 
     if (evidence.length) {
       await attachEvidence(op.loop_id, userId, evidence.map((m) => ({ id: m.id, at: m.at, content: m.content })));
@@ -317,18 +351,19 @@ export async function detectLoopsForChat(userId: string, chatId: string): Promis
   }
 
   for (const { op, outcome } of plan.closes) {
-    if (outcome.action === 'skip') continue;
+    if (outcome.action === 'skip' || process.env.LOOP_DETECTION_SHADOW === 'true' || options.messageIds?.length) continue;
 
     if (outcome.action === 'suggest_close') {
       // Recorded but not applied: the details page surfaces this as a confirm
       // chip. A wrongly-closed loop is the worst failure this system has.
-      await recordEvent({
-        loopId: op.loop_id,
-        userId,
-        kind: 'agent_note',
-        summary: `Claire thinks this is done: ${op.change_reason}`,
-        confidence: op.confidence,
-        payload: { suggestedResolution: op.resolution, reason: outcome.reason },
+      const version = context.openLoops.find(l => l.id === op.loop_id)?.rowVersion;
+      if (version === undefined) throw new Error('Missing loop version for proposal');
+      const evidence = resolveEvidence(op.evidence_refs, context.window);
+      await transitionLoop({
+        loopId: op.loop_id, userId, expectedVersion: version, patch: {}, actor: 'detector', kind: 'agent_note',
+        summary: `Claire suggests ${op.resolution}: ${op.change_reason}`,
+        payload: { suggestedResolution: op.resolution, reason: outcome.reason, expectedVersion: version, expectedChatGeneration: context.cursorIngestSeq, evidenceIds: evidence.map(m => m.id) },
+        operationKey: `close-proposal:${op.loop_id}:${version}:${context.cursorIngestSeq}:${op.resolution}`,
       });
       result.suggestedCloses += 1;
       continue;
@@ -350,7 +385,9 @@ export async function detectLoopsForChat(userId: string, chatId: string): Promis
   }
 
   const producedOps = result.created + result.updated + result.closed + result.suppressed > 0;
-  await advanceCursor(userId, chatId, context.cursorTimestamp, context.cursorMessageId, producedOps, 'ran');
+  if (options.advanceCursor !== false) {
+    await advanceCursor(userId, chatId, context.cursorTimestamp, context.cursorMessageId, producedOps, 'ran', context.cursorIngestSeq);
+  }
 
   logger.info('[loops] detection pass', {
     chatId,
@@ -386,22 +423,33 @@ function normalizeDeadline(value: string | null | undefined): string | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
 }
 
+function normalizeLoopText(value: string): string {
+  return value.trim().toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+}
+
 /** Roster entries for the people a loop actually involves. */
-function buildParticipants(
+export function buildParticipants(
   names: string[],
   context: LoopContext,
+  owner: 'me' | 'them' | 'shared' | 'unknown',
   ownerName: string | null,
 ): Array<{ displayName: string; identityKey: string; contactId?: string | null; isSelf?: boolean; role?: 'owner' | 'counterparty' | 'mentioned' | 'observer' }> {
   const byName = new Map(context.roster.map((p) => [p.displayName.toLowerCase(), p]));
 
   return names.slice(0, 25).map((name) => {
     const match = byName.get(name.toLowerCase());
-    const isOwner = !!ownerName && name.toLowerCase() === ownerName.toLowerCase();
+    const isSelf = match?.isSelf ?? false;
+    // The model's optional name must never override the structured owner
+    // direction. In particular, a user cannot be labelled the owner of a loop
+    // whose `owner` is `them` merely because their name appeared in the prompt.
+    const isOwner = owner === 'me'
+      ? isSelf
+      : owner === 'them' && !isSelf && !!ownerName && name.toLowerCase() === ownerName.toLowerCase();
     return {
       displayName: name,
       identityKey: match?.identityKey ?? name.toLowerCase(),
       contactId: match?.contactId ?? null,
-      isSelf: match?.isSelf ?? false,
+      isSelf,
       role: isOwner ? ('owner' as const) : ('counterparty' as const),
     };
   });

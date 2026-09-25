@@ -1,144 +1,60 @@
-/**
- * Debounced, per-chat scheduling.
- *
- * The old detector ran once per message. A twenty-message burst in a group chat
- * therefore cost twenty model calls and produced up to twenty disconnected rows
- * — which is both the cost problem and the duplicate-fragments problem, and they
- * have the same fix: wait for the conversation to settle, then look at it once.
- *
- * Trailing debounce with a hard cap: each new message pushes the run back, but
- * never past LOOP_MAX_DELAY_MS, so a chat that never goes quiet still gets
- * processed.
- *
- * See /docs/plans/loops-revamp §5.
- */
-
-import Bull from 'bull';
-
-import { redisConfig } from '../../config';
+/** Durable per-chat dirty generations. Redis is not the source of pending work. */
+import { supabase } from '../supabase';
 import { logger } from '../../utils/logger';
 import { detectLoopsForChat, detectionMode } from './loop-detector';
 
-const DEBOUNCE_MS = parseInt(process.env.LOOP_DEBOUNCE_MS ?? '45000', 10);
-const MAX_DELAY_MS = parseInt(process.env.LOOP_MAX_DELAY_MS ?? '180000', 10);
+let timer: ReturnType<typeof setInterval> | undefined;
+let running: Promise<void> | undefined;
+const BLOCKED = new Set(['detection_disabled', 'ai_disabled', 'sensitivity_off', 'weak_identity', 'detection_mode_off']);
 
-interface LoopJob {
-  userId: string;
-  chatId: string;
-  /** When this chat's pending run was first scheduled, for the hard cap. */
-  firstScheduledAt: number;
-}
-
-let queue: Bull.Queue<LoopJob> | null = null;
-
-/** Per-chat first-scheduled timestamps, so the cap survives re-scheduling. */
-const pendingSince = new Map<string, number>();
-
-function jobKey(userId: string, chatId: string): string {
-  return `loop:${userId}:${chatId}`;
-}
-
-function getQueue(): Bull.Queue<LoopJob> | null {
-  if (detectionMode() !== 'queue') return null;
-  if (queue) return queue;
-
-  try {
-    queue = new Bull<LoopJob>('loop-detection', {
-      // redisConfig is a union: Railway supplies REDIS_URL, local dev supplies
-      // host/port. Narrow rather than reaching for a field that may not exist.
-      redis: 'url' in redisConfig
-        ? redisConfig.url
-        : { host: redisConfig.host, port: redisConfig.port, password: redisConfig.password },
-      defaultJobOptions: {
-        removeOnComplete: 100,
-        removeOnFail: 50,
-        attempts: 2,
-        backoff: { type: 'exponential', delay: 30_000 },
-      },
-    });
-
-    queue.process(async (job) => {
-      pendingSince.delete(jobKey(job.data.userId, job.data.chatId));
-      return detectLoopsForChat(job.data.userId, job.data.chatId);
-    });
-
-    queue.on('failed', (job, error) => {
-      logger.warn('[loops] detection job failed', {
-        chatId: job?.data?.chatId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    });
-
-    logger.info('[loops] detection queue ready', { debounceMs: DEBOUNCE_MS, maxDelayMs: MAX_DELAY_MS });
-    return queue;
-  } catch (error) {
-    logger.error('[loops] could not create detection queue', {
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return null;
-  }
-}
-
-/**
- * Schedule a detection pass for a chat.
- *
- * In `inline` mode this runs immediately — used by tests, the mock bridge, and
- * self-hosters without Redis. In `off` mode it does nothing at all.
- */
-export async function scheduleChat(userId: string, chatId: string): Promise<void> {
-  const mode = detectionMode();
-  if (mode === 'off') return;
-
-  if (mode === 'inline') {
+export async function runLoopWorkOnce(): Promise<void> {
+  if (detectionMode() !== 'queue') return;
+  const { data, error } = await supabase.rpc('claim_chat_loop_work');
+  if (error) throw error;
+  await Promise.all((data ?? []).map(async (work: any) => {
     try {
-      await detectLoopsForChat(userId, chatId);
+      const result = await detectLoopsForChat(work.user_id, work.chat_id, { maxIngestSeq: work.generation });
+      const blocked = result.skipReason && BLOCKED.has(result.skipReason);
+      const { data: cursor, error: cursorError } = await supabase.from('chat_loop_cursors')
+        .select('last_ingest_seq').eq('user_id', work.user_id).eq('chat_id', work.chat_id).maybeSingle();
+      if (cursorError) throw cursorError;
+      const { error: finishError } = await supabase.from('chat_loop_work').update({
+        processed_generation: blocked ? work.processed_generation : Math.max(work.processed_generation, cursor?.last_ingest_seq ?? 0),
+        lease_until: null, lease_token: null, attempts: 0,
+        last_error: blocked ? result.skipReason : null,
+        last_success_at: blocked ? work.last_success_at : new Date().toISOString(),
+        next_run_at: new Date(Date.now() + (blocked ? 5 * 60_000 : 1000)).toISOString(),
+      }).eq('user_id', work.user_id).eq('chat_id', work.chat_id).eq('lease_token', work.lease_token);
+      if (finishError) throw finishError;
     } catch (error) {
-      logger.warn('[loops] inline detection failed', {
-        chatId,
-        error: error instanceof Error ? error.message : String(error),
-      });
+      const message = error instanceof Error ? error.message : String(error);
+      const { error: persistError } = await supabase.from('chat_loop_work').update({
+        lease_until: null, lease_token: null, last_error: message.slice(0, 500),
+        next_run_at: new Date(Date.now() + Math.min(60 * 60_000, 30_000 * 2 ** Math.min(work.attempts, 7))).toISOString(),
+      }).eq('user_id', work.user_id).eq('chat_id', work.chat_id).eq('lease_token', work.lease_token);
+      logger.warn('[loops] durable detection failed', { chatId: work.chat_id, error: message, persistError: persistError?.message });
     }
-    return;
-  }
-
-  const active = getQueue();
-  if (!active) return;
-
-  const key = jobKey(userId, chatId);
-  const now = Date.now();
-  const firstScheduledAt = pendingSince.get(key) ?? now;
-  pendingSince.set(key, firstScheduledAt);
-
-  // Never push the run past the hard cap, even in a conversation that keeps
-  // producing messages.
-  const elapsed = now - firstScheduledAt;
-  const delay = Math.max(0, Math.min(DEBOUNCE_MS, MAX_DELAY_MS - elapsed));
-
-  try {
-    // A fixed jobId plus removeOnComplete makes this a replace-in-place: the
-    // previously scheduled run for this chat is cancelled and re-timed.
-    const existing = await active.getJob(key);
-    if (existing) {
-      const state = await existing.getState();
-      if (state === 'delayed' || state === 'waiting') {
-        await existing.remove();
-      }
-    }
-
-    await active.add({ userId, chatId, firstScheduledAt }, { delay, jobId: key });
-  } catch (error) {
-    logger.warn('[loops] could not schedule detection', {
-      chatId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
+  }));
 }
 
-/** Shut the queue down. Used by tests and graceful shutdown. */
+export function startLoopQueue(): void {
+  if (timer || detectionMode() !== 'queue') return;
+  const tick = () => {
+    if (running) return;
+    running = runLoopWorkOnce().catch(error => { logger.error('[loops] worker poll failed', error); }).finally(() => { running = undefined; });
+  };
+  timer = setInterval(tick, 5000);
+  tick();
+}
+
+/** The message transaction already marked the chat dirty, including edits. */
+export async function scheduleChat(userId: string, chatId: string): Promise<void> {
+  if (detectionMode() === 'inline') await detectLoopsForChat(userId, chatId);
+  else startLoopQueue();
+}
+
 export async function closeLoopQueue(): Promise<void> {
-  if (queue) {
-    await queue.close();
-    queue = null;
-  }
-  pendingSince.clear();
+  if (timer) clearInterval(timer);
+  timer = undefined;
+  await running;
 }

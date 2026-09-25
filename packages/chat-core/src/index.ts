@@ -7,7 +7,29 @@ export {
   chatMessageFromSend,
   isBridgeFailure,
 } from './messages';
-export { normalizeMediaUrl, isPlayableAudio, parseMediaCaption, type MediaCaption } from './media';
+export {
+  normalizeMediaUrl,
+  normalizeAudioPlaybackUrl,
+  isPlayableAudio,
+  parseMediaCaption,
+  type MediaCaption,
+} from './media';
+export {
+  sanitizeWaveform,
+  downsampleWaveform,
+  meteringToWaveformSample,
+  formatAudioDuration,
+  seekSecondsForPosition,
+} from './audio';
+export { isSingleEmojiMessage } from './emoji';
+export {
+  EMPTY_TIMELINE,
+  TIMELINE_WINDOW,
+  keepPendingReactions,
+  mergeRealtimeMessage,
+  mergeServerTimeline,
+  type ChatTimeline,
+} from './timeline';
 export {
   groupReactions,
   groupReactionsByMessage,

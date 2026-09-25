@@ -4,6 +4,7 @@ import {
   ArrowRightIcon,
   ArrowTopRightOnSquareIcon,
   Bars3Icon,
+  ChatBubbleLeftEllipsisIcon,
   ChatBubbleLeftRightIcon,
   CheckBadgeIcon,
   CheckCircleIcon,
@@ -24,7 +25,6 @@ import {
   PencilSquareIcon,
   PlusIcon,
   ServerStackIcon,
-  SparklesIcon,
   UsersIcon,
 } from '@heroicons/react/24/outline';
 import type { ComponentType, SVGProps } from 'react';
@@ -39,7 +39,8 @@ const icons = {
   search: MagnifyingGlassIcon,
   plus: PlusIcon,
   compose: PencilSquareIcon,
-  sparkles: SparklesIcon,
+  // Keep the existing key for content metadata while using a less clichéd mark.
+  'chat-ellipsis': ChatBubbleLeftEllipsisIcon,
   send: PaperAirplaneIcon,
   settings: Cog6ToothIcon,
   people: UsersIcon,

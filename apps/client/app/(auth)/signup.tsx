@@ -4,6 +4,8 @@ import { router, Link } from 'expo-router';
 import { supabase } from '../../services/supabase';
 import { GoogleSignInButton } from '../../components/GoogleSignInButton';
 import { getAuthRedirectUri } from '../../services/googleAuth';
+import { userFacingErrorMessage } from '../../services/api-errors';
+import { reportNewSignup } from '../../services/operator-alerts';
 
 export default function SignupScreen() {
   const [email, setEmail] = useState('');
@@ -36,11 +38,13 @@ export default function SignupScreen() {
       });
 
       if (error) {
-        Alert.alert('Signup Error', error.message);
+        Alert.alert('Signup Error', userFacingErrorMessage(error, 'Failed to sign up'));
         return;
       }
 
       if (data.user) {
+        reportNewSignup(data.user.id);
+
         if (data.session) {
           // User is automatically logged in after signup (email confirmation disabled)
           // The auth store will be updated via the Supabase auth listener
@@ -54,8 +58,8 @@ export default function SignupScreen() {
           );
         }
       }
-    } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to sign up');
+    } catch (error) {
+      Alert.alert('Error', userFacingErrorMessage(error, 'Failed to sign up'));
     } finally {
       setLoading(false);
     }

@@ -1,9 +1,24 @@
+const {
+  withStorybook,
+} = require('@storybook/react-native/withStorybook');
+
 const fs = require('fs');
 const path = require('path');
 const { getDefaultConfig } = require('expo/metro-config');
 const { withNativeWind } = require('nativewind/metro');
 
 const config = getDefaultConfig(__dirname);
+
+// Expo's default is `inlineRequires: false`, which means every module in the
+// graph is evaluated at bundle start whether or not the first screen needs it.
+// Requiring at first use instead keeps the settings screens, the desktop
+// workspace and the connection flows out of the startup path.
+config.transformer.getTransformOptions = async () => ({
+  transform: {
+    experimentalImportSupport: true,
+    inlineRequires: true,
+  },
+});
 // The app lives at apps/client, so the workspace root is two levels up.
 const workspaceRoot = path.resolve(__dirname, '../..');
 
@@ -69,4 +84,11 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
   return context.resolveRequest(context, moduleName, platform);
 };
 
-module.exports = withNativeWind(config, { input: './global.css' });
+module.exports = withStorybook(withNativeWind(config, { input: './global.css' }), {
+  enabled: process.env.STORYBOOK_ENABLED === 'true',
+  // Keep the review runner JavaScript-only so it works in Claire's existing
+  // development client. The interactive walkthrough is the initial story;
+  // the stock on-device navigator is not compatible with this RN version.
+  liteMode: true,
+  disableUI: true,
+});

@@ -10,6 +10,7 @@ import {
   Platform,
   PlatformStatus,
   MessageContentType,
+  type PlatformCapabilities,
 } from '../adapters';
 import { MatrixBridgeAdapter } from '../adapters/matrix';
 import { platformConfig } from '../config';
@@ -20,7 +21,10 @@ import { loginWithCredentials, submitTwoFactorCode } from '../services/instagram
 import { platformCatalog, platformCatalogVersion } from '../platform-catalog';
 import { supabase, type DbRow } from '../services/supabase';
 import { operationsTelemetry } from '../services/operations-telemetry';
+import { ClientFacingError, respondWithError } from '../utils/api-error';
 import { queueWhatsAppContactIdentitySync } from '../services/whatsapp-contact-backfill';
+import { outgoingTransactionId } from '../services/outgoing-request-id';
+import { transcodeVoiceToOggOpus } from '../services/audio-transcoder';
 
 // Railway services cannot reach each other through localhost. Railway does not
 // inject NODE_ENV by default, so its public-domain marker is also used to
@@ -73,6 +77,29 @@ const whatsappBridgeClient = new BridgeHttpClient(
 const router = Router();
 const INSTAGRAM_LOGIN_URL = 'https://www.instagram.com/accounts/login/';
 const REQUIRED_INSTAGRAM_COOKIES = ['sessionid', 'csrftoken', 'mid', 'ig_did', 'ds_user_id'];
+
+function voiceDurationMs(req: Request): number | undefined {
+  const rawHeader = req.header('x-claire-audio-duration-ms');
+  const rawLegacy = typeof req.query.durationSeconds === 'string' ? req.query.durationSeconds : undefined;
+  const value = rawHeader !== undefined ? Number(rawHeader) : rawLegacy !== undefined ? Number(rawLegacy) * 1000 : undefined;
+  if (value === undefined) return undefined;
+  if (!Number.isFinite(value) || value <= 0 || value > 60 * 60 * 1000) {
+    throw new ClientFacingError('Voice-note duration is invalid');
+  }
+  return Math.round(value);
+}
+
+function voiceWaveform(req: Request): number[] {
+  const value = req.header('x-claire-audio-waveform');
+  if (!value) return [];
+  const values = value.split(',');
+  if (values.length > 128) throw new ClientFacingError('Voice-note waveform is too long');
+  const waveform = values.map(Number);
+  if (waveform.some((sample) => !Number.isFinite(sample) || sample < 0 || sample > 255)) {
+    throw new ClientFacingError('Voice-note waveform is invalid');
+  }
+  return waveform.map(Math.round);
+}
 
 /**
  * GET /platforms/definitions
@@ -198,6 +225,44 @@ router.post('/:platform/interest', async (req: Request, res: Response) => {
  * GET /platforms
  * List all available platforms and their status
  */
+/**
+ * Translate an adapter's capabilities into the shape the clients consume.
+ *
+ * These are two different vocabularies for the same facts, and returning the
+ * adapter object verbatim silently disabled every feature whose name happened
+ * not to match. `canReactToMessages` is `canSendReactions` on the client, so
+ * the reaction picker read `undefined`, treated every platform as incapable,
+ * and never offered a reaction — even though the adapter, the endpoint and the
+ * persistence behind it were all fully implemented. Reply escaped the bug only
+ * because `canReplyToMessages` is spelled the same on both sides.
+ *
+ * Mapping field by field keeps the contract in one place, so the next rename is
+ * a compile error here rather than a feature that quietly stops appearing.
+ */
+export function clientCapabilities(adapter: { capabilities: PlatformCapabilities; sendReaction?: unknown }) {
+  const capabilities = adapter.capabilities;
+  return {
+    canSendText: capabilities.canSendText,
+    canSendMedia: capabilities.canSendMedia,
+    canSendVoice: capabilities.canSendVoice,
+    canSendStickers: capabilities.canSendStickers,
+    // Both halves, because the reaction endpoint gates on both. Three adapters
+    // advertise canReactToMessages without implementing sendReaction; that is
+    // harmless while PLATFORM_MODE=matrix routes them all through the bridge
+    // adapter, but the moment one is served directly the picker would offer a
+    // reaction the endpoint answers with 400. Advertise only what works.
+    canSendReactions: capabilities.canReactToMessages && typeof adapter.sendReaction === 'function',
+    canReplyToMessages: capabilities.canReplyToMessages,
+    canReadReceipts: capabilities.canReadReceipts,
+    canDeleteMessages: capabilities.canDeleteMessages,
+    canEditMessages: capabilities.canEditMessages,
+    // The adapters track whether a group can be *created*, which is the closest
+    // fact available; neither of these is read by a client today.
+    supportsGroups: capabilities.canCreateGroups,
+    supportsBroadcasts: false,
+  };
+}
+
 router.get('/', async (_req: Request, res: Response) => {
   try {
     const platforms = platformManager.getAvailablePlatforms();
@@ -208,7 +273,7 @@ router.get('/', async (_req: Request, res: Response) => {
         platform,
         enabled: platformConfig[platform as keyof typeof platformConfig]?.enabled ?? false,
         authMethod: adapter?.authMethod,
-        capabilities: adapter?.capabilities,
+        capabilities: adapter ? clientCapabilities(adapter) : undefined,
       };
     });
 
@@ -830,6 +895,45 @@ router.get('/:platform/auth/:sessionId', async (req: Request, res: Response) => 
   }
 });
 
+/** Resume an existing transport only. Unlike /reconnect this never starts login. */
+router.post('/:platform/recover', async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    const { platform } = req.params;
+    const { sessionId } = req.body;
+    if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });
+    if (typeof sessionId !== 'string') return res.status(400).json({ success: false, error: 'Session ID required' });
+    const adapter = platformManager.getAdapter(platform as Platform);
+    if (!(adapter instanceof MatrixBridgeAdapter)) return res.status(409).json({ success: false, error: 'Connection needs attention in Connections.' });
+    const session = await adapter.getSession(sessionId);
+    if (!session || session.userId !== userId || session.platform !== platform) {
+      return res.status(404).json({ success: false, error: 'Session not found' });
+    }
+    if (!session.lastConnectedAt) return res.status(409).json({ success: false, error: 'Connection needs attention in Connections.' });
+    adapter.recoverTransport();
+    // mautrix owns remote-network retries. Reconcile Claire's status against
+    // that exact existing login, without creating or rotating credentials.
+    const bridge = platform === Platform.WHATSAPP ? whatsappBridgeClient
+      : platform === Platform.INSTAGRAM ? instagramBridgeClient : undefined;
+    if (bridge && session.platformUserId) {
+      const state = await bridge.getConnectionState(session.platformUserId);
+      if (state === 'CONNECTED') await adapter.markSessionConnected(sessionId, session.platformUserId);
+      else if (!state || state === 'BAD_CREDENTIALS' || state === 'LOGGED_OUT') {
+        return res.status(409).json({ success: false, error: 'Connection needs attention in Connections.' });
+      }
+    }
+    const updated = await adapter.getSession(sessionId);
+    return res.json({ success: true, session: {
+      id: updated!.id, platform: updated!.platform, status: updated!.status,
+      authMethod: updated!.authMethod, platformUserId: updated!.platformUserId,
+      platformUsername: updated!.platformUsername, phoneNumber: updated!.phoneNumber,
+      createdAt: updated!.createdAt, lastConnectedAt: updated!.lastConnectedAt,
+    } });
+  } catch (error) {
+    return respondWithError(res, error, { logMessage: 'Error recovering platform connection', fallback: 'Connection recovery will retry.' });
+  }
+});
+
 /**
  * POST /platforms/:platform/reconnect
  * Reconnect an existing session
@@ -970,7 +1074,7 @@ router.get('/:platform/chats/:sessionId', async (req: Request, res: Response) =>
  * hard, auditable size limit before it reaches a bridge.
  */
 router.post(
-  '/:platform/reactions',
+  ['/:platform/reactions', '/:platform/outbox/reactions'],
   async (req: Request, res: Response) => {
     try {
       const { platform } = req.params;
@@ -996,6 +1100,10 @@ router.post(
         });
       }
 
+      if (req.path.includes('/outbox/') && !req.body.clientRequestId) {
+        throw new ClientFacingError('Outgoing request ID required');
+      }
+
       const adapter = platformManager.getAdapter(platform as Platform);
       if (!adapter) return res.status(404).json({ success: false, error: 'Platform not available' });
       if (!adapter.capabilities.canReactToMessages || !adapter.sendReaction) {
@@ -1003,6 +1111,10 @@ router.post(
           success: false,
           error: 'Platform does not support message reactions',
         });
+      }
+
+      if (req.body.clientRequestId && !(adapter instanceof MatrixBridgeAdapter)) {
+        return res.status(409).json({ success: false, error: 'Queued reactions are unavailable for this connection.' });
       }
 
       const session = await adapter.getSession(sessionId);
@@ -1048,17 +1160,29 @@ router.post(
       if (existing) return res.json({ success: true, reaction: existing, alreadyReacted: true });
 
       const startedAt = Date.now();
-      const sent = await adapter.sendReaction(sessionId, chatId, messageId, emoji);
+      const transactionId = outgoingTransactionId(userId, platform, chatId, 'reaction', req.body.clientRequestId);
+      const sent = await adapter.sendReaction(sessionId, chatId, messageId, emoji, transactionId);
+      // Upsert, not insert. The duplicate check above runs before the bridge
+      // call, so the whole provider round trip sits inside the window — and the
+      // bridge echoes the reaction back through the normal ingest path, which
+      // writes this exact row. When the echo wins that race an insert violates
+      // message_reactions_user_id_message_id_reactor_id_emoji_key and the user
+      // sees a raw Postgres constraint error for a reaction that in fact
+      // succeeded. Landing on the row the echo created is the correct outcome,
+      // and it carries our platform_event_id onto it.
       const { data: reaction, error: reactionError } = await supabase
         .from('message_reactions')
-        .insert({
-          user_id: userId,
-          message_id: target.id,
-          platform_event_id: sent.platformEventId,
-          emoji,
-          from_me: true,
-          reactor_id: 'self',
-        })
+        .upsert(
+          {
+            user_id: userId,
+            message_id: target.id,
+            platform_event_id: sent.platformEventId,
+            emoji,
+            from_me: true,
+            reactor_id: 'self',
+          },
+          { onConflict: 'user_id,message_id,reactor_id,emoji' }
+        )
         .select('*')
         .single();
       if (reactionError) throw reactionError;
@@ -1074,10 +1198,9 @@ router.post(
       });
       return res.json({ success: true, reaction });
     } catch (error) {
-      logger.error('Error sending message reaction:', error);
-      return res.status(500).json({
-        success: false,
-        error: (error as Error).message || 'Failed to send reaction',
+      return respondWithError(res, error, {
+        logMessage: 'Error sending message reaction',
+        fallback: 'Could not add that reaction. Try again.',
       });
     }
   }
@@ -1141,11 +1264,21 @@ router.post(
 
       const startedAt = Date.now();
       try {
+        const durationMs = voiceDurationMs(req);
+        const waveform = voiceWaveform(req);
+        const voiceData = await transcodeVoiceToOggOpus(req.body);
         const message = await adapter.sendMessage(sessionId, chatId, {
           content: 'Voice message',
           contentType: MessageContentType.VOICE,
           replyToMessageId,
-          media: [{ type: MessageContentType.VOICE, data: req.body, mimeType, fileName: 'voice-note.m4a' }],
+          media: [{
+            type: MessageContentType.VOICE,
+            data: voiceData,
+            mimeType: 'audio/ogg; codecs=opus',
+            fileName: 'voice-note.ogg',
+            durationMs,
+            waveform,
+          }],
         });
         void operationsTelemetry.record({
           traceSource: message.platformMessageId || `voice:${sessionId}:${Date.now()}`,
@@ -1171,8 +1304,10 @@ router.post(
         throw error;
       }
     } catch (error) {
-      logger.error('Error sending voice note:', error);
-      return res.status(500).json({ success: false, error: 'Failed to send voice note' });
+      return respondWithError(res, error, {
+        logMessage: 'Error sending voice note',
+        fallback: 'Could not send that voice note. Try again.',
+      });
     }
   }
 );
@@ -1181,10 +1316,10 @@ router.post(
  * POST /platforms/:platform/send
  * Send a text message via a platform
  */
-router.post('/:platform/send', async (req: Request, res: Response) => {
+router.post(['/:platform/send', '/:platform/outbox/send'], async (req: Request, res: Response) => {
   try {
     const { platform } = req.params;
-    const { sessionId, chatId, content, replyToMessageId } = req.body;
+    const { sessionId, chatId, content, replyToMessageId, clientRequestId } = req.body;
     const userId = req.user?.id;
 
     if (!userId) {
@@ -1201,12 +1336,20 @@ router.post('/:platform/send', async (req: Request, res: Response) => {
       });
     }
 
+    if (req.path.includes('/outbox/') && !clientRequestId) {
+      throw new ClientFacingError('Outgoing request ID required');
+    }
+
     const adapter = platformManager.getAdapter(platform as Platform);
     if (!adapter) {
       return res.status(404).json({
         success: false,
         error: 'Platform not available',
       });
+    }
+
+    if (clientRequestId && !(adapter instanceof MatrixBridgeAdapter)) {
+      return res.status(409).json({ success: false, error: 'Queued sending is unavailable for this connection.' });
     }
 
     // Verify session belongs to user
@@ -1269,11 +1412,14 @@ router.post('/:platform/send', async (req: Request, res: Response) => {
       }
     }
 
+    const transactionId = outgoingTransactionId(userId, platform, chatId, 'text', clientRequestId);
     const startedAt = Date.now();
     try {
     const message = await adapter.sendMessage(sessionId, chatId, {
       content,
       replyToMessageId,
+      transactionId,
+      clientRequestId,
     });
 
     void operationsTelemetry.record({
@@ -1304,10 +1450,9 @@ router.post('/:platform/send', async (req: Request, res: Response) => {
       throw error;
     }
   } catch (error) {
-    logger.error('Error sending message:', error);
-    return res.status(500).json({
-      success: false,
-      error: (error as Error).message || 'Failed to send message',
+    return respondWithError(res, error, {
+      logMessage: 'Error sending message',
+      fallback: 'Could not send that message. Try again.',
     });
   }
 });

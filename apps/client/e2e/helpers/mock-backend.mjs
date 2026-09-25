@@ -789,6 +789,27 @@ export async function mockBackend(page) {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data: { status: 'ready', indexedCount: 4, totalCount: 4, lastIndexedAt: new Date().toISOString(), lastError: null } }) });
     } else if (path.endsWith('/index') && method === 'POST') {
       await route.fulfill({ status: 202, contentType: 'application/json', body: JSON.stringify({ success: true, data: { status: 'indexing', indexedCount: 0, totalCount: 4, lastIndexedAt: null, lastError: null } }) });
+    } else if (path.endsWith('/assistant/messages') && method === 'POST') {
+      const request = JSON.parse(route.request().postData() || '{}');
+      assistantScope = request.chatIds || [];
+      assistantThread.title = request.question.slice(0, 72);
+      assistantThreads = [assistantThread];
+      const answer = assistantScope.includes('mock-chat-wa-alice') ? 'Scoped Alice answer.' : 'You discussed meeting Alice after the report is sent.';
+      const citations = [
+        { messageId: 'chatmsg-1', chatId: 'mock-chat-wa-alice', excerpt: "Hi! I'll send you the report by Friday", senderName: 'Alice (WA)', fromMe: false, timestamp: new Date().toISOString(), platform: 'whatsapp', chatName: 'Alice (WA)', isGroup: false, isPreferredScope: assistantScope.includes('mock-chat-wa-alice') },
+      ];
+      const assistantTurn = { id: 'assistant-answer-1', role: 'assistant', content: answer, citations, actions: [], status: 'completed', request_id: request.requestId, created_at: new Date().toISOString() };
+      assistantTurns = [
+        { id: 'assistant-user-1', role: 'user', content: request.question, citations: [], scope_chat_ids: assistantScope, created_at: new Date().toISOString() },
+        assistantTurn,
+      ];
+      const result = { answer, citations, actions: [], indexing: { status: 'ready', indexedCount: 4, totalCount: 4, lastIndexedAt: new Date().toISOString(), lastError: null }, requestId: request.requestId, assistantTurn, thread: assistantThread };
+      const events = [
+        { type: 'data-claire-status', data: { phase: 'reading' } },
+        { type: 'text-delta', id: assistantTurn.id, delta: answer },
+        { type: 'data-claire-result', data: result },
+      ];
+      await route.fulfill({ status: 200, contentType: 'text/event-stream', body: events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join('') });
     } else if (path.endsWith('/threads') && method === 'GET') {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data: assistantThreads }) });
     } else if (path.endsWith('/threads') && method === 'POST') {

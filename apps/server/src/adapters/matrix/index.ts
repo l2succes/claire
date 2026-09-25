@@ -37,6 +37,7 @@ import { MatrixConfig, BRIDGE_BOT_LOCALPARTS } from './types';
 import { MatrixRoomMapper } from './room-mapper';
 import { MatrixUserMapper } from './user-mapper';
 import { MatrixEventConverter } from './event-converter';
+import { ownReadReceiptEventIds } from './read-receipts';
 import { BridgeAuthManager, BridgeAuthConfig } from './bridge-auth';
 import {
   fromPersistedMatrixSession,
@@ -293,12 +294,38 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     );
     if (displayName) message.senderName = displayName;
 
+    if (identity.avatarUrl) {
+      message.senderAvatarUrl =
+        this.matrixMediaProxyUrl(identity.avatarUrl) || identity.avatarUrl;
+    }
+
     const phoneNumber = phoneNumberFromBridgeIdentifiers([identity.phoneNumber]);
     if (phoneNumber) {
       message.platformMetadata = {
         ...message.platformMetadata,
         contactPhone: phoneNumber,
       };
+    }
+    if (identity.avatarUrl) {
+      message.platformMetadata = {
+        ...message.platformMetadata,
+        contactAvatarUrl: this.matrixMediaProxyUrl(identity.avatarUrl) || identity.avatarUrl,
+      };
+    }
+  }
+
+  /** Attach notification-ready sender and conversation artwork to live events. */
+  private enrichMessageAvatars(message: UnifiedMessage, room: Room): void {
+    const senderAvatar = room.getMember(message.senderId)?.getMxcAvatarUrl();
+    if (senderAvatar) {
+      message.senderAvatarUrl =
+        this.matrixMediaProxyUrl(senderAvatar) || senderAvatar;
+    }
+
+    const chatAvatar = room.getMxcAvatarUrl();
+    if (chatAvatar) {
+      message.chatAvatarUrl =
+        this.matrixMediaProxyUrl(chatAvatar) || chatAvatar;
     }
   }
 
@@ -506,6 +533,10 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
   private setupMatrixEventHandlers(): void {
     if (!this.matrixClient) return;
 
+    this.matrixClient.on(ClientEvent.Sync, (state, previous) => {
+      if (state === 'ERROR' && previous !== 'ERROR') this.matrixClient?.retryImmediately();
+    });
+
     // Auto-accept room invites from bridge bots
     this.matrixClient.on(RoomMemberEvent.Membership, async (_event, member) => {
       if (member.userId !== this.matrixClient!.getUserId()) return;
@@ -563,6 +594,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
 
       // Skip bridge notices in chat rooms (system messages, errors)
       if (event.getContent()?.msgtype === 'm.notice') return;
+      if (!this.eventConverter.isSupportedMessageEvent(event)) return;
 
       // Check if this is a bridged chat message
       let chatInfo = this.roomMapper.getRoomChatInfo(room.roomId);
@@ -588,6 +620,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
         selfGhostIds,
         matrixUserId
       );
+      this.enrichMessageAvatars(unifiedMessage, room);
       await this.enrichRemoteMessageContact(unifiedMessage, session);
 
       // Matrix receives bridged provider events after mautrix has translated
@@ -614,6 +647,41 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
       });
 
       this.emitPlatformEvent('message', chatInfo.sessionId, unifiedMessage);
+    });
+
+    // The WhatsApp bridge can mirror reads performed on the native phone as
+    // Matrix receipts. Only receipts for this account's exact Matrix identity
+    // (or its self ghost) may advance Claire's read cursor. Contact reads and
+    // bridge delivery receipts are deliberately ignored.
+    this.matrixClient.on(RoomEvent.Receipt, async (event, room) => {
+      try {
+        let chatInfo = this.roomMapper.getRoomChatInfo(room.roomId);
+        if (!chatInfo) {
+          await this.tryRegisterRoom(room);
+          chatInfo = this.roomMapper.getRoomChatInfo(room.roomId);
+        }
+        if (!chatInfo) return;
+        const session = this.sessions.get(chatInfo.sessionId);
+        if (!session) return;
+        // The shared bot is not the person. In non-double-puppet mode it can
+        // send delivery receipts, which must not clear the person's unread
+        // state. Only a session-bound real Matrix user qualifies.
+        const ownIds = [
+          this.sessionMatrixUserIds.get(chatInfo.sessionId),
+          ...this.getSelfGhostIds(chatInfo.sessionId, session, chatInfo.platform),
+        ].filter((id): id is string => !!id);
+        for (const eventId of ownReadReceiptEventIds(event.getContent(), ownIds)) {
+          const { error } = await supabase.rpc('reconcile_matrix_read_receipt', {
+            target_user_id: session.userId,
+            target_platform: chatInfo.platform,
+            target_platform_chat_id: chatInfo.chatId,
+            target_matrix_event_id: eventId,
+          });
+          if (error) this.log('warn', 'Could not reconcile Matrix read receipt', { error: error.message });
+        }
+      } catch (error) {
+        this.log('warn', 'Could not process Matrix read receipt', { error: (error as Error).message });
+      }
     });
 
     // Handle room invites
@@ -1122,8 +1190,18 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     this.sessionSelfGhostIds.delete(sessionId);
     this.sessionMatrixUserIds.delete(sessionId);
 
+    const disconnected = await this.getSession(sessionId);
+    if (disconnected) {
+      disconnected.lastConnectedAt = undefined;
+      await this.saveSessionToRedis(disconnected);
+    }
     await this.updateSessionStatus(sessionId, PlatformStatus.DISCONNECTED);
     this.emitPlatformEvent('session_disconnected', sessionId, { reason: 'manual' });
+  }
+
+  /** Wake the existing sync transport without initiating authentication. */
+  recoverTransport(): void {
+    this.matrixClient?.retryImmediately();
   }
 
   /**
@@ -1279,7 +1357,20 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
       });
       outboundMediaMetadata = {
         mediaUrl: uploaded.content_uri,
-        mediaInfo: { mimetype: media.mimeType },
+        mediaInfo: {
+          mimetype: media.mimeType,
+          size: typeof media.data === 'string' ? undefined : media.data.length,
+          duration: media.durationMs,
+        },
+        ...(media.type === MessageContentType.VOICE
+          ? {
+              audio: {
+                durationMs: media.durationMs,
+                waveform: media.waveform || [],
+                isVoice: true,
+              },
+            }
+          : {}),
       };
 
       const msgtype = this.contentTypeToMatrixMsgtype(media.type);
@@ -1289,8 +1380,22 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
         msgtype: msgtype as any,
         body: message.content || media.fileName || 'media',
         url: uploaded.content_uri,
+        info: {
+          mimetype: media.mimeType,
+          size: typeof media.data === 'string' ? undefined : media.data.length,
+          duration: media.durationMs,
+        },
+        ...(media.type === MessageContentType.VOICE
+          ? {
+              'org.matrix.msc1767.audio': {
+                duration: media.durationMs || 0,
+                waveform: media.waveform || [],
+              },
+              'org.matrix.msc3245.voice': {},
+            }
+          : {}),
         ...relation,
-      });
+      }, message.transactionId);
       eventId = response.event_id;
     } else {
       // Send text message
@@ -1298,7 +1403,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
         msgtype: MsgType.Text,
         body: message.content,
         ...relation,
-      });
+      }, message.transactionId);
       eventId = response.event_id;
     }
 
@@ -1323,7 +1428,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
       isRead: true,
       replyToMessageId: message.replyToMessageId,
       hasMedia: !!message.media?.length,
-      platformMetadata: outboundMediaMetadata,
+      platformMetadata: { ...outboundMediaMetadata, ...(message.clientRequestId ? { clientRequestId: message.clientRequestId } : {}) },
     };
 
     void operationsTelemetry.record({
@@ -1347,7 +1452,8 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     sessionId: string,
     chatId: string,
     messageId: string,
-    emoji: string
+    emoji: string,
+    transactionId?: string
   ): Promise<{ platformEventId: string }> {
     if (!this.matrixClient) throw new Error('Matrix client not initialized');
     if (!this.sessions.has(sessionId)) throw new Error('Session not found');
@@ -1367,7 +1473,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
         event_id: messageId,
         key: emoji,
       },
-    });
+    }, transactionId);
     this.rememberSentEvent(response.event_id);
     return { platformEventId: response.event_id };
   }
@@ -1475,7 +1581,9 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
             const resolvedPhone = phoneNumberFromBridgeIdentifiers([identity.phoneNumber]);
             if (resolvedPhone) contact.phoneNumber = resolvedPhone;
             if (identity.username) contact.username = identity.username;
-            if (identity.avatarUrl) contact.avatarUrl = identity.avatarUrl;
+            if (identity.avatarUrl) {
+              contact.avatarUrl = this.matrixMediaProxyUrl(identity.avatarUrl) || identity.avatarUrl;
+            }
           }
         }
 
@@ -1542,6 +1650,10 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
         userId: session.userId,
         name: room.name,
         isGroup: room.getJoinedMemberCount() > 2,
+        avatarUrl: (() => {
+          const avatar = room.getMxcAvatarUrl();
+          return avatar ? this.matrixMediaProxyUrl(avatar) || avatar : undefined;
+        })(),
         lastMessageAt: room.getLastActiveTimestamp()
           ? new Date(room.getLastActiveTimestamp())
           : undefined,
@@ -1583,6 +1695,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     const messages: UnifiedMessage[] = [];
     for (const event of events) {
       if (event.getType() === 'm.room.message' && event.getContent()?.msgtype !== 'm.notice') {
+        if (!this.eventConverter.isSupportedMessageEvent(event)) continue;
         messages.push(
           await this.eventConverter.toUnifiedMessage(
             event,
@@ -1839,6 +1952,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
       for (const event of events) {
         if (event.getType() !== 'm.room.message') continue;
         if (event.getContent()?.msgtype === 'm.notice') continue;
+        if (!this.eventConverter.isSupportedMessageEvent(event)) continue;
 
         const unifiedMessage = await this.eventConverter.toUnifiedMessage(
           event,

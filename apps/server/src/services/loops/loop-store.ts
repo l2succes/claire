@@ -13,13 +13,14 @@
  * See /docs/plans/loops-revamp §5.
  */
 
+import { transitionLoop } from './loop-transition';
 import { logger } from '../../utils/logger';
 import { supabase } from '../supabase';
 
 /** Postgres unique-violation. */
 const UNIQUE_VIOLATION = '23505';
 
-export const DETECTOR_VERSION = 'thread-of-intent-1';
+export const DETECTOR_VERSION = 'thread-of-intent-2-recovery';
 
 export interface LoopWriteFields {
   title: string;
@@ -35,6 +36,9 @@ export interface LoopWriteFields {
   suppressedReason: string | null;
   dedupeKey: string | null;
   confidence: number;
+  requester?: string;
+  priorityScore?: number;
+  priorityBreakdown?: unknown;
 }
 
 export interface CreateLoopInput extends LoopWriteFields {
@@ -53,6 +57,7 @@ export interface CreateLoopInput extends LoopWriteFields {
 export interface StoredLoop {
   id: string;
   created: boolean;
+  terminal?: boolean;
 }
 
 /**
@@ -62,6 +67,13 @@ export interface StoredLoop {
  * converts into an update rather than treating as a failure.
  */
 export async function createLoop(input: CreateLoopInput): Promise<StoredLoop | null> {
+  if (input.dedupeKey && input.lastEvidenceAt) {
+    const { data: terminal, error } = await supabase.from('loops').select('id')
+      .eq('user_id', input.userId).eq('chat_id', input.chatId).eq('dedupe_key', input.dedupeKey)
+      .in('status', ['done', 'dropped']).gte('resolved_at', input.lastEvidenceAt).limit(1).maybeSingle();
+    if (error) throw error;
+    if (terminal) return { id: terminal.id, created: false, terminal: true };
+  }
   const row = {
     user_id: input.userId,
     chat_id: input.chatId,
@@ -71,6 +83,7 @@ export async function createLoop(input: CreateLoopInput): Promise<StoredLoop | n
     kind: input.kind,
     type: input.kind,
     owner: input.owner,
+    requester: input.requester ?? 'unknown',
     from_me: input.fromMe,
     thread_state: input.threadState,
     state_summary: input.stateSummary,
@@ -86,6 +99,9 @@ export async function createLoop(input: CreateLoopInput): Promise<StoredLoop | n
     suppressed_reason: input.suppressedReason,
     dedupe_key: input.dedupeKey,
     confidence: input.confidence,
+    priority_score: input.priorityScore ?? 0,
+    priority_breakdown: input.priorityBreakdown ?? {},
+    priority_updated_at: new Date().toISOString(),
     source: 'detector',
     detector_version: DETECTOR_VERSION,
     last_detected_at: new Date().toISOString(),
@@ -101,7 +117,7 @@ export async function createLoop(input: CreateLoopInput): Promise<StoredLoop | n
   }
 
   logger.warn('[loops] create failed', { chatId: input.chatId, error: error?.message, code: error?.code });
-  return null;
+  throw new Error(error?.message || 'Loop create failed');
 }
 
 export async function findLiveLoopByDedupeKey(
@@ -109,7 +125,7 @@ export async function findLiveLoopByDedupeKey(
   chatId: string,
   dedupeKey: string,
 ): Promise<string | null> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('loops')
     .select('id')
     .eq('user_id', userId)
@@ -118,16 +134,21 @@ export async function findLiveLoopByDedupeKey(
     .in('status', ['open', 'waiting', 'snoozed'])
     .maybeSingle();
 
+  if (error) throw error;
   return data?.id ?? null;
 }
 
 export interface UpdateLoopInput {
   loopId: string;
   userId: string;
+  expectedVersion?: number;
+  evidenceGeneration?: number;
+  visibility?: 'surfaced' | 'suppressed' | 'shadow';
   stateSummary?: string;
   threadState?: string | null;
   status?: string | null;
   owner?: string | null;
+  requester?: string | null;
   deadline?: string | null;
   deadlinePrecision?: string | null;
   latestMessageId?: string | null;
@@ -142,69 +163,40 @@ export interface UpdateLoopInput {
  * rule that must hold for every write path into a loop row.
  */
 export async function updateLoop(input: UpdateLoopInput): Promise<boolean> {
-  const { data: current } = await supabase
-    .from('loops')
-    .select('user_edited, evidence_count')
-    .eq('id', input.loopId)
-    .eq('user_id', input.userId)
-    .maybeSingle();
-
-  if (!current) return false;
-
-  const patch: Record<string, unknown> = {
-    last_detected_at: new Date().toISOString(),
-    detector_version: DETECTOR_VERSION,
-  };
-
+  const { data: current, error } = await supabase.from('loops').select('row_version,last_evidence_at,latest_message_id,status,evidence_generation')
+    .eq('id', input.loopId).eq('user_id', input.userId).maybeSingle();
+  if (error) throw error;
+  if (!current || !['open','waiting','snoozed'].includes(current.status)) return false;
+  const patch: Record<string, unknown> = { last_detected_at: new Date().toISOString(), detector_version: DETECTOR_VERSION };
+  if (input.visibility !== undefined) patch.visibility = input.visibility;
   if (input.stateSummary !== undefined) patch.state_summary = input.stateSummary;
   if (input.threadState) patch.thread_state = input.threadState;
-  if (input.status) patch.status = input.status;
-  if (input.latestMessageId) patch.latest_message_id = input.latestMessageId;
-  if (input.lastEvidenceAt) patch.last_evidence_at = input.lastEvidenceAt;
+  // Evidence updates must never implicitly end a user's snooze.
+  if (input.status && current.status !== 'snoozed') patch.status = input.status;
+  if (input.owner) patch.owner = input.owner;
+  if (input.requester) patch.requester = input.requester;
+  if (input.deadline !== undefined) patch.deadline = input.deadline;
+  if (input.deadlinePrecision) patch.deadline_precision = input.deadlinePrecision;
   if (input.confidence !== undefined) patch.confidence = input.confidence;
-
-  // A human correction outranks the detector on the fields a human can set.
-  if (!current.user_edited) {
-    if (input.owner) patch.owner = input.owner;
-    if (input.deadline !== undefined) patch.deadline = input.deadline;
-    if (input.deadlinePrecision) patch.deadline_precision = input.deadlinePrecision;
+  if ((input.evidenceGeneration ?? 0) > (current.evidence_generation ?? 0)) {
+    patch.evidence_generation = input.evidenceGeneration;
+    patch.reviewed_at = null;
   }
-
-  const { error } = await supabase
-    .from('loops')
-    .update(patch)
-    .eq('id', input.loopId)
-    .eq('user_id', input.userId);
-
-  if (error) {
-    logger.warn('[loops] update failed', { loopId: input.loopId, error: error.message });
-    return false;
+  if (input.latestMessageId && input.lastEvidenceAt &&
+      (!current.last_evidence_at || input.lastEvidenceAt > current.last_evidence_at || input.latestMessageId !== current.latest_message_id && input.lastEvidenceAt === current.last_evidence_at)) {
+    patch.latest_message_id = input.latestMessageId;
+    patch.last_evidence_at = input.lastEvidenceAt;
+    patch.reviewed_at = null;
   }
+  await transitionLoop({ userId: input.userId, loopId: input.loopId,
+    expectedVersion: input.expectedVersion ?? current.row_version,
+    patch, actor: 'detector', kind: 'state_change', summary: input.stateSummary ?? 'Updated from conversation evidence' });
   return true;
 }
 
-export async function closeLoop(
-  loopId: string,
-  userId: string,
-  resolution: string,
-): Promise<boolean> {
-  const { error } = await supabase
-    .from('loops')
-    .update({
-      status: 'done',
-      thread_state: 'resolved',
-      resolution,
-      resolved_at: new Date().toISOString(),
-      last_detected_at: new Date().toISOString(),
-    })
-    .eq('id', loopId)
-    .eq('user_id', userId);
-
-  if (error) {
-    logger.warn('[loops] close failed', { loopId, error: error.message });
-    return false;
-  }
-  return true;
+/** Autonomous closure is intentionally disabled; create a versioned suggestion. */
+export async function closeLoop(_loopId: string, _userId: string, _resolution: string): Promise<boolean> {
+  throw new Error('Use a reviewed closure proposal');
 }
 
 export interface LoopEventInput {
@@ -239,7 +231,7 @@ export async function recordEvent(input: LoopEventInput): Promise<void> {
   });
 
   if (error && error.code !== UNIQUE_VIOLATION) {
-    logger.warn('[loops] event insert failed', { loopId: input.loopId, kind: input.kind, error: error.message });
+    throw error;
   }
 }
 
@@ -262,17 +254,19 @@ export async function attachEvidence(
     });
   }
 
-  const { count } = await supabase
+  const { count, error: countError } = await supabase
     .from('loop_events')
     .select('id', { count: 'exact', head: true })
     .eq('loop_id', loopId)
     .eq('kind', 'evidence');
 
-  await supabase
+  if (countError) throw countError;
+  const { error: evidenceError } = await supabase
     .from('loops')
     .update({ evidence_count: count ?? messages.length })
     .eq('id', loopId)
     .eq('user_id', userId);
+  if (evidenceError) throw evidenceError;
 }
 
 export interface ParticipantInput {
@@ -305,7 +299,7 @@ export async function upsertLoopParticipants(
     .upsert(rows, { onConflict: 'loop_id,identity_key', ignoreDuplicates: true });
 
   if (error) {
-    logger.warn('[loops] participant upsert failed', { loopId, error: error.message });
+    throw error;
   }
 }
 
@@ -322,30 +316,11 @@ export async function advanceCursor(
   messageId: string | null,
   producedOps: boolean,
   gateResult: string,
+  ingestSeq = 0,
 ): Promise<void> {
-  const { data: current } = await supabase
-    .from('chat_loop_cursors')
-    .select('consecutive_empty')
-    .eq('user_id', userId)
-    .eq('chat_id', chatId)
-    .maybeSingle();
-
-  const consecutiveEmpty = producedOps ? 0 : (current?.consecutive_empty ?? 0) + 1;
-
-  const { error } = await supabase.from('chat_loop_cursors').upsert(
-    {
-      user_id: userId,
-      chat_id: chatId,
-      last_message_timestamp: timestamp,
-      last_message_id: messageId,
-      last_run_at: new Date().toISOString(),
-      last_gate_result: gateResult,
-      consecutive_empty: consecutiveEmpty,
-    },
-    { onConflict: 'user_id,chat_id' },
-  );
-
-  if (error) {
-    logger.warn('[loops] cursor advance failed', { chatId, error: error.message });
-  }
+  const { error } = await supabase.rpc('advance_chat_loop_cursor', {
+    p_user_id: userId, p_chat_id: chatId, p_timestamp: timestamp, p_message_id: messageId,
+    p_produced: producedOps, p_result: gateResult, p_ingest_seq: ingestSeq,
+  });
+  if (error) throw error;
 }

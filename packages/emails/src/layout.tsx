@@ -19,6 +19,7 @@ type ClaireEmailLayoutProps = {
   title: string;
   children: ReactNode;
   action?: { label: string; href: string };
+  afterAction?: ReactNode;
 };
 
 const colors = {
@@ -40,7 +41,14 @@ const brandIconUrl = 'https://useclaire.co/assets/brand/claire-app-icon-paper.pn
  * landing-page visual language. Keep this primitive conservative; inboxes are
  * not browsers.
  */
-export function ClaireEmailLayout({ preview, eyebrow, title, children, action }: ClaireEmailLayoutProps) {
+export function ClaireEmailLayout({
+  preview,
+  eyebrow,
+  title,
+  children,
+  action,
+  afterAction,
+}: ClaireEmailLayoutProps) {
   return (
     <Html lang="en">
       <Head />
@@ -56,6 +64,7 @@ export function ClaireEmailLayout({ preview, eyebrow, title, children, action }:
             <Heading style={heading}>{title}</Heading>
             {children}
             {action ? <Button href={action.href} style={button}>{action.label}</Button> : null}
+            {afterAction}
           </Section>
           <Hr style={rule} />
           <Section style={footer}>

@@ -4,10 +4,12 @@ export function ClaireMark({
   size = 22,
   color = '#10120F',
   dot = '#FFFDF8',
+  strokeWidth = 7,
 }: {
   size?: number;
   color?: string;
   dot?: string;
+  strokeWidth?: number;
 }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 64 64" accessibilityIgnoresInvertColors>
@@ -16,7 +18,7 @@ export function ClaireMark({
           d="M10 34c0-13 9-22 22-22s22 8 22 20-9 20-21 20c-10 0-17-6-17-14 0-7 5-12 12-12 6 0 10 4 10 9 0 6-4 10-10 10"
           fill="none"
           stroke={color}
-          strokeWidth={7}
+          strokeWidth={strokeWidth}
           strokeLinecap="round"
           strokeLinejoin="round"
         />

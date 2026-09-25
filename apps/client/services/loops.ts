@@ -6,17 +6,15 @@
  * module, one set of types.
  */
 
-import { supabase } from './supabase';
 import { API_BASE_URL } from './platforms';
-import type { LoopAgentResult, LoopDetail, LoopItem } from './loop-types';
+import { authenticatedFetch } from './authenticated-fetch';
+import type { LoopAgentResult, LoopDetail, LoopItem, LoopReviewInput } from './loop-types';
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const { data: { session } } = await supabase.auth.getSession();
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await authenticatedFetch(`${API_BASE_URL}${path}`, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
-      ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
       ...init.headers,
     },
   });
@@ -34,9 +32,16 @@ export function fetchLoopDetail(id: string): Promise<LoopDetail> {
   return request<LoopDetail>(`/loops/${id}?include=events,participants`);
 }
 
+export function createLoop(content: string): Promise<LoopItem> {
+  return request<LoopItem>('/loops', {
+    method: 'POST',
+    body: JSON.stringify({ content, priority: 'medium' }),
+  });
+}
+
 export function updateLoop(id: string, patch: Partial<Pick<LoopItem,
-  'status' | 'notes' | 'deadline' | 'priority' | 'content'>>): Promise<LoopItem> {
-  return request<LoopItem>(`/loops/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
+  'status' | 'owner' | 'notes' | 'deadline' | 'priority' | 'content'>>, expectedVersion?: number): Promise<LoopItem> {
+  return request<LoopItem>(`/loops/${id}`, { method: 'PATCH', body: JSON.stringify({ ...patch, ...(expectedVersion !== undefined ? { expected_version: expectedVersion } : {}) }) });
 }
 
 /**
@@ -68,5 +73,47 @@ export function deleteLoop(id: string): Promise<void> {
   return request<void>(`/loops/${id}`, { method: 'DELETE' });
 }
 
+/**
+ * Record a deliberate stale-loop or close-suggestion decision. Unlike a local
+ * hide, this persists “keep open” so the same review does not reappear until
+ * the conversation adds new evidence.
+ */
+export function reviewLoop(id: string, input: LoopReviewInput): Promise<LoopItem> {
+  return request<LoopItem>(`/loops/${id}/review`, {
+    method: 'POST',
+    body: JSON.stringify({
+      action: input.action,
+      resolution: input.resolution,
+      suggestion_event_id: input.suggestionEventId,
+    }),
+  });
+}
+
 export * from './loop-types';
 export * from './loop-display';
+
+export interface LoopAttentionItem {
+  loop_id: string;
+  row_version: number;
+  reason: string;
+  next_action: string;
+  due_at: string;
+  loop: LoopItem;
+}
+
+export function fetchLoopAttention(): Promise<LoopAttentionItem[]> {
+  return request<LoopAttentionItem[]>('/loops/attention');
+}
+
+export interface LoopHealth {
+  detectionMode: string;
+  shadow: boolean;
+  notificationsEnabled: boolean;
+  enabledDevices: number;
+  dirtyChats: number;
+  oldestDirtyAt: string | null;
+  preferences: { detectionEnabled: boolean; aiEnabled: boolean; notificationsEnabled: boolean; notifyLoops: boolean } | null;
+}
+export function fetchLoopHealth(): Promise<LoopHealth> {
+  return request<LoopHealth>('/loops/health');
+}

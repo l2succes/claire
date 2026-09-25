@@ -9,8 +9,8 @@ import { LiquidGlassTabs } from '../../components/claire/liquid-glass-tabs';
 import { useAuthStore } from '../../stores/authStore';
 import { supabase } from '../../services/supabase';
 
-// 'custom' = floating Claire bar. 'liquid-glass' = system NativeTabs on iOS.
-export const TAB_BAR_STYLE: 'custom' | 'liquid-glass' = 'custom';
+// 'custom' = equal-slot floating glass bar. 'liquid-glass' = system NativeTabs on iOS.
+export const TAB_BAR_STYLE: 'custom' | 'liquid-glass' = 'liquid-glass';
 
 function useOpenLoopCount() {
   const user = useAuthStore((state) => state.user);

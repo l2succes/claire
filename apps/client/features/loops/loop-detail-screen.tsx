@@ -1,12 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, ChevronLeft, Clock3, MessageCircle, RotateCcw, Trash2, UserRound } from 'lucide-react-native';
+import { Bell, Check, CheckCircle2, ChevronLeft, Clock3, MessageCircle, RotateCcw, XCircle, UserRound } from 'lucide-react-native';
 import { colors, mobileType, radius, space } from '@claire/design-system';
 
 import { MobileHeader, MobileIconButton, MobileState } from '../../components/mobile/claire-mobile';
 import { useAuthStore } from '../../stores/authStore';
+import { markInAppLoopRead, notificationFeedKey } from '../../hooks/useInAppNotifications';
 import {
   conversationName,
   deleteLoop,
@@ -14,14 +15,26 @@ import {
   formatDeadline,
   isOverdue,
   loopTitle,
+  reviewLoop,
   snoozeLoop,
   updateLoop,
   type LoopDetail,
+  type LoopItem,
   type LoopParticipant,
 } from '../../services/loops';
+import { pendingCloseSuggestion } from '../../services/loop-review';
 import { LoopAgentPanel } from './loop-agent-panel';
 import { LoopBlocks } from './loop-blocks';
 import { LoopTimeline } from './loop-timeline';
+import { userFacingErrorMessage } from '../../services/api-errors';
+import { cacheLoop, deleteCachedLoop } from '../../services/mobile-cache';
+import {
+  invalidateLoopQueries,
+  patchLoopQueries,
+  removeLoopFromQueries,
+  restoreLoopQueries,
+  snapshotLoopQueries,
+} from '../../services/loop-query-cache';
 
 /**
  * Where a loop is actually resolved.
@@ -49,6 +62,13 @@ const STATE_LABEL: Record<string, string> = {
   pending_confirmation: 'Waiting on confirmation',
   agreed: 'Agreed',
   resolved: 'Resolved',
+};
+
+const REMINDER_LABEL: Record<string, string> = {
+  snooze_ended: 'Returns after snooze',
+  act_now: 'Needs attention',
+  deadline_soon: 'Before the deadline',
+  follow_up: 'Follow-up window',
 };
 
 /** A tappable pill. Static style plus press state — see the Pressable gotcha in CLAUDE.md. */
@@ -136,9 +156,6 @@ function ParticipantRow({ participant }: { participant: LoopParticipant }) {
       <Text style={{ ...mobileType.bodySmall, flex: 1, color: colors.ink }}>
         {participant.is_self ? 'You' : participant.display_name}
       </Text>
-      {participant.role === 'owner' ? (
-        <Text style={{ ...mobileType.monoLabel, color: colors.neutral[600] }}>OWNER</Text>
-      ) : null}
     </View>
   );
 }
@@ -179,33 +196,101 @@ export function LoopDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const user = useAuthStore((state) => state.user);
   const queryClient = useQueryClient();
+  // Opening from the list should paint the loop the person just tapped before
+  // its timeline and participants finish downloading. The detail request still
+  // runs immediately and replaces this lightweight list shape when it lands.
+  const listLoop = queryClient
+    .getQueryData<LoopItem[]>(['mobile-loops', user?.id])
+    ?.find((item) => item.id === String(id));
 
   const query = useQuery({
     queryKey: ['loop-detail', id],
     enabled: !!id && !!user?.id,
     queryFn: () => fetchLoopDetail(String(id)),
+    initialData: listLoop as LoopDetail | undefined,
+    initialDataUpdatedAt: listLoop ? 0 : undefined,
   });
 
-  const invalidate = () => {
-    void queryClient.invalidateQueries({ queryKey: ['loop-detail', id] });
-    void queryClient.invalidateQueries({ queryKey: ['mobile-loops', user?.id] });
+  const loopId = String(id);
+  useEffect(() => {
+    if (!user?.id || !id) return;
+    void markInAppLoopRead(user.id, loopId)
+      .then(() => queryClient.invalidateQueries({ queryKey: notificationFeedKey(user.id) }))
+      .catch(error => console.warn('Could not clear follow-up notification:', error));
+  }, [id, loopId, queryClient, user?.id]);
+  const beginOptimisticPatch = async (next: Partial<LoopItem>) => {
+    await Promise.all([
+      queryClient.cancelQueries({ queryKey: ['loop-detail', loopId] }),
+      queryClient.cancelQueries({ queryKey: ['mobile-loops', user?.id] }),
+      queryClient.cancelQueries({ queryKey: ['mobile-home-loops', user?.id] }),
+      queryClient.cancelQueries({ queryKey: ['loop-attention', user?.id] }),
+    ]);
+    const snapshot = snapshotLoopQueries(queryClient, user?.id, loopId);
+    patchLoopQueries(queryClient, user?.id, loopId, next);
+    return { snapshot };
+  };
+
+  const persistSuccessfulMutation = async (updated: LoopItem) => {
+    patchLoopQueries(queryClient, user?.id, loopId, updated);
+    if (user?.id) await cacheLoop(user.id, updated as unknown as Record<string, unknown>);
+    await invalidateLoopQueries(queryClient, user?.id, loopId);
   };
 
   const patch = useMutation({
-    mutationFn: (next: Parameters<typeof updateLoop>[1]) => updateLoop(String(id), next),
-    onSuccess: invalidate,
+    mutationFn: (next: Parameters<typeof updateLoop>[1]) => updateLoop(loopId, next, query.data?.row_version),
+    onMutate: beginOptimisticPatch,
+    onSuccess: persistSuccessfulMutation,
+    onError: (_error, _variables, context) => {
+      if (context?.snapshot) restoreLoopQueries(queryClient, user?.id, loopId, context.snapshot);
+    },
   });
 
   const snooze = useMutation({
-    mutationFn: (until: string) => snoozeLoop(String(id), until),
-    onSuccess: invalidate,
+    mutationFn: (until: string) => snoozeLoop(loopId, until),
+    onMutate: (until) => beginOptimisticPatch({ status: 'snoozed', snoozed_until: until }),
+    onSuccess: persistSuccessfulMutation,
+    onError: (_error, _variables, context) => {
+      if (context?.snapshot) restoreLoopQueries(queryClient, user?.id, loopId, context.snapshot);
+    },
   });
 
   const remove = useMutation({
-    mutationFn: () => deleteLoop(String(id)),
-    onSuccess: () => {
-      invalidate();
+    mutationFn: () => deleteLoop(loopId),
+    onMutate: async () => {
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: ['loop-detail', loopId] }),
+        queryClient.cancelQueries({ queryKey: ['mobile-loops', user?.id] }),
+        queryClient.cancelQueries({ queryKey: ['mobile-home-loops', user?.id] }),
+        queryClient.cancelQueries({ queryKey: ['loop-attention', user?.id] }),
+      ]);
+      const snapshot = snapshotLoopQueries(queryClient, user?.id, loopId);
+      removeLoopFromQueries(queryClient, user?.id, loopId);
+      return { snapshot };
+    },
+    onSuccess: async () => {
+      if (user?.id) await deleteCachedLoop(user.id, loopId);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['mobile-loops', user?.id] }),
+        queryClient.invalidateQueries({ queryKey: ['mobile-home-loops', user?.id] }),
+        queryClient.invalidateQueries({ queryKey: ['loop-attention', user?.id] }),
+      ]);
       router.back();
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.snapshot) restoreLoopQueries(queryClient, user?.id, loopId, context.snapshot);
+    },
+  });
+
+  const review = useMutation({
+    mutationFn: (input: Parameters<typeof reviewLoop>[1]) => reviewLoop(loopId, input),
+    onMutate: (input) => beginOptimisticPatch(input.action === 'done'
+      ? { status: 'done', thread_state: 'resolved' }
+      : input.action === 'dismiss'
+        ? { status: 'dropped', thread_state: 'resolved' }
+        : { reviewed_at: new Date().toISOString() }),
+    onSuccess: persistSuccessfulMutation,
+    onError: (_error, _variables, context) => {
+      if (context?.snapshot) restoreLoopQueries(queryClient, user?.id, loopId, context.snapshot);
     },
   });
 
@@ -226,18 +311,20 @@ export function LoopDetailScreen() {
         <MobileHeader title="Loop" safeArea leading={<BackButton />} />
         <MobileState
           title="Could not open this loop"
-          message={query.error instanceof Error ? query.error.message : 'It may have been deleted.'}
+          message={userFacingErrorMessage(query.error, 'It may have been deleted.')}
         />
       </View>
     );
   }
 
   const overdue = isOverdue(loop);
-  const done = loop.status === 'done';
+  const done = ['done', 'dropped', 'superseded'].includes(loop.status);
   const chatName = conversationName(loop);
   const group = !!loop.chat?.is_group;
   const due = formatDeadline(loop.deadline, loop.deadline_precision);
   const snoozedUntil = formatDeadline(loop.snoozed_until, 'exact');
+  const nextReminder = formatDeadline(loop.next_reminder_at, 'exact');
+  const closeSuggestion = pendingCloseSuggestion(loop.events ?? [], loop.row_version, loop.chat_generation);
 
   const tomorrow = () => {
     const date = new Date();
@@ -259,7 +346,7 @@ export function LoopDetailScreen() {
           style={{
             padding: space[4],
             borderRadius: radius.card,
-            backgroundColor: done ? colors.lime : overdue ? colors.blush : colors.paper,
+            backgroundColor: loop.status === 'done' ? colors.lime : overdue ? colors.blush : colors.paper,
             borderWidth: 1,
             borderColor: colors.neutral[200],
             gap: space[3],
@@ -314,14 +401,81 @@ export function LoopDetailScreen() {
               Snoozed until {snoozedUntil}
             </Text>
           ) : null}
+          {loop.reminder_plan_state === 'scheduled' && nextReminder ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}>
+              <Bell size={15} color={colors.neutral[600]} />
+              <Text testID="loop-detail-next-reminder" style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>
+                {REMINDER_LABEL[loop.reminder_reason ?? ''] ?? 'Reminder'} · {nextReminder}
+              </Text>
+            </View>
+          ) : null}
         </View>
+
+        {closeSuggestion && !done ? (
+          <View
+            testID="loop-close-suggestion"
+            style={{
+              padding: space[4],
+              borderRadius: radius.card,
+              borderWidth: 1,
+              borderColor: colors.ink,
+              backgroundColor: colors.sky,
+              gap: space[3],
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}>
+              <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: colors.lime, alignItems: 'center', justifyContent: 'center' }}>
+                <CheckCircle2 size={15} color={colors.ink} />
+              </View>
+              <Text selectable style={{ ...mobileType.body, flex: 1, fontWeight: '700', color: colors.ink }}>
+                Claire thinks this loop is finished
+              </Text>
+            </View>
+            <Text selectable style={{ ...mobileType.bodySmall, color: colors.ink }}>
+              {closeSuggestion.summary}
+            </Text>
+            <View style={{ flexDirection: 'row', gap: space[2] }}>
+              <View style={{ flex: 1 }}>
+                <ActionButton
+                  testID="loop-close-suggestion-accept"
+                  label="Mark as closed"
+                  icon={Check}
+                  tone="primary"
+                  disabled={review.isPending}
+                  onPress={() => review.mutate({
+                    action: 'done',
+                    resolution: closeSuggestion.resolution,
+                    suggestionEventId: closeSuggestion.eventId,
+                  })}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <ActionButton
+                  testID="loop-close-suggestion-keep"
+                  label="Keep open"
+                  icon={RotateCcw}
+                  disabled={review.isPending}
+                  onPress={() => review.mutate({
+                    action: 'keep_open',
+                    suggestionEventId: closeSuggestion.eventId,
+                  })}
+                />
+              </View>
+            </View>
+            {review.error ? (
+              <Text selectable style={{ ...mobileType.bodySmall, color: colors.danger }}>
+                {userFacingErrorMessage(review.error)}
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
 
         {/* Actions */}
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space[2] }}>
           <View style={{ flex: 1, minWidth: 140 }}>
             <ActionButton
               testID="loop-detail-toggle"
-              label={done ? 'Reopen' : 'Mark done'}
+              label={done ? 'Reopen' : 'Mark as closed'}
               icon={done ? RotateCcw : Check}
               tone="primary"
               disabled={patch.isPending}
@@ -340,6 +494,12 @@ export function LoopDetailScreen() {
             </View>
           ) : null}
         </View>
+
+        {patch.error || snooze.error || remove.error ? (
+          <Text testID="loop-mutation-error" selectable style={{ ...mobileType.bodySmall, color: colors.danger }}>
+            {userFacingErrorMessage(patch.error || snooze.error || remove.error)}
+          </Text>
+        ) : null}
 
         {loop.chat_id ? (
           <ActionButton
@@ -379,7 +539,7 @@ export function LoopDetailScreen() {
 
         {!done ? (
           <Section title="Claire">
-            <LoopAgentPanel loopId={String(id)} />
+            <LoopAgentPanel loop={loop} />
           </Section>
         ) : null}
 
@@ -391,8 +551,8 @@ export function LoopDetailScreen() {
 
         <ActionButton
           testID="loop-detail-delete"
-          label="Delete this loop"
-          icon={Trash2}
+          label="Dismiss loop"
+          icon={XCircle}
           tone="danger"
           disabled={remove.isPending}
           onPress={() => remove.mutate()}

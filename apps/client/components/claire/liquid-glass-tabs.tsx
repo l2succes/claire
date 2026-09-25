@@ -17,7 +17,13 @@ export function LiquidGlassTabs({ loopCount }: { loopCount?: number }) {
         <NativeTabs.Trigger.Label hidden>Inbox</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="ask-claire" disableTransparentOnScrollEdge>
-        <NativeTabs.Trigger.Icon sf={{ default: 'sparkles', selected: 'sparkles' }} md="auto_awesome" />
+        <NativeTabs.Trigger.Icon
+          src={{
+            default: require('../../assets/claire-tab-icon-v2.png'),
+            selected: require('../../assets/claire-tab-icon-selected-v2.png'),
+          }}
+          renderingMode="original"
+        />
         <NativeTabs.Trigger.Label hidden>Ask Claire</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="loops" disableTransparentOnScrollEdge>
@@ -27,9 +33,9 @@ export function LiquidGlassTabs({ loopCount }: { loopCount?: number }) {
           <NativeTabs.Trigger.Badge>{loopCount > 99 ? '99+' : String(loopCount)}</NativeTabs.Trigger.Badge>
         ) : null}
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="more" role="more" disableTransparentOnScrollEdge>
-        <NativeTabs.Trigger.Icon sf="ellipsis" md="more_horiz" />
-        <NativeTabs.Trigger.Label hidden>More</NativeTabs.Trigger.Label>
+      <NativeTabs.Trigger name="settings" disableTransparentOnScrollEdge>
+        <NativeTabs.Trigger.Icon sf={{ default: 'person.crop.circle', selected: 'person.crop.circle.fill' }} md="account_circle" />
+        <NativeTabs.Trigger.Label hidden>Profile</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );

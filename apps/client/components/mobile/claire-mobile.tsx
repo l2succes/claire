@@ -24,7 +24,7 @@ export function MobileScreen({ children, scroll = false, testID }: { children: R
   return <View testID={testID} style={{ flex: 1, backgroundColor: colors.cream }}>{children}</View>;
 }
 
-export function MobileHeader({ title, eyebrow, subtitle, leading, actions, profile, safeArea = false }: { title: string; eyebrow?: string; subtitle?: string; leading?: ReactNode; actions?: ReactNode; profile?: ReactNode; safeArea?: boolean }) {
+export function MobileHeader({ title, eyebrow, subtitle, leading, actions, profile, safeArea = false, titleStyle, titleNumberOfLines }: { title: string; eyebrow?: string; subtitle?: string; leading?: ReactNode; actions?: ReactNode; profile?: ReactNode; safeArea?: boolean; titleStyle?: StyleProp<TextStyle>; titleNumberOfLines?: number }) {
   const { top } = useSafeAreaInsets();
   // ScrollView/FlatList with automatic inset adjustment already owns this
   // space. View-rooted tab screens need to add it explicitly.
@@ -44,7 +44,7 @@ export function MobileHeader({ title, eyebrow, subtitle, leading, actions, profi
         {stacked ? null : leading}
         <View style={{ flex: stacked ? undefined : 1, width: stacked ? '100%' : undefined, minWidth: 0 }}>
           {eyebrow ? <Text selectable maxFontSizeMultiplier={1} style={{ ...mobileType.monoLabel, color: colors.neutral[600], textTransform: 'uppercase' }}>{eyebrow}</Text> : null}
-          <Text selectable maxFontSizeMultiplier={1} style={{ ...mobileType.screenTitle, color: colors.ink }}>{title}</Text>
+          <Text selectable maxFontSizeMultiplier={1} numberOfLines={titleNumberOfLines} adjustsFontSizeToFit={titleNumberOfLines === 1} minimumFontScale={0.8} style={[{ ...mobileType.screenTitle, color: colors.ink }, titleStyle]}>{title}</Text>
           {subtitle ? <Text selectable maxFontSizeMultiplier={1} numberOfLines={stacked ? undefined : 1} style={{ ...mobileType.bodySmall, color: colors.neutral[600], paddingTop: 1 }}>{subtitle}</Text> : null}
         </View>
         {stacked ? null : actions}

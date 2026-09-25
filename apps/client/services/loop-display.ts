@@ -21,6 +21,16 @@ export function isOverdue(item: Pick<LoopItem, 'snoozed_until' | 'deadline' | 's
   return !!due && new Date(due) < new Date() && LIVE_STATUSES.includes(item.status);
 }
 
+/** A snoozed loop leaves active lists until its reminder becomes due. */
+export function isLoopDeferred(
+  item: Pick<LoopItem, 'snoozed_until' | 'status'>,
+  now = new Date(),
+): boolean {
+  return item.status === 'snoozed'
+    && !!item.snoozed_until
+    && Date.parse(item.snoozed_until) > now.getTime();
+}
+
 /**
  * Render a deadline as precisely as it is actually known.
  *
@@ -65,4 +75,8 @@ export function conversationName(item: Pick<LoopItem, 'chat' | 'contact' | 'cont
     item.contact_name ||
     'Personal reminder'
   );
+}
+
+export function isLoopClosed(loop: Pick<LoopItem, 'status'>): boolean {
+  return ['done', 'dropped', 'superseded'].includes(loop.status);
 }
