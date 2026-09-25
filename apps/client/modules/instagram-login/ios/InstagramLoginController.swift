@@ -8,6 +8,7 @@ private enum ClaireLoginStyle {
   static let muted = UIColor(red: 98/255, green: 99/255, blue: 93/255, alpha: 1)
   static let border = UIColor(red: 223/255, green: 220/255, blue: 211/255, alpha: 1)
   static let lime = UIColor(red: 223/255, green: 255/255, blue: 100/255, alpha: 1)
+  static let error = UIColor(red: 169/255, green: 43/255, blue: 59/255, alpha: 1)
 
   static func font(_ size: CGFloat, bold: Bool = false) -> UIFont {
     let fallback = bold ? UIFont.systemFont(ofSize: size, weight: .bold) : UIFont.systemFont(ofSize: size)
@@ -41,6 +42,49 @@ private final class InstagramLoginMark: UIView {
   }
 }
 
+private final class ClaireProgressView: UIView {
+  private let orbit = CAShapeLayer()
+
+  override init(frame: CGRect) {
+    super.init(frame: frame)
+    isAccessibilityElement = true
+    accessibilityLabel = "Claire is checking your sign-in"
+    accessibilityTraits = .updatesFrequently
+    let tile = UIView()
+    tile.translatesAutoresizingMaskIntoConstraints = false
+    tile.backgroundColor = ClaireLoginStyle.lime
+    tile.layer.cornerRadius = 16
+    addSubview(tile)
+    NSLayoutConstraint.activate([
+      tile.centerXAnchor.constraint(equalTo: centerXAnchor), tile.centerYAnchor.constraint(equalTo: centerYAnchor),
+      tile.widthAnchor.constraint(equalToConstant: 52), tile.heightAnchor.constraint(equalToConstant: 52),
+      heightAnchor.constraint(equalToConstant: 68),
+    ])
+    orbit.frame = CGRect(x: 8, y: 8, width: 36, height: 36)
+    orbit.path = UIBezierPath(arcCenter: CGPoint(x: 18, y: 18), radius: 13,
+                              startAngle: -.pi / 2, endAngle: .pi * 1.1, clockwise: true).cgPath
+    orbit.fillColor = UIColor.clear.cgColor
+    orbit.strokeColor = ClaireLoginStyle.ink.cgColor
+    orbit.lineWidth = 5
+    orbit.lineCap = .round
+    tile.layer.addSublayer(orbit)
+  }
+
+  required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+  override func didMoveToWindow() {
+    super.didMoveToWindow()
+    orbit.removeAnimation(forKey: "claireOrbit")
+    guard window != nil else { return }
+    let turn = CABasicAnimation(keyPath: "transform.rotation")
+    turn.fromValue = 0
+    turn.toValue = CGFloat.pi * 2
+    turn.duration = 1.2
+    turn.repeatCount = .infinity
+    orbit.add(turn, forKey: "claireOrbit")
+  }
+}
+
 @MainActor
 final class InstagramLoginController: UIViewController, WKNavigationDelegate, WKHTTPCookieStoreObserver {
   private let api: InstagramLoginAPI
@@ -56,6 +100,12 @@ final class InstagramLoginController: UIViewController, WKNavigationDelegate, WK
   private var finished = false
   private var busy = false
   private var cancelRequested = false
+  private var credentialRequestInFlight = false
+  private var retryNeedsNewAttempt = false
+  private var preservedUsername: String?
+  private weak var credentialErrorLabel: UILabel?
+  private weak var credentialProgress: ClaireProgressView?
+  private weak var submitButton: UIButton?
   private let privacyCover = UIView()
 
   init(api: InstagramLoginAPI, completion: @escaping ([String: Any]) -> Void) {
@@ -103,6 +153,7 @@ final class InstagramLoginController: UIViewController, WKNavigationDelegate, WK
   @objc private func showPrivateContent() { privacyCover.removeFromSuperview() }
   private func clearContent(_ text: String, title: String = "Sign in to Instagram") {
     fields.values.forEach { $0.text = nil }; fields.removeAll(); selections.removeAll(); closeBrowser()
+    credentialErrorLabel = nil; credentialProgress = nil; submitButton = nil
     stack.arrangedSubviews.forEach { stack.removeArrangedSubview($0); $0.removeFromSuperview() }
     let mark = InstagramLoginMark()
     mark.widthAnchor.constraint(equalToConstant: 54).isActive = true
@@ -117,20 +168,14 @@ final class InstagramLoginController: UIViewController, WKNavigationDelegate, WK
     ])
     stack.addArrangedSubview(markRow)
 
-    let overline = UILabel()
-    overline.text = "CLAIRE  /  INSTAGRAM"
-    overline.font = UIFont(name: "DMMono-Medium", size: 11) ?? UIFont.monospacedSystemFont(ofSize: 11, weight: .medium)
-    overline.textColor = ClaireLoginStyle.muted
-    stack.addArrangedSubview(overline)
-
     let heading = UILabel()
     heading.text = title; heading.numberOfLines = 0
     heading.font = ClaireLoginStyle.font(28, bold: true); heading.textColor = ClaireLoginStyle.ink
     heading.adjustsFontForContentSizeCategory = true
     stack.addArrangedSubview(heading)
-    message.text = text; stack.addArrangedSubview(message)
+    message.text = text; message.isHidden = text.isEmpty; stack.addArrangedSubview(message)
   }
-  private func button(_ title: String, action: @escaping () -> Void) {
+  @discardableResult private func button(_ title: String, action: @escaping () -> Void) -> UIButton {
     let button = UIButton(type: .system)
     var config = UIButton.Configuration.filled()
     config.title = title; config.cornerStyle = .large
@@ -142,12 +187,11 @@ final class InstagramLoginController: UIViewController, WKNavigationDelegate, WK
     button.configuration = config
     button.heightAnchor.constraint(greaterThanOrEqualToConstant: 54).isActive = true
     button.addAction(UIAction { _ in action() }, for: .touchUpInside); stack.addArrangedSubview(button)
+    return button
   }
   private func showWorking(_ title: String, detail: String) {
     clearContent(detail, title: title)
-    let indicator = UIActivityIndicatorView(style: .medium)
-    indicator.color = ClaireLoginStyle.ink; indicator.startAnimating()
-    stack.addArrangedSubview(indicator)
+    stack.addArrangedSubview(ClaireProgressView())
   }
   private func begin() {
     showWorking("Opening Instagram", detail: "Preparing your private sign-in…"); busy = true
@@ -160,7 +204,9 @@ final class InstagramLoginController: UIViewController, WKNavigationDelegate, WK
   }
   private func render() {
     guard !finished else { return }
+    let wasCheckingCredentials = credentialRequestInFlight
     if snapshot["status"] as? String == "connected" {
+      credentialRequestInFlight = false
       clearContent("Your connection is active. Conversations may appear gradually while Instagram syncs.", title: "Instagram connected")
       navigationItem.leftBarButtonItem = nil
       button("Done") { [weak self] in
@@ -170,15 +216,19 @@ final class InstagramLoginController: UIViewController, WKNavigationDelegate, WK
     guard let step = snapshot["step"] as? [String: Any], let type = step["type"] as? String else {
       showFailure(InstagramLoginFailure(message: "Instagram returned an unsupported sign-in step.")); return
     }
-    clearContent(step["instructions"] as? String ?? "Continue signing in to Instagram.", title: type == "user_input" ? "Finish Instagram sign-in" : "Verify your account")
     if snapshot["status"] as? String == "working" {
-      let indicator = UIActivityIndicatorView(style: .medium)
-      indicator.color = ClaireLoginStyle.ink; indicator.startAnimating(); stack.addArrangedSubview(indicator)
+      if wasCheckingCredentials { setCredentialSubmitting(true) }
+      else { showWorking("Checking Instagram", detail: "This may take a moment.") }
       poll(); return
     }
+    credentialRequestInFlight = false
+    let specs = (step["user_input"] as? [String: Any])?["fields"] as? [[String: Any]]
+    let credentialForm = specs?.contains(where: { $0["type"] as? String == "password" }) == true
+    clearContent(credentialForm ? "" : (step["instructions"] as? String ?? "Continue with Instagram."),
+                 title: credentialForm ? "Sign in to Instagram" : "Verify your account")
     switch type {
     case "user_input":
-      guard let params = step["user_input"] as? [String: Any], let specs = params["fields"] as? [[String: Any]] else { return }
+      guard let specs else { return }
       for spec in specs {
         guard let id = spec["id"] as? String, let type = spec["type"] as? String else { continue }
         let name = spec["name"] as? String ?? id
@@ -201,7 +251,10 @@ final class InstagramLoginController: UIViewController, WKNavigationDelegate, WK
           field.leftView = inset; field.leftViewMode = .always
           field.autocapitalizationType = .none; field.autocorrectionType = .no; field.isSecureTextEntry = type == "password"
           if type == "password" { field.textContentType = .password }
-          else if type == "username" || type == "email" { field.textContentType = .username }
+          else if type == "username" || type == "email" {
+            field.textContentType = .username
+            field.text = preservedUsername
+          }
           else if type == "2fa_code" { field.textContentType = .oneTimeCode }
           field.heightAnchor.constraint(greaterThanOrEqualToConstant: 54).isActive = true
           fields[id] = field
@@ -211,9 +264,31 @@ final class InstagramLoginController: UIViewController, WKNavigationDelegate, WK
           stack.addArrangedSubview(group)
         }
       }
-      button("Continue") { [weak self] in self?.submitFields() }
+      if credentialForm {
+        let errorLabel = UILabel()
+        errorLabel.numberOfLines = 0
+        errorLabel.font = ClaireLoginStyle.font(13)
+        errorLabel.textColor = ClaireLoginStyle.error
+        errorLabel.isHidden = !wasCheckingCredentials
+        errorLabel.text = wasCheckingCredentials ? "That email or password wasn't accepted. Check both and try again." : nil
+        errorLabel.accessibilityTraits = .updatesFrequently
+        stack.addArrangedSubview(errorLabel)
+        credentialErrorLabel = errorLabel
+        // A returned form is still a live bridge step; only a failed request
+        // needs a fresh attempt before the next submission.
+        retryNeedsNewAttempt = false
+      } else {
+        retryNeedsNewAttempt = false
+      }
+      submitButton = button("Continue") { [weak self] in self?.submitFields() }
+      if credentialForm {
+        let progress = ClaireProgressView()
+        progress.isHidden = true
+        stack.addArrangedSubview(progress)
+        credentialProgress = progress
+      }
       let note = UILabel(); note.numberOfLines = 0; note.font = ClaireLoginStyle.font(12); note.textColor = ClaireLoginStyle.muted
-      note.text = "Your password and verification code are used for sign-in and are not saved in the app. Claire’s bridge keeps the connection active."
+      note.text = credentialForm ? "Your password isn’t saved in Claire." : "Verification codes aren’t saved in Claire."
       stack.addArrangedSubview(note)
     case "display_and_wait": advance(nil)
     case "cookies": if let spec = step["cookies"] as? [String: Any] { openBrowser(spec) }
@@ -224,12 +299,82 @@ final class InstagramLoginController: UIViewController, WKNavigationDelegate, WK
     var values = selections; for (id, field) in fields { values[id] = field.text ?? "" }
     let specs = ((snapshot["step"] as? [String: Any])?["user_input"] as? [String: Any])?["fields"] as? [[String: Any]]
     guard values.count == specs?.count, values.values.allSatisfy({ !$0.isEmpty }) else {
-      message.text = "Complete all fields and choose any requested option."; return
-    }; advance(values)
+      if credentialErrorLabel != nil {
+        showInlineError("Enter your email or username and password.")
+      } else {
+        message.text = "Complete all fields and choose any requested option."
+        message.isHidden = false
+      }
+      return
+    }
+    let isCredentials = specs?.contains(where: { $0["type"] as? String == "password" }) == true
+    if isCredentials, let username = specs?.first(where: {
+      ["username", "email"].contains($0["type"] as? String ?? "")
+    })?["id"] as? String {
+      preservedUsername = values[username]
+    }
+    if isCredentials && retryNeedsNewAttempt { restartAndAdvance(values); return }
+    advance(values, credentials: isCredentials)
   }
-  private func advance(_ input: [String: String]?) {
+  private func setCredentialSubmitting(_ submitting: Bool) {
+    fields.values.forEach { $0.isEnabled = !submitting }
+    submitButton?.isEnabled = !submitting
+    if var configuration = submitButton?.configuration {
+      configuration.title = submitting ? "Checking…" : "Continue"
+      submitButton?.configuration = configuration
+    }
+    credentialProgress?.isHidden = !submitting
+    if submitting { credentialErrorLabel?.isHidden = true }
+  }
+  private func showInlineError(_ text: String) {
+    credentialErrorLabel?.text = text
+    credentialErrorLabel?.isHidden = false
+    UIAccessibility.post(notification: .announcement, argument: text)
+  }
+  private func showCredentialError() {
+    busy = false
+    if cancelRequested { cancel(); return }
+    credentialRequestInFlight = false
+    retryNeedsNewAttempt = true
+    setCredentialSubmitting(false)
+    let specs = ((snapshot["step"] as? [String: Any])?["user_input"] as? [String: Any])?["fields"] as? [[String: Any]] ?? []
+    for spec in specs where spec["type"] as? String == "password" {
+      if let id = spec["id"] as? String { fields[id]?.text = nil }
+    }
+    showInlineError("Instagram couldn't sign you in. Check your details and try again.")
+  }
+  private func restartAndAdvance(_ input: [String: String]) {
+    guard !busy else { return }
+    busy = true
+    credentialRequestInFlight = true
+    setCredentialSubmitting(true)
+    view.endEditing(true)
+    task = Task {
+      do {
+        let fresh = try await api.request("start", body: [:])
+        snapshot = fresh
+        let step = fresh["step"] as? [String: Any]
+        let specs = (step?["user_input"] as? [String: Any])?["fields"] as? [[String: Any]] ?? []
+        let newIDs = Set(specs.compactMap { $0["id"] as? String })
+        guard step?["type"] as? String == "user_input", newIDs == Set(input.keys) else {
+          busy = false
+          credentialRequestInFlight = false
+          render()
+          return
+        }
+        busy = false
+        retryNeedsNewAttempt = false
+        advance(input, credentials: true)
+      } catch { showCredentialError() }
+    }
+  }
+  private func advance(_ input: [String: String]?, credentials: Bool = false) {
     guard !busy, let id = snapshot["attemptId"] as? String, let revision = snapshot["revision"] as? Int else { return }
-    busy = true; showWorking("Checking with Instagram", detail: "Keep Claire open while this step finishes."); view.endEditing(true)
+    busy = true
+    credentialRequestInFlight = credentials
+    if credentials { setCredentialSubmitting(true) }
+    else { showWorking("Checking Instagram", detail: "This may take a moment.") }
+    view.endEditing(true)
     var body: [String: Any] = ["revision": revision]; if let input { body["input"] = input }
     task = Task {
       do {
@@ -238,7 +383,9 @@ final class InstagramLoginController: UIViewController, WKNavigationDelegate, WK
       } catch {
         body.removeAll(); busy = false
         // A lost response is recovered without replaying the password or code.
-        if error is URLError { poll() } else { showFailure(error) }
+        if error is URLError { poll() }
+        else if credentials { showCredentialError() }
+        else { showFailure(error) }
       }
     }
   }
@@ -248,11 +395,20 @@ final class InstagramLoginController: UIViewController, WKNavigationDelegate, WK
       do {
         try await Task.sleep(nanoseconds: 1_000_000_000); snapshot = try await api.request(id); busy = false
         if cancelRequested { cancel(); return }; render()
-      } catch { busy = false; showFailure(error) }
+      } catch {
+        busy = false
+        if credentialRequestInFlight { showCredentialError() }
+        else { showFailure(error) }
+      }
     }
   }
   @objc private func cancel() {
-    if busy { cancelRequested = true; message.text = "Finishing the current request before closing…"; return }
+    if busy {
+      cancelRequested = true
+      message.text = "Finishing the current request before closing…"
+      message.isHidden = false
+      return
+    }
     task?.cancel()
     if snapshot["status"] as? String == "connected" {
       finish(["success": true, "sessionId": snapshot["sessionId"] as? String ?? ""]); return

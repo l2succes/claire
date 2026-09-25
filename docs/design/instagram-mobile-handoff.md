@@ -16,11 +16,11 @@ Read [the research review](instagram-mobile-connection-review.md) and [the imple
 - The real iOS Connections screen and onboarding accounts screen offer **Connect Instagram** when the authenticated mobile-login capability endpoint reports readiness. Unavailable staging shows a retry state. The native sign-in is presented as a sheet over Claire. It uses Claire's colors and typography; its intermediate states and completion remain in the Connections flow.
 - A native authentication success leads to **Check connection**. Claire only shows a completed connection after the server confirms a durable platform session. An earlier standalone probe returned success without registering a Claire session.
 - The authenticated API uses an exact one-user allowlist, explicit flow selection, expiration, cancellation, serialization, duplicate suppression, and start rate limiting. Credentials and bridge IDs are not returned to React. Login attempts are in memory, so run one API replica.
-- The native Expo iOS module supports UIKit forms, OTP/account choices, approval waits, ephemeral networking, isolated cookie-only web challenges, app-switcher cover, cancellation, and response recovery. Unsupported CAPTCHA/passkey/extraction steps stop explicitly.
+- The native Expo iOS module supports UIKit forms, OTP/account choices, approval waits, ephemeral networking, isolated cookie-only web challenges, app-switcher cover, cancellation, and response recovery. The credential form has short copy, a Claire-branded animated progress view, and inline validation; rejected credentials preserve the username, clear the password, and allow a retry on the same screen. Unsupported CAPTCHA/passkey/extraction steps stop explicitly.
 - Android and old binaries retain the desktop guide. The legacy desktop route explicitly selects the cookie flow.
 - A development-only synthetic route remains for regression checks; it is not the user-facing connection experience.
 
-Commits: `591182be` (Claire Connections integration) and `df490548` (isolated iOS staging configuration and bridge image fix). Focused client tests, targeted lint, TypeScript, and an iOS Simulator native build passed.
+Commits: `591182be` (Claire Connections integration) and `df490548` (isolated iOS staging configuration and bridge image fix). Focused client tests, targeted lint, TypeScript, and an iOS Simulator native build passed. The later credential-screen revision was also built natively and its empty-form validation checked in the dedicated Simulator.
 
 ## Live local proof
 
