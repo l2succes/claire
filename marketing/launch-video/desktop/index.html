@@ -25,8 +25,8 @@
       /* ---------- captions ---------- */
       .cap {
         position: absolute; left: 50%; transform: translateX(-50%); text-align: center; white-space: nowrap;
-        padding: 12px 36px 20px; border-radius: 30px;
-        font-family: "Inter", sans-serif; font-weight: 600; font-size: 84px; letter-spacing: -0.035em; color: #10120f;
+        padding: 10px 36px 18px;
+        font-family: "Inter", sans-serif; font-weight: 600; font-size: 112px; line-height: 1.05; letter-spacing: -0.04em; color: #10120f;
       }
       .cap.light { color: #f4f1ea; }
       .cap .w { display: inline-block; }
@@ -80,6 +80,13 @@
       #typed-text { display: block; overflow: hidden; white-space: nowrap; }
       #typed-caret { width: 1.2px; height: 13px; background: #10120f; margin-left: 1px; }
 
+      /* phone scene */
+      .cap.cap-left { left: 170px; transform: none; text-align: left; }
+      .cap .ln { display: block; }
+      .phone35 { position: absolute; left: 0; top: 0; width: 511.25px; height: 1085px; border-radius: 67.5px; overflow: hidden; transform-origin: 0 0; box-shadow: 0 60px 120px rgba(16, 18, 15, 0.28); }
+      .phone35 > img { position: absolute; display: block; }
+      .phone35 > img.base { left: 0; top: 0; width: 511.25px; height: 1085px; }
+
       /* gallery */
       .gw { position: absolute; width: 1360px; height: 765px; border-radius: 16px; overflow: hidden; transform-origin: 0 0; box-shadow: 0 40px 90px rgba(16, 18, 15, 0.22), 0 0 0 1px rgba(16, 18, 15, 0.1); }
       .gw img { width: 100%; height: 100%; display: block; }
@@ -100,16 +107,16 @@
       #end i { position: absolute; width: 54px; height: 54px; background: #1a1d17; display: block; }
       #end-mark { position: absolute; left: 50%; top: 250px; width: 150px; height: 150px; margin-left: -75px; border-radius: 40px; background: #dfff64; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 140px rgba(223, 255, 100, 0.35); }
       #end-mark svg { width: 102px; height: 102px; }
-      #end-tag { position: absolute; left: 0; right: 0; top: 470px; text-align: center; font-family: "Inter"; font-weight: 600; font-size: 88px; letter-spacing: -0.04em; line-height: 1.08; color: #f4f1ea; }
+      #end-tag { position: absolute; left: 0; right: 0; top: 450px; text-align: center; font-family: "Inter"; font-weight: 600; font-size: 112px; letter-spacing: -0.045em; line-height: 1.04; color: #f4f1ea; }
       #end-tag .l { display: block; }
-      #end-url { position: absolute; left: 0; right: 0; top: 720px; text-align: center; font-family: "DM Mono"; font-weight: 500; font-size: 34px; letter-spacing: 0.06em; color: #8b8f85; }
+      #end-url { position: absolute; left: 0; right: 0; top: 740px; text-align: center; font-family: "DM Mono"; font-weight: 500; font-size: 40px; letter-spacing: 0.06em; color: #8b8f85; }
       #black { position: absolute; inset: 0; background: #000; opacity: 0; }
     </style>
   </head>
   <body>
-    <div id="root" data-composition-id="main" data-start="0" data-duration="38" data-width="1920" data-height="1080">
-      <!-- wallpaper (0 – 27.6) -->
-      <div id="wall" class="clip" data-start="0" data-duration="27.6" data-track-index="0">
+    <div id="root" data-composition-id="main" data-start="0" data-duration="42.5" data-width="1920" data-height="1080">
+      <!-- wallpaper (0 – 32.1) -->
+      <div id="wall" class="clip" data-start="0" data-duration="32.1" data-track-index="0">
         <div class="base"></div>
         <div class="blob" id="b1" style="left: -200px; top: 420px; width: 900px; height: 800px; background: #dfff64; opacity: 0.7"></div>
         <div class="blob" id="b2" style="left: 1150px; top: -250px; width: 1000px; height: 900px; background: #b9dcff; opacity: 0.85"></div>
@@ -165,8 +172,20 @@
         <div class="cap" id="cap3c" style="top: 110px"><span class="w">Claire</span> <span class="w hl"><span class="sw"></span>keeps track.</span></div>
       </div>
 
+      <!-- S3.5 · the same loop on the phone -->
+      <div id="s35" class="clip" data-start="15.5" data-duration="4.7" data-track-index="1">
+        <div class="cap cap-left" id="cap35" style="top: 330px"><span class="ln"><span class="w">Same</span> <span class="w">loops,</span></span><span class="ln"><span class="w">in</span> <span class="w">your</span> <span class="w hl"><span class="sw"></span>pocket.</span></span></div>
+        <div class="phone35" id="ph35">
+          <img class="base" src="assets/phone/lp-base.png" alt="" />
+          <img id="ph-l1" src="assets/phone/lp-l1.png" alt="" />
+          <img id="ph-l2" src="assets/phone/lp-l2.png" alt="" />
+          <img id="ph-l3" src="assets/phone/lp-l3.png" alt="" />
+          <div class="glow" id="ph-glow"></div>
+        </div>
+      </div>
+
       <!-- S4 · ask claire -->
-      <div id="s4" class="clip" data-start="15.5" data-duration="7" data-track-index="1">
+      <div id="s4" class="clip" data-start="20" data-duration="7" data-track-index="1">
         <div class="cam" id="cam4">
           <div class="win" id="win4">
             <img class="base" src="assets/ui/ak-base.png" alt="" />
@@ -184,7 +203,7 @@
       </div>
 
       <!-- S5 · connections + gallery -->
-      <div id="s5" class="clip" data-start="22.3" data-duration="5.3" data-track-index="1">
+      <div id="s5" class="clip" data-start="26.8" data-duration="5.3" data-track-index="1">
         <div class="gw" id="g1"><img src="assets/ui/unified-workspace.png" alt="" /></div>
         <div class="gw" id="g2"><img src="assets/ui/ask-claire-workspace.png" alt="" /></div>
         <div class="gw" id="g3"><img src="assets/ui/desktop-home.png" alt="" /></div>
@@ -209,9 +228,9 @@
       </div>
 
       <!-- S6 · lime field + wordmark -->
-      <div id="s6" class="clip" data-start="27.6" data-duration="4.4" data-track-index="1">
+      <div id="s6" class="clip" data-start="32.1" data-duration="4.4" data-track-index="1">
         <div id="field"></div>
-        <div class="cap" id="cap6" style="top: 470px; font-size: 80px"><span class="w">All</span> <span class="w">your</span> <span class="w">chats.</span> <span class="w">One</span> <span class="w">AI.</span></div>
+        <div class="cap" id="cap6" style="top: 450px; font-size: 112px"><span class="w">All</span> <span class="w">your</span> <span class="w">chats.</span> <span class="w">One</span> <span class="w">AI.</span></div>
         <div id="wordmark">
           <svg viewBox="0 0 64 64"><g transform="translate(64 0) scale(-1 1)"><path id="wm-path" pathLength="1" d="M10 34c0-13 9-22 22-22s22 8 22 20-9 20-21 20c-10 0-17-6-17-14 0-7 5-12 12-12 6 0 10 4 10 9 0 6-4 10-10 10" fill="none" stroke="#10120F" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="1 1" stroke-dashoffset="1" /><circle id="wm-dot" cx="10" cy="34" r="4.5" fill="#FFFDF8" /></g></svg>
           <span id="wm-text">Claire</span>
@@ -219,7 +238,7 @@
       </div>
 
       <!-- S7 · end card -->
-      <div id="end" class="clip" data-start="32" data-duration="6" data-track-index="1">
+      <div id="end" class="clip" data-start="36.5" data-duration="6" data-track-index="1">
         <div id="end-mark">
           <svg viewBox="0 0 64 64"><g transform="translate(64 0) scale(-1 1)"><path d="M10 34c0-13 9-22 22-22s22 8 22 20-9 20-21 20c-10 0-17-6-17-14 0-7 5-12 12-12 6 0 10 4 10 9 0 6-4 10-10 10" fill="none" stroke="#10120F" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" /><circle cx="10" cy="34" r="4.5" fill="#FFFDF8" /></g></svg>
         </div>
@@ -242,19 +261,22 @@
       <audio id="sfx-promise" src="assets/sfx/chime.mp3" data-start="12.6" data-duration="1.6" data-volume="0.45"></audio>
       <audio id="sfx-c2" src="assets/sfx/click.mp3" data-start="13.95" data-duration="0.37" data-volume="0.8"></audio>
       <audio id="sfx-t1" src="assets/sfx/whoosh.mp3" data-start="15.3" data-duration="0.57" data-volume="0.5"></audio>
-      <audio id="sfx-c3" src="assets/sfx/click.mp3" data-start="16.75" data-duration="0.37" data-volume="0.8"></audio>
-      <audio id="sfx-type" src="assets/sfx/typing.mp3" data-start="16.95" data-duration="1.3" data-volume="0.55"></audio>
-      <audio id="sfx-c4" src="assets/sfx/click.mp3" data-start="18.55" data-duration="0.37" data-volume="0.8"></audio>
-      <audio id="sfx-ans" src="assets/sfx/sparkle.mp3" data-start="18.8" data-duration="1.8" data-volume="0.5"></audio>
-      <audio id="sfx-t2" src="assets/sfx/whoosh.mp3" data-start="22.2" data-duration="0.57" data-volume="0.5"></audio>
-      <audio id="sfx-k1" src="assets/sfx/pop.mp3" data-start="22.95" data-duration="0.72" data-volume="0.45"></audio>
-      <audio id="sfx-k2" src="assets/sfx/pop.mp3" data-start="23.5" data-duration="0.72" data-volume="0.45"></audio>
-      <audio id="sfx-k3" src="assets/sfx/pop.mp3" data-start="24.05" data-duration="0.72" data-volume="0.45"></audio>
-      <audio id="sfx-k4" src="assets/sfx/pop.mp3" data-start="24.6" data-duration="0.72" data-volume="0.45"></audio>
-      <audio id="sfx-riser" src="assets/sfx/riser.mp3" data-start="24.4" data-duration="3.2" data-volume="0.35"></audio>
-      <audio id="sfx-pix" src="assets/sfx/whoosh-cinematic.mp3" data-start="26.8" data-duration="2" data-volume="0.45"></audio>
-      <audio id="sfx-wm" src="assets/sfx/impact-bass-1.mp3" data-start="30.3" data-duration="2.1" data-volume="0.6"></audio>
-      <audio id="sfx-end" src="assets/sfx/chime.mp3" data-start="32.2" data-duration="2.5" data-volume="0.4"></audio>
+      <audio id="sfx-ph-rows" src="assets/sfx/pop.mp3" data-start="16.1" data-duration="0.72" data-volume="0.4"></audio>
+      <audio id="sfx-ph-loop" src="assets/sfx/chime.mp3" data-start="16.8" data-duration="1.6" data-volume="0.4"></audio>
+      <audio id="sfx-ph-out" src="assets/sfx/whoosh.mp3" data-start="19.5" data-duration="0.57" data-volume="0.45"></audio>
+      <audio id="sfx-c3" src="assets/sfx/click.mp3" data-start="21.25" data-duration="0.37" data-volume="0.8"></audio>
+      <audio id="sfx-type" src="assets/sfx/typing.mp3" data-start="21.45" data-duration="1.3" data-volume="0.55"></audio>
+      <audio id="sfx-c4" src="assets/sfx/click.mp3" data-start="23.05" data-duration="0.37" data-volume="0.8"></audio>
+      <audio id="sfx-ans" src="assets/sfx/sparkle.mp3" data-start="23.3" data-duration="1.8" data-volume="0.5"></audio>
+      <audio id="sfx-t2" src="assets/sfx/whoosh.mp3" data-start="26.7" data-duration="0.57" data-volume="0.5"></audio>
+      <audio id="sfx-k1" src="assets/sfx/pop.mp3" data-start="27.45" data-duration="0.72" data-volume="0.45"></audio>
+      <audio id="sfx-k2" src="assets/sfx/pop.mp3" data-start="28.0" data-duration="0.72" data-volume="0.45"></audio>
+      <audio id="sfx-k3" src="assets/sfx/pop.mp3" data-start="28.55" data-duration="0.72" data-volume="0.45"></audio>
+      <audio id="sfx-k4" src="assets/sfx/pop.mp3" data-start="29.1" data-duration="0.72" data-volume="0.45"></audio>
+      <audio id="sfx-riser" src="assets/sfx/riser.mp3" data-start="28.9" data-duration="3.2" data-volume="0.35"></audio>
+      <audio id="sfx-pix" src="assets/sfx/whoosh-cinematic.mp3" data-start="31.3" data-duration="2" data-volume="0.45"></audio>
+      <audio id="sfx-wm" src="assets/sfx/impact-bass-1.mp3" data-start="34.8" data-duration="2.1" data-volume="0.6"></audio>
+      <audio id="sfx-end" src="assets/sfx/chime.mp3" data-start="36.7" data-duration="2.5" data-volume="0.4"></audio>
     </div>
 
     <script>
@@ -273,6 +295,9 @@
         Object.entries(AK).forEach(([k, r]) => { if (k !== "input" && k !== "send") place("ak-" + k, r); });
         place("typed", AK.input);
         Object.entries(CN).forEach(([k, r]) => place("cn-" + k, r));
+        const LP = { l1: [30, 403.2, 451.3, 135], l2: [30, 538.2, 451.3, 135], l3: [30, 673.2, 451.3, 135] };
+        Object.entries(LP).forEach(([k, r]) => place("ph-" + k, r));
+        place("ph-glow", LP.l1);
 
         // ------- S1 notifications -------
         const NOTES = [
@@ -357,10 +382,10 @@
           const mid = (r) => [r[0] + r[2] / 2, r[1] + r[3] / 2];
 
           // ===== wallpaper drift =====
-          tl.to("#b1", { x: 220, y: -120, duration: 27.6, ease: "sine.inOut" }, 0);
-          tl.to("#b2", { x: -260, y: 140, duration: 27.6, ease: "sine.inOut" }, 0);
-          tl.to("#b3", { x: -200, y: -160, duration: 27.6, ease: "sine.inOut" }, 0);
-          tl.to("#b4", { x: 240, y: 120, duration: 27.6, ease: "sine.inOut" }, 0);
+          tl.to("#b1", { x: 220, y: -120, duration: 32.1, ease: "sine.inOut" }, 0);
+          tl.to("#b2", { x: -260, y: 140, duration: 32.1, ease: "sine.inOut" }, 0);
+          tl.to("#b3", { x: -200, y: -160, duration: 32.1, ease: "sine.inOut" }, 0);
+          tl.to("#b4", { x: 240, y: 120, duration: 32.1, ease: "sine.inOut" }, 0);
           tl.to("#d1", { x: 260, y: -100, duration: 7.3, ease: "sine.inOut" }, 0);
           tl.to("#d2", { x: -200, y: 120, duration: 7.3, ease: "sine.inOut" }, 0);
           tl.to("#d3", { x: -160, y: -140, duration: 7.3, ease: "sine.inOut" }, 0);
@@ -397,7 +422,7 @@
           // ===== S3 · inbox + promise (7.3 – 15.7) =====
           const S3 = 7.3;
           tl.fromTo("#win3", { y: 380, rotationX: 22, scale: 0.9, filter: "blur(18px)", transformPerspective: 1800, transformOrigin: "50% 0%" }, { y: 0, rotationX: 0, scale: 1, filter: "blur(0px)", duration: 1.1, ease: "expo.out" }, S3);
-          camSet("#cam3", 1.22, 680, 300, 960, 640);
+          camSet("#cam3", 1.22, 680, 300, 960, 680);
           capIn("#cap3a", S3 + 0.3, 0.1);
           gsap.set("#uw-row, #uw-aibar, #uw-b1, #uw-b2, #uw-promise, #uw-b3, #uw-ctask", { opacity: 0 });
           // cursor → Maya row
@@ -407,7 +432,7 @@
           tl.fromTo("#uw-row", { opacity: 0, scale: 0.97 }, { opacity: 1, scale: 1, duration: 0.3, ease: "back.out(2)" }, S3 + 3.15);
           capOut("#cap3a", S3 + 3.3);
           // push into the conversation
-          camTo("#cam3", 1.85, 720, 290, 960, 800, S3 + 3.35, 1.0);
+          camTo("#cam3", 1.85, 720, 290, 960, 830, S3 + 3.35, 1.0);
           tl.to("#cur3", { x: 560, y: 600, opacity: 0, duration: 0.6, ease: "power2.in" }, S3 + 3.5);
           tl.fromTo("#uw-aibar", { opacity: 0, y: -12 }, { opacity: 1, y: 0, duration: 0.4, ease: "power3.out" }, S3 + 3.6);
           tl.fromTo("#uw-b1", { opacity: 0, y: 14, scale: 0.94, transformOrigin: "0% 100%" }, { opacity: 1, y: 0, scale: 1, duration: 0.4, ease: "back.out(1.8)" }, S3 + 3.9);
@@ -425,16 +450,28 @@
           click("#cur3", "#rip3", trk[0] - 4, trk[1] - 3, S3 + 6.65);
           tl.fromTo("#tracked", { opacity: 0, scale: 0.6 }, { opacity: 1, scale: 1, duration: 0.3, ease: "back.out(3)" }, S3 + 6.7);
           // pull back so the promise lands in the context panel
-          camTo("#cam3", 1.32, 720, 320, 960, 680, S3 + 6.9, 0.8);
+          camTo("#cam3", 1.32, 720, 320, 960, 710, S3 + 6.9, 0.8);
           tl.to("#cur3", { x: 1200, y: 700, opacity: 0, duration: 0.5, ease: "power2.in" }, S3 + 6.95);
           tl.fromTo("#uw-ctask", { opacity: 0, x: UW.promise[0] - UW.ctask[0] + 20, y: UW.promise[1] - UW.ctask[1] + 8, scale: 0.9 }, { opacity: 1, x: 0, y: 0, scale: 1, duration: 0.8, ease: "power3.inOut" }, S3 + 7.05);
           tl.fromTo("#uw-b3", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.4, ease: "back.out(1.8)" }, S3 + 7.4);
           capOut("#cap3c", S3 + 7.85);
           tl.to("#win3", { scale: 1.08, opacity: 0, filter: "blur(22px)", duration: 0.4, ease: "power2.in" }, S3 + 8.0);
 
-          // ===== S4 · ask (15.5 – 22.5) =====
-          const S4 = 15.5;
-          camSet("#cam4", 1.22, 680, 320, 960, 640);
+          // ===== S3.5 · the same loop on the phone (15.5 – 20) =====
+          const P = 15.5;
+          gsap.set("#ph-l1, #ph-l2, #ph-l3", { opacity: 0 });
+          tl.fromTo("#ph35", { x: 1150, y: 1150, scale: 0.92, rotation: 6, filter: "blur(16px)" }, { x: 1150, y: 60, scale: 0.92, rotation: 0, filter: "blur(0px)", duration: 0.9, ease: "expo.out" }, P + 0.1);
+          capIn("#cap35", P + 0.35, 0.1);
+          tl.fromTo("#ph-l1, #ph-l2, #ph-l3", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.45, ease: "expo.out", stagger: 0.1 }, P + 0.6);
+          tl.fromTo("#ph-glow", { opacity: 0 }, { opacity: 1, duration: 0.3 }, P + 1.3);
+          tl.to("#ph-glow", { opacity: 0, duration: 0.8 }, P + 2.3);
+          tl.to("#ph35", { y: 36, duration: 2.8, ease: "sine.inOut" }, P + 1.0);
+          capOut("#cap35", P + 3.85);
+          tl.to("#ph35", { scale: 1.02, y: -10, opacity: 0, filter: "blur(20px)", duration: 0.4, ease: "power2.in" }, P + 4.05);
+
+          // ===== S4 · ask (20 – 27)
+          const S4 = 20.0;
+          camSet("#cam4", 1.22, 680, 320, 960, 680);
           tl.fromTo("#win4", { x: 300, rotationY: -24, filter: "blur(20px)", opacity: 0, transformPerspective: 2000, transformOrigin: "0% 50%" }, { x: 0, rotationY: 0, filter: "blur(0px)", opacity: 1, duration: 1.0, ease: "expo.out" }, S4 + 0.05);
           capIn("#cap4a", S4 + 0.2, 0.12);
           gsap.set("#ak-sug, #ak-ev1, #ak-ev2, #ak-ev3", { opacity: 0 });
@@ -450,7 +487,7 @@
           const snd = mid(AK.send);
           tl.to("#cur4", { x: snd[0] - 3, y: snd[1] - 3, duration: 0.45, ease: "power3.inOut" }, S4 + 2.6);
           click("#cur4", "#rip4", snd[0] - 3, snd[1] - 3, S4 + 3.05);
-          camTo("#cam4", 1.45, 720, 260, 960, 620, S4 + 3.15, 0.9);
+          camTo("#cam4", 1.45, 720, 260, 960, 660, S4 + 3.15, 0.9);
           tl.to("#cur4", { x: 1180, y: 740, opacity: 0, duration: 0.5, ease: "power2.in" }, S4 + 3.2);
           tl.fromTo("#ak-sug", { opacity: 0, y: 24, filter: "blur(12px)" }, { opacity: 1, y: 0, filter: "blur(0px)", duration: 0.6, ease: "expo.out" }, S4 + 3.3);
           capIn("#cap4b", S4 + 3.45, 0.1);
@@ -459,9 +496,9 @@
           capOut("#cap4b", S4 + 6.35);
           tl.to("#win4", { x: -260, rotationY: 18, filter: "blur(20px)", opacity: 0, duration: 0.45, ease: "power2.in" }, S4 + 6.5);
 
-          // ===== S5 · connections + gallery (22.3 – 27.6) =====
-          const S5 = 22.3;
-          camSet("#cam5", 1.2, 680, 330, 960, 650);
+          // ===== S5 · connections + gallery (26.8 – 32.1) =====
+          const S5 = 26.8;
+          camSet("#cam5", 1.2, 680, 330, 960, 690);
           tl.fromTo("#win5", { y: 300, filter: "blur(18px)", opacity: 0, scale: 0.94 }, { y: 0, filter: "blur(0px)", opacity: 1, scale: 1, duration: 0.9, ease: "expo.out" }, S5);
           gsap.set(".cn, #cn-banner", { opacity: 0 });
           capIn("#cap5a", S5 + 0.25, 0.1);
@@ -480,8 +517,8 @@
           capIn("#cap5b", S5 + 3.7, 0.09);
           PIX.forEach((p) => tl.fromTo(p.el, { opacity: 0, scale: 0.4 }, { opacity: 1, scale: 1, duration: 0.18, ease: "power2.out" }, S5 + 4.45 + p.d));
 
-          // ===== S6 · lime field + wordmark (27.6 – 32) =====
-          const S6 = 27.6;
+          // ===== S6 · lime field + wordmark (32.1 – 36.5) =====
+          const S6 = 32.1;
           FIELD.forEach((f) => tl.fromTo(f.el, { opacity: 0 }, { opacity: 1, duration: 0.25, yoyo: true, repeat: 3, repeatDelay: 0.3, ease: "sine.inOut" }, S6 + f.d * 1.2));
           capIn("#cap6", S6 + 0.25, 0.14);
           capOut("#cap6", S6 + 2.3);
@@ -492,7 +529,7 @@
           tl.to("#wordmark", { scale: 1.05, duration: 1.8, ease: "none" }, S6 + 2.65);
 
           // ===== S7 · end card (32 – 38) =====
-          const S7 = 32;
+          const S7 = 36.5;
           ENDPX.forEach((p) => tl.fromTo(p.el, { opacity: 0 }, { opacity: 1, duration: 0.6, yoyo: true, repeat: 3, repeatDelay: 0.4, ease: "sine.inOut" }, S7 + p.d * 1.5));
           tl.fromTo("#end-mark", { scale: 0.6, opacity: 0, filter: "blur(16px)" }, { scale: 1, opacity: 1, filter: "blur(0px)", duration: 0.8, ease: "expo.out" }, S7 + 0.1);
           tl.fromTo("#et1", { opacity: 0, y: 20, filter: "blur(10px)" }, { opacity: 1, y: 0, filter: "blur(0px)", duration: 0.6, ease: "power3.out" }, S7 + 0.6);

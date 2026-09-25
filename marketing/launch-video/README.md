@@ -7,7 +7,7 @@ self-contained HyperFrames project; `index.html` is the whole composition
 
 | Project | Canvas | Product surface |
 | --- | --- | --- |
-| `desktop/` | 1920×1080, 38s | Desktop screens from `apps/website/public/mockups/desktop-mockups.html` |
+| `desktop/` | 1920×1080, 42.5s | Desktop screens from `apps/website/public/mockups/desktop-mockups.html` |
 | `mobile/` | 1080×1920, 40s | Phone screens from `apps/website/public/mockups/app-mockups.html` |
 
 ## Story
@@ -20,6 +20,8 @@ self-contained HyperFrames project; `index.html` is the whole composition
    in the context panel: "Claire keeps track."
 4. **Ask Claire** — a question is typed and answered with context: "answered from
    every chat."
+   Then a phone rises with the same loop in the Loops tab: "Same loops, in your
+   pocket."
 5. **Connections** — cards pop in as the caption cycles networks, then four
    screens fan out: "It all lives together."
 6. **Close** — pixel dissolve to lime, "All your chats. One AI.", wordmark, dark end
@@ -50,10 +52,15 @@ npx hyperframes render --output renders/claire-launch.mp4
 ```
 
 If HyperFrames' bundled headless Chrome fails to start (`Unknown system error
--88` from `npx hyperframes doctor`), point it at an installed Chrome:
+-88` from `npx hyperframes doctor`), install a current `chrome-headless-shell`
+and point HyperFrames at it. Do not use the full Google Chrome app: its window
+clips the capture area and leaves a black band along the bottom of every frame.
 
 ```bash
-export HYPERFRAMES_BROWSER_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+V=146.0.7680.31; D=~/.cache/puppeteer/chrome-headless-shell/mac_arm-$V
+curl -fL -o /tmp/chs.zip "https://storage.googleapis.com/chrome-for-testing-public/$V/mac-arm64/chrome-headless-shell-mac-arm64.zip"
+mkdir -p $D && ditto -x -k /tmp/chs.zip $D
+export HYPERFRAMES_BROWSER_PATH=$D/chrome-headless-shell-mac-arm64/chrome-headless-shell
 ```
 
 `renders/` and `snapshots/` are git-ignored.
