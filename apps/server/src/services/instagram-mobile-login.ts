@@ -27,7 +27,7 @@ export class InstagramMobileLogin {
   private starting = false;
   private readonly now: () => number;
 
-  constructor(private deps: Dependencies, private flowId: 'android' | 'instagram-password' = 'android') {
+  constructor(private deps: Dependencies, private flowId: 'android' | 'instagram-password' | 'instagram' = 'android') {
     this.now = deps.now ?? Date.now;
   }
 
