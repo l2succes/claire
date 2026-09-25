@@ -34,6 +34,7 @@ import { formatPairingCodeForDisplay } from './connection-formatters';
 import { ConnectionPlatformMark } from './connection-platform-mark';
 import { useConnectionFlow } from './use-connection-flow';
 import { useInstagramMobileLogin } from './use-instagram-mobile-login';
+import { useInstagramMobileAvailability } from './use-instagram-mobile-availability';
 import { hasInstagramMobileLogin } from '../../modules/instagram-login';
 
 const isAndroid = process.env.EXPO_OS === 'android';
@@ -42,6 +43,7 @@ export function ConnectionFlowScreen({ platform, source }: { platform: Platform;
   const insets = useSafeAreaInsets();
   const connection = useConnectionFlow(platform, source);
   const instagram = useInstagramMobileLogin();
+  const instagramAvailability = useInstagramMobileAvailability();
   const config = CONNECTION_PLATFORM_CONFIG[platform];
   const flowError = connection.error || '';
   const rateLimited = platform === Platform.WHATSAPP && /rate limited/i.test(flowError);
@@ -56,8 +58,19 @@ export function ConnectionFlowScreen({ platform, source }: { platform: Platform;
     body = <SuccessState platform={platform} account={connection.connectedSession?.platformUsername || connection.connectedSession?.phoneNumber || connection.connectedSession?.platformUserId} />;
     footer = <FlowButton label={source === 'onboarding' ? 'Back to accounts' : 'Done'} onPress={connection.goBack} />;
   } else if (platform === Platform.INSTAGRAM && hasInstagramMobileLogin) {
-    body = <InstagramMobileIntro error={instagram.error} />;
-    footer = <><FlowButton label="Sign in to Instagram" loading={instagram.busy} onPress={() => void instagram.start()} /><FlowButton label="Do this later" variant="tertiary" onPress={connection.goBack} /></>;
+    if (instagram.authenticated) {
+      body = <InstagramFinishingState />;
+      footer = <><FlowButton label="Check connection" loading={connection.checking} onPress={() => void connection.checkConnection()} /><FlowButton label="Back to accounts" variant="tertiary" onPress={connection.goBack} /></>;
+    } else if (instagramAvailability.checking) {
+      body = <InstagramMobileIntro error={null} />;
+      footer = <FlowButton label="Checking Instagram sign-in…" loading disabled />;
+    } else if (instagramAvailability.available) {
+      body = <InstagramMobileIntro error={instagram.error} />;
+      footer = <><FlowButton label="Continue to Instagram sign-in" loading={instagram.busy} onPress={() => void instagram.start()} /><FlowButton label="Do this later" variant="tertiary" onPress={connection.goBack} /></>;
+    } else {
+      body = <InstagramMobileIntro error={null} availability={instagramAvailability.error ? 'offline' : 'not-enabled'} />;
+      footer = <><FlowButton label="Check again" loading={instagramAvailability.checking} onPress={() => void instagramAvailability.retry()} /><FlowButton label="Back to accounts" variant="tertiary" onPress={connection.goBack} /></>;
+    }
   } else if (platform === Platform.INSTAGRAM || platform === Platform.IMESSAGE) {
     body = <CompanionGuide platform={platform} error={flowError} />;
     footer = (
@@ -319,11 +332,47 @@ function TelegramCodeState({ value, error, onChange, onChangeNumber }: { value: 
   );
 }
 
-function InstagramMobileIntro({ error }: { error: string | null }) {
+function InstagramMobileIntro({ error, availability }: { error: string | null; availability?: 'offline' | 'not-enabled' }) {
   return <View style={{ flex: 1, gap: space[4] }} testID="instagram-mobile-login">
-    <FlowIntro platform={Platform.INSTAGRAM} title="Connect Instagram on your iPhone" copy="Sign in and complete any verification Instagram asks for. Your conversations will sync to Claire after you connect." />
-    <InfoNote icon={<ShieldCheck size={17} color={colors.ink} />} text="Your password is used only for this sign-in. Claire’s bridge keeps your connection active after you close the app." />
+    <View style={{ gap: space[4], padding: space[5], borderRadius: radius.panel, borderCurve: 'continuous', backgroundColor: colors.ink }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <ConnectionPlatformMark platform={Platform.INSTAGRAM} size={58} />
+        <View style={{ paddingHorizontal: 11, paddingVertical: 7, borderRadius: radius.pill, backgroundColor: colors.lime }}>
+          <Text style={{ ...mobileType.monoLabel, color: colors.ink }}>ON THIS IPHONE</Text>
+        </View>
+      </View>
+      <View style={{ gap: space[2] }}>
+        <Text style={{ ...mobileType.screenTitle, fontSize: 29, lineHeight: 32, color: colors.paper }}>Your Instagram chats, together in Claire.</Text>
+        <Text style={{ ...mobileType.body, color: colors.neutral[200] }}>Sign in here, complete Instagram’s verification, and Claire will start bringing in your conversations.</Text>
+      </View>
+    </View>
+    {availability ? <ErrorCallout warning text={availability === 'offline' ? 'Claire could not check Instagram sign-in right now. Check your connection and try again.' : 'Mobile Instagram sign-in is not available for this Claire account yet. Check again soon.'} /> : null}
+    <View style={{ gap: space[2], padding: space[4], borderRadius: radius.card, borderCurve: 'continuous', borderWidth: 1, borderColor: colors.neutral[200], backgroundColor: colors.paper }}>
+      <Text style={{ ...mobileType.monoLabel, color: colors.neutral[600] }}>HOW IT WORKS</Text>
+      <InstagramStep number={1} title="Sign in" detail="Enter your Instagram details in Claire’s private sign-in sheet." />
+      <InstagramStep number={2} title="Verify" detail="If Instagram sends a code or approval request, finish it there." />
+      <InstagramStep number={3} title="Start syncing" detail="New chats can appear first while older conversations load." />
+    </View>
+    <InfoNote icon={<ShieldCheck size={17} color={colors.ink} />} text="Your password and verification code are used for sign-in and are not saved in the app. Claire’s bridge keeps the connection active after you close it." />
     {error ? <ErrorCallout text={error} /> : null}
+  </View>;
+}
+
+function InstagramStep({ number, title, detail }: { number: number; title: string; detail: string }) {
+  return <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: space[3], paddingVertical: space[2] }}>
+    <View style={{ width: 27, height: 27, borderRadius: 9, borderCurve: 'continuous', backgroundColor: colors.neutral[100], alignItems: 'center', justifyContent: 'center' }}>
+      <Text style={{ ...mobileType.label, color: colors.ink }}>{number}</Text>
+    </View>
+    <View style={{ flex: 1, gap: 2 }}><Text style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>{title}</Text><Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{detail}</Text></View>
+  </View>;
+}
+
+function InstagramFinishingState() {
+  return <View style={{ flex: 1, gap: space[4] }} testID="instagram-connection-finishing">
+    <FlowIntro platform={Platform.INSTAGRAM} title="Instagram sign-in complete" copy="Claire is confirming your account connection. Your conversations may take a little longer to appear." />
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[3], padding: space[4], borderRadius: radius.card, backgroundColor: colors.paper }}>
+      <ActivityIndicator color={colors.success} /><Text style={{ flex: 1, ...mobileType.bodySmall, color: colors.ink }}>Checking the bridge and your Claire account…</Text>
+    </View>
   </View>;
 }
 
@@ -389,7 +438,7 @@ function SuccessState({ platform, account }: { platform: Platform; account?: str
       <ConnectionPlatformMark platform={platform} />
       <View style={{ alignItems: 'center', gap: 6 }}>
         <Text style={{ ...mobileType.screenTitle, fontSize: 27, lineHeight: 30, textAlign: 'center', color: colors.ink }}>{config.name} is connected</Text>
-        <Text style={{ ...mobileType.bodySmall, textAlign: 'center', color: colors.neutral[600], maxWidth: 310 }}>Your conversations can now sync into Claire. Disconnect this account whenever you want.</Text>
+        <Text style={{ ...mobileType.bodySmall, textAlign: 'center', color: colors.neutral[600], maxWidth: 310 }}>{platform === Platform.INSTAGRAM ? 'Your connection is active. Conversations may appear gradually as Instagram syncs.' : 'Your conversations can now sync into Claire. Disconnect this account whenever you want.'}</Text>
       </View>
       {account ? (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 13, paddingVertical: 9, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.neutral[200], backgroundColor: colors.paper }}>

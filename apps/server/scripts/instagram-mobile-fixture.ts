@@ -44,4 +44,5 @@ app.post(prefix + '/:id/cancel', async (req, res) => {
   try { await login.cancel('fixture', req.params.id); res.json({ cancelled: true }); }
   catch { res.status(409).json({ error: 'Synthetic request still running.' }); }
 });
-app.listen(3309, '127.0.0.1', () => console.info('Synthetic Instagram fixture listening on loopback port 3309. No real credentials.'));
+const port = Number(process.env.INSTAGRAM_FIXTURE_PORT || '3309');
+app.listen(port, '127.0.0.1', () => console.info(`Synthetic Instagram fixture listening on loopback port ${port}. No real credentials.`));

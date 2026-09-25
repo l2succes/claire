@@ -132,6 +132,16 @@ api.interceptors.response.use(
  * Platform API methods
  */
 export const platformsApi = {
+  async getInstagramMobileLoginAvailability(): Promise<boolean> {
+    try {
+      const response = await api.get<{ available: boolean }>('/platforms/instagram/mobile-login/capabilities');
+      return response.data?.available === true;
+    } catch (error) {
+      // The endpoint is intentionally hidden from accounts outside the pilot.
+      if (error instanceof PlatformRequestError && error.status === 404) return false;
+      throw error;
+    }
+  },
   async getPlatformDefinitions(): Promise<PlatformDefinition[]> {
     try {
       const response = await api.get<{ success: boolean; platforms: PlatformDefinition[] }>('/platforms/definitions');

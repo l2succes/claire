@@ -20,7 +20,7 @@ import { OnboardingReveal } from '../onboarding/onboarding-reveal';
 export type OnboardingConnectionStates = Partial<Record<Platform, ConnectionRowState>>;
 
 function defaultConnectionState(platform: Platform): ConnectionRowState {
-  if (platform === Platform.INSTAGRAM) return 'desktop';
+  if (platform === Platform.INSTAGRAM) return CONNECTION_PLATFORM_CONFIG[Platform.INSTAGRAM].setupSurface === 'phone' ? 'available' : 'desktop';
   if (platform === Platform.IMESSAGE) return 'mac';
   return 'available';
 }
@@ -153,7 +153,7 @@ export function OnboardingConnectionsScreen() {
     const platformSessions = sessions.filter((session) => session.platform === platform);
     if (platformSessions.some((session) => session.status === PlatformStatus.CONNECTED)) return 'connected';
     if (platformSessions.some((session) => isPendingPlatformStatus(session.status))) return 'pending';
-    if (platform === Platform.INSTAGRAM) return 'desktop';
+    if (platform === Platform.INSTAGRAM) return defaultConnectionState(platform);
     if (platform === Platform.IMESSAGE) return 'mac';
     return 'available';
   };
