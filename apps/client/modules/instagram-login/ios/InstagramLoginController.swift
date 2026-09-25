@@ -349,7 +349,9 @@ final class InstagramLoginController: UIViewController, WKNavigationDelegate, WK
       }
       submitButton = button(singleConfirmation ? "Continue with Instagram" : "Continue") { [weak self] in self?.submitFields() }
       let note = UILabel(); note.numberOfLines = 0; note.font = ClaireLoginStyle.font(12); note.textColor = ClaireLoginStyle.muted
-      note.text = credentialForm ? "Your password isn’t saved in Claire." : "Verification codes aren’t saved in Claire."
+      note.text = credentialForm
+        ? "Instagram may offer SMS or another verification method next. Your password isn’t saved in Claire."
+        : "Verification codes aren’t saved in Claire."
       stack.addArrangedSubview(note)
     case "display_and_wait": advance(nil)
     case "cookies": if let spec = step["cookies"] as? [String: Any] { openBrowser(spec) }
