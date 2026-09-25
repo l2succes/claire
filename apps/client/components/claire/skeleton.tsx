@@ -173,6 +173,24 @@ export function ChatSkeleton({ testID }: { testID?: string }) {
   );
 }
 
+export function SearchResultsSkeleton() {
+  return (
+    <View style={{ paddingHorizontal: space[4] }}>
+      <Bone width={110} height={10} style={{ marginBottom: space[3] }} />
+      {Array.from({ length: 6 }, (_, index) => (
+        <View key={index} style={{ minHeight: 76, flexDirection: 'row', alignItems: 'center', gap: space[3], paddingVertical: space[4] }}>
+          <Bone width={40} height={40} radius={13} delay={index * 70} />
+          <View style={{ flex: 1, gap: 8 }}>
+            <Bone width="64%" height={14} delay={index * 70 + 30} />
+            <Bone width="84%" height={11} delay={index * 70 + 70} />
+          </View>
+          <Bone width={44} height={10} delay={index * 70 + 50} />
+        </View>
+      ))}
+    </View>
+  );
+}
+
 export function PeopleSkeleton() {
   return (
     <View>
