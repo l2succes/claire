@@ -24,7 +24,8 @@ interface Args {
   email: string;
   apiUrl: string;
   reset: boolean;
-  name: string;
+  /** Only set when --name is passed, so a reseed never clobbers an existing name. */
+  name?: string;
 }
 
 function parseArgs(): Args {
@@ -49,7 +50,7 @@ function parseArgs(): Args {
     email,
     apiUrl: (value('--api') || process.env.DEMO_API_URL || 'http://localhost:3001').replace(/\/$/, ''),
     reset: argv.includes('--reset'),
-    name: value('--name') || 'Claire Demo',
+    name: value('--name')?.trim() || undefined,
   };
 }
 
@@ -88,10 +89,10 @@ async function ensureAuthUser(email: string): Promise<string> {
 }
 
 /** Ensure the profile row exists and is flagged as a demo account. */
-async function ensureDemoProfile(userId: string, email: string, name: string): Promise<void> {
+async function ensureDemoProfile(userId: string, email: string, name?: string): Promise<void> {
   const { error } = await admin
     .from('users')
-    .upsert({ id: userId, email, name, is_demo: true }, { onConflict: 'id' });
+    .upsert({ id: userId, email, is_demo: true, ...(name ? { name } : {}) }, { onConflict: 'id' });
   if (error) {
     if (error.message?.includes('is_demo')) {
       throw new Error(
@@ -102,6 +103,21 @@ async function ensureDemoProfile(userId: string, email: string, name: string): P
     throw error;
   }
   console.log('• Marked account as a demo account (users.is_demo = true)');
+}
+
+/**
+ * The display name lives in two places and the client reads both: the Home
+ * greeting uses the auth session's `user_metadata.name`, other screens use
+ * `public.users.name`. Setting only the profile row leaves the greeting blank.
+ */
+async function ensureDisplayName(userId: string, name: string): Promise<void> {
+  const { data, error: readError } = await admin.auth.admin.getUserById(userId);
+  if (readError) throw readError;
+  const { error } = await admin.auth.admin.updateUserById(userId, {
+    user_metadata: { ...(data.user?.user_metadata || {}), name },
+  });
+  if (error) throw error;
+  console.log(`• Display name set to "${name}"`);
 }
 
 /** AI features are the point of this account, so opt it in explicitly. */
@@ -194,6 +210,7 @@ async function main(): Promise<void> {
 
   const userId = await ensureAuthUser(args.email);
   await ensureDemoProfile(userId, args.email, args.name);
+  if (args.name) await ensureDisplayName(userId, args.name);
   await ensureAiEnabled(userId);
   const token = await mintAccessToken(args.email);
   await callSeed(args.apiUrl, token, args.reset);
