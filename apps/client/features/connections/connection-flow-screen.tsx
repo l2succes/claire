@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   AlertCircle,
@@ -33,7 +34,6 @@ import { CONNECTION_PLATFORM_CONFIG } from './connection-platform-config';
 import { formatPairingCodeForDisplay } from './connection-formatters';
 import { ConnectionPlatformMark } from './connection-platform-mark';
 import { useConnectionFlow } from './use-connection-flow';
-import { useInstagramMobileLogin } from './use-instagram-mobile-login';
 import { useInstagramMobileAvailability } from './use-instagram-mobile-availability';
 import { hasInstagramMobileLogin } from '../../modules/instagram-login';
 
@@ -42,7 +42,6 @@ const isAndroid = process.env.EXPO_OS === 'android';
 export function ConnectionFlowScreen({ platform, source }: { platform: Platform; source: ConnectionSource }) {
   const insets = useSafeAreaInsets();
   const connection = useConnectionFlow(platform, source);
-  const instagram = useInstagramMobileLogin();
   const instagramAvailability = useInstagramMobileAvailability();
   const config = CONNECTION_PLATFORM_CONFIG[platform];
   const flowError = connection.error || '';
@@ -58,15 +57,12 @@ export function ConnectionFlowScreen({ platform, source }: { platform: Platform;
     body = <SuccessState platform={platform} account={connection.connectedSession?.platformUsername || connection.connectedSession?.phoneNumber || connection.connectedSession?.platformUserId} />;
     footer = <FlowButton label={source === 'onboarding' ? 'Back to accounts' : 'Done'} onPress={connection.goBack} />;
   } else if (platform === Platform.INSTAGRAM && hasInstagramMobileLogin) {
-    if (instagram.authenticated) {
-      body = <InstagramFinishingState />;
-      footer = <><FlowButton label="Check connection" loading={connection.checking} onPress={() => void connection.checkConnection()} /><FlowButton label="Back to accounts" variant="tertiary" onPress={connection.goBack} /></>;
-    } else if (instagramAvailability.checking) {
+    if (instagramAvailability.checking) {
       body = <InstagramMobileIntro error={null} />;
       footer = <FlowButton label="Checking Instagram sign-in…" loading disabled />;
     } else if (instagramAvailability.available) {
-      body = <InstagramMobileIntro error={instagram.error} />;
-      footer = <><FlowButton label="Continue to Instagram sign-in" loading={instagram.busy} onPress={() => void instagram.start()} /><FlowButton label="Do this later" variant="tertiary" onPress={connection.goBack} /></>;
+      body = <InstagramMobileIntro error={null} />;
+      footer = <><FlowButton label="Continue to Instagram sign-in" onPress={() => router.push('/(auth)/connections/instagram-signin')} /><FlowButton label="Do this later" variant="tertiary" onPress={connection.goBack} /></>;
     } else {
       body = <InstagramMobileIntro error={null} availability={instagramAvailability.error ? 'offline' : 'not-enabled'} />;
       footer = <><FlowButton label="Check again" loading={instagramAvailability.checking} onPress={() => void instagramAvailability.retry()} /><FlowButton label="Back to accounts" variant="tertiary" onPress={connection.goBack} /></>;
@@ -144,11 +140,11 @@ export function ConnectionFlowScreen({ platform, source }: { platform: Platform;
   return (
     <View style={{ flex: 1, backgroundColor: colors.cream }} testID={`connection-flow-${platform}`}>
       <StatusBar style="dark" />
-      <FlowHeader title={connection.success ? `${config.name} connection` : `Connect ${config.name}`} topInset={insets.top} onBack={connection.goBack} />
+      <FlowHeader title={connection.success ? `${config.name} connection` : `Connect ${config.name}`} topInset={insets.top} compact={platform === Platform.INSTAGRAM && hasInstagramMobileLogin} onBack={connection.goBack} />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={process.env.EXPO_OS === 'ios' ? 'padding' : 'height'}>
         <ScrollView
           style={{ flex: 1 }}
-          contentInsetAdjustmentBehavior="automatic"
+          contentInsetAdjustmentBehavior={platform === Platform.INSTAGRAM && hasInstagramMobileLogin ? 'never' : 'automatic'}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ flexGrow: 1, paddingHorizontal: space[4], paddingTop: space[4], paddingBottom: space[5] }}
         >
@@ -174,12 +170,15 @@ export function ConnectionFlowScreen({ platform, source }: { platform: Platform;
   );
 }
 
-function FlowHeader({ title, topInset, onBack }: { title: string; topInset: number; onBack: () => void }) {
+export function FlowHeader({ title, topInset, compact = false, backLabel = 'Back to accounts', onBack }: { title: string; topInset: number; compact?: boolean; backLabel?: string; onBack: () => void }) {
+  // The full-screen route needs the device safe area. In a sheet, iOS can
+  // report the presenting screen's inset too, so cap it to one status bar.
+  const headerInset = compact ? Math.min(topInset, 64) : topInset;
   return (
-    <View style={{ paddingTop: Math.max(topInset, space[2]), paddingHorizontal: space[4], minHeight: 58 + topInset, flexDirection: 'row', alignItems: 'center', gap: space[2] }}>
+    <View style={{ paddingTop: Math.max(headerInset, space[2]), paddingHorizontal: space[4], minHeight: 58 + headerInset, flexDirection: 'row', alignItems: 'center', gap: space[2] }}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Back to accounts"
+        accessibilityLabel={backLabel}
         testID="connection-flow-back"
         onPress={onBack}
         style={{ width: 42, height: 42, borderRadius: 13, borderCurve: 'continuous', borderWidth: 1, borderColor: colors.neutral[200], backgroundColor: colors.paper, alignItems: 'center', justifyContent: 'center' }}
@@ -342,18 +341,18 @@ function InstagramMobileIntro({ error, availability }: { error: string | null; a
         </View>
       </View>
       <View style={{ gap: space[2] }}>
-        <Text style={{ ...mobileType.screenTitle, fontSize: 29, lineHeight: 32, color: colors.paper }}>Your Instagram chats, together in Claire.</Text>
-        <Text style={{ ...mobileType.body, color: colors.neutral[200] }}>Sign in here, complete Instagram’s verification, and Claire will start bringing in your conversations.</Text>
+        <Text style={{ ...mobileType.screenTitle, fontSize: 29, lineHeight: 32, color: colors.paper }}>Your Instagram chats in Claire.</Text>
+        <Text style={{ ...mobileType.body, color: colors.neutral[200] }}>Sign in on this iPhone. Your chats start syncing after verification.</Text>
       </View>
     </View>
     {availability ? <ErrorCallout warning text={availability === 'offline' ? 'Claire could not check Instagram sign-in right now. Check your connection and try again.' : 'Mobile Instagram sign-in is not available for this Claire account yet. Check again soon.'} /> : null}
     <View style={{ gap: space[2], padding: space[4], borderRadius: radius.card, borderCurve: 'continuous', borderWidth: 1, borderColor: colors.neutral[200], backgroundColor: colors.paper }}>
       <Text style={{ ...mobileType.monoLabel, color: colors.neutral[600] }}>HOW IT WORKS</Text>
-      <InstagramStep number={1} title="Sign in" detail="Enter your Instagram details in Claire’s private sign-in sheet." />
-      <InstagramStep number={2} title="Verify" detail="If Instagram sends a code or approval request, finish it there." />
-      <InstagramStep number={3} title="Start syncing" detail="New chats can appear first while older conversations load." />
+      <InstagramStep number={1} title="Sign in" detail="Use your Instagram account." />
+      <InstagramStep number={2} title="Verify" detail="Complete any code Instagram sends." />
+      <InstagramStep number={3} title="Sync" detail="Conversations appear in Claire." />
     </View>
-    <InfoNote icon={<ShieldCheck size={17} color={colors.ink} />} text="Your password and verification code are used for sign-in and are not saved in the app. Claire’s bridge keeps the connection active after you close it." />
+    <InfoNote icon={<ShieldCheck size={17} color={colors.ink} />} text="Your password and verification code aren’t saved in Claire." />
     {error ? <ErrorCallout text={error} /> : null}
   </View>;
 }
@@ -364,15 +363,6 @@ function InstagramStep({ number, title, detail }: { number: number; title: strin
       <Text style={{ ...mobileType.label, color: colors.ink }}>{number}</Text>
     </View>
     <View style={{ flex: 1, gap: 2 }}><Text style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>{title}</Text><Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{detail}</Text></View>
-  </View>;
-}
-
-function InstagramFinishingState() {
-  return <View style={{ flex: 1, gap: space[4] }} testID="instagram-connection-finishing">
-    <FlowIntro platform={Platform.INSTAGRAM} title="Instagram sign-in complete" copy="Claire is confirming your account connection. Your conversations may take a little longer to appear." />
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[3], padding: space[4], borderRadius: radius.card, backgroundColor: colors.paper }}>
-      <ActivityIndicator color={colors.success} /><Text style={{ flex: 1, ...mobileType.bodySmall, color: colors.ink }}>Checking the bridge and your Claire account…</Text>
-    </View>
   </View>;
 }
 
