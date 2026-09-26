@@ -11,11 +11,11 @@ let mockStatusListener: (event: { status: string }) => void;
 const mockPlayer = { play: mockPlay, pause: mockPause, release: mockRelease, replaceAsync: mockReplace, addListener: jest.fn((_name, listener) => { mockStatusListener = listener; return { remove: jest.fn() }; }) };
 jest.mock('../features/chat/expo-video-module', () => ({ expoVideoModule: {
   useVideoPlayer: () => {
-    const React = require('react');
+    const React = jest.requireActual('react');
     React.useEffect(() => () => mockRelease(), []);
     return mockPlayer;
   },
-  VideoView: require('react-native').View,
+  VideoView: jest.requireActual('react-native').View,
 } }));
 
 describe('video playback lifecycle', () => {
