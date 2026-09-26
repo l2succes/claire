@@ -3,7 +3,7 @@ import { fireEvent, render } from '@testing-library/react-native';
 import { MediaMessage } from '../features/chat/media-message';
 import type { ChatMessage, VisualMedia } from '@claire/chat-core';
 
-jest.mock('expo-image', () => ({ Image: require('react-native').Image }));
+jest.mock('expo-image', () => ({ Image: jest.requireActual('react-native').Image }));
 const message: ChatMessage = { id: 'photo', content: '', timestamp: '2026-09-24T10:00:00Z', from_me: false };
 const media: VisualMedia = { messageId: 'photo', kind: 'image', uri: 'https://example.com/photo', width: 600, height: 400 };
 

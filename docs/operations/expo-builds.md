@@ -148,7 +148,7 @@ APP_VARIANT=staging bunx expo run:ios -d
 
 | Symptom | Resolution |
 | --- | --- |
-| `lockfile had changes, but lockfile is frozen` | Run `bun install` from the repository root, commit the updated `bun.lockb` and `yarn.lock`, then verify with `cd apps/client && bun install --frozen-lockfile`. |
+| `lockfile had changes, but lockfile is frozen` | Run Bun 1.3 or newer from the repository root, commit the updated `bun.lock` and `yarn.lock`, then verify with `cd apps/client && bun install --frozen-lockfile`. |
 | New phone cannot install | Run `bunx eas device:create`, then create a new internal build so its Ad Hoc provisioning profile includes that phone. |
 | Apple credentials or profile is invalid | Run an interactive `bun run build:staging` or `bun run build:prod`; select the Claire Apple Developer team and let EAS refresh the profile. |
 | Wrong backend opens | Check the profile shown on the EAS build page and the app name on the phone. Rebuild—do not change a distributed app's endpoint at runtime. |

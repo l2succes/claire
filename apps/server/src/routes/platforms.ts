@@ -197,7 +197,11 @@ const instagramMobileLogin = new InstagramMobileLogin({
     const adapter = platformManager.getAdapter(Platform.INSTAGRAM) as MatrixBridgeAdapter | undefined;
     await adapter?.markSessionFailed(sessionId, 'Instagram mobile sign-in ended.');
   },
-}, process.env.INSTAGRAM_MOBILE_LOGIN_FLOW === 'instagram-password' ? 'instagram-password' : 'android');
+}, process.env.INSTAGRAM_MOBILE_LOGIN_FLOW === 'instagram'
+  ? 'instagram'
+  : process.env.INSTAGRAM_MOBILE_LOGIN_FLOW === 'instagram-password'
+    ? 'instagram-password'
+    : 'android');
 router.use('/instagram/mobile-login', instagramMobileLoginRouter(instagramMobileLogin));
 
 /** Authenticated opt-in platform interest. No external credentials are stored. */
