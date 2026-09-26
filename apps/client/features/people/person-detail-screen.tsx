@@ -98,7 +98,7 @@ export function PersonDetailScreen() {
 
   const back = (
     <View style={{ position: 'absolute', top: insets.top + space[2], left: space[4], zIndex: 1 }}>
-      <MobileIconButton label="Back to People" onPress={() => router.back()}>
+      <MobileIconButton label="Back to Contacts" onPress={() => router.back()}>
         <ChevronLeft size={21} color={colors.ink} />
       </MobileIconButton>
     </View>

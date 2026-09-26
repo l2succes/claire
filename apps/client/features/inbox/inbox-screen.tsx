@@ -1,12 +1,13 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, InteractionManager, Modal, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
-import Animated, { FadeIn, LinearTransition } from 'react-native-reanimated';
+import Animated, { Extrapolation, FadeIn, interpolate, LinearTransition, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BellOff, Check, CheckCircle2, Clock3, PenSquare, Pin, Search, X } from 'lucide-react-native';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { colors, mobileType, radius, space, useIsDesktopLayout } from '@claire/design-system';
-import { MobileChip, MobileHeader, MobileIconButton, MobileSearchField, MobileState, SectionLabel } from '../../components/mobile/claire-mobile';
+import { MobileChip, MobileIconButton, MobileSearchField, MobileState, SectionLabel } from '../../components/mobile/claire-mobile';
 import { FeedbackPressable } from '../../components/mobile/pressable-feedback';
 import {
   inboxQueryPrefix,
@@ -36,6 +37,8 @@ type PlatformFilter = 'all' | Platform;
 const avatarTones = [colors.sky, colors.mint, colors.lavender, colors.blush] as const;
 const inboxRowLayout = LinearTransition.duration(180);
 const inboxContentUpdate = FadeIn.duration(160);
+const INBOX_TITLE_HEIGHT = 72;
+const INBOX_CONTROLS_HEIGHT = 104;
 
 const MEDIA_PREVIEW_LABELS: Record<string, string> = {
   image: 'sent a picture',
@@ -272,7 +275,6 @@ function InboxControls({
   platformFilters,
   platform,
   onPlatformChange,
-  safeArea = false,
 }: {
   query: string;
   onQueryChange: (value: string) => void;
@@ -282,15 +284,8 @@ function InboxControls({
   platformFilters: Array<{ value: PlatformFilter; label: string }>;
   platform: PlatformFilter;
   onPlatformChange: (value: PlatformFilter) => void;
-  safeArea?: boolean;
 }) {
   return (
-    <>
-      <MobileHeader
-        title="Inbox"
-        safeArea={safeArea}
-        actions={<MobileIconButton label="New message" testID="inbox-compose" onPress={() => router.push('/compose' as never)}><PenSquare size={20} color={colors.ink} /></MobileIconButton>}
-      />
       <View style={{ paddingHorizontal: space[4], gap: space[3], paddingBottom: space[3], borderBottomWidth: 1, borderBottomColor: colors.neutral[200] }}>
         <MobileSearchField style={{ minHeight: 46, borderRadius: 13, paddingHorizontal: space[4], backgroundColor: colors.neutral[100] }} inputStyle={{ fontSize: 15, lineHeight: 20 }} icon={<Search size={24} strokeWidth={1.7} color={colors.neutral[600]} />} value={query} onChangeText={onQueryChange} placeholder="Search conversations" returnKeyType="search" testID="messages-search-input" />
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingRight: space[4] }}>
@@ -307,7 +302,6 @@ function InboxControls({
           ))}
         </ScrollView>
       </View>
-    </>
   );
 }
 
@@ -320,6 +314,8 @@ export const InboxConversationRow = memo(InboxConversationRowInner);
 
 export function InboxScreen() {
   const isDesktop = useIsDesktopLayout();
+  const { top } = useSafeAreaInsets();
+  const safeTop = Math.max(top, process.env.EXPO_OS === 'ios' ? 48 : 0);
   const params = useLocalSearchParams<{ filter?: string }>();
   const user = useAuthStore(state => state.user);
   const connectedSessions = usePlatformStore(state => state.connectedSessions);
@@ -339,6 +335,20 @@ export function InboxScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [snoozeTarget, setSnoozeTarget] = useState<InboxMessage | null>(null);
   const [locallySnoozed, setLocallySnoozed] = useState<Set<string>>(new Set());
+  const scrollY = useSharedValue(0);
+  const onScroll = useAnimatedScrollHandler((event) => {
+    scrollY.value = Math.max(0, event.contentOffset.y);
+  });
+  const titleStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(scrollY.value, [0, INBOX_TITLE_HEIGHT * 0.8], [1, 0], Extrapolation.CLAMP),
+    transform: [
+      { translateY: interpolate(scrollY.value, [0, INBOX_TITLE_HEIGHT], [0, -24], Extrapolation.CLAMP) },
+      { scale: interpolate(scrollY.value, [0, INBOX_TITLE_HEIGHT], [1, 0.9], Extrapolation.CLAMP) },
+    ],
+  }));
+  const controlsStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: -interpolate(scrollY.value, [0, INBOX_TITLE_HEIGHT], [0, INBOX_TITLE_HEIGHT], Extrapolation.CLAMP) }],
+  }));
 
   const inbox = useInboxMessages(user?.id, { search: debouncedQuery, filter, platform });
   const queryClient = useQueryClient();
@@ -536,20 +546,11 @@ export function InboxScreen() {
       collapsable={false}
       style={{ flex: 1, backgroundColor: colors.paper }}
     >
-      {inbox.isCold ? <>
-        <InboxControls
-          query={query}
-          onQueryChange={setQuery}
-          filters={filters}
-          filter={filter}
-          onFilterChange={setFilter}
-          platformFilters={platformFilters}
-          platform={platform}
-          onPlatformChange={setPlatform}
-          safeArea
-        />
-        <InboxSkeleton testID="messages-loading" />
-      </> : (
+      {inbox.isCold ? (
+        <View style={{ flex: 1, paddingTop: safeTop + INBOX_TITLE_HEIGHT + INBOX_CONTROLS_HEIGHT }}>
+          <InboxSkeleton testID="messages-loading" />
+        </View>
+      ) : (
       <Animated.FlatList
         ref={listRef}
         testID="messages-list"
@@ -557,8 +558,10 @@ export function InboxScreen() {
         keyExtractor={item => item.conversation_key}
         renderItem={renderConversation}
         itemLayoutAnimation={inboxRowLayout}
-        contentInsetAdjustmentBehavior="automatic"
-        contentContainerStyle={{ paddingBottom: 156 }}
+        contentInsetAdjustmentBehavior="never"
+        contentContainerStyle={{ paddingTop: safeTop + INBOX_TITLE_HEIGHT + INBOX_CONTROLS_HEIGHT, paddingBottom: 156 }}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
         onEndReached={() => {
           // Search results paginate too — the feed is filtered in the database,
           // so there can be more matches beyond the first page.
@@ -571,16 +574,6 @@ export function InboxScreen() {
           {/* Keeping the vertical list on the screen's first native-descendant
               chain lets iOS 26 drive the Liquid Glass tab minimization from
               this scroll gesture. */}
-          <InboxControls
-            query={query}
-            onQueryChange={setQuery}
-            filters={filters}
-            filter={filter}
-            onFilterChange={setFilter}
-            platformFilters={platformFilters}
-            platform={platform}
-            onPlatformChange={setPlatform}
-          />
           {highlights.length ? <>
             <View style={{ paddingHorizontal: space[4], paddingTop: space[3], paddingBottom: space[2] }}><SectionLabel title="Highlights" detail="Claire's picks" /></View>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: space[4], gap: space[3], paddingBottom: space[1] }}>
@@ -594,9 +587,29 @@ export function InboxScreen() {
       />
       )}
 
-      {/* The header already carries a compose action. On a phone the floating
-          button is the reachable one; on desktop it would just be a second
-          control for the same thing, sitting over the conversation list. */}
+      <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: safeTop, backgroundColor: colors.paper }} />
+      <Animated.View
+        pointerEvents="none"
+        style={[{ position: 'absolute', top: safeTop, left: 0, right: 0, height: INBOX_TITLE_HEIGHT, paddingHorizontal: space[4], justifyContent: 'center' }, titleStyle]}
+      >
+        <Text selectable maxFontSizeMultiplier={1} style={{ ...mobileType.screenTitle, color: colors.ink }}>Inbox</Text>
+      </Animated.View>
+      <Animated.View
+        style={[{ position: 'absolute', top: safeTop + INBOX_TITLE_HEIGHT, left: 0, right: 0, height: INBOX_CONTROLS_HEIGHT, justifyContent: 'flex-end', backgroundColor: colors.paper }, controlsStyle]}
+      >
+        <InboxControls
+          query={query}
+          onQueryChange={setQuery}
+          filters={filters}
+          filter={filter}
+          onFilterChange={setFilter}
+          platformFilters={platformFilters}
+          platform={platform}
+          onPlatformChange={setPlatform}
+        />
+      </Animated.View>
+
+      {/* Compose stays within thumb reach without duplicating it in the header. */}
       {isDesktop ? null : (
       <FeedbackPressable
         testID="inbox-floating-compose"

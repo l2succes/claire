@@ -72,6 +72,7 @@ import { imessageAdapter } from './adapters/imessage';
 import { instagramAdapter } from './adapters/instagram';
 import { MatrixBridgeAdapter } from './adapters/matrix';
 import { mockBridgeAdapter } from './adapters/mock';
+import { createMediaRouter } from './routes/media';
 import { transcodeVoiceToM4aOnce } from './services/audio-transcoder';
 import { applyIncomingMessageEdit } from './services/message-edits';
 import { isWhatsAppStatusUpdate } from './services/whatsapp-status';
@@ -292,43 +293,11 @@ app.get('/', (req, res, next) => {
   });
 });
 
-// Matrix media proxy — serves mxc:// content via the admin token
-// Client uses: GET /media/:server/:mediaId
-app.get('/media/:server/:mediaId', async (req, res) => {
-  if (!matrixConfig.enabled || !matrixConfig.homeserverUrl || !matrixConfig.adminToken) {
-    return res.status(503).json({ error: 'Matrix not configured' });
-  }
-  const { server, mediaId } = req.params;
-  const url = `${matrixConfig.homeserverUrl}/_matrix/client/v1/media/download/${server}/${mediaId}`;
-  try {
-    const upstream = await fetch(url, {
-      headers: { Authorization: `Bearer ${matrixConfig.adminToken}` },
-    });
-    if (!upstream.ok) {
-      return res.status(upstream.status).json({ error: 'Media not found' });
-    }
-    const contentType = upstream.headers.get('content-type') || 'application/octet-stream';
-    const buffer = Buffer.from(await upstream.arrayBuffer());
-    if (req.query.format === 'm4a') {
-      if (!/(?:audio\/(?:ogg|opus)|application\/ogg)/i.test(contentType)) {
-        return res.status(415).json({ error: 'M4A conversion is only available for Ogg/Opus audio' });
-      }
-      const converted = await transcodeVoiceToM4aOnce(`${server}/${mediaId}:m4a`, buffer);
-      res.setHeader('Content-Type', 'audio/mp4');
-      res.setHeader('Content-Disposition', 'inline; filename="voice-note.m4a"');
-      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-      return res.send(converted);
-    }
-    res.setHeader('Content-Type', contentType);
-    // Matrix media IDs are immutable. Cache aggressively so scrolling an
-    // inbox or reopening a chat does not re-download every attachment.
-    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-    return res.send(buffer);
-  } catch (err) {
-    logger.error('Media proxy error:', err);
-    return res.status(500).json({ error: 'Failed to prepare media' });
-  }
-});
+app.use('/media', createMediaRouter({
+  config: matrixConfig,
+  transcode: transcodeVoiceToM4aOnce,
+  onError: () => logger.warn('Media delivery failed'),
+}));
 
 async function collectReadiness() {
   const checks: Record<
