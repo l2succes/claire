@@ -1,6 +1,8 @@
 import { describe, expect, it, mock } from 'bun:test';
 mock.module('../../services/operations-telemetry', () => ({ operationsTelemetry: { record: async () => undefined } }));
 const { MatrixBridgeAdapter } = await import('./index');
+const { DemoBridgeAdapter } = await import('../demo');
+const { matrixBridgeFor } = await import('./resolve-adapter');
 const { Platform, PlatformStatus } = await import('../types');
 
 function setup() {
@@ -16,6 +18,26 @@ function setup() {
   return { adapter, sendEvent, retryImmediately, initiateAuth };
 }
 describe('Matrix outgoing recovery', () => {
+  it('accepts a demo-decorated Matrix transport and sends for a real account', async () => {
+    const { adapter, sendEvent, retryImmediately } = setup();
+    const decorated = new DemoBridgeAdapter(adapter, {
+      ingest: async () => undefined,
+      isDemoUser: async () => false,
+      onOutgoing: () => undefined,
+    });
+    expect(decorated instanceof MatrixBridgeAdapter).toBe(false);
+    expect(matrixBridgeFor(decorated)).toBe(adapter);
+    const sent = await decorated.sendMessage('session', '!test:test.local', {
+      content: 'synthetic test', transactionId: 'stable-key', clientRequestId: 'client-key',
+    });
+    expect(sent.platformMessageId).toBe('$stable-key');
+    expect(sendEvent.mock.calls[0][3]).toBe('stable-key');
+    await decorated.sendReaction('session', '!test:test.local', '$target', '👍', 'reaction-key');
+    expect(sendEvent.mock.calls[1][3]).toBe('reaction-key');
+    matrixBridgeFor(decorated)?.recoverTransport();
+    expect(retryImmediately).toHaveBeenCalledTimes(1);
+    expect(matrixBridgeFor({} as any)).toBeNull();
+  });
   it('passes the same idempotency key to Matrix on retry and keeps client identity', async () => {
     const { adapter, sendEvent } = setup();
     const message = { content: 'synthetic test', transactionId: 'stable-key', clientRequestId: 'client-key' };

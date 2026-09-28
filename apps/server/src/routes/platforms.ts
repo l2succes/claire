@@ -12,7 +12,7 @@ import {
   MessageContentType,
   type PlatformCapabilities,
 } from '../adapters';
-import { MatrixBridgeAdapter } from '../adapters/matrix';
+import { matrixBridgeFor } from '../adapters/matrix/resolve-adapter';
 import { platformConfig } from '../config';
 import { logger } from '../utils/logger';
 import { requireAuth } from '../middleware/auth';
@@ -186,15 +186,17 @@ const instagramMobileLogin = new InstagramMobileLogin({
   bridge: instagramBridgeClient,
   async createSession(userId, sessionId) {
     const adapter = platformManager.getAdapter(Platform.INSTAGRAM);
-    if (!(adapter instanceof MatrixBridgeAdapter)) throw new Error('Instagram bridge unavailable');
+    const matrixAdapter = matrixBridgeFor(adapter);
+    if (!adapter || !matrixAdapter) throw new Error('Instagram bridge unavailable');
     await adapter.createSession(userId, sessionId, { platform: Platform.INSTAGRAM, skipBridgeAuth: true } as never);
   },
   async completeSession(sessionId, loginId) {
-    const adapter = platformManager.getAdapter(Platform.INSTAGRAM) as MatrixBridgeAdapter;
+    const adapter = matrixBridgeFor(platformManager.getAdapter(Platform.INSTAGRAM));
+    if (!adapter) throw new Error('Instagram bridge unavailable');
     await adapter.markSessionConnected(sessionId, loginId, { backgroundSync: true });
   },
   async failSession(sessionId) {
-    const adapter = platformManager.getAdapter(Platform.INSTAGRAM) as MatrixBridgeAdapter | undefined;
+    const adapter = matrixBridgeFor(platformManager.getAdapter(Platform.INSTAGRAM));
     await adapter?.markSessionFailed(sessionId, 'Instagram mobile sign-in ended.');
   },
 }, process.env.INSTAGRAM_MOBILE_LOGIN_FLOW === 'instagram'
@@ -403,7 +405,8 @@ router.post('/instagram/login/start', async (req: Request, res: Response) => {
     // The provisioning API's login and step IDs live only in the active
     // client flow. Starting again cannot safely resume an older attempt, so
     // explicitly retire it instead of accumulating duplicate sessions.
-    const matrixAdapter = adapter as MatrixBridgeAdapter;
+    const matrixAdapter = matrixBridgeFor(adapter);
+    if (!matrixAdapter) return res.status(409).json({ success: false, error: 'Instagram bridge unavailable' });
     const pendingSessions = (await adapter.getUserSessions(userId)).filter((session) => (
       session.platform === Platform.INSTAGRAM
       && (session.status === PlatformStatus.INITIALIZING
@@ -450,7 +453,7 @@ router.post('/instagram/login/start', async (req: Request, res: Response) => {
   } catch (error) {
     logger.error('Error starting Instagram login:', error);
     if (sessionId) {
-      const matrixAdapter = platformManager.getAdapter(Platform.INSTAGRAM) as MatrixBridgeAdapter | undefined;
+      const matrixAdapter = matrixBridgeFor(platformManager.getAdapter(Platform.INSTAGRAM));
       await matrixAdapter?.markSessionFailed(sessionId, (error as Error).message || 'Failed to start Instagram login');
     }
     return res.status(500).json({
@@ -507,7 +510,8 @@ router.post('/instagram/login/submit', async (req: Request, res: Response) => {
 
       // Directly mark the session connected — the HTTP API flow doesn't guarantee
       // a Matrix bot message, so we can't rely on the event handler to do this.
-      const matrixAdapter = platformManager.getAdapter(Platform.INSTAGRAM) as MatrixBridgeAdapter;
+      const matrixAdapter = matrixBridgeFor(platformManager.getAdapter(Platform.INSTAGRAM));
+      if (!matrixAdapter) throw new Error('Instagram bridge unavailable');
       await matrixAdapter.markSessionConnected(sessionId, userLoginId);
 
       return res.json({ success: true, userLoginId });
@@ -695,6 +699,8 @@ router.post('/:platform/connect', async (req: Request, res: Response) => {
     const newSessionId = sessionId || `${platform}-${userId}-${Date.now()}`;
 
     if (platform === Platform.WHATSAPP && process.env.WHATSAPP_BRIDGE_SECRET) {
+      const matrixAdapter = matrixBridgeFor(adapter);
+      if (!matrixAdapter) return res.status(409).json({ success: false, error: 'WhatsApp bridge unavailable' });
       const flow = await whatsappBridgeClient.startLogin('phone');
       const codeStep = await whatsappBridgeClient.submitUserInput(
         flow.login_id,
@@ -702,13 +708,13 @@ router.post('/:platform/connect', async (req: Request, res: Response) => {
         { phone_number: config.phoneNumber }
       );
 
-      const session = await (adapter as MatrixBridgeAdapter).createSession(
+      const session = await adapter.createSession(
         userId,
         newSessionId,
         { platform: Platform.WHATSAPP, phoneNumber: config.phoneNumber, skipBridgeAuth: true } as never
       );
       const pairingCode = codeStep.display_and_wait?.data;
-      await (adapter as MatrixBridgeAdapter).setSessionAuthData(
+      await matrixAdapter.setSessionAuthData(
         session.id,
         pairingCode ? { pairingCode } : undefined
       );
@@ -720,7 +726,7 @@ router.post('/:platform/connect', async (req: Request, res: Response) => {
           .waitForDisplayAndWait(flow.login_id, codeStep.step_id, codeStep.txn_id)
           .then(async (result) => {
             if (result.type === 'complete') {
-              await (adapter as MatrixBridgeAdapter).markSessionConnected(
+              await matrixAdapter.markSessionConnected(
                 session.id,
                 result.complete?.user_login_id
               );
@@ -738,7 +744,7 @@ router.post('/:platform/connect', async (req: Request, res: Response) => {
               return;
             }
 
-            await (adapter as MatrixBridgeAdapter).markSessionFailed(
+            await matrixAdapter.markSessionFailed(
               session.id,
               `WhatsApp login returned an unexpected ${result.type} step`
             );
@@ -746,7 +752,7 @@ router.post('/:platform/connect', async (req: Request, res: Response) => {
           .catch(async (error) => {
             const message = (error as Error).message || 'WhatsApp login failed';
             logger.error(`WhatsApp pairing flow failed for session ${session.id}:`, error);
-            await (adapter as MatrixBridgeAdapter).markSessionFailed(session.id, message);
+            await matrixAdapter.markSessionFailed(session.id, message);
           });
       }
 
@@ -928,20 +934,21 @@ router.post('/:platform/recover', async (req: Request, res: Response) => {
     if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });
     if (typeof sessionId !== 'string') return res.status(400).json({ success: false, error: 'Session ID required' });
     const adapter = platformManager.getAdapter(platform as Platform);
-    if (!(adapter instanceof MatrixBridgeAdapter)) return res.status(409).json({ success: false, error: 'Connection needs attention in Connections.' });
+    const matrixAdapter = matrixBridgeFor(adapter);
+    if (!adapter || !matrixAdapter) return res.status(409).json({ success: false, error: 'Connection needs attention in Connections.' });
     const session = await adapter.getSession(sessionId);
     if (!session || session.userId !== userId || session.platform !== platform) {
       return res.status(404).json({ success: false, error: 'Session not found' });
     }
     if (!session.lastConnectedAt) return res.status(409).json({ success: false, error: 'Connection needs attention in Connections.' });
-    adapter.recoverTransport();
+    matrixAdapter.recoverTransport();
     // mautrix owns remote-network retries. Reconcile Claire's status against
     // that exact existing login, without creating or rotating credentials.
     const bridge = platform === Platform.WHATSAPP ? whatsappBridgeClient
       : platform === Platform.INSTAGRAM ? instagramBridgeClient : undefined;
     if (bridge && session.platformUserId) {
       const state = await bridge.getConnectionState(session.platformUserId);
-      if (state === 'CONNECTED') await adapter.markSessionConnected(sessionId, session.platformUserId);
+      if (state === 'CONNECTED') await matrixAdapter.markSessionConnected(sessionId, session.platformUserId);
       else if (!state || state === 'BAD_CREDENTIALS' || state === 'LOGGED_OUT') {
         return res.status(409).json({ success: false, error: 'Connection needs attention in Connections.' });
       }
@@ -1137,7 +1144,7 @@ router.post(
         });
       }
 
-      if (req.body.clientRequestId && !(adapter instanceof MatrixBridgeAdapter)) {
+      if (req.body.clientRequestId && !matrixBridgeFor(adapter)) {
         return res.status(409).json({ success: false, error: 'Queued reactions are unavailable for this connection.' });
       }
 
@@ -1372,7 +1379,7 @@ router.post(['/:platform/send', '/:platform/outbox/send'], async (req: Request, 
       });
     }
 
-    if (clientRequestId && !(adapter instanceof MatrixBridgeAdapter)) {
+    if (clientRequestId && !matrixBridgeFor(adapter)) {
       return res.status(409).json({ success: false, error: 'Queued sending is unavailable for this connection.' });
     }
 
