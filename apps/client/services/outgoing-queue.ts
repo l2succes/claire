@@ -50,6 +50,12 @@ export class OutgoingQueue<T extends QueueEntry> {
     const { error: _, ...pending } = entry;
     return pending as T;
   })); }
+  async failWhere(predicate: (entry: T) => boolean, error: string) {
+    await this.hydrate();
+    if (!this.entries.some((entry) => !entry.error && predicate(entry))) return;
+    await this.update((entries) => entries.map((entry) => !entry.error && predicate(entry)
+      ? { ...entry, error } : entry));
+  }
   async flush() {
     if (this.flushing) return;
     this.flushing = true;

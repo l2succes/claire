@@ -256,6 +256,7 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
     [chatOutbox],
   );
   const failedReactionEvent = chatOutbox.find((entry) => entry.kind === 'reaction' && entry.error);
+  const hasFailedTextInChat = chatOutbox.some((entry) => entry.kind === 'text' && entry.error);
   const availablePlatforms = usePlatformStore((state) => state.availablePlatforms);
   // Selectors, not a bare destructure: subscribing to the whole store re-rendered
   // this screen on every settings mutation for every conversation. Only this
@@ -1185,17 +1186,6 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
         }}
         testID={`message-row-${item.id}-${isMe ? 'outgoing' : 'incoming'}`}
       >
-        {failedSend?.error ? (
-          <MessageSendFailure
-            messageId={item.id}
-            onRetry={() => {
-              if (!user?.id) return;
-              void retryFailedChatEvent(user.id, failedSend.id).catch((error) => {
-                console.warn('Could not retry failed message:', error);
-              });
-            }}
-          />
-        ) : null}
         <Pressable
           style={
             media
@@ -1257,6 +1247,7 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
               borderBottomRightRadius: standaloneEmoji ? 10 : isMe ? 6 : radius.card,
               borderBottomLeftRadius: standaloneEmoji ? 10 : isMe ? radius.card : 6,
               paddingHorizontal: standaloneEmoji || media ? 0 : space[3],
+              paddingRight: failedSend?.error && !standaloneEmoji && !media ? space[3] + 18 : undefined,
               paddingVertical: standaloneEmoji || media ? 0 : space[2],
             }}
           >
@@ -1302,6 +1293,22 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
               </>
             )}
           </InjectedBubble>
+          {failedSend?.error ? (
+            <MessageSendFailure
+              messageId={item.id}
+              needsConnection={!!resolvedPlatform && attentionPlatforms.includes(resolvedPlatform as Platform)}
+              onRetry={() => {
+                if (resolvedPlatform && attentionPlatforms.includes(resolvedPlatform as Platform)) {
+                  router.push('/connections');
+                  return;
+                }
+                if (!user?.id) return;
+                void retryFailedChatEvent(user.id, failedSend.id).catch((error) => {
+                  console.warn('Could not retry failed message:', error);
+                });
+              }}
+            />
+          ) : null}
           {reactionChips.length ? (
             <View
               pointerEvents="none"
@@ -1605,7 +1612,7 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
             // added alarm without an action. Text delivery failures live on
             // their message bubbles; this area is reserved for connection-wide
             // problems and reaction failures, which have no bubble of their own.
-            visible={connectionNeedsAttention || !!failedReactionEvent}
+            visible={(!hasFailedTextInChat && connectionNeedsAttention) || !!failedReactionEvent}
             needsAttention={connectionNeedsAttention}
             count={0}
             error={failedReactionEvent?.error}
