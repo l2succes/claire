@@ -1657,7 +1657,9 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
       <MessageContextMenu
         visible={!!messageActionTarget}
         canReact={
-          Boolean(messageActionTarget) && Boolean(platformCapabilities?.canSendReactions)
+          Boolean(messageActionTarget) &&
+          !textOutboxByMessageId.get(messageActionTarget!.id) &&
+          Boolean(platformCapabilities?.canSendReactions)
         }
         canReply={Boolean(messageActionTarget?.platform_message_id) && Boolean(platformCapabilities?.canReplyToMessages)}
         content={messageActionTarget?.content || ''}
@@ -1668,6 +1670,15 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
           .map((reaction) => reaction.emoji)}
         onReact={(emoji) => void handleReact(emoji)}
         onDismiss={() => setMessageActionTarget(null)}
+        onDiscardFailed={messageActionTarget && user?.id && textOutboxByMessageId.get(messageActionTarget.id)?.error
+          ? () => {
+              const failed = textOutboxByMessageId.get(messageActionTarget.id);
+              setMessageActionTarget(null);
+              if (!failed) return;
+              void removeFailedChatEvent(user.id, failed.id)
+                .catch(() => setSendError('Could not discard the failed message. Please try again.'));
+            }
+          : undefined}
         onReply={() => {
           if (!messageActionTarget) return;
           setReplyTarget(messageActionTarget);

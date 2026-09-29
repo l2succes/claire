@@ -80,6 +80,20 @@ describe('outgoing queue', () => {
       { id: 'second', chatId: 'a' },
     ]);
   });
+  it('allows a later message through after its failed predecessor is discarded', async () => {
+    const harness = setup([
+      { id: 'failed', chatId: 'a', error: 'Could not send' },
+      { id: 'approved-test', chatId: 'a' },
+    ]);
+    const queue = harness.create();
+    await queue.hydrate();
+    await queue.flush();
+    expect(harness.execute).not.toHaveBeenCalled();
+    await queue.remove('failed');
+    await queue.flush();
+    expect(harness.execute).toHaveBeenCalledWith({ id: 'approved-test', chatId: 'a' });
+    expect(harness.disk()).toEqual([]);
+  });
   it('marks only matching pending sends for manual connection recovery', async () => {
     const harness = setup([
       { id: 'pending', chatId: 'a' },
