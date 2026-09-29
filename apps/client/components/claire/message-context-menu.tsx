@@ -6,7 +6,7 @@ import GorhomBottomSheet, {
   BottomSheetView,
   type BottomSheetBackdropProps,
 } from '@gorhom/bottom-sheet';
-import { Copy, Reply, X } from 'lucide-react-native';
+import { Copy, Reply, Trash2, X } from 'lucide-react-native';
 import { colors, mobileType, radius, space } from '@claire/design-system';
 import { QUICK_REACTIONS } from '@claire/chat-core';
 
@@ -29,6 +29,7 @@ type MessageContextMenuProps = {
   activeReactionEmojis?: readonly string[];
   onReact: (emoji: string) => void;
   onReply: () => void;
+  onDiscardFailed?: () => void;
   onDismiss: () => void;
 };
 
@@ -47,6 +48,7 @@ export function MessageContextMenu({
   activeReactionEmojis = [],
   onReact,
   onReply,
+  onDiscardFailed,
   onDismiss,
 }: MessageContextMenuProps) {
   const insets = useSafeAreaInsets();
@@ -182,6 +184,14 @@ export function MessageContextMenu({
             disabled={!canCopy}
             testID="message-context-copy"
           />
+          {onDiscardFailed ? (
+            <ActionCard
+              icon={<Trash2 size={21} color={colors.paper} strokeWidth={2.1} />}
+              label="Discard failed"
+              onPress={onDiscardFailed}
+              testID="message-context-discard-failed"
+            />
+          ) : null}
         </View>
       </BottomSheetView>
     </GorhomBottomSheet>
