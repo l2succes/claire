@@ -1202,8 +1202,16 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
           accessibilityRole={media || canReplyToMessage || Boolean(item.content) ? 'button' : undefined}
           accessibilityLabel={media ? (media.kind === 'image' ? 'View image full screen' : 'Play video full screen') : undefined}
           onPressIn={() => { mediaLongPressed.current = false; }}
-          onPress={media ? () => { if (!mediaLongPressed.current) mediaViewer.open(item); } : undefined}
-          accessibilityHint={canReplyToMessage || Boolean(item.content) ? 'Long press for message actions' : undefined}
+          onPress={media
+            ? () => { if (!mediaLongPressed.current) mediaViewer.open(item); }
+            : failedSend?.error
+              ? () => setMessageActionTarget(item)
+              : undefined}
+          accessibilityHint={failedSend?.error
+            ? 'Tap for failed message actions'
+            : canReplyToMessage || Boolean(item.content)
+              ? 'Long press for message actions'
+              : undefined}
           delayLongPress={350}
           onLongPress={
             canReplyToMessage || Boolean(item.content)
