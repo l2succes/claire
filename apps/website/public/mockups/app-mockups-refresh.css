@@ -1,0 +1,1025 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/*
+ * Refreshed core screens (September 2026) — matched to the shipping iOS app:
+ * Loops instead of Promises, the Focus card on Home, Claire's picks in the
+ * inbox, the pinned open-loop card in a chat, the Ask Claire thread and the
+ * grouped Connections list. Type follows the app at its real size, which is
+ * roughly 1.5x the original mockup scale.
+ *
+ * Every rule is scoped under `.rf` so the older screens keep their styles.
+ */
+
+.rf {
+  --rf-ink: var(--claire-ink);
+  --rf-muted: var(--neutral-600);
+  --rf-faint: var(--neutral-400);
+  --rf-line: var(--neutral-200);
+  --rf-info: #e3f0ff;
+  --rf-info-border: #b6d6fa;
+  --rf-danger: #c83a3a;
+  --rf-success: #18794e;
+  padding: 10px 16px calc(84px + var(--mock-safe-bottom));
+  color: var(--rf-ink);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.35;
+}
+.rf.no-tab {
+  padding-bottom: calc(18px + var(--mock-safe-bottom));
+}
+.rf.sky {
+  background: var(--claire-sky);
+}
+.rf.cream {
+  background: var(--claire-cream);
+}
+.rf.paper {
+  background: var(--claire-paper);
+}
+/* The status bar sits outside .screen; let it take the screen's colour. */
+claire-phone:has(.rf.cream) .status {
+  background: var(--claire-cream);
+}
+claire-phone:has(.rf.sky) .status {
+  background: var(--claire-sky);
+}
+claire-phone:has(.rf.paper) .status {
+  background: var(--claire-paper);
+}
+.rf .hero-icon {
+  width: 24px;
+  height: 24px;
+}
+.rf-mono {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+/* ---------- titles and chrome ---------- */
+.rf-title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 6px 0 16px;
+}
+.rf-title h2 {
+  margin: 0;
+  font-size: 34px;
+  line-height: 38px;
+  font-weight: 800;
+  letter-spacing: -1px;
+}
+.rf-title p {
+  margin: 4px 0 0;
+  font-size: 16.5px;
+  line-height: 22px;
+  color: var(--rf-muted);
+}
+.rf-square {
+  flex: none;
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
+  border: 1px solid var(--rf-line);
+  background: var(--claire-paper);
+  display: grid;
+  place-items: center;
+  color: var(--rf-ink);
+}
+.rf-square.lime {
+  background: var(--claire-lime);
+  border: 1.5px solid var(--rf-ink);
+}
+.rf-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 18px 2px 10px;
+}
+.rf-section span + span {
+  color: var(--rf-faint);
+}
+
+/* ---------- avatars and platform marks ---------- */
+.rf-av {
+  position: relative;
+  flex: none;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 15px;
+  font-weight: 700;
+  background: var(--claire-blush);
+}
+.rf-av.sky { background: var(--claire-sky); }
+.rf-av.mint { background: var(--claire-mint); }
+.rf-av.lav { background: var(--claire-lavender); }
+.rf-av.sand { background: #ffd9a8; }
+.rf-av.sm {
+  width: 26px;
+  height: 26px;
+  font-size: 10px;
+}
+.rf-pf {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  width: 21px;
+  height: 21px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 0 0 2.5px var(--claire-paper);
+}
+.rf-pf img,
+.rf-pi img {
+  width: 58%;
+  height: 58%;
+  display: block;
+}
+.rf-pi {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  vertical-align: -3px;
+}
+.rf .wa { background: #25d366; }
+.rf .tg { background: #229ed9; }
+.rf .ig { background: linear-gradient(135deg, #f58529, #dd2a7b 55%, #8134af); }
+.rf .im { background: #34c759; }
+
+/* ---------- Home ---------- */
+.rf-hello {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 8px 0 18px;
+}
+.rf-hello h2 {
+  margin: 0;
+  font-size: 30px;
+  line-height: 34px;
+  font-weight: 800;
+  letter-spacing: -0.8px;
+}
+.rf-me {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--claire-lavender);
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 15px;
+}
+.rf-me::after {
+  content: '';
+  position: absolute;
+  right: -2px;
+  bottom: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--claire-lime);
+  box-shadow: 0 0 0 2px var(--claire-cream);
+}
+.rf-focus {
+  border: 1px solid var(--rf-line);
+  border-radius: 24px;
+  background: var(--claire-paper);
+  padding: 4px 16px;
+}
+.rf-focus-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 14px 0 12px;
+  border-bottom: 1px solid var(--rf-line);
+  font-size: 15px;
+  color: var(--rf-muted);
+}
+.rf-focus-head b {
+  margin-left: auto;
+  color: var(--rf-ink);
+}
+.rf-focus-head .rf-mono {
+  color: var(--rf-ink);
+}
+.rf-loop {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 0;
+}
+.rf-loop + .rf-loop {
+  border-top: 1px solid var(--rf-line);
+}
+.rf-ring {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  margin-top: 2px;
+  border-radius: 50%;
+  background: var(--claire-blush);
+  border: 1.5px solid var(--rf-danger);
+  display: grid;
+  place-items: center;
+  color: var(--rf-danger);
+}
+.rf-ring.calm {
+  border-color: var(--neutral-400);
+  background: var(--claire-paper);
+  color: var(--rf-muted);
+}
+.rf-ring .hero-icon {
+  width: 18px;
+  height: 18px;
+}
+.rf-loop-body {
+  flex: 1;
+  min-width: 0;
+}
+.rf-loop-body b {
+  display: block;
+  font-size: 17px;
+  line-height: 22px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rf-loop-body p {
+  margin: 2px 0 0;
+  font-size: 15.5px;
+  line-height: 21px;
+  color: var(--rf-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rf-act {
+  flex: none;
+  color: var(--rf-danger);
+  font-size: 11.5px;
+  padding-top: 3px;
+}
+.rf-act.calm {
+  color: var(--rf-faint);
+}
+.rf-convo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--rf-line);
+}
+.rf-bubble-tile {
+  flex: none;
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  background: var(--claire-sky);
+  display: grid;
+  place-items: center;
+}
+.rf-convo time,
+.rf-row time {
+  flex: none;
+  align-self: flex-start;
+  padding-top: 3px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--rf-muted);
+}
+.rf-ask {
+  margin-top: 14px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 16px;
+  border-radius: 24px;
+  background: var(--claire-sky);
+}
+.rf-ask b {
+  display: block;
+  margin-top: 4px;
+  font-size: 17px;
+  line-height: 22px;
+}
+
+/* ---------- Inbox ---------- */
+.rf-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 46px;
+  padding: 0 14px;
+  border-radius: 14px;
+  background: var(--neutral-100);
+  color: var(--rf-faint);
+  font-size: 17px;
+}
+.rf-chips {
+  display: flex;
+  gap: 8px;
+  margin: 12px -16px 0 0;
+  padding-bottom: 12px;
+  overflow: hidden;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--rf-line);
+}
+.rf-chip {
+  flex: none;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--rf-line);
+  background: var(--claire-paper);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 15px;
+  font-weight: 500;
+}
+.rf-chip.on {
+  background: var(--rf-ink);
+  border-color: var(--rf-ink);
+  color: var(--claire-paper);
+}
+.rf-picks {
+  display: flex;
+  gap: 10px;
+  margin-right: -16px;
+  overflow: hidden;
+}
+.rf-pick {
+  flex: none;
+  width: 262px;
+  height: 130px;
+  padding: 12px 14px;
+  border-radius: 20px;
+  border: 1.5px solid var(--rf-ink);
+  background: var(--claire-sky);
+  display: flex;
+  flex-direction: column;
+}
+.rf-pick-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+}
+.rf-pick-head .hero-icon {
+  width: 18px;
+  height: 18px;
+}
+.rf-pick-head .rf-pi {
+  margin-left: auto;
+  width: 22px;
+  height: 22px;
+}
+.rf-pick b {
+  margin-top: 8px;
+  font-size: 17px;
+}
+.rf-pick p {
+  margin: 2px 0 0;
+  font-size: 15.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rf-pick-foot {
+  margin-top: auto;
+  display: flex;
+  justify-content: space-between;
+  font-size: 15px;
+  font-weight: 700;
+}
+.rf-pick-foot time {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 12px;
+  color: var(--rf-muted);
+}
+.rf-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--rf-line);
+  background: var(--claire-paper);
+}
+.rf-row-body {
+  flex: 1;
+  min-width: 0;
+}
+.rf-row-body b {
+  display: block;
+  font-size: 18px;
+  line-height: 23px;
+}
+.rf-row-body p {
+  margin: 2px 0 0;
+  font-size: 16px;
+  line-height: 21px;
+  color: var(--rf-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rf-row-side {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+}
+.rf-row-side time {
+  padding: 0;
+}
+.rf-badges {
+  display: flex;
+  gap: 6px;
+}
+.rf-loopbadge {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--claire-blush);
+  display: grid;
+  place-items: center;
+}
+.rf-loopbadge .hero-icon {
+  width: 17px;
+  height: 17px;
+}
+.rf-unread {
+  min-width: 26px;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 13px;
+  background: var(--claire-lime);
+  display: grid;
+  place-items: center;
+  font-size: 15px;
+  font-weight: 700;
+}
+.rf-fab {
+  position: absolute;
+  right: 16px;
+  bottom: calc(84px + var(--mock-safe-bottom));
+  width: 56px;
+  height: 56px;
+  border-radius: 18px;
+  background: var(--rf-ink);
+  color: var(--claire-paper);
+  display: grid;
+  place-items: center;
+  box-shadow: 0 10px 24px rgb(16 18 15/22%);
+}
+
+/* ---------- Chat ---------- */
+.rf-chat {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--claire-cream);
+}
+.rf-chat-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px 12px;
+  border-bottom: 1px solid var(--rf-line);
+}
+.rf-chat-head .rf-av {
+  width: 42px;
+  height: 42px;
+}
+.rf-chat-who {
+  flex: 1;
+  min-width: 0;
+}
+.rf-chat-who b {
+  display: block;
+  font-size: 18px;
+  line-height: 22px;
+}
+.rf-chat-who small {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 15px;
+  color: var(--rf-muted);
+}
+.rf-stream {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 12px 0;
+  overflow: hidden;
+}
+.rf-openloop {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--rf-line);
+  background: var(--claire-paper);
+  box-shadow: 0 4px 14px rgb(16 18 15/6%);
+}
+.rf-openloop .rf-ring {
+  width: 34px;
+  height: 34px;
+  margin: 0;
+  border: 0;
+  background: var(--claire-sky);
+  color: var(--rf-ink);
+}
+.rf-openloop div {
+  flex: 1;
+  min-width: 0;
+}
+.rf-openloop small {
+  color: var(--rf-muted);
+  font-size: 11.5px;
+}
+.rf-openloop b {
+  display: block;
+  margin-top: 2px;
+  font-size: 16px;
+  line-height: 21px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rf-openloop em {
+  font-style: normal;
+  font-size: 16px;
+  color: var(--rf-muted);
+}
+.rf-day {
+  align-self: center;
+  margin: 6px 0 2px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--rf-muted);
+}
+.rf-msg {
+  max-width: 76%;
+  padding: 11px 15px 9px;
+  border-radius: 22px;
+  font-size: 17px;
+  line-height: 23px;
+  border: 1px solid var(--rf-line);
+  background: var(--claire-paper);
+}
+.rf-msg small {
+  display: block;
+  margin-top: 4px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--rf-muted);
+}
+.rf-msg.out {
+  align-self: flex-end;
+  background: var(--claire-lime);
+  border-color: #cfe95a;
+}
+.rf-composer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 12px 0;
+  padding: 8px;
+  border-radius: 26px;
+  border: 1px solid var(--rf-line);
+  background: var(--claire-paper);
+  font-size: 17px;
+  color: var(--rf-faint);
+}
+.rf-composer span {
+  flex: 1;
+}
+.rf-composer i,
+.rf-composer .rf-cbtn {
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border-radius: 13px;
+  background: var(--neutral-100);
+  display: grid;
+  place-items: center;
+  color: var(--rf-ink);
+}
+.rf-composer .rf-cbtn.round {
+  border-radius: 50%;
+}
+.rf-composer .rf-cbtn.send {
+  background: var(--neutral-200);
+  color: var(--rf-muted);
+}
+.rf-composer .hero-icon {
+  width: 21px;
+  height: 21px;
+}
+
+/* ---------- Loops ---------- */
+.rf-metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.rf-metric {
+  padding: 14px 16px 12px;
+  border-radius: 22px;
+  background: var(--claire-lime);
+}
+.rf-metric.sky {
+  background: var(--claire-sky);
+}
+.rf-metric b {
+  display: block;
+  font-size: 38px;
+  line-height: 40px;
+  font-weight: 800;
+  letter-spacing: -1px;
+}
+.rf-metric .rf-mono {
+  font-size: 11.5px;
+}
+.rf-loops .rf-chips {
+  border-bottom: 0;
+  padding-bottom: 4px;
+}
+.rf-looprow {
+  display: flex;
+  gap: 12px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--rf-line);
+  background: var(--claire-cream);
+}
+.rf-looprow .rf-loop-body b {
+  font-size: 17.5px;
+}
+.rf-owner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 15.5px;
+  color: var(--rf-muted);
+}
+.rf-owner .rf-mono {
+  color: var(--rf-ink);
+  font-size: 11.5px;
+}
+.rf-due {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  color: var(--rf-danger);
+  font-size: 11.5px;
+}
+.rf-due .hero-icon {
+  width: 20px;
+  height: 20px;
+}
+.rf-due.calm {
+  color: var(--rf-muted);
+}
+
+/* ---------- Ask Claire thread ---------- */
+.rf-ask-screen {
+  display: flex;
+  flex-direction: column;
+}
+.rf-q {
+  align-self: flex-end;
+  max-width: 86%;
+  padding: 14px 16px;
+  border-radius: 20px;
+  background: var(--rf-ink);
+  color: var(--claire-paper);
+  font-size: 17px;
+  line-height: 23px;
+}
+.rf-a {
+  margin-top: 12px;
+  padding: 16px;
+  border-radius: 20px;
+  border: 1px solid var(--rf-ink);
+  background: var(--claire-paper);
+  font-size: 17px;
+  line-height: 24px;
+}
+.rf-a mark {
+  background: var(--claire-lime);
+  border-radius: 5px;
+  padding: 0 3px;
+}
+.rf-sources {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0 10px;
+  font-size: 14px;
+  font-weight: 700;
+}
+.rf-sources span + span {
+  color: var(--rf-muted);
+  font-weight: 600;
+}
+.rf-stack {
+  display: flex;
+}
+.rf-stack i {
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  border: 2px solid var(--claire-sky);
+  background: var(--claire-cream);
+  display: grid;
+  place-items: center;
+  font-style: normal;
+  font-size: 9.5px;
+  font-weight: 800;
+}
+.rf-stack i + i {
+  margin-left: -8px;
+}
+.rf-stack i:nth-child(2) {
+  background: var(--claire-lime);
+}
+.rf-srcs {
+  display: flex;
+  gap: 10px;
+  margin-right: -16px;
+  overflow: hidden;
+}
+.rf-src {
+  flex: none;
+  width: 250px;
+  padding: 12px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--rf-info-border);
+  background: var(--rf-info);
+}
+.rf-src-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14.5px;
+  font-weight: 800;
+}
+.rf-src-head time {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--rf-muted);
+}
+.rf-src p {
+  margin: 6px 0 8px;
+  font-size: 15px;
+  line-height: 21px;
+  color: var(--neutral-800);
+}
+.rf-src em {
+  font-style: normal;
+  font-size: 13px;
+  font-weight: 700;
+}
+.rf-askbar {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: calc(84px + var(--mock-safe-bottom));
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 52px;
+  padding: 0 8px 0 18px;
+  border-radius: 26px;
+  border: 1px solid rgb(16 18 15/18%);
+  background: var(--claire-paper);
+  font-size: 17px;
+  color: var(--rf-faint);
+}
+.rf-askbar > span:first-child {
+  flex: 1;
+}
+.rf-askbar .rf-cbtn {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--rf-ink);
+  color: var(--claire-paper);
+  display: grid;
+  place-items: center;
+}
+.rf-askbar .hero-icon {
+  width: 20px;
+  height: 20px;
+}
+
+/* ---------- Connections ---------- */
+.rf-nav {
+  display: flex;
+  justify-content: space-between;
+  margin: 4px 0 14px;
+}
+.rf-hero {
+  padding: 16px 18px 18px;
+  border-radius: 24px;
+  background: var(--rf-ink);
+  color: var(--claire-cream);
+}
+.rf-hero .rf-square {
+  width: 40px;
+  height: 40px;
+  border: 0;
+  background: var(--claire-lime);
+}
+.rf-hero b {
+  display: block;
+  margin-top: 12px;
+  font-size: 21px;
+  line-height: 26px;
+  letter-spacing: -0.3px;
+}
+.rf-hero p {
+  margin: 6px 0 0;
+  font-size: 15px;
+  line-height: 21px;
+  color: #c9ccc2;
+}
+.rf-group {
+  border-radius: 22px;
+  background: var(--claire-paper);
+  padding: 0 14px;
+}
+.rf-net {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 13px 0;
+  background: var(--claire-paper);
+}
+.rf-net + .rf-net {
+  border-top: 1px solid var(--rf-line);
+}
+.rf-net-icon {
+  flex: none;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+}
+.rf-net-icon img {
+  width: 58%;
+  height: 58%;
+}
+.rf-net div {
+  flex: 1;
+  min-width: 0;
+}
+.rf-net b {
+  display: block;
+  font-size: 18px;
+  line-height: 23px;
+}
+.rf-net p {
+  margin: 1px 0 0;
+  font-size: 15px;
+  line-height: 20px;
+  color: var(--rf-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rf-state {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 2px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--rf-success);
+}
+.rf-state.muted {
+  color: var(--rf-muted);
+}
+.rf-state .hero-icon {
+  width: 17px;
+  height: 17px;
+}
+.rf-net > .hero-icon {
+  width: 20px;
+  height: 20px;
+  color: var(--rf-faint);
+}
+
+/* ---------- tab bar (shared) ---------- */
+claire-mobile-tabs.rf-tabs {
+  left: 14px;
+  right: 14px;
+  height: 62px;
+  padding: 0 6px;
+  border-radius: 31px;
+  justify-content: space-around;
+  background: rgb(255 253 248/96%);
+}
+claire-mobile-tabs.rf-tabs.sky {
+  background: rgb(214 238 255/96%);
+}
+claire-mobile-tabs.rf-tabs button {
+  width: 62px;
+  height: 50px;
+  border-radius: 25px;
+  color: var(--claire-ink);
+}
+claire-mobile-tabs.rf-tabs button.active {
+  background: rgb(16 18 15/7%);
+}
+claire-mobile-tabs.rf-tabs .hero-icon {
+  width: 27px;
+  height: 27px;
+  stroke-width: 1.6;
+}
+claire-mobile-tabs.rf-tabs [data-tab='claire'] img {
+  width: 27px;
+  height: 27px;
+}
+claire-mobile-tabs.rf-tabs .rf-count {
+  position: absolute;
+  top: 1px;
+  right: 2px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #ef3b3b;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 15px;
+}
+
+/* ---------- older screens: larger type ---------- */
+/*
+ * Screens not yet redrawn above keep their layout but render at the app's
+ * type size. `zoom` scales type, spacing and icons together (like iOS Display
+ * Zoom); the box itself still fills the phone.
+ * The shared tab bar is sized in zoomed units so it lands close to the
+ * refreshed screens' bar.
+ */
+.screen:not(.rf) {
+  --legacy-zoom: 1.35;
+  zoom: var(--legacy-zoom);
+}
+.screen:not(.rf) claire-mobile-tabs {
+  left: 10px;
+  right: 10px;
+  bottom: 8px;
+  height: 46px;
+}
+.screen:not(.rf) claire-mobile-tabs button {
+  width: 44px;
+  height: 36px;
+  border-radius: 18px;
+}
+.screen:not(.rf) claire-mobile-tabs .hero-icon,
+.screen:not(.rf) claire-mobile-tabs [data-tab='claire'] img {
+  width: 20px;
+  height: 20px;
+}
+
+/* ---------- status bar ---------- */
+/* iOS glyphs: filled signal bars, the SF wifi fan and the filled battery. */
+.status {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+}
+.status .status-icons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 3px;
+  color: var(--claire-ink);
+  fill: currentColor;
+}
+.status .status-signal { width: 18px; height: 12px; }
+.status .status-wifi { width: 17px; height: 12.5px; }
+.status .status-battery { width: 27px; height: 12.5px; }
