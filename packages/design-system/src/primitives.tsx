@@ -287,9 +287,11 @@ export function ClaireAvatar({
         <Image
           source={stableSource as never}
           onError={() => setFailed(true)}
-          width={size}
-          height={size}
-          borderRadius={size / 2}
+          style={{
+            width: size,
+            height: size,
+            borderRadius: size / 2,
+          }}
         />
       ) : (
         <ClaireText variant="label">{initials}</ClaireText>
