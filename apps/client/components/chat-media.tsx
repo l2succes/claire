@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, AppState, LayoutChangeEvent, Pressable, Text, View } from 'react-native';
-import { Pause, Play, RotateCcw, SendHorizonal, Square, Trash2 } from 'lucide-react-native';
+import { ActivityIndicator, AppState, Image, LayoutChangeEvent, Pressable, Text, TextInput, View } from 'react-native';
+import { Pause, Play, RotateCcw, SendHorizonal, Square, Trash2, Video } from 'lucide-react-native';
 import {
   AudioModule,
   RecordingPresets,
@@ -12,9 +12,50 @@ import {
 } from 'expo-audio';
 import { colors, mobileType, radius, space } from '@claire/design-system';
 import type { OutgoingMediaUpload } from '../services/platforms';
+import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 
 type PausablePlayer = { pause: () => void };
 let activeAudioPlayer: PausablePlayer | null = null;
+const MAX_MEDIA_BYTES = 25 * 1024 * 1024;
+
+export async function pickChatMedia(source: 'camera' | 'library'): Promise<OutgoingMediaUpload | null> {
+  const permission = source === 'camera'
+    ? await ImagePicker.requestCameraPermissionsAsync()
+    : await ImagePicker.requestMediaLibraryPermissionsAsync();
+  if (!permission.granted) throw new Error(source === 'camera' ? 'Camera access is required.' : 'Photo library access is required.');
+  const result = source === 'camera'
+    ? await ImagePicker.launchCameraAsync({ mediaTypes: ['images', 'videos'], quality: 1 })
+    : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images', 'videos'], allowsMultipleSelection: false, quality: 1 });
+  if (result.canceled || !result.assets?.[0]) return null;
+  const asset = result.assets[0];
+  let uri = asset.uri;
+  let mimeType = asset.mimeType || (asset.type === 'video' ? 'video/mp4' : 'image/jpeg');
+  let fileName = asset.fileName || `${asset.type || 'image'}-${Date.now()}.${asset.type === 'video' ? 'mp4' : 'jpg'}`;
+  let fileSize = asset.fileSize;
+  if (asset.type !== 'video' && (!fileSize || fileSize > MAX_MEDIA_BYTES)) {
+    const normalized = await ImageManipulator.manipulateAsync(uri, [{ resize: { width: Math.min(asset.width || 2048, 2048) } }], { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG });
+    uri = normalized.uri;
+    mimeType = 'image/jpeg';
+    fileName = `image-${Date.now()}.jpg`;
+    fileSize = undefined;
+  }
+  if (fileSize && fileSize > MAX_MEDIA_BYTES) throw new Error('Images and videos must be 25 MiB or smaller.');
+  return { uri, fileName, mimeType, kind: asset.type === 'video' ? 'video' : 'image', width: asset.width, height: asset.height, durationMs: asset.duration ?? undefined };
+}
+
+export function MediaAttachmentPanel({ media, caption, onCaptionChange, onRemove, onSend }: { media: OutgoingMediaUpload; caption: string; onCaptionChange: (value: string) => void; onRemove: () => void; onSend: () => void }) {
+  return (
+    <View testID="media-attachment-panel" style={{ gap: space[2], padding: space[3], borderWidth: 1, borderColor: colors.ink, borderRadius: radius.control, backgroundColor: colors.sky }}>
+      {media.kind === 'image' ? <Image source={{ uri: media.uri }} style={{ width: 160, height: 120, borderRadius: radius.control }} resizeMode="cover" /> : <View style={{ width: 160, height: 90, borderRadius: radius.control, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' }}><Video size={24} color={colors.lime} /><Text style={{ ...mobileType.label, color: colors.lime }}>Video ready</Text></View>}
+      <TextInput value={caption} onChangeText={onCaptionChange} placeholder="Add a caption (optional)" placeholderTextColor={colors.neutral[400]} style={{ minHeight: 40, borderWidth: 1, borderColor: colors.neutral[300], borderRadius: radius.control, paddingHorizontal: space[2], color: colors.ink }} />
+      <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: space[2] }}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Remove attachment" onPress={onRemove}><Text style={{ ...mobileType.label, color: colors.danger }}>Remove</Text></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="Send attachment" onPress={onSend} style={{ paddingHorizontal: space[3], paddingVertical: 8, borderRadius: radius.control, backgroundColor: colors.ink }}><Text style={{ ...mobileType.label, color: colors.lime }}>Send</Text></Pressable>
+      </View>
+    </View>
+  );
+}
 
 function formatDuration(seconds?: number) {
   const safe = Number.isFinite(seconds) ? Math.max(0, seconds || 0) : 0;

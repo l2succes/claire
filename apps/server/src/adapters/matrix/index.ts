@@ -1366,9 +1366,12 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
         mediaUrl: uploaded.content_uri,
         mediaInfo: {
           mimetype: media.mimeType,
-          size: typeof media.data === 'string' ? undefined : media.data.length,
+          size: media.size ?? (typeof media.data === 'string' ? undefined : media.data.length),
+          w: media.width,
+          h: media.height,
           duration: media.durationMs,
         },
+        filename: media.fileName,
         ...(media.type === MessageContentType.VOICE
           ? {
               audio: {
@@ -1387,9 +1390,12 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
         msgtype: msgtype as any,
         body: message.content || media.fileName || 'media',
         url: uploaded.content_uri,
+        filename: media.fileName,
         info: {
           mimetype: media.mimeType,
-          size: typeof media.data === 'string' ? undefined : media.data.length,
+          size: media.size ?? (typeof media.data === 'string' ? undefined : media.data.length),
+          w: media.width,
+          h: media.height,
           duration: media.durationMs,
         },
         ...(media.type === MessageContentType.VOICE

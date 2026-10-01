@@ -5,6 +5,8 @@
  */
 
 import express, { Router, Request, Response } from 'express';
+import multer from 'multer';
+import { fileTypeFromBuffer } from 'file-type';
 import {
   platformManager,
   Platform,
@@ -77,6 +79,26 @@ const whatsappBridgeClient = new BridgeHttpClient(
 );
 
 const router = Router();
+const MEDIA_LIMIT_BYTES = 25 * 1024 * 1024;
+const mediaUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MEDIA_LIMIT_BYTES, files: 1 },
+});
+const IMAGE_MIMES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+const VIDEO_MIMES = new Set(['video/mp4', 'video/quicktime', 'video/webm']);
+
+function mediaKindFromMime(mime: string): MessageContentType.IMAGE | MessageContentType.VIDEO | null {
+  if (IMAGE_MIMES.has(mime)) return MessageContentType.IMAGE;
+  if (VIDEO_MIMES.has(mime)) return MessageContentType.VIDEO;
+  return null;
+}
+
+function optionalPositiveNumber(value: unknown, label: string): number | undefined {
+  if (value === undefined || value === '') return undefined;
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) throw new ClientFacingError(`${label} is invalid`);
+  return number;
+}
 const INSTAGRAM_LOGIN_URL = 'https://www.instagram.com/accounts/login/';
 const REQUIRED_INSTAGRAM_COOKIES = ['sessionid', 'csrftoken', 'mid', 'ig_did', 'ds_user_id'];
 
@@ -1347,11 +1369,38 @@ router.post(
  * POST /platforms/:platform/send
  * Send a text message via a platform
  */
-router.post(['/:platform/send', '/:platform/outbox/send'], async (req: Request, res: Response) => {
+router.post(
+  ['/:platform/send', '/:platform/outbox/send'],
+  (req: Request, res: Response, next) => {
+    if (!req.is('multipart/form-data')) return next();
+    mediaUpload.single('media')(req, res, (error) => {
+      if (!error) return next();
+      if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') {
+        return res.status(413).json({ success: false, error: 'Media must be 25 MiB or smaller' });
+      }
+      return res.status(400).json({ success: false, error: 'Invalid media upload' });
+    });
+  },
+  async (req: Request, res: Response) => {
   try {
     const { platform } = req.params;
-    const { sessionId, chatId, content, replyToMessageId, clientRequestId } = req.body;
+    const { sessionId, chatId, content, replyToMessageId, clientRequestId, mediaKind } = req.body;
     const userId = req.user?.id;
+    const uploadedFile = req.file;
+
+    let resolvedMediaKind: MessageContentType.IMAGE | MessageContentType.VIDEO | undefined;
+    if (uploadedFile) {
+      const detected = await fileTypeFromBuffer(uploadedFile.buffer);
+      const detectedMime = detected?.mime;
+      const declaredMime = uploadedFile.mimetype.split(';')[0].trim().toLowerCase();
+      if (!detectedMime || detectedMime !== declaredMime) {
+        return res.status(415).json({ success: false, error: 'Unsupported or mismatched media format' });
+      }
+      resolvedMediaKind = mediaKindFromMime(detectedMime) || undefined;
+      if (!resolvedMediaKind || (mediaKind && mediaKind !== resolvedMediaKind)) {
+        return res.status(415).json({ success: false, error: 'Only image and video attachments are supported' });
+      }
+    }
 
     if (!userId) {
       return res.status(401).json({
@@ -1360,7 +1409,7 @@ router.post(['/:platform/send', '/:platform/outbox/send'], async (req: Request, 
       });
     }
 
-    if (!sessionId || !chatId || !content) {
+    if (!sessionId || !chatId || (!content && !uploadedFile)) {
       return res.status(400).json({
         success: false,
         error: 'Session ID, chat ID, and content are required',
@@ -1399,7 +1448,10 @@ router.post(['/:platform/send', '/:platform/outbox/send'], async (req: Request, 
       });
     }
 
-    if (!adapter.capabilities.canSendText) {
+    if (uploadedFile && !adapter.capabilities.canSendMedia) {
+      return res.status(400).json({ success: false, error: 'Platform does not support sending media' });
+    }
+    if (!uploadedFile && !adapter.capabilities.canSendText) {
       return res.status(400).json({
         success: false,
         error: 'Platform does not support sending messages',
@@ -1443,14 +1495,25 @@ router.post(['/:platform/send', '/:platform/outbox/send'], async (req: Request, 
       }
     }
 
-    const transactionId = outgoingTransactionId(userId, platform, chatId, 'text', clientRequestId);
+    const transactionId = outgoingTransactionId(userId, platform, chatId, uploadedFile ? 'media' : 'text', clientRequestId);
     const startedAt = Date.now();
     try {
     const message = await adapter.sendMessage(sessionId, chatId, {
-      content,
+      content: typeof content === 'string' ? content : '',
+      contentType: resolvedMediaKind,
       replyToMessageId,
       transactionId,
       clientRequestId,
+      media: uploadedFile && resolvedMediaKind ? [{
+        type: resolvedMediaKind,
+        data: uploadedFile.buffer,
+        fileName: uploadedFile.originalname || `media-${Date.now()}`,
+        mimeType: uploadedFile.mimetype.split(';')[0].trim().toLowerCase(),
+        size: uploadedFile.size,
+        width: optionalPositiveNumber(req.body.width, 'Media width'),
+        height: optionalPositiveNumber(req.body.height, 'Media height'),
+        durationMs: optionalPositiveNumber(req.body.durationMs, 'Media duration'),
+      }] : undefined,
     });
 
     void operationsTelemetry.record({
@@ -1486,6 +1549,7 @@ router.post(['/:platform/send', '/:platform/outbox/send'], async (req: Request, 
       fallback: 'Could not send that message. Try again.',
     });
   }
-});
+  },
+);
 
 export default router;

@@ -142,6 +142,7 @@ function ComposerBar({
   chips,
   menu,
   voiceReview,
+  attachmentReview,
   trailingControl,
   inputTestID,
   sendTestID,
@@ -163,6 +164,7 @@ function ComposerBar({
   menu?: ReactNode;
   /** Compact review state lives above the composer; never in the timeline. */
   voiceReview?: ReactNode;
+  attachmentReview?: ReactNode;
   /** A small host action immediately beside the text input (for example, mic). */
   trailingControl?: ReactNode;
   inputTestID?: string;
@@ -178,6 +180,7 @@ function ComposerBar({
       {chips}
       {variant === 'chat' ? menu : null}
       {voiceReview}
+      {attachmentReview}
       <View
         style={{
           minHeight: variant === 'ask' ? 42 : 48,
@@ -325,6 +328,8 @@ export function ChatComposer({
   inputRef,
   voiceEnabled = false,
   onSendVoice,
+  onPickMedia,
+  attachmentReview,
   ...inputProps
 }: Omit<TextInputProps, 'style'> & {
   onSend: () => void;
@@ -338,6 +343,8 @@ export function ChatComposer({
   inputRef?: React.RefObject<TextInput | null>;
   voiceEnabled?: boolean;
   onSendVoice?: (draft: VoiceNoteDraft) => Promise<void>;
+  onPickMedia?: (source: 'camera' | 'library') => void;
+  attachmentReview?: ReactNode;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const toggleMenu = () => setMenuOpen((open) => !open);
@@ -363,19 +370,19 @@ export function ChatComposer({
       : []),
     {
       id: 'photo',
-      label: 'Attach a photo',
-      description: 'Coming soon.',
-      disabled: true,
+      label: 'Choose photo or video',
+      description: onPickMedia ? 'Select one attachment.' : 'Media unavailable.',
+      disabled: !onPickMedia,
       icon: <Plus size={13} color={colors.neutral[600]} />,
-      onPress: () => undefined,
+      onPress: () => onPickMedia?.('library'),
     },
     {
-      id: 'file',
-      label: 'Attach a file',
-      description: 'Coming soon.',
-      disabled: true,
+      id: 'camera',
+      label: 'Take a photo or video',
+      description: onPickMedia ? 'Use the camera.' : 'Camera unavailable.',
+      disabled: !onPickMedia,
       icon: <Plus size={13} color={colors.neutral[600]} />,
-      onPress: () => undefined,
+      onPress: () => onPickMedia?.('camera'),
     },
   ];
   const armed = Boolean(value?.toString().trim()) && !sending;
@@ -405,6 +412,7 @@ export function ChatComposer({
       chips={accessory}
       menu={menuOpen ? <ComposerMenu items={actions} testID="chat-composer-menu" /> : null}
       voiceReview={voiceReview}
+      attachmentReview={attachmentReview}
       trailingControl={voiceTrigger}
       inputTestID="chat-input"
       inputRef={inputRef}

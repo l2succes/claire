@@ -30,8 +30,10 @@ export type OutgoingMediaUpload = {
   uri: string;
   fileName?: string;
   mimeType: string;
-  kind: 'voice';
-  durationMs: number;
+  kind: 'image' | 'video' | 'voice';
+  width?: number;
+  height?: number;
+  durationMs?: number;
   waveform?: number[];
 };
 
@@ -303,6 +305,33 @@ export const platformsApi = {
     const response = await api.post<{ success: boolean; message: unknown }>(
       `/platforms/${platform}/${clientRequestId ? 'outbox/send' : 'send'}`,
       { sessionId, chatId, content, replyToMessageId, clientRequestId }
+    );
+    return response.data;
+  },
+
+  async sendMediaMessage(
+    platform: Platform,
+    sessionId: string,
+    chatId: string,
+    media: OutgoingMediaUpload,
+    caption?: string,
+    replyToMessageId?: string,
+  ): Promise<{ success: boolean; message: unknown }> {
+    if (media.kind === 'voice') throw new Error('Voice notes use the voice upload endpoint.');
+    const form = new FormData();
+    form.append('sessionId', sessionId);
+    form.append('chatId', chatId);
+    if (caption?.trim()) form.append('content', caption.trim());
+    if (replyToMessageId) form.append('replyToMessageId', replyToMessageId);
+    form.append('mediaKind', media.kind);
+    if (media.width) form.append('width', String(Math.round(media.width)));
+    if (media.height) form.append('height', String(Math.round(media.height)));
+    if (media.durationMs) form.append('durationMs', String(Math.round(media.durationMs)));
+    form.append('media', { uri: media.uri, name: media.fileName || `${media.kind}-${Date.now()}`, type: media.mimeType } as unknown as Blob);
+    const response = await api.post<{ success: boolean; message: unknown }>(
+      `/platforms/${platform}/send`,
+      form,
+      { headers: { 'Content-Type': 'multipart/form-data' }, maxContentLength: 25 * 1024 * 1024, maxBodyLength: 25 * 1024 * 1024 },
     );
     return response.data;
   },

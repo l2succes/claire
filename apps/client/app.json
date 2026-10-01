@@ -18,7 +18,9 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.claire.app",
       "infoPlist": {
-        "NSCameraUsageDescription": "This app uses the camera to scan QR codes for WhatsApp login.",
+        "NSCameraUsageDescription": "Allow Claire to take photos and videos to send in chats.",
+        "NSPhotoLibraryUsageDescription": "Allow Claire to choose photos and videos to send in chats.",
+        "NSPhotoLibraryAddUsageDescription": "Allow Claire to save captured media when needed.",
         "NSUserActivityTypes": ["INSendMessageIntent"],
         "ITSAppUsesNonExemptEncryption": false
       },
@@ -78,6 +80,13 @@
       ],
       "expo-web-browser",
       "expo-video",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Claire to choose photos and videos to send in chats.",
+          "cameraPermission": "Allow Claire to take photos and videos to send in chats."
+        }
+      ],
       [
         "expo-audio",
         {

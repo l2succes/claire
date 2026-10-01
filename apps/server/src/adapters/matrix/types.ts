@@ -104,6 +104,7 @@ export type MatrixMessageType =
 export interface MatrixMessageContent {
   msgtype: MatrixMessageType;
   body: string;
+  filename?: string;
   format?: string;
   formatted_body?: string;
   url?: string;

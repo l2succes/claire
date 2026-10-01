@@ -26,12 +26,13 @@ import { useLocalSearchParams, useFocusEffect, router } from 'expo-router';
 import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../services/supabase';
-import { platformsApi, API_BASE_URL } from '../../services/platforms';
+import { platformsApi, API_BASE_URL, type OutgoingMediaUpload } from '../../services/platforms';
 import { useAuthStore } from '../../stores/authStore';
 import { usePlatformStore } from '../../stores/platformStore';
 import { useChatPreferencesStore } from '../../stores/chatPreferencesStore';
 import { ResponseSuggestion } from '../../components/ResponseSuggestion';
 import { ChatComposer } from '../../components/claire/composer';
+import { MediaAttachmentPanel, pickChatMedia } from '../../components/chat-media';
 import { ComposerReplyTarget, MessageReplyPreview } from '../../components/claire/reply-reference';
 import { MessageContextMenu } from '../../components/claire/message-context-menu';
 import type { VoiceNoteDraft } from '../../components/claire/voice-note-control';
@@ -302,6 +303,8 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
   const [replyTarget, setReplyTarget] = useState<ChatMessage | null>(null);
   const [messageActionTarget, setMessageActionTarget] = useState<ChatMessage | null>(null);
   const [activeVoiceMessageId, setActiveVoiceMessageId] = useState<string | null>(null);
+  const [mediaAttachment, setMediaAttachment] = useState<OutgoingMediaUpload | null>(null);
+  const [mediaCaption, setMediaCaption] = useState('');
   const stopVoice = useCallback(() => setActiveVoiceMessageId(null), []);
   const mediaViewer = useChatMediaViewer(chatId, stopVoice);
   const [conversationWidth, setConversationWidth] = useState(320);
@@ -328,6 +331,15 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
   // closes the double-tap window before React has rendered `sending=true`.
   const textSendInFlightRef = useRef(false);
   const reactionInFlightRef = useRef(new Set<string>());
+
+  const handlePickMedia = useCallback(async (source: 'camera' | 'library') => {
+    try {
+      const selected = await pickChatMedia(source);
+      if (selected) { setMediaAttachment(selected); setMediaCaption(''); setSendError(null); }
+    } catch (error) {
+      setSendError(error instanceof Error ? error.message : 'Could not choose that media.');
+    }
+  }, []);
 
   useEffect(() => {
     if (!draft) return;
@@ -900,6 +912,41 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
       textSendInFlightRef.current = false;
     }
   }, [chatId, connectedSessions, fetchChatInfo, inputText, resolvedPlatform, replyTarget, user?.id]);
+
+  const handleSendMedia = useCallback(async () => {
+    if (!mediaAttachment || !resolvedPlatform) return;
+    const platformChatId = platformChatIdRef.current || ((await fetchChatInfo()) ? platformChatIdRef.current : null);
+    const session = connectedSessions.find((candidate) => candidate.platform === (resolvedPlatform as Platform) && candidate.status === 'connected');
+    if (!platformChatId || !session) { setSendError(`Not connected to ${resolvedPlatform}. Reconnect it from Connections.`); return; }
+    const replyTargetAtSend = replyTarget;
+    const optimistic: ChatMessage = {
+      id: `optimistic-${Date.now()}`,
+      content: mediaCaption,
+      content_type: mediaAttachment.kind,
+      media_url: mediaAttachment.uri,
+      media_mime_type: mediaAttachment.mimeType,
+      metadata: { mediaInfo: { w: mediaAttachment.width, h: mediaAttachment.height, duration: mediaAttachment.durationMs } },
+      timestamp: new Date().toISOString(),
+      from_me: true,
+      reply_to_message_id: replyTargetAtSend?.id ?? null,
+      reply_to_platform_message_id: replyTargetAtSend?.platform_message_id ?? null,
+    };
+    patchTimeline((previous) => ({ ...previous, messages: [...previous.messages, optimistic] }), { createIfMissing: true });
+    syncInboxPreview(optimistic);
+    setMediaAttachment(null); setMediaCaption(''); setReplyTarget(null); setSending(true); setSendError(null);
+    try {
+      const sent = await platformsApi.sendMediaMessage(resolvedPlatform as Platform, session.id, platformChatId, mediaAttachment, optimistic.content, replyTargetAtSend?.platform_message_id);
+      const confirmed = chatMessageFromSend(sent.message, optimistic);
+      patchTimeline((previous) => ({ ...previous, messages: mergeChatMessage(previous.messages, confirmed) }), { createIfMissing: true });
+      syncInboxPreview(confirmed);
+      requestAnimationFrame(() => listRef.current?.scrollToOffset({ offset: 0, animated: true }));
+    } catch (error) {
+      setSendError(userFacingErrorMessage(error, 'Failed to send media. Please try again.'));
+      patchTimeline((previous) => ({ ...previous, messages: previous.messages.filter((item) => item.id !== optimistic.id) }));
+      setMediaAttachment(mediaAttachment); setMediaCaption(optimistic.content);
+      setReplyTarget(replyTargetAtSend);
+    } finally { setSending(false); }
+  }, [connectedSessions, fetchChatInfo, mediaAttachment, mediaCaption, replyTarget, resolvedPlatform]);
 
   const handleSendVoice = useCallback(async (draft: VoiceNoteDraft) => {
     if (!resolvedPlatform) {
@@ -1648,6 +1695,8 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
             }
             voiceEnabled={Boolean(platformCapabilities?.canSendVoice) && isConnected}
             onSendVoice={handleSendVoice}
+            onPickMedia={(source) => void handlePickMedia(source)}
+            attachmentReview={mediaAttachment ? <MediaAttachmentPanel media={mediaAttachment} caption={mediaCaption} onCaptionChange={setMediaCaption} onRemove={() => { setMediaAttachment(null); setMediaCaption(''); }} onSend={() => void handleSendMedia()} /> : undefined}
             accessory={
               replyTarget ? (
                 <ComposerReplyTarget
