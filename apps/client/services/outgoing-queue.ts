@@ -16,6 +16,7 @@ export class OutgoingQueue<T extends QueueEntry> {
     write: (entries: T[]) => Promise<void>;
     execute: (entry: T) => Promise<void>;
     retryable: (error: unknown) => boolean;
+    independentOfPrevious?: (entry: T) => boolean;
     active: () => boolean;
     changed: () => void;
   }) {}
@@ -64,15 +65,19 @@ export class OutgoingQueue<T extends QueueEntry> {
       const blocked = new Set<string>();
       for (const entry of [...this.entries]) {
         if (!this.options.active()) break;
-        if (blocked.has(entry.chatId)) continue;
-        if (entry.error) { blocked.add(entry.chatId); continue; }
+        const independent = this.options.independentOfPrevious?.(entry) ?? false;
+        if (blocked.has(entry.chatId) && !independent) continue;
+        if (entry.error) {
+          if (!independent) blocked.add(entry.chatId);
+          continue;
+        }
         try {
           await this.options.execute(entry);
           if (!this.options.active()) break;
           await this.remove(entry.id);
         } catch (error) {
           if (!this.options.active()) break;
-          blocked.add(entry.chatId);
+          if (!independent) blocked.add(entry.chatId);
           if (!this.options.retryable(error)) {
             await this.update((entries) => entries.map((item) => item.id === entry.id
               ? { ...item, error: userFacingErrorMessage(error, 'Could not send. Try again.') } : item));

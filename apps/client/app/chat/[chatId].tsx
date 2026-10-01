@@ -256,6 +256,7 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
     [chatOutbox],
   );
   const failedReactionEvent = chatOutbox.find((entry) => entry.kind === 'reaction' && entry.error);
+  const pendingReactionCount = chatOutbox.filter((entry) => entry.kind === 'reaction' && !entry.error).length;
   const hasFailedTextInChat = chatOutbox.some((entry) => entry.kind === 'text' && entry.error);
   const availablePlatforms = usePlatformStore((state) => state.availablePlatforms);
   // Selectors, not a bare destructure: subscribing to the whole store re-rendered
@@ -1620,9 +1621,9 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
             // added alarm without an action. Text delivery failures live on
             // their message bubbles; this area is reserved for connection-wide
             // problems and reaction failures, which have no bubble of their own.
-            visible={(!hasFailedTextInChat && connectionNeedsAttention) || !!failedReactionEvent}
+            visible={(!hasFailedTextInChat && connectionNeedsAttention) || !!failedReactionEvent || pendingReactionCount > 0}
             needsAttention={connectionNeedsAttention}
-            count={0}
+            count={pendingReactionCount}
             error={failedReactionEvent?.error}
             onPress={() => {
               if (connectionNeedsAttention) router.push('/connections');

@@ -2,11 +2,11 @@ import { upsertReactionRow, type ChatTimeline, type ChatMessage } from '@claire/
 
 /** Keep a queued reaction attached when its local message gains a server ID. */
 export function pendingReactions(timeline: ChatTimeline, events: Array<{
-  id: string; kind: string; target?: ChatMessage; emoji?: string; message: ChatMessage;
+  id: string; kind: string; target?: ChatMessage; emoji?: string; message: ChatMessage; error?: string;
 }>) {
   let reactions = timeline.reactions;
   for (const event of events) {
-    if (event.kind !== 'reaction' || !event.target || !event.emoji) continue;
+    if (event.kind !== 'reaction' || event.error || !event.target || !event.emoji) continue;
     const target = event.target;
     const message = timeline.messages.find((row) => row.id === target.id
       || (!!target.platform_message_id && row.platform_message_id === target.platform_message_id)
