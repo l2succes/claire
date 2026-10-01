@@ -42,15 +42,21 @@ class NotificationService: UNNotificationServiceExtension {
     }
 
     private func stringValue(_ key: String, in content: UNNotificationContent) -> String? {
-        guard let value = content.userInfo[key] as? String else { return nil }
+        // Expo delivers the application's custom payload inside `data` on
+        // iOS. Also check the top level so this extension remains compatible
+        // with direct APNs payloads and older builds.
+        let data = content.userInfo["data"] as? [String: Any]
+        guard let value = (content.userInfo[key] ?? data?[key]) as? String else { return nil }
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
     }
 
     private func boolValue(_ key: String, in content: UNNotificationContent) -> Bool {
-        if let value = content.userInfo[key] as? Bool { return value }
-        if let value = content.userInfo[key] as? NSNumber { return value.boolValue }
-        if let value = content.userInfo[key] as? String {
+        let data = content.userInfo["data"] as? [String: Any]
+        let rawValue = content.userInfo[key] ?? data?[key]
+        if let value = rawValue as? Bool { return value }
+        if let value = rawValue as? NSNumber { return value.boolValue }
+        if let value = rawValue as? String {
             return ["true", "1", "yes"].contains(value.lowercased())
         }
         return false

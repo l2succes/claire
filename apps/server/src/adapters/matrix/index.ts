@@ -422,7 +422,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     else {
       const repairedChatName =
         message.chatType === 'group'
-          ? message.chatName || message.chatId
+          ? message.chatName || undefined
           : displayNameFromBridge(message.chatName, message.platform, message.chatId) || contactName;
       const { error: chatError } = await supabase
         .from('chats')
