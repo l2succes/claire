@@ -40,6 +40,7 @@ function optimisticReaction(event: OutboxEvent): ReactionRow {
 }
 export function showOutboxEvent(event: OutboxEvent) {
   if (event.kind === 'reaction') {
+    if (event.error) return;
     patch(event, (previous) => ({ ...previous, reactions: upsertReactionRow(previous.reactions, optimisticReaction(event)) }));
   } else {
     patch(event, (previous) => ({ ...previous, messages: mergeChatMessage(previous.messages, event.message) }));
@@ -101,9 +102,21 @@ export function getChatOutbox(userId: string) {
       write: (entries) => writeQuerySnapshot(userId, 'outbox-v1', entries),
       execute,
       retryable: (error) => error instanceof PlatformRequestError && error.retryable,
+      // A reaction to a server message has no dependency on an earlier text
+      // send in this chat. Let it proceed even when that send needs attention.
+      independentOfPrevious: (entry) => entry.kind === 'reaction' && !!entry.target?.platform_message_id,
       active: () => queues.get(userId) === queue && useAuthStore.getState().user?.id === userId && !!useAuthStore.getState().token,
       changed: () => {
         if (useAuthStore.getState().user?.id === userId && queues.get(userId) === queue) {
+          for (const entry of queue!.entries) {
+            if (entry.kind !== 'reaction' || !entry.error) continue;
+            // A failed reaction has no message bubble of its own. Remove only
+            // its local chip; a confirmed server row must remain visible.
+            updateChatTimeline(queryClient, entry.userId, entry.chatId, (previous) => {
+              const reactions = removeReactionRow(previous.reactions, { id: entry.id });
+              return reactions === previous.reactions ? previous : { ...previous, reactions };
+            });
+          }
           useChatOutbox.setState({ entries: [...queues.get(userId)!.entries] });
         }
       },

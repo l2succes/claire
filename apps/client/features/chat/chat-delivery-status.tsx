@@ -16,7 +16,7 @@ export function ChatDeliveryStatus({ visible, needsAttention, count, error, onPr
       <Pressable testID="chat-connection-status" accessibilityRole="button" onPress={onPress}>
         <Text style={{ ...mobileType.bodySmall, color: error ? colors.danger : colors.neutral[600] }}>
           {needsAttention ? 'Connection needs attention · Open Connections' : error ? `${error} · Tap to retry`
-            : count ? `${count} queued · Will send when connected` : 'Reconnecting… You can keep typing'}
+            : count ? `${count} reaction${count === 1 ? '' : 's'} pending · Tap to check connection` : 'Reconnecting… You can keep typing'}
         </Text>
       </Pressable>
       {error && onRestore ? (
