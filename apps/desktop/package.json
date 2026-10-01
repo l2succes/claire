@@ -28,7 +28,7 @@
     "electron": "43.4.0",
     "electron-builder": "^26.15.3",
     "typescript": "^5.3.3",
-    "@types/node": "^22.10.0"
+    "@types/node": "^26.6.2"
   },
   "nx": {
     "tags": [
