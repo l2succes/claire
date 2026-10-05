@@ -5,7 +5,8 @@ import { useAuthStore } from '../stores/authStore';
 import { usePlatformStore } from '../stores/platformStore';
 import { platformsApi } from '../services/platforms';
 import { requestConnectionRecovery } from '../services/connection-recovery-signal';
-import { getChatOutbox } from '../services/chat-outbox';
+import { getChatOutbox, useChatOutbox } from '../services/chat-outbox';
+import { PlatformRequestError } from '../services/api-errors';
 import { Platform, PlatformStatus } from '../types/platform';
 
 jest.mock('../services/platforms', () => ({ platformsApi: {
@@ -17,7 +18,8 @@ jest.mock('../stores/authStore', () => {
 });
 jest.mock('../services/chat-outbox', () => {
   const { create } = jest.requireActual<typeof import('zustand')>('zustand');
-  const queue = { entries: [], hydrate: jest.fn(async () => undefined), flush: jest.fn(async () => undefined) };
+  const queue = { entries: [], hydrate: jest.fn(async () => undefined), flush: jest.fn(async () => undefined),
+    failWhere: jest.fn(async () => undefined) };
   return { getChatOutbox: () => queue, showOutboxEvent: jest.fn(), resetChatOutbox: jest.fn(),
     useChatOutbox: create(() => ({ entries: [], attentionPlatforms: [] })) };
 });
@@ -75,6 +77,21 @@ describe('background connection recovery', () => {
     const { unmount } = renderHook(useConnectionRecovery);
     await tick();
     expect(api.recoverPlatform).not.toHaveBeenCalled();
+    unmount();
+  });
+  it('marks queued text sends when a linked connection requires manual attention', async () => {
+    const session = { id: 'linked', platform: Platform.WHATSAPP, status: PlatformStatus.RECONNECTING,
+      lastConnectedAt: '2026-09-15T12:00:00Z' } as Awaited<ReturnType<typeof platformsApi.getAllSessions>>[number];
+    api.getAllSessions.mockResolvedValue([session]);
+    api.recoverPlatform.mockRejectedValue(new PlatformRequestError('Reconnect manually', 409));
+    const { unmount } = renderHook(useConnectionRecovery);
+    await tick();
+    expect(useChatOutbox.getState().attentionPlatforms).toContain(Platform.WHATSAPP);
+    expect(getChatOutbox('test-user').failWhere).toHaveBeenCalledWith(expect.any(Function), 'Reconnect to send');
+    const predicate = (getChatOutbox('test-user').failWhere as jest.Mock).mock.calls[0][0];
+    expect(predicate({ kind: 'text', platform: Platform.WHATSAPP })).toBe(true);
+    expect(predicate({ kind: 'reaction', platform: Platform.WHATSAPP })).toBe(false);
+    expect(predicate({ kind: 'text', platform: Platform.TELEGRAM })).toBe(false);
     unmount();
   });
 });

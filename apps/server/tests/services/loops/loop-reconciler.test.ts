@@ -155,6 +155,14 @@ describe('create guards', () => {
     expect(outcome).toEqual({ action: 'skip', reason: 'low_confidence' });
   });
 
+  it('rejects a date-only availability listing while retaining a real plan with a date', () => {
+    expect(decideCreate(createOp({ title: 'Available: August 16, 2026' }), context())).toEqual({
+      action: 'skip', reason: 'not_actionable',
+    });
+    expect(decideCreate(createOp({ title: 'Available on 2026-08-16.' }), context()).action).toBe('skip');
+    expect(decideCreate(createOp({ title: 'Meet Priya on August 16, 2026' }), context()).action).toBe('create');
+  });
+
   it('honours a per-chat confidence floor above the default', () => {
     const outcome = decideCreate(
       createOp({ confidence: 0.6 }),

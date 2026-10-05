@@ -218,6 +218,9 @@ export function updateChatTimeline(
     queryClient.setQueryData<ChatTimeline>(
       chatTimelineKey(userId, chatId),
       updater(EMPTY_TIMELINE),
+      // This is only a locally queued message, not fetched history. Opening
+      // the chat must still request the full timeline from the server.
+      { updatedAt: 0 },
     );
     return;
   }
@@ -229,7 +232,10 @@ export function updateChatTimeline(
     // reference, so an effect that writes and then depends on its own write
     // would loop forever. Bail before touching the cache instead.
     if (next === previous) continue;
-    queryClient.setQueryData<ChatTimeline>(query.queryKey, next);
+    // A disk seed or outbox-only entry remains incomplete until its server
+    // fetch finishes. A local patch must not make it look freshly fetched.
+    const updatedAt = query.state.dataUpdatedAt === 0 ? { updatedAt: 0 } : undefined;
+    queryClient.setQueryData<ChatTimeline>(query.queryKey, next, updatedAt);
   }
 }
 

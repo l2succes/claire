@@ -58,6 +58,11 @@ export class DemoBridgeAdapter implements IPlatformAdapter {
     private readonly deps: DemoAdapterDeps
   ) {}
 
+  /** Adapter-specific operations still belong to the wrapped transport. */
+  getDelegate(): IPlatformAdapter {
+    return this.delegate;
+  }
+
   get platform(): Platform {
     return this.delegate.platform;
   }
@@ -196,7 +201,8 @@ export class DemoBridgeAdapter implements IPlatformAdapter {
     sessionId: string,
     chatId: string,
     messageId: string,
-    emoji: string
+    emoji: string,
+    transactionId?: string
   ): Promise<{ platformEventId: string }> {
     if (parseDemoSessionId(sessionId)) {
       return { platformEventId: `demo-reaction-${Date.now()}` };
@@ -204,7 +210,7 @@ export class DemoBridgeAdapter implements IPlatformAdapter {
     if (!this.delegate.sendReaction) {
       throw new Error('Platform does not support reactions');
     }
-    return this.delegate.sendReaction(sessionId, chatId, messageId, emoji);
+    return this.delegate.sendReaction(sessionId, chatId, messageId, emoji, transactionId);
   }
 
   async markAsRead(sessionId: string, chatId: string, messageId: string): Promise<void> {

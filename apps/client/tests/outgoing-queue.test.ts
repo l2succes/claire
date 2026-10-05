@@ -80,6 +80,22 @@ describe('outgoing queue', () => {
       { id: 'second', chatId: 'a' },
     ]);
   });
+  it('marks only matching pending sends for manual connection recovery', async () => {
+    const harness = setup([
+      { id: 'pending', chatId: 'a' },
+      { id: 'already-failed', chatId: 'a', error: 'Original failure' },
+      { id: 'other-chat', chatId: 'b' },
+    ]);
+    const queue = harness.create();
+    await queue.failWhere((entry) => entry.chatId === 'a', 'Reconnect to send');
+    expect(harness.disk()).toEqual([
+      { id: 'pending', chatId: 'a', error: 'Reconnect to send' },
+      { id: 'already-failed', chatId: 'a', error: 'Original failure' },
+      { id: 'other-chat', chatId: 'b' },
+    ]);
+    await queue.flush();
+    expect(harness.execute).toHaveBeenCalledWith({ id: 'other-chat', chatId: 'b' });
+  });
   it('does not accept a message when durable storage fails', async () => {
     const harness = setup();
     harness.write.mockRejectedValueOnce(new Error('disk full'));

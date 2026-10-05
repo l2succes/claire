@@ -636,7 +636,10 @@ async function initializePlatforms() {
           : '';
       const chatDisplayName =
         message.chatType === 'group'
-          ? message.chatName || message.chatId
+          // A bridge routing ID is not a conversation name. Leaving this
+          // unset preserves any previously learned group name and lets a
+          // later room metadata sync fill it in.
+          ? message.chatName || undefined
           : displayNameFromBridge(message.chatName, message.platform, message.chatId) ||
             displayNameFromBridge(message.senderName, message.platform, senderContactId);
 
@@ -667,6 +670,17 @@ async function initializePlatforms() {
       if (chatError || !chat) {
         logger.error('Failed to upsert chat:', chatError);
         return;
+      }
+
+      const hasGroupIdAsName =
+        message.chatType === 'group' && chat.name === message.chatId;
+      if (hasGroupIdAsName) {
+        // Repair rows written by the old fallback too. Clear only the known
+        // bad value; a legitimate previously learned group name is retained.
+        await supabase
+          .from('chats')
+          .update({ name: message.chatName || null })
+          .eq('id', chat.id);
       }
 
       // Two tiers, and they are not the same question. `aiProcessingEnabled` is
@@ -934,13 +948,17 @@ async function initializePlatforms() {
         }
 
         if (!message.isFromMe && !isBackfill && savedMsg?.id) {
+          const notificationChatName =
+            hasGroupIdAsName
+              ? message.chatName
+              : chat.name || chatDisplayName;
           void notifyIncomingMessage({
             userId: message.userId,
             chatId: chat.id,
             platform: message.platform,
             senderContactId: contactId || undefined,
             senderName: message.senderName,
-            chatName: chat.name || chatDisplayName,
+            chatName: notificationChatName,
             isGroup: chat.is_group,
             content: message.content,
             messageId: savedMsg.id,
