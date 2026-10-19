@@ -53,3 +53,22 @@ the remote recipient has received or read the message.
 
 No live WhatsApp messages were sent. Real bridge-to-phone delivery remains a
 separate Lucas two-device test under `lucas-two-device-test-spec.md`.
+
+## Wrapped Matrix adapter regression (2026-09-28)
+
+The demo account feature decorates the production Matrix adapter even for real
+accounts. The outbox send and reaction routes used `instanceof MatrixBridgeAdapter`
+on that outer decorator, so they rejected every queued request with a 409 before
+calling Matrix. Recovery and some bridge login routes made the same assumption.
+The routes now resolve the Matrix transport through the demo decorator before
+checking queue support or using transport-specific methods. The demo decorator
+also forwards reaction transaction IDs, preserving retry idempotence.
+
+The iOS Simulator shows an existing failed outgoing bubble in the Lucas test
+chat; no retry was tapped. The focused wrapped-adapter test confirms that a real
+account's text and reaction reach Matrix with their stable transaction IDs.
+An HTTP regression test also exercises the actual `/platforms/whatsapp/outbox/send`
+route with the decorated adapter and confirms it returns 200 and forwards one
+Matrix event.
+Production delivery still needs a server deployment and the Lucas two-device
+test with explicit account-owner confirmation.

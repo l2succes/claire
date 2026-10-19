@@ -1,0 +1,88 @@
+# mautrix Instagram Configuration for Claire
+# Documentation: https://docs.mau.fi/bridges/go/meta/config.html
+
+# `network` replaced the legacy `meta` block. The current bridge exits while
+# attempting to migrate the old block, which made the provisioning API time
+# out before a user could authenticate.
+network:
+    mode: instagram
+    displayname_template: '{{or .DisplayName .Username "Unknown user"}}'
+
+    # Fetch the complete thread list during the initial Instagram sync. Message
+    # history is limited separately by the top-level `backfill` block below.
+    thread_backfill:
+        batch_count: -1
+        batch_delay: 2s
+
+homeserver:
+    address: http://synapse:8008
+    # Railway assigns the Matrix server name at deploy time. Keep the bridge's
+    # bot/ghost IDs aligned with Synapse's appservice registration instead of
+    # hard-coding the local development domain.
+    domain: __MATRIX_SERVER_NAME__
+
+appservice:
+    address: http://mautrix-instagram:29319
+    hostname: 0.0.0.0
+    port: 29319
+    # This must exactly match the ID in Synapse's appservice registration.
+    id: meta
+    bot:
+        username: metabot
+        displayname: Instagram Bridge Bot
+    as_token: __AS_TOKEN__
+    hs_token: __HS_TOKEN__
+    username_template: "meta_{{.}}"
+
+# Bridge v2 stores its database config at the top level. Keeping it under
+# appservice marks the entire file as a legacy bridge config and causes the
+# current Instagram image to exit before provisioning can answer a request.
+database:
+    type: sqlite3-fk-wal
+    uri: /data/mautrix-instagram.db
+
+bridge:
+    displayname_template: "{{.Name}} (IG)"
+    command_prefix: "!ig"
+
+    # mautrix-meta v26 requires this section inside `bridge`. The placeholders
+    # are replaced by the Railway entrypoint with Synapse's real server name.
+    permissions:
+        "*": relay
+        "__MATRIX_SERVER_NAME__": user
+        "@claire_bot:__MATRIX_SERVER_NAME__": admin
+
+# Double puppeting: allows the bridge to act as the real Matrix user so
+# outgoing messages appear as their actual Matrix account rather than a ghost.
+double_puppet:
+    secrets:
+        claire.local: "as_token:__DOUBLE_PUPPET_AS__"
+
+provisioning:
+    shared_secret: __PROVISIONING_SECRET__
+
+# Populate newly-created Matrix portals with recent Instagram history. The
+# bridge defaults this to disabled, which creates rooms without any message
+# events and leaves Claire's inbox empty until a new DM arrives.
+backfill:
+    enabled: true
+    max_initial_messages: 50
+    max_catchup_messages: 500
+    unread_hours_threshold: 720
+    threads:
+        max_initial_messages: 50
+    # Backwards insertion is Beeper-only; standard Synapse uses timestamped
+    # initial/catch-up events instead.
+    queue:
+        enabled: false
+        manual: false
+        batch_size: 100
+        batch_delay: 20
+        max_batches: -1
+        max_batches_override: {}
+
+logging:
+    min_level: info
+    writers:
+        - type: stdout
+          format: pretty-colored

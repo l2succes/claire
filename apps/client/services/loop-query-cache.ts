@@ -112,11 +112,22 @@ export async function invalidateLoopQueries(
   userId: string | undefined,
   loopId: string,
 ): Promise<void> {
+  const loop = queryClient.getQueryData<LoopDetail>(detailKey(loopId))
+    ?? queryClient.getQueryData<LoopItem[]>(listKey(userId))?.find((item) => item.id === loopId);
+  if (loop && !belongsInHomeLoops(loop)) {
+    // A chat can keep its open-loop card cached after the detail screen closes
+    // the loop. Clear that specific card before returning to the conversation.
+    queryClient.setQueriesData<{ id: string } | null>(
+      { queryKey: ['chat-open-loop', userId] },
+      (current) => current?.id === loopId ? null : current,
+    );
+  }
   await Promise.all([
     queryClient.invalidateQueries({ queryKey: listKey(userId) }),
     queryClient.invalidateQueries({ queryKey: ['loop-attention', userId] }),
     queryClient.invalidateQueries({ queryKey: homeKey(userId) }),
     queryClient.invalidateQueries({ queryKey: ['inbox-open-loops', userId] }),
+    queryClient.invalidateQueries({ queryKey: ['chat-open-loop', userId] }),
     queryClient.invalidateQueries({ queryKey: detailKey(loopId) }),
   ]);
 }

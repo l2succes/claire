@@ -1,6 +1,6 @@
 import { useEffect, useState, type ComponentType, type ReactNode } from 'react';
 import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
-import { Bell, Bot, Check, ChevronRight, CreditCard, DatabaseZap, KeyRound, Link2, LogOut, MessageCircle, Smile } from 'lucide-react-native';
+import { Bell, Bot, Check, ChevronRight, CreditCard, DatabaseZap, KeyRound, Link2, LogOut, MessageCircle, UsersRound } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, mobileType, radius, space, useIsDesktopLayout } from '@claire/design-system';
@@ -116,7 +116,7 @@ export default function SettingsScreen() {
 
   const claireRows: SettingsRow[] = [
     { title: 'AI behavior', detail: 'Suggestions, summaries, and memory', icon: Bot, href: '/settings/ai', testID: 'settings-ai-settings', iconBackground: colors.lavender },
-    { title: 'Relationships', detail: 'People, categories, and prompts', icon: Smile, href: '/people', testID: 'settings-relationships', iconBackground: colors.blush },
+    { title: 'Contacts', detail: 'People, categories, and prompts', icon: UsersRound, href: '/people', testID: 'settings-relationships', iconBackground: colors.blush },
     {
       title: 'Loop detection',
       detail: loopDetectionKnown
@@ -180,7 +180,7 @@ export default function SettingsScreen() {
 
   if (isDesktop) {
     const nav = [
-      ['Profile', '/settings'], ['Connections', '/connections'], ['AI behavior', '/settings/ai'], ['Relationships', '/people'], ['Notifications', '/settings/notifications'], ['Appearance', '/settings'], ['Shortcuts', '/settings'], ['Privacy & data', '/settings/privacy'], ['About', '/settings'],
+      ['Profile', '/settings'], ['Connections', '/connections'], ['AI behavior', '/settings/ai'], ['Contacts', '/people'], ['Notifications', '/settings/notifications'], ['Appearance', '/settings'], ['Shortcuts', '/settings'], ['Privacy & data', '/settings/privacy'], ['About', '/settings'],
     ] as const;
     return <View style={{ flex: 1, flexDirection: 'row', minHeight: 0, backgroundColor: colors.cream }} testID="desktop-settings-screen">
       <View style={{ width: 210, flexShrink: 0, padding: space[4], backgroundColor: '#F4F2EC', borderRightWidth: 1, borderColor: colors.neutral[200] }}><Text style={{ ...mobileType.sectionTitle, color: colors.ink, marginBottom: space[3] }}>Settings</Text>{nav.map(([label, href]) => <Pressable key={label} onPress={() => router.push(href as never)}><View style={{ minHeight: 34, justifyContent: 'center', paddingHorizontal: 10, borderRadius: 9, backgroundColor: label === 'Profile' ? colors.ink : 'transparent', marginBottom: 3 }}><Text style={{ ...mobileType.bodySmall, color: label === 'Profile' ? colors.paper : colors.ink }}>{label}</Text></View></Pressable>)}</View>

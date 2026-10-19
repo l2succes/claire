@@ -1,14 +1,12 @@
 import {
   View,
   Text,
-  ActivityIndicator,
   Pressable,
   AppState,
   FlatList,
   InteractionManager,
   KeyboardAvoidingView,
   Platform as RNPlatform,
-  Image,
   Linking,
 } from 'react-native';
 import {
@@ -20,12 +18,11 @@ import {
   MessageCircle,
   X,
   ChevronLeft,
-  Play,
   MapPin,
   CheckCircle2,
 } from 'lucide-react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useLocalSearchParams, router } from 'expo-router';
+import { useLocalSearchParams, useFocusEffect, router } from 'expo-router';
 import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../services/supabase';
@@ -86,10 +83,14 @@ import {
   normalizeMediaUrl as normalizeMediaUrlWithBase,
   removeReactionRow,
   upsertReactionRow,
+  visualMediaForMessage,
   type ChatMessage,
   type ChatTimeline,
   type ReactionRow,
 } from '@claire/chat-core';
+import { MediaMessage } from '../../features/chat/media-message';
+import { MediaViewer } from '../../features/chat/media-viewer';
+import { useChatMediaViewer } from '../../hooks/useChatMediaViewer';
 import { VoiceMessageBubble } from '../../features/chat/voice-message-bubble';
 import { enqueueChatEvent, newOutgoingMessage, useChatOutbox, removeFailedChatEvent, retryFailedChatEvent } from '../../services/chat-outbox';
 import { requestConnectionRecovery } from '../../services/connection-recovery-signal';
@@ -125,17 +126,6 @@ function InjectedBubble({
       {children}
     </Animated.View>
   );
-}
-
-// An installed development client can lag behind the JavaScript bundle after a
-// new Expo native module is added. Keep the chat route loadable in that window:
-// current builds play video; older builds retain a clear attachment fallback.
-let expoVideoModule: typeof import('expo-video') | null = null;
-try {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  expoVideoModule = require('expo-video') as typeof import('expo-video');
-} catch {
-  expoVideoModule = null;
 }
 
 // The shared helper takes the base URL as a parameter so desktop can pass its
@@ -220,150 +210,6 @@ function MessageBadge({ label, testID }: { label: string; testID?: string }) {
   );
 }
 
-function MediaImage({ uri, messageId }: { uri: string; messageId: string }) {
-  const [failed, setFailed] = useState(false);
-  const [loading, setLoading] = useState(true);
-  if (failed) {
-    return (
-      <View
-        testID={`media-image-fallback-${messageId}`}
-        style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 12 }}
-      >
-        <AlertCircle size={16} color={colors.neutral[400]} />
-        <Text style={{ ...mobileType.bodySmall, color: colors.neutral[400], textAlign: 'left' }}>
-          Media unavailable
-        </Text>
-      </View>
-    );
-  }
-  return (
-    <View testID={`media-image-${messageId}`}>
-      {loading && (
-        <ActivityIndicator
-          testID={`media-image-loading-${messageId}`}
-          size="small"
-          color={colors.neutral[400]}
-        />
-      )}
-      <Image
-        source={{ uri }}
-        style={{
-          width: 220,
-          height: 160,
-          borderRadius: radius.control,
-          marginBottom: 4,
-          opacity: loading ? 0 : 1,
-        }}
-        resizeMode="cover"
-        onLoad={() => setLoading(false)}
-        onError={() => {
-          setLoading(false);
-          setFailed(true);
-        }}
-        testID={`media-image-img-${messageId}`}
-      />
-    </View>
-  );
-}
-
-function MediaVideo({ uri, messageId }: { uri: string; messageId: string }) {
-  const video = expoVideoModule;
-  if (!video) {
-    return (
-      <View
-        testID={`media-video-fallback-${messageId}`}
-        style={{
-          width: 250,
-          minHeight: 96,
-          borderRadius: radius.control,
-          marginBottom: 4,
-          padding: space[3],
-          gap: 6,
-          backgroundColor: colors.neutral[100],
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <Video size={22} color={colors.neutral[600]} />
-        <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600], textAlign: 'left' }}>
-          Video attachment
-        </Text>
-        <Text numberOfLines={1} style={{ ...mobileType.label, color: colors.focus }}>
-          Update Claire to play this video
-        </Text>
-      </View>
-    );
-  }
-  return <MediaVideoSurface uri={uri} messageId={messageId} />;
-}
-
-const VIDEO_SURFACE = {
-  width: 250,
-  height: 180,
-  borderRadius: radius.control,
-  marginBottom: 4,
-  backgroundColor: colors.ink,
-} as const;
-
-/**
- * Mount the player only after a tap. useVideoPlayer allocates a native player
- * per call, and a busy conversation renders many video rows at once, so
- * creating them all up front costs memory and decoders for videos nobody
- * watches. Until then this is a poster with a play affordance.
- */
-function MediaVideoSurface({ uri, messageId }: { uri: string; messageId: string }) {
-  const [started, setStarted] = useState(false);
-  if (!started) {
-    return (
-      <FeedbackPressable
-        testID={`media-video-play-${messageId}`}
-        accessibilityRole="button"
-        accessibilityLabel="Play video"
-        onPress={() => setStarted(true)}
-        style={({ pressed }) => ({
-          ...VIDEO_SURFACE,
-          alignItems: 'center',
-          justifyContent: 'center',
-          opacity: pressed ? 0.85 : 1,
-        })}
-      >
-        <View
-          style={{
-            width: 52,
-            height: 52,
-            borderRadius: 26,
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: colors.paper,
-          }}
-        >
-          <Play size={22} color={colors.ink} fill={colors.ink} />
-        </View>
-      </FeedbackPressable>
-    );
-  }
-  return <MediaVideoPlayer uri={uri} messageId={messageId} />;
-}
-
-function MediaVideoPlayer({ uri, messageId }: { uri: string; messageId: string }) {
-  const video = expoVideoModule!;
-  const player = video.useVideoPlayer(uri, (instance) => {
-    instance.loop = false;
-    instance.play();
-  });
-  const VideoView = video.VideoView;
-  return (
-    <VideoView
-      testID={`media-video-player-${messageId}`}
-      player={player}
-      nativeControls
-      contentFit="contain"
-      playsInline
-      style={VIDEO_SURFACE}
-    />
-  );
-}
-
 export default function ChatRoute() {
   const isDesktop = useIsDesktopLayout();
   const { chatId } = useLocalSearchParams<{ chatId: string }>();
@@ -410,6 +256,8 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
     [chatOutbox],
   );
   const failedReactionEvent = chatOutbox.find((entry) => entry.kind === 'reaction' && entry.error);
+  const pendingReactionCount = chatOutbox.filter((entry) => entry.kind === 'reaction' && !entry.error).length;
+  const hasFailedTextInChat = chatOutbox.some((entry) => entry.kind === 'text' && entry.error);
   const availablePlatforms = usePlatformStore((state) => state.availablePlatforms);
   // Selectors, not a bare destructure: subscribing to the whole store re-rendered
   // this screen on every settings mutation for every conversation. Only this
@@ -454,6 +302,11 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
   const [replyTarget, setReplyTarget] = useState<ChatMessage | null>(null);
   const [messageActionTarget, setMessageActionTarget] = useState<ChatMessage | null>(null);
   const [activeVoiceMessageId, setActiveVoiceMessageId] = useState<string | null>(null);
+  const stopVoice = useCallback(() => setActiveVoiceMessageId(null), []);
+  const mediaViewer = useChatMediaViewer(chatId, stopVoice);
+  const [conversationWidth, setConversationWidth] = useState(320);
+  const mediaLongPressed = useRef(false);
+  useFocusEffect(useCallback(() => () => { mediaViewer.close(); stopVoice(); }, [mediaViewer.close, stopVoice]));
   const [suggestionRefreshKey, setSuggestionRefreshKey] = useState(0);
   const [showReplyOptions, setShowReplyOptions] = useState(false);
   const [groupBannerDismissed, setGroupBannerDismissed] = useState(false);
@@ -1178,27 +1031,6 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
 
     const caption = parseMediaCaption(item.content);
 
-    if (type === 'image' && item.media_url) {
-      const imageUri = normalizeMediaUrl(item.media_url);
-      if (!imageUri) return null;
-      return (
-        <View>
-          {caption.badge ? (
-            <MessageBadge label={caption.badge} testID={`media-badge-${item.id}`} />
-          ) : null}
-          <MediaImage uri={imageUri} messageId={item.id} />
-          {caption.text ? (
-            <Text style={{ ...mobileType.body, color: textColor, marginTop: 2, textAlign: 'left' }}>
-              {caption.text}
-            </Text>
-          ) : null}
-          {caption.hint ? (
-            <MessageHint label={caption.hint} testID={`media-hint-${item.id}`} />
-          ) : null}
-        </View>
-      );
-    }
-
     if (type === 'image') {
       return (
         <View
@@ -1227,25 +1059,6 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
           }
         />
       );
-    }
-
-    if (type === 'video' && item.media_url) {
-      const videoUri = normalizeMediaUrl(item.media_url);
-      if (videoUri) {
-        return (
-          <View>
-            {caption.badge ? (
-              <MessageBadge label={caption.badge} testID={`media-badge-${item.id}`} />
-            ) : null}
-            <MediaVideo uri={videoUri} messageId={item.id} />
-            {caption.text ? (
-              <Text style={{ fontSize: 14, color: textColor, marginTop: 2, textAlign: 'left' }}>
-                {caption.text}
-              </Text>
-            ) : null}
-          </View>
-        );
-      }
     }
 
     if (type === 'video') {
@@ -1352,6 +1165,8 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
     const reactionChips = groupReactions(reactionsByMessage[item.id] || []);
     const failedSend = isMe ? textOutboxByMessageId.get(item.id) : undefined;
     const plainText = parseMediaCaption(item.content, { dropSelfLinks: false });
+    const media = isBridgeFailure(item.content) ? null : visualMediaForMessage(item, API_BASE_URL);
+    const mediaMaxWidth = Math.min(360, Math.max(1, conversationWidth - space[3] * 2) * 0.78);
     const standaloneEmoji =
       (item.content_type || 'text') === 'text' &&
       !replySource &&
@@ -1372,20 +1187,11 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
         }}
         testID={`message-row-${item.id}-${isMe ? 'outgoing' : 'incoming'}`}
       >
-        {failedSend?.error ? (
-          <MessageSendFailure
-            messageId={item.id}
-            onRetry={() => {
-              if (!user?.id) return;
-              void retryFailedChatEvent(user.id, failedSend.id).catch((error) => {
-                console.warn('Could not retry failed message:', error);
-              });
-            }}
-          />
-        ) : null}
         <Pressable
           style={
-            standaloneEmoji
+            media
+              ? { maxWidth: '78%' }
+              : standaloneEmoji
               ? {
                   minWidth: 44,
                   minHeight: 44,
@@ -1394,12 +1200,24 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
                 }
               : { width: '78%', maxWidth: '78%' }
           }
-          accessibilityRole={canReplyToMessage || Boolean(item.content) ? 'button' : undefined}
-          accessibilityHint={canReplyToMessage || Boolean(item.content) ? 'Long press for message actions' : undefined}
+          accessibilityRole={media || canReplyToMessage || Boolean(item.content) ? 'button' : undefined}
+          accessibilityLabel={media ? (media.kind === 'image' ? 'View image full screen' : 'Play video full screen') : undefined}
+          onPressIn={() => { mediaLongPressed.current = false; }}
+          onPress={media
+            ? () => { if (!mediaLongPressed.current) mediaViewer.open(item); }
+            : failedSend?.error
+              ? () => setMessageActionTarget(item)
+              : undefined}
+          accessibilityHint={failedSend?.error
+            ? 'Tap for failed message actions'
+            : canReplyToMessage || Boolean(item.content)
+              ? 'Long press for message actions'
+              : undefined}
           delayLongPress={350}
           onLongPress={
             canReplyToMessage || Boolean(item.content)
               ? () => {
+                  mediaLongPressed.current = true;
                   setMessageActionTarget((current) => (current?.id === item.id ? null : item));
                 }
               : undefined
@@ -1413,16 +1231,16 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
               // explicit width it shrink-wraps its content, leaving this
               // percentage with no meaningful container and wrapping words
               // into narrow vertical bubbles.
-              width: standaloneEmoji ? undefined : '100%',
+              width: standaloneEmoji || media ? undefined : '100%',
               maxWidth: '100%',
               minWidth: standaloneEmoji ? 44 : undefined,
               minHeight: standaloneEmoji ? 44 : undefined,
-              backgroundColor: standaloneEmoji
+              backgroundColor: standaloneEmoji || media
                 ? 'transparent'
                 : isMe
                   ? colors.lime
                   : colors.paper,
-              borderWidth: standaloneEmoji
+              borderWidth: standaloneEmoji || media
                 ? isHighlighted || hasActionsOpen
                   ? 2
                   : 0
@@ -1437,19 +1255,25 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
               borderRadius: standaloneEmoji ? 10 : radius.card,
               borderBottomRightRadius: standaloneEmoji ? 10 : isMe ? 6 : radius.card,
               borderBottomLeftRadius: standaloneEmoji ? 10 : isMe ? radius.card : 6,
-              paddingHorizontal: standaloneEmoji ? 0 : space[3],
-              paddingVertical: standaloneEmoji ? 0 : space[2],
+              paddingHorizontal: standaloneEmoji || media ? 0 : space[3],
+              paddingRight: failedSend?.error && !standaloneEmoji && !media ? space[3] + 18 : undefined,
+              paddingVertical: standaloneEmoji || media ? 0 : space[2],
             }}
           >
-            {!isMe && is_group === '1' && item.contact_name && (
+            {!media && !isMe && is_group === '1' && item.contact_name && (
               <Text style={{ ...mobileType.label, color: colors.neutral[600], marginBottom: 2 }}>
                 {item.contact_name}
               </Text>
             )}
-            {replySource ? (
+            {!media && replySource ? (
               <MessageReplyPreview sender={replySender} content={replySource.content} />
             ) : null}
-            {standaloneEmoji ? (
+            {media ? (
+              <MediaMessage key={`${item.id}:${media.uri}`} media={media} message={item} maxWidth={mediaMaxWidth}
+                sender={!isMe && is_group === '1' ? item.contact_name : undefined}
+                reply={replySource ? <MessageReplyPreview sender={replySender} content={replySource.content} /> : undefined}
+              />
+            ) : standaloneEmoji ? (
               <StandaloneEmojiMessage
                 messageId={item.id}
                 content={plainText.text ?? item.content}
@@ -1478,6 +1302,22 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
               </>
             )}
           </InjectedBubble>
+          {failedSend?.error ? (
+            <MessageSendFailure
+              messageId={item.id}
+              needsConnection={!!resolvedPlatform && attentionPlatforms.includes(resolvedPlatform as Platform)}
+              onRetry={() => {
+                if (resolvedPlatform && attentionPlatforms.includes(resolvedPlatform as Platform)) {
+                  router.push('/connections');
+                  return;
+                }
+                if (!user?.id) return;
+                void retryFailedChatEvent(user.id, failedSend.id).catch((error) => {
+                  console.warn('Could not retry failed message:', error);
+                });
+              }}
+            />
+          ) : null}
           {reactionChips.length ? (
             <View
               pointerEvents="none"
@@ -1539,6 +1379,7 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
       style={{ flex: 1, minHeight: 0, backgroundColor: colors.cream }}
       edges={embedded ? [] : ['top']}
       testID="chat-screen"
+      onLayout={({ nativeEvent }) => setConversationWidth(nativeEvent.layout.width)}
     >
       {/* Header */}
       <View
@@ -1780,9 +1621,9 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
             // added alarm without an action. Text delivery failures live on
             // their message bubbles; this area is reserved for connection-wide
             // problems and reaction failures, which have no bubble of their own.
-            visible={connectionNeedsAttention || !!failedReactionEvent}
+            visible={(!hasFailedTextInChat && connectionNeedsAttention) || !!failedReactionEvent || pendingReactionCount > 0}
             needsAttention={connectionNeedsAttention}
-            count={0}
+            count={pendingReactionCount}
             error={failedReactionEvent?.error}
             onPress={() => {
               if (connectionNeedsAttention) router.push('/connections');
@@ -1821,10 +1662,13 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
           />
         </View>
       </KeyboardAvoidingView>
+      {mediaViewer.media && mediaViewer.message ? <MediaViewer media={mediaViewer.media} message={mediaViewer.message} onClose={mediaViewer.close} /> : null}
       <MessageContextMenu
         visible={!!messageActionTarget}
         canReact={
-          Boolean(messageActionTarget) && Boolean(platformCapabilities?.canSendReactions)
+          Boolean(messageActionTarget) &&
+          !textOutboxByMessageId.get(messageActionTarget!.id) &&
+          Boolean(platformCapabilities?.canSendReactions)
         }
         canReply={Boolean(messageActionTarget?.platform_message_id) && Boolean(platformCapabilities?.canReplyToMessages)}
         content={messageActionTarget?.content || ''}
@@ -1835,6 +1679,15 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
           .map((reaction) => reaction.emoji)}
         onReact={(emoji) => void handleReact(emoji)}
         onDismiss={() => setMessageActionTarget(null)}
+        onDiscardFailed={messageActionTarget && user?.id && textOutboxByMessageId.get(messageActionTarget.id)?.error
+          ? () => {
+              const failed = textOutboxByMessageId.get(messageActionTarget.id);
+              setMessageActionTarget(null);
+              if (!failed) return;
+              void removeFailedChatEvent(user.id, failed.id)
+                .catch(() => setSendError('Could not discard the failed message. Please try again.'));
+            }
+          : undefined}
         onReply={() => {
           if (!messageActionTarget) return;
           setReplyTarget(messageActionTarget);

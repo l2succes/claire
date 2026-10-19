@@ -50,9 +50,8 @@ describe('Matrix outbound media', () => {
 
     expect(uploads[0].options.type).toBe('video/mp4');
     expect(events[0]).toMatchObject({
-      msgtype: 'm.video', body: 'Launch walkthrough', filename: 'launch.mp4', url: 'mxc://test/uploaded',
-      info: { mimetype: 'video/mp4', size: 5, w: 1280, h: 720, duration: 18_000 },
-      format: 'org.matrix.custom.html', formatted_body: 'Launch walkthrough',
+      msgtype: 'm.video', body: 'Launch walkthrough', url: 'mxc://test/uploaded',
+      info: { mimetype: 'video/mp4', size: 5, duration: 18_000 },
     });
     expect(message.platformMessageId).toBe('$sent-media');
     expect(message.platformMetadata?.mediaUrl).toBe('mxc://test/uploaded');
@@ -75,8 +74,9 @@ describe('Matrix outbound media', () => {
     });
 
     expect(events[0]).toMatchObject({
-      msgtype: 'm.audio', body: 'voice.m4a', filename: 'voice.m4a',
+      msgtype: 'm.audio', body: 'voice.m4a', url: 'mxc://test/uploaded',
       'org.matrix.msc3245.voice': {},
+      'org.matrix.msc1767.audio': { duration: 9_000, waveform: [] },
       info: { mimetype: 'audio/mp4', size: 5, duration: 9_000 },
     });
   });

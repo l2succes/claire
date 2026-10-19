@@ -121,6 +121,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // Listen to auth changes
       supabase.auth.onAuthStateChange((event, session) => {
         if (session) {
+          const previousUserId = get().user?.id;
+          if (event === 'SIGNED_IN' && previousUserId !== session.user.id) {
+            // A deep link or account switch can sign in without going through
+            // logout. Never show the previous account's connection badges.
+            usePlatformStore.getState().reset();
+            resetQueryClient();
+          }
           set({ 
             isAuthenticated: true, 
             token: session.access_token,

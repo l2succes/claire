@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
+import { Alert, FlatList, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { Check, RotateCcw, XCircle } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import Animated, { FadeInRight, FadeOutLeft } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, { Extrapolation, FadeInRight, FadeOutLeft, interpolate, runOnJS, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { colors, mobileType, radius, space } from '@claire/design-system';
 import { MobileChip, MobileHeader, MobileState } from '../../components/mobile/claire-mobile';
 import type { LoopItem } from '../../services/loop-types';
@@ -29,6 +30,30 @@ import {
 type LoopFilter = 'for_you' | 'done' | 'waiting' | 'all';
 
 const LIVE_STATUSES: LoopItem['status'][] = ['open', 'waiting', 'snoozed'];
+const AnimatedLoopList = Animated.createAnimatedComponent(FlatList<LoopItem>);
+
+function LoopsFilters({ filter, forYou, waiting, open, onChange }: {
+  filter: LoopFilter;
+  forYou: number;
+  waiting: number;
+  open: number;
+  onChange: (filter: LoopFilter) => void;
+}) {
+  return (
+    <View style={{ height: 60, justifyContent: 'center', backgroundColor: colors.cream }}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ alignItems: 'center', gap: space[2], paddingHorizontal: space[4] }}
+      >
+        <MobileChip label="For you" active={filter === 'for_you'} count={forYou} onPress={() => onChange('for_you')} testID="loops-tab-open" />
+        <MobileChip label="Closed" active={filter === 'done'} onPress={() => onChange('done')} testID="loops-tab-done" />
+        <MobileChip label="I'm waiting" active={filter === 'waiting'} count={waiting} onPress={() => onChange('waiting')} testID="loops-tab-waiting" />
+        <MobileChip label="All" active={filter === 'all'} count={open} onPress={() => onChange('all')} testID="loops-tab-all" />
+      </ScrollView>
+    </View>
+  );
+}
 
 function ReviewButton({
   label,
@@ -82,9 +107,11 @@ function ReviewButton({
 // deadline the user actually committed to.
 export function LoopsScreen() {
   const user = useAuthStore(state => state.user);
+  const { top: safeTop } = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const attentionQuery = useLoopAttention();
   const [filter, setFilter] = useState<LoopFilter>('for_you');
+  const [showPinnedFilters, setShowPinnedFilters] = useState(false);
   const [snoozeTarget, setSnoozeTarget] = useState<LoopItem | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
   const loopsQueryKey = useMemo(() => ['mobile-loops', user?.id] as const, [user?.id]);
@@ -209,6 +236,32 @@ export function LoopsScreen() {
     [attentionQuery.data],
   );
   const reviewTarget = reviewCandidates[0] ?? null;
+  const scrollY = useSharedValue(0);
+  const overviewHeight = useSharedValue(280);
+  const filtersPinned = useSharedValue(false);
+  const onScroll = useAnimatedScrollHandler((event) => {
+    scrollY.value = Math.max(0, event.contentOffset.y);
+    const shouldPin = scrollY.value >= overviewHeight.value;
+    if (shouldPin !== filtersPinned.value) {
+      filtersPinned.value = shouldPin;
+      runOnJS(setShowPinnedFilters)(shouldPin);
+    }
+  });
+  const overviewStyle = useAnimatedStyle(() => {
+    const fadeEnd = Math.max(overviewHeight.value * 0.85, 1);
+    return {
+      opacity: interpolate(scrollY.value, [0, fadeEnd], [1, 0], Extrapolation.CLAMP),
+      transform: [{ scale: interpolate(scrollY.value, [0, fadeEnd], [1, 0.9], Extrapolation.CLAMP) }],
+    };
+  });
+  const pinnedFiltersStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(
+      scrollY.value,
+      [Math.max(0, overviewHeight.value - 60), overviewHeight.value],
+      [0, 1],
+      Extrapolation.CLAMP,
+    ),
+  }));
 
   useEffect(() => {
     if (reviewOpen && !reviewTarget && !review.isPending && !review.error) setReviewOpen(false);
@@ -218,52 +271,75 @@ export function LoopsScreen() {
 
   return (
     <View testID="loops-screen" style={{ flex: 1, backgroundColor: colors.cream }}>
-      <MobileHeader title="Loops" subtitle="Follow through without losing the conversation." safeArea />
-      <View style={{ paddingHorizontal: space[4], gap: space[3], paddingBottom: space[3] }}>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space[2] }}>
-          <View style={{ flex: 1, padding: space[4], borderRadius: radius.card, backgroundColor: colors.lime }}><Text style={{ ...mobileType.screenTitle, color: colors.ink, fontVariant: ['tabular-nums'] }}>{attentionQuery.data?.length ?? '—'}</Text><Text style={{ ...mobileType.monoLabel, color: colors.ink }}>NEED ATTENTION</Text></View>
-          <View style={{ flex: 1, padding: space[4], borderRadius: radius.card, backgroundColor: colors.sky }}><Text style={{ ...mobileType.screenTitle, color: colors.ink, fontVariant: ['tabular-nums'] }}>{today}</Text><Text style={{ ...mobileType.monoLabel, color: colors.ink }}>DUE TODAY</Text></View>
-        </View>
-        <View style={{ flexDirection: 'row', gap: space[2] }}>
-          <MobileChip label="For you" active={filter === 'for_you'} count={forYou.length} onPress={() => setFilter('for_you')} testID="loops-tab-open" />
-          <MobileChip label="Closed" active={filter === 'done'} onPress={() => setFilter('done')} testID="loops-tab-done" />
-          <MobileChip label="I'm waiting" active={filter === 'waiting'} count={waiting.length} onPress={() => setFilter('waiting')} testID="loops-tab-waiting" />
-          <MobileChip label="All" active={filter === 'all'} count={open.length} onPress={() => setFilter('all')} testID="loops-tab-all" />
-        </View>
-        {reviewCandidates.length ? (
-          <Pressable
-            testID="loops-review-old"
-            accessibilityRole="button"
-            accessibilityLabel={`Review ${reviewCandidates.length} ${reviewCandidates.length === 1 ? 'loop' : 'loops'}`}
-            onPress={() => setReviewOpen(true)}
-            style={{
-              minHeight: 52,
-              paddingHorizontal: space[3],
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: space[2],
-              borderRadius: radius.control,
-              borderWidth: 1,
-              borderColor: colors.ink,
-              backgroundColor: colors.sky,
-            }}
-          >
-            <RotateCcw size={17} color={colors.ink} />
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={{ ...mobileType.bodySmall, fontWeight: '700', color: colors.ink }}>
-                Review follow-ups
-              </Text>
-              <Text numberOfLines={1} style={{ ...mobileType.label, color: colors.neutral[600] }}>
-                {reviewCandidates.length} {reviewCandidates.length === 1 ? 'item needs' : 'items need'} your attention
-              </Text>
-            </View>
-            <Text style={{ ...mobileType.label, fontWeight: '700', color: colors.ink }}>Review</Text>
-          </Pressable>
-        ) : null}
-      </View>
-      {query.isCold ? <LoopsSkeleton /> : (
-        <FlatList testID="loops-list" data={visible} renderItem={({ item }) => <LoopRow item={item} onOpen={() => router.push({ pathname: '/loops/[id]', params: { id: item.id } })} onToggle={() => patch.mutate({ id: item.id, status: isLoopClosed(item) ? 'open' : 'done' })} onWait={isLoopClosed(item) ? undefined : () => patch.mutate({ id: item.id, owner: item.owner === 'them' ? 'me' : 'them', status: item.owner === 'them' ? 'open' : 'waiting' })} onSnooze={isLoopClosed(item) ? undefined : () => setSnoozeTarget(item)} />} keyExtractor={item => item.id} contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ paddingBottom: 112 }} refreshControl={<RefreshControl refreshing={query.isRefetching || attentionQuery.isRefetching} onRefresh={() => { void query.refetch(); void attentionQuery.refetch(); }} tintColor={colors.ink} />} ListEmptyComponent={<MobileState title={filter === 'done' ? 'Nothing closed yet' : filter === 'waiting' ? "You're not waiting on anyone" : 'No open loops'} message="Claire will surface commitments from your conversations here." />} />
-      )}
+      <AnimatedLoopList
+        testID="loops-list"
+        data={query.isCold ? [] : visible}
+        ListHeaderComponent={
+          <View>
+            <Animated.View
+              onLayout={(event) => { overviewHeight.value = event.nativeEvent.layout.height; }}
+              style={overviewStyle}
+            >
+              <MobileHeader title="Loops" subtitle="Follow through without losing the conversation." />
+              <View style={{ paddingHorizontal: space[4], gap: space[3], paddingBottom: space[3] }}>
+              <View style={{ flexDirection: 'row', gap: space[2] }}>
+                <View style={{ flex: 1, padding: space[4], borderRadius: radius.card, backgroundColor: colors.lime }}><Text style={{ ...mobileType.screenTitle, color: colors.ink, fontVariant: ['tabular-nums'] }}>{attentionQuery.data?.length ?? '—'}</Text><Text style={{ ...mobileType.monoLabel, color: colors.ink }}>NEED ATTENTION</Text></View>
+                <View style={{ flex: 1, padding: space[4], borderRadius: radius.card, backgroundColor: colors.sky }}><Text style={{ ...mobileType.screenTitle, color: colors.ink, fontVariant: ['tabular-nums'] }}>{today}</Text><Text style={{ ...mobileType.monoLabel, color: colors.ink }}>DUE TODAY</Text></View>
+              </View>
+              {reviewCandidates.length ? (
+                <Pressable
+                  testID="loops-review-old"
+                  accessibilityRole="button"
+                  accessibilityLabel={`Review ${reviewCandidates.length} ${reviewCandidates.length === 1 ? 'loop' : 'loops'}`}
+                  onPress={() => setReviewOpen(true)}
+                  style={{
+                    minHeight: 52,
+                    paddingHorizontal: space[3],
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: space[2],
+                    borderRadius: radius.control,
+                    borderWidth: 1,
+                    borderColor: colors.ink,
+                    backgroundColor: colors.sky,
+                  }}
+                >
+                  <RotateCcw size={17} color={colors.ink} />
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={{ ...mobileType.bodySmall, fontWeight: '700', color: colors.ink }}>
+                      Review follow-ups
+                    </Text>
+                    <Text numberOfLines={1} style={{ ...mobileType.label, color: colors.neutral[600] }}>
+                      {reviewCandidates.length} {reviewCandidates.length === 1 ? 'item needs' : 'items need'} your attention
+                    </Text>
+                  </View>
+                  <Text style={{ ...mobileType.label, fontWeight: '700', color: colors.ink }}>Review</Text>
+                </Pressable>
+              ) : null}
+              </View>
+            </Animated.View>
+            <LoopsFilters filter={filter} forYou={forYou.length} waiting={waiting.length} open={open.length} onChange={setFilter} />
+          </View>
+        }
+        renderItem={({ item }) => <LoopRow item={item} onOpen={() => router.push({ pathname: '/loops/[id]', params: { id: item.id } })} onToggle={() => patch.mutate({ id: item.id, status: isLoopClosed(item) ? 'open' : 'done' })} onWait={isLoopClosed(item) ? undefined : () => patch.mutate({ id: item.id, owner: item.owner === 'them' ? 'me' : 'them', status: item.owner === 'them' ? 'open' : 'waiting' })} onSnooze={isLoopClosed(item) ? undefined : () => setSnoozeTarget(item)} />}
+        keyExtractor={item => item.id}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+        contentInsetAdjustmentBehavior="automatic"
+        contentContainerStyle={{ paddingBottom: 112 }}
+        refreshControl={<RefreshControl refreshing={query.isRefetching || attentionQuery.isRefetching} onRefresh={() => { void query.refetch(); void attentionQuery.refetch(); }} tintColor={colors.ink} />}
+        ListEmptyComponent={query.isCold
+          ? <LoopsSkeleton />
+          : <MobileState title={filter === 'done' ? 'Nothing closed yet' : filter === 'waiting' ? "You're not waiting on anyone" : 'No open loops'} message="Claire will surface commitments from your conversations here." />}
+      />
+      <Animated.View
+        pointerEvents={showPinnedFilters ? 'auto' : 'none'}
+        accessibilityElementsHidden={!showPinnedFilters}
+        importantForAccessibility={showPinnedFilters ? 'auto' : 'no-hide-descendants'}
+        style={[{ position: 'absolute', top: 0, left: 0, right: 0, height: safeTop + 60, paddingTop: safeTop, backgroundColor: colors.cream }, pinnedFiltersStyle]}
+      >
+        <LoopsFilters filter={filter} forYou={forYou.length} waiting={waiting.length} open={open.length} onChange={setFilter} />
+      </Animated.View>
 
       <BottomSheet
         visible={!!snoozeTarget}

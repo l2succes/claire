@@ -49,6 +49,20 @@ describe('updateChatTimeline', () => {
       { createIfMissing: true },
     );
     expect(qc.getQueryData<ChatTimeline>(chatTimelineKey(USER, CHAT))?.messages).toHaveLength(1);
+    expect(new QueryObserver(qc, chatTimelineOptions(qc, USER, CHAT)).getCurrentResult().isStale).toBe(true);
+  });
+
+  it('keeps a partial outbox timeline stale after another local message arrives', () => {
+    const qc = client();
+    updateChatTimeline(qc, USER, CHAT,
+      (previous) => ({ ...previous, messages: [message({ id: 'queued' })] }),
+      { createIfMissing: true });
+    updateChatTimeline(qc, USER, CHAT,
+      (previous) => ({ ...previous, messages: [...previous.messages, message({ id: 'second' })] }));
+
+    const observer = new QueryObserver(qc, chatTimelineOptions(qc, USER, CHAT));
+    expect(observer.getCurrentResult().data?.messages.map((row) => row.id)).toEqual(['queued', 'second']);
+    expect(observer.getCurrentResult().isStale).toBe(true);
   });
 
   it('does not touch the cache when the updater returns the same reference', () => {
@@ -184,6 +198,19 @@ describe('cache-derived seeds', () => {
     const observer = new QueryObserver(qc, chatTimelineOptions(qc, USER, CHAT));
     expect(observer.getCurrentResult().isStale).toBe(true);
     expect(observer.getCurrentResult().data?.messages).toHaveLength(1);
+  });
+
+  it('keeps a disk-seeded history stale when a queued send is patched into it', () => {
+    const qc = client();
+    qc.setQueryData<ChatTimeline>(
+      chatTimelineKey(USER, CHAT),
+      { messages: [message({ id: 'cached' })], reactions: {} },
+      { updatedAt: 0 },
+    );
+    updateChatTimeline(qc, USER, CHAT,
+      (previous) => ({ ...previous, messages: [...previous.messages, message({ id: 'queued' })] }));
+
+    expect(new QueryObserver(qc, chatTimelineOptions(qc, USER, CHAT)).getCurrentResult().isStale).toBe(true);
   });
 
   it('a normal write is fresh, so re-entering a chat does not refetch', () => {

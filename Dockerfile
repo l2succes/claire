@@ -40,7 +40,7 @@ WORKDIR /app
 # Workspace manifests required to resolve @claire/server and its local
 # @claire/platform-catalog dependency without copying the whole repository.
 FROM base AS manifests
-COPY package.json bun.lockb ./
+COPY package.json bun.lock ./
 # Bun resolves every root-level patchedDependency before applying the workspace
 # filter, so the patch sources must be present in both install stages.
 COPY patches ./patches

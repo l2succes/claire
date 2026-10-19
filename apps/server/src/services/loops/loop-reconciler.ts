@@ -106,8 +106,15 @@ export function isActionable(threadState: string): boolean {
   return threadState === 'agreed';
 }
 
+// A date is a deadline attribute, not a loop subject. This catches extraction
+// outputs such as "Available: August 16, 2026" that otherwise become empty
+// reminders in busy groups despite the prompt asking for actionable titles.
+const DATE_ONLY_TITLE =
+  /^(?:(?:available|availability|due|deadline|date)\s*[:—-]?\s*(?:on\s+)?)?(?:(?:mon|tues|wednes|thurs|fri|satur|sun)day\s+)?(?:(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s+\d{4})?|\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?|\d{4}-\d{1,2}-\d{1,2})[.!]?$/i;
+
 export function decideCreate(op: LoopCreateOp, context: ReconcileContext): CreateOutcome {
   if (op.state === 'resolved') return { action: 'skip', reason: 'not_actionable' };
+  if (DATE_ONLY_TITLE.test(op.title.trim())) return { action: 'skip', reason: 'not_actionable' };
   const evidence = resolveEvidence(op.evidence_refs, context.window);
   if (evidence.length !== new Set(op.evidence_refs).size || !evidence.length) return { action: 'skip', reason: 'not_actionable' };
   const minConfidence = context.settings.minConfidence ?? DEFAULT_MIN_CONFIDENCE;

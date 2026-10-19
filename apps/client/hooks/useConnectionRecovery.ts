@@ -48,6 +48,8 @@ export function useConnectionRecovery() {
             } catch (error) {
               if (!stopped && error instanceof PlatformRequestError && error.status === 409) {
                 useChatOutbox.setState((state) => ({ attentionPlatforms: [...new Set([...state.attentionPlatforms, session.platform])] }));
+                await queue.failWhere((entry) => entry.kind === 'text' && entry.platform === session.platform,
+                  'Reconnect to send');
               }
             }
           }

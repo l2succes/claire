@@ -16,8 +16,7 @@ import { CategoryPicker } from '../../../components/CategoryPicker';
 import { MobileAvatar, MobileIconButton, SectionLabel } from '../../../components/mobile/claire-mobile';
 import { PlatformBadge } from '../../../components/PlatformIcon';
 import { Platform } from '../../../types/platform';
-import { CATEGORY_DISPLAY_THRESHOLD, type ChatCategory, type GroupCategory } from '../../../types/conversationSettings';
-import { groupCategoryTag } from '../../../features/chat/group-category';
+import { type ChatCategory } from '../../../types/conversationSettings';
 import { formatPhoneNumber, formatPhoneNumberInput, normalizePhoneNumber } from '../../../services/phone-numbers';
 import { displayContactName } from '../../../services/contact-display';
 import { API_BASE_URL } from '../../../services/platforms';
@@ -68,7 +67,6 @@ export default function ConversationSettingsScreen() {
   // which it is inheriting.
   const [aiEnabled, setAiEnabled] = useState<boolean | null>(null);
   const [isSavingAi, setIsSavingAi] = useState(false);
-  const [inferredCategory, setInferredCategory] = useState<GroupCategory | null>(null);
   const displayName =
     is_group === '1'
       ? chat_name || contact_name || 'Group'
@@ -102,25 +100,13 @@ export default function ConversationSettingsScreen() {
       // for one column.
       const { data: chat } = await supabase
         .from('chats')
-        .select('contact_id,is_muted,ai_enabled,contacts(phone_number),chat_classifications(category,confidence)')
+        .select('contact_id,is_muted,ai_enabled,contacts(phone_number)')
         .eq('id', chatId)
         .maybeSingle();
       if (!active) return;
       const muted = chat?.is_muted === true;
       setIsMuted(muted);
       setAiEnabled(typeof chat?.ai_enabled === 'boolean' ? chat.ai_enabled : null);
-
-      const embeddedClass = chat?.chat_classifications as
-        | { category?: string | null; confidence?: number | null }
-        | Array<{ category?: string | null; confidence?: number | null }>
-        | null
-        | undefined;
-      const classification = Array.isArray(embeddedClass) ? embeddedClass[0] : embeddedClass;
-      setInferredCategory(
-        (classification?.confidence ?? 0) >= CATEGORY_DISPLAY_THRESHOLD
-          ? ((classification?.category as GroupCategory) ?? null)
-          : null
-      );
 
       const embedded = chat?.contacts as { phone_number?: string | null } | Array<{ phone_number?: string | null }> | null | undefined;
       const embeddedContact = Array.isArray(embedded) ? embedded[0] : embedded;
@@ -251,16 +237,11 @@ export default function ConversationSettingsScreen() {
                 <Text style={{ ...mobileType.body, fontWeight: '700', color: colors.ink }}>Claire AI</Text>
                 <Text style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>
                   {effectiveAi
-                    ? 'Summaries, suggested replies and follow-ups for this chat.'
+                    ? 'Summaries, replies, and follow-ups.'
                     : aiEnabled === null
-                      ? "Off by default for groups. Claire still stores and searches it, but won't suggest anything."
-                      : "Claire won't process new messages here."}
+                      ? 'Off by default. Search still works.'
+                      : 'AI is off for this chat.'}
                 </Text>
-                {inferredCategory ? (
-                  <Text style={{ ...mobileType.bodySmall, fontSize: 11, lineHeight: 14, color: colors.neutral[400] }}>
-                    Claire reads this as a {groupCategoryTag(inferredCategory, 1)?.toLowerCase()} group.
-                  </Text>
-                ) : null}
               </View>
               <View style={{ height: 40, justifyContent: 'center' }}>
                 <Switch testID="conversation-ai-enabled" accessibilityLabel={`Claire AI for ${displayName}`} value={effectiveAi} disabled={isSavingAi || !accessToken} onValueChange={(value) => void updateAi(value)} trackColor={{ false: colors.neutral[200], true: colors.ink }} thumbColor={effectiveAi ? colors.lime : colors.paper} />
