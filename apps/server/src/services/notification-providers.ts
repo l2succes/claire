@@ -150,7 +150,14 @@ export class ApnsNotificationProvider implements NotificationProvider {
         });
       });
       request.end(JSON.stringify({
-        aps: { alert: { title: payload.title, body: payload.body }, sound: 'default', badge: payload.badge },
+        aps: {
+          alert: { title: payload.title, body: payload.body },
+          sound: 'default',
+          badge: payload.badge,
+          ...(payload.mutableContent ? { 'mutable-content': 1 } : {}),
+          ...(payload.categoryId ? { category: payload.categoryId } : {}),
+          ...(payload.threadId ? { 'thread-id': payload.threadId } : {}),
+        },
         ...payload.data,
       }));
     });

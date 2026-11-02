@@ -108,8 +108,13 @@ export function buildIncomingMessageNotification(
   const avatarType = groupAvatarUrl ? 'group' : avatarUrl ? 'sender' : undefined;
 
   return {
-    title: senderName,
-    body: event.content.trim().slice(0, 160) || 'Sent you an update',
+    // Keep group identity in the visible APNs alert itself. If iOS doesn't run
+    // the service extension (or can't promote the intent), this fallback still
+    // tells the user which conversation the message belongs to.
+    title: isGroup ? chatName : senderName,
+    body: isGroup
+      ? `${senderName}: ${event.content.trim().slice(0, 160) || 'Sent you an update'}`
+      : event.content.trim().slice(0, 160) || 'Sent you an update',
     badge,
     collapseId: event.messageId,
     categoryId: MESSAGE_NOTIFICATION_CATEGORY,
