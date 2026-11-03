@@ -96,6 +96,7 @@ export function buildIncomingMessageNotification(
   event: IncomingNotificationEvent,
   badge: number,
   artwork: MessageNotificationArtwork = {},
+  devicePlatform: NotificationDevice['platform'] = 'ios',
 ): NotificationPayload {
   const isGroup = event.isGroup === true;
   const senderName = event.senderName?.trim()
@@ -106,13 +107,14 @@ export function buildIncomingMessageNotification(
   const senderAvatarUrl = notificationImageUrl(artwork.senderAvatarUrl);
   const avatarUrl = groupAvatarUrl || senderAvatarUrl;
   const avatarType = groupAvatarUrl ? 'group' : avatarUrl ? 'sender' : undefined;
+  const messageBody = event.content.trim().slice(0, 160) || 'Sent you an update';
 
   return {
-    // Use the native title / subtitle / body hierarchy so group messages keep
-    // the sender as the headline even when iOS doesn't promote the intent.
+    // iOS has a native subtitle field; on Android keep the same information
+    // order by prefixing the message body with the group name.
     title: senderName,
-    ...(isGroup ? { subtitle: chatName } : {}),
-    body: event.content.trim().slice(0, 160) || 'Sent you an update',
+    ...(isGroup && devicePlatform === 'ios' ? { subtitle: chatName } : {}),
+    body: isGroup && devicePlatform !== 'ios' ? `${chatName} · ${messageBody}` : messageBody,
     badge,
     collapseId: event.messageId,
     categoryId: MESSAGE_NOTIFICATION_CATEGORY,
@@ -411,7 +413,7 @@ export class NotificationDeliveryService {
       const payload = buildIncomingMessageNotification(event, badge, {
         senderAvatarUrl,
         chatAvatarUrl,
-      });
+      }, device.platform);
       await this.queue!.add({
         kind: 'delivery',
         deliveryId: delivery.id,
