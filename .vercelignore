@@ -5,11 +5,21 @@
 **/.next
 **/.expo
 **/dist
-apps/client
-apps/desktop
-apps/server
+# Keep every workspace's package.json. Without them, `bun install` re-resolves
+# a smaller workspace than bun.lock describes and can split React: the website
+# gets react@19.2.8 while react-dom hoists at 19.2.0, and the docs prebuild
+# crashes. Builds with a warm cache hide this; a new branch hits it.
+apps/client/*
+!apps/client/package.json
+apps/desktop/*
+!apps/desktop/package.json
+apps/server/*
+!apps/server/package.json
 docker
-examples
+examples/*
+!examples/plugins
+examples/plugins/*/*
+!examples/plugins/*/package.json
 vendor
 .agents
 .codex

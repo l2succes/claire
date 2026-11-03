@@ -12,6 +12,7 @@ import { logger } from '../utils/logger';
 import { supabase, type DbRow } from './supabase';
 import { selectAssistantActions, type AssistantAction } from './conversation-assistant-actions';
 import { normalizeAssistantCitationLabels, selectCitedSources } from './conversation-assistant-citations';
+import { loadEvidenceExcerpt } from './conversation-assistant-evidence';
 import { hasAnyProvider, resolveEmbeddingRole, resolveRole, type RoleResolution } from './ai/provider-registry';
 import { planAssistantQuery, type AssistantQueryPlan } from './conversation-assistant-query';
 
@@ -551,18 +552,8 @@ class ConversationAssistantService {
   }
 
   private async expandEvidenceWindow(userId: string, anchor: RetrievedMessage): Promise<RetrievedMessage> {
-    const timestamp = new Date(anchor.timestamp).getTime();
-    const { data, error } = await supabase.from('messages')
-      .select('id, content, contact_name, from_me, timestamp').eq('user_id', userId).eq('chat_id', anchor.chatId)
-      .eq('is_deleted', false).gte('timestamp', new Date(timestamp - 43_200_000).toISOString())
-      .lte('timestamp', new Date(timestamp + 43_200_000).toISOString()).not('content', 'is', null)
-      .order('timestamp', { ascending: true }).limit(9);
-    if (error || !data?.length) return anchor;
-    const excerpt = data.map((row: DbRow) => {
-      const marker = row.id === anchor.messageId ? '→ ' : '';
-      return `${marker}${row.from_me ? 'You' : row.contact_name || anchor.senderName}: ${String(row.content || '').slice(0, 280)}`;
-    }).join('\n').slice(0, 1_600);
-    return { ...anchor, excerpt };
+    const excerpt = await loadEvidenceExcerpt(supabase, userId, anchor);
+    return excerpt ? { ...anchor, excerpt } : anchor;
   }
 
   private async getMemoryContext(userId: string, plan: AssistantQueryPlan): Promise<string> {
