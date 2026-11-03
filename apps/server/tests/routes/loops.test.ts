@@ -197,6 +197,29 @@ describe('PATCH /loops/:id', () => {
     });
   });
 
+  it('passes expected_version through as the version check and keeps undeclared keys out of the patch', async () => {
+    mockQuery.single
+      .mockResolvedValueOnce({ data: { ...mockLoop, row_version: 4 }, error: null })
+      .mockResolvedValueOnce({ data: { ...mockLoop, status: 'done' }, error: null });
+
+    const res = await request(app).patch(`/loops/${VALID_UUID}`).send({
+      status: 'done',
+      expected_version: 3,
+      user_id: 'someone-else',
+      visibility: 'hidden',
+    });
+
+    expect(res.status).toBe(200);
+    const args = mockRpc.mock.calls.at(-1)?.[1];
+    expect(args.p_expected_version).toBe(3);
+    expect(args.p_patch).toEqual({ status: 'done' });
+  });
+
+  it('rejects a body that only carries expected_version', async () => {
+    const res = await request(app).patch(`/loops/${VALID_UUID}`).send({ expected_version: 3 });
+    expect(res.status).toBe(400);
+  });
+
   it('blocks cross-user access — returns 404', async () => {
     mockQuery.single.mockResolvedValueOnce({ data: null, error: null }); // null = not owned
     const res = await request(app).patch(`/loops/${VALID_UUID}`).send({ status: 'done' });
