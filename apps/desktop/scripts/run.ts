@@ -124,6 +124,8 @@ async function main(): Promise<void> {
   run('bun', ['run', 'build'], DESKTOP_DIR);
 
   if (channel === 'dev') {
+    // The Expo dev server reads the development env files; match them.
+    run('bun', ['run', 'scripts/write-app-config.ts', 'development'], DESKTOP_DIR);
     const port = await freePort(8081);
     const url = `http://localhost:${String(port)}`;
 

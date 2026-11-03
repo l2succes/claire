@@ -8,7 +8,9 @@
   "description": "Claire Desktop — Electron shell hosting the Claire client's web build.",
   "main": "dist-main/main.js",
   "scripts": {
-    "build": "bun run build:main && bun run build:preload",
+    "build": "bun run build:main && bun run build:preload && bun run build:config",
+    "_comment:build:config": "Writes dist-main/app-config.json from the client env files; pass development for the dev channel.",
+    "build:config": "bun run scripts/write-app-config.ts",
     "build:main": "tsc -p tsconfig.json",
     "_comment:build:preload": "A sandboxed preload cannot require() relative modules, so it must ship as one bundled file.",
     "build:preload": "bun build src/preload.ts --target=node --format=cjs --external electron --outfile dist-main/preload.js",
