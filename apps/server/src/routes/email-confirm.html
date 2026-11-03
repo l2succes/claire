@@ -64,17 +64,11 @@
         const refreshToken = params.get('refresh_token');
 
         if (accessToken && refreshToken) {
-            // Try to open the app with deep link
-            const deepLink = `claire://auth/confirm?access_token=${accessToken}&refresh_token=${refreshToken}`;
-            
-            // Attempt to open the app
-            window.location.href = deepLink;
-            
-            // Show button after a delay in case app doesn't open
-            setTimeout(() => {
-                document.getElementById('status').textContent = 'You can now sign in to the Claire app.';
-                document.getElementById('openApp').style.display = 'inline-block';
-            }, 2000);
+            // The app does not accept session tokens from a link; the user
+            // signs in there with their confirmed email.
+            history.replaceState(null, '', window.location.pathname);
+            document.getElementById('status').textContent = 'You can now sign in to the Claire app.';
+            document.getElementById('openApp').style.display = 'inline-block';
         } else {
             document.getElementById('message').textContent = 'Invalid confirmation link.';
             document.getElementById('status').textContent = 'Please try signing up again.';
