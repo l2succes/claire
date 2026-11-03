@@ -323,7 +323,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
     // profile directly so notifications can still show the actual sender.
     if (!senderAvatar && this.matrixClient && message.senderId) {
       try {
-        senderAvatar = (await this.matrixClient.getUserProfile(message.senderId)).avatar_url || undefined;
+        senderAvatar = (await this.matrixClient.getProfileInfo(message.senderId)).avatar_url || undefined;
       } catch {
         // A missing profile image must not delay or block message delivery.
       }
