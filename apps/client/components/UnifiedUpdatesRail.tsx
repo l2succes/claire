@@ -2,6 +2,7 @@ import { memo } from 'react';
 import { Image, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { User } from 'lucide-react-native';
 import { Platform } from '../types/platform';
+import { useSignedMediaUrl } from '../hooks/useMediaToken';
 
 export interface UnifiedUpdateContact {
   id: string;
@@ -35,6 +36,7 @@ function UpdateBubble({
   isOwn?: boolean;
 }) {
   const ringColor = isOwn ? '#22c55e' : PLATFORM_RING_COLORS[platform || Platform.WHATSAPP];
+  const signedAvatarUrl = useSignedMediaUrl(avatarUrl);
   const testLabel = label.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 
   return (
@@ -50,8 +52,8 @@ function UpdateBubble({
         style={{ borderColor: ringColor }}
       >
         <View className="w-[58px] h-[58px] rounded-full bg-gray-100 dark:bg-gray-700 items-center justify-center overflow-hidden">
-          {avatarUrl ? (
-            <Image source={{ uri: avatarUrl }} className="w-full h-full" />
+          {signedAvatarUrl ? (
+            <Image source={{ uri: signedAvatarUrl }} className="w-full h-full" />
           ) : (
             <User size={28} color="#6b7280" />
           )}

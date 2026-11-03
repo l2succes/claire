@@ -3,11 +3,14 @@ import { ActivityIndicator, AppState, Text, View } from 'react-native';
 import type { VideoPlayerStatus } from 'expo-video';
 import { expoVideoModule } from './expo-video-module';
 import { FeedbackPressable } from '../../components/mobile/pressable-feedback';
+import { useStableSignedMediaUrl } from '../../hooks/useMediaToken';
 
 export function MediaVideoPlayer({ uri }: { uri: string }) {
   const [attempt, setAttempt] = useState(0);
+  const playbackUri = useStableSignedMediaUrl(uri);
   if (!expoVideoModule) return <Text style={{ color: 'white', textAlign: 'center' }}>Update Claire to play this video.</Text>;
-  return <ActiveVideo key={`${uri}:${attempt}`} uri={uri} onRetry={() => setAttempt((value) => value + 1)} />;
+  if (!playbackUri) return <ActivityIndicator color="white" accessibilityLabel="Loading video" style={{ flex: 1 }} />;
+  return <ActiveVideo key={`${uri}:${attempt}`} uri={playbackUri} onRetry={() => setAttempt((value) => value + 1)} />;
 }
 
 function ActiveVideo({ uri, onRetry }: { uri: string; onRetry: () => void }) {

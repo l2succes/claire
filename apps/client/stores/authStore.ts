@@ -6,6 +6,7 @@ import { deregisterNotificationDevice } from '../services/notifications';
 import { clearMobileCache } from '../services/mobile-cache';
 import { resetQueryClient } from '../services/query-client';
 import { usePlatformStore } from './platformStore';
+import { useMediaTokenStore } from '../hooks/useMediaToken';
 import { appMark } from '../services/perf-marks';
 import { reportNewSignup } from '../services/operator-alerts';
 
@@ -57,6 +58,7 @@ async function clearLocalUserData(userId: string | undefined): Promise<void> {
   if (userId && clearingFor === userId) return;
   clearingFor = userId ?? null;
   try {
+    useMediaTokenStore.getState().clear();
     if (userId) await clearMobileCache(userId).catch(() => undefined);
     resetQueryClient();
     await Promise.resolve(usePlatformStore.persist.clearStorage()).catch(() => undefined);
@@ -126,6 +128,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             // A deep link or account switch can sign in without going through
             // logout. Never show the previous account's connection badges.
             usePlatformStore.getState().reset();
+            useMediaTokenStore.getState().clear();
             resetQueryClient();
           }
           set({ 

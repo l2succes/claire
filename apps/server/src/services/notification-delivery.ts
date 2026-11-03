@@ -7,6 +7,7 @@ import { logger } from '../utils/logger';
 import { operationsTelemetry } from './operations-telemetry';
 import { isWhatsAppStatusUpdate } from './whatsapp-status';
 import { recordLoopActivity, recordMessageActivity } from './in-app-notifications';
+import { mediaTokens } from './media-token';
 
 interface NotificationDevice {
   id: string;
@@ -417,9 +418,11 @@ export class NotificationDeliveryService {
       if (error) throw error;
       if (suppression || !delivery) continue;
 
+      // Notification extensions download artwork without credentials, so
+      // proxied media gets a short-lived token for this recipient.
       const payload = buildIncomingMessageNotification(event, badge, {
-        senderAvatarUrl,
-        chatAvatarUrl,
+        senderAvatarUrl: mediaTokens().signUrl(senderAvatarUrl, event.userId),
+        chatAvatarUrl: mediaTokens().signUrl(chatAvatarUrl, event.userId),
       }, device.platform);
       await this.queue!.add({
         kind: 'delivery',

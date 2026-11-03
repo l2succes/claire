@@ -1,5 +1,7 @@
 import {
   isPlayableAudio,
+  isProxiedMediaUrl,
+  withMediaToken,
   normalizeAudioPlaybackUrl,
   normalizeMediaUrl,
   parseMediaCaption,
@@ -135,5 +137,24 @@ describe('parseMediaCaption', () => {
 
   it.each([null, undefined, ''])('returns an empty result for %s', (raw) => {
     expect(parseMediaCaption(raw as string | null | undefined)).toEqual({});
+  });
+});
+
+describe('withMediaToken', () => {
+  it('adds the token to proxied media and keeps existing parameters', () => {
+    expect(withMediaToken(`${API}/media/srv/id`, API, 'a.b+c')).toBe(`${API}/media/srv/id?mt=a.b%2Bc`);
+    expect(withMediaToken(`${API}/media/srv/id?format=m4a`, API, 't')).toBe(`${API}/media/srv/id?format=m4a&mt=t`);
+  });
+
+  it('replaces an older token instead of stacking them', () => {
+    expect(withMediaToken(`${API}/media/srv/id?mt=old&format=m4a`, API, 'new')).toBe(`${API}/media/srv/id?format=m4a&mt=new`);
+  });
+
+  it('never sends the token to another host or path', () => {
+    expect(withMediaToken('https://cdn.example/media/srv/id', API, 't')).toBe('https://cdn.example/media/srv/id');
+    expect(withMediaToken(`${API}.evil.example/media/srv/id`, API, 't')).toBe(`${API}.evil.example/media/srv/id`);
+    expect(withMediaToken(`${API}/platforms/x`, API, 't')).toBe(`${API}/platforms/x`);
+    expect(isProxiedMediaUrl(`${API}/media/token`, API)).toBe(false);
+    expect(withMediaToken(null, API, 't')).toBeNull();
   });
 });

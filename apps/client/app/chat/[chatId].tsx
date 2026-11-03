@@ -91,6 +91,7 @@ import {
 import { MediaMessage } from '../../features/chat/media-message';
 import { MediaViewer } from '../../features/chat/media-viewer';
 import { useChatMediaViewer } from '../../hooks/useChatMediaViewer';
+import { signMediaUrlNow } from '../../hooks/useMediaToken';
 import { VoiceMessageBubble } from '../../features/chat/voice-message-bubble';
 import { enqueueChatEvent, newOutgoingMessage, useChatOutbox, removeFailedChatEvent, retryFailedChatEvent } from '../../services/chat-outbox';
 import { requestConnectionRecovery } from '../../services/connection-recovery-signal';
@@ -1103,7 +1104,9 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
           accessibilityRole="button"
           accessibilityLabel={`Open ${label}`}
           onPress={() => {
-            void Linking.openURL(documentUri).catch(() => undefined);
+            void signMediaUrlNow(documentUri)
+              .then((signed) => (signed ? Linking.openURL(signed) : undefined))
+              .catch(() => undefined);
           }}
           style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
         >

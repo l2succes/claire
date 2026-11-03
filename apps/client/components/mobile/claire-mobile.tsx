@@ -5,6 +5,7 @@ import { AlertCircle, Inbox, UserRound } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { colors, mobileType, radius, space } from '@claire/design-system';
+import { useSignedMediaSource } from '../../hooks/useMediaToken';
 
 export const mobileColors = colors;
 
@@ -142,10 +143,11 @@ export function MobileAvatar({ name, uri, size = 46, isGroup = false, badge, ton
   const hash = [...name].reduce((total, character) => total + character.charCodeAt(0), 0);
   const background = tone || avatarTones[hash % avatarTones.length];
   const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase() || '?';
+  const source = useSignedMediaSource(uri);
   return (
     <View style={{ width: size, height: size, flexShrink: 0 }}>
       <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: background, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-        {uri ? <Image source={{ uri }} style={{ width: size, height: size }} contentFit="cover" transition={120} /> : isGroup ? <UserRound size={size * 0.48} color={colors.neutral[600]} /> : <Text style={{ ...mobileType.label, color: colors.ink }}>{initials}</Text>}
+        {source ? <Image source={source} style={{ width: size, height: size }} contentFit="cover" transition={120} /> : isGroup ? <UserRound size={size * 0.48} color={colors.neutral[600]} /> : <Text style={{ ...mobileType.label, color: colors.ink }}>{initials}</Text>}
       </View>
       {badge ? <View style={{ position: 'absolute', right: -3, bottom: -2 }}>{badge}</View> : null}
     </View>

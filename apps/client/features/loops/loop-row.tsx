@@ -6,6 +6,7 @@ import { colors, mobileType, space } from '@claire/design-system';
 import { isLoopClosed } from '../../services/loop-display';
 import type { LoopItem } from '../../services/loop-types';
 import { SwipeActionRow } from '../../components/mobile/swipe-action-row';
+import { useSignedMediaSource } from '../../hooks/useMediaToken';
 
 const LIVE_STATUSES: LoopItem['status'][] = ['open', 'waiting', 'snoozed'];
 
@@ -62,7 +63,7 @@ export function LoopRow({
   const name = conversationName(item);
   const title = loopTitle(item);
   const detail = loopDetail(item, title);
-  const avatar = item.contact?.avatar_url || item.chat?.contact?.avatar_url;
+  const avatar = useSignedMediaSource(item.contact?.avatar_url || item.chat?.contact?.avatar_url);
   const group = !!item.chat?.is_group;
   const overdue = isOverdue(item);
   const due = dueLabel(item, overdue);
@@ -104,7 +105,7 @@ export function LoopRow({
         {detail ? <Text selectable numberOfLines={1} style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>{detail}</Text> : null}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 2 }}>
           <View testID={`loop-contact-avatar-${item.id}`} style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: group ? colors.sky : colors.blush, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }}>
-            {avatar ? <Image source={{ uri: avatar }} style={{ width: 24, height: 24 }} contentFit="cover" /> : group ? <UsersRound size={13} color={colors.neutral[600]} /> : <UserRound size={13} color={colors.neutral[600]} />}
+            {avatar ? <Image source={avatar} style={{ width: 24, height: 24 }} contentFit="cover" /> : group ? <UsersRound size={13} color={colors.neutral[600]} /> : <UserRound size={13} color={colors.neutral[600]} />}
           </View>
           <Text testID={`loop-contact-name-${item.id}`} selectable numberOfLines={1} style={{ ...mobileType.bodySmall, flexShrink: 1, color: colors.neutral[600] }}>{name}</Text>
           {ownership ? <Text numberOfLines={1} style={{ ...mobileType.monoLabel, color: item.owner === 'me' ? colors.ink : colors.neutral[600] }}>{ownership}</Text> : null}

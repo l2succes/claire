@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { FeedbackPressable } from '../../components/mobile/pressable-feedback';
+import { useSignedMediaSource } from '../../hooks/useMediaToken';
 
 export function MediaImage({ uri, onDimensions, testID, onRetry, contentFit = 'contain' }: {
   uri: string;
@@ -10,6 +11,7 @@ export function MediaImage({ uri, onDimensions, testID, onRetry, contentFit = 'c
   onRetry?: () => void;
   contentFit?: 'contain' | 'cover';
 }) {
+  const source = useSignedMediaSource(uri);
   const [attempt, setAttempt] = useState(0);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   useEffect(() => {
@@ -21,7 +23,7 @@ export function MediaImage({ uri, onDimensions, testID, onRetry, contentFit = 'c
     <View style={{ flex: 1 }} testID={testID}>
       <Image
         key={`${uri}:${attempt}`}
-        source={{ uri }}
+        source={source ?? null}
         style={{ width: '100%', height: '100%' }}
         contentFit={contentFit}
         cachePolicy="memory-disk"
