@@ -30,8 +30,9 @@ describe('notification eligibility', () => {
       content: 'See you there', messageId: 'message-1',
     }, 4);
 
-    expect(payload.title).toBe('Melaninaires');
-    expect(payload.body).toBe('Jare CDMX: See you there');
+    expect(payload.title).toBe('Jare CDMX');
+    expect(payload.subtitle).toBe('Melaninaires');
+    expect(payload.body).toBe('See you there');
     expect(payload.mutableContent).toBe(true);
     expect(payload.data.senderName).toBe('Jare CDMX');
     expect(payload.data.chatName).toBe('Melaninaires');
