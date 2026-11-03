@@ -412,6 +412,7 @@ export class MessageIngestionService extends EventEmitter {
       .from('messages')
       .select(MESSAGE_SELECT)
       .eq('user_id', userId)
+      .eq('is_deleted', false)
       .ilike('content', `%${query}%`)
       .order('timestamp', { ascending: false })
       .limit(limit);
