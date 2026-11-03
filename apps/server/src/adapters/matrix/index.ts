@@ -315,8 +315,19 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
   }
 
   /** Attach notification-ready sender and conversation artwork to live events. */
-  private enrichMessageAvatars(message: UnifiedMessage, room: Room): void {
-    const senderAvatar = room.getMember(message.senderId)?.getMxcAvatarUrl();
+  private async enrichMessageAvatars(message: UnifiedMessage, room: Room): Promise<void> {
+    let senderAvatar: string | undefined =
+      room.getMember(message.senderId)?.getMxcAvatarUrl() || undefined;
+    // Room member state may not include the ghost user's avatar (for example,
+    // when the member joined before profile metadata was synced). Fetch the
+    // profile directly so notifications can still show the actual sender.
+    if (!senderAvatar && this.matrixClient && message.senderId) {
+      try {
+        senderAvatar = (await this.matrixClient.getUserProfile(message.senderId)).avatar_url || undefined;
+      } catch {
+        // A missing profile image must not delay or block message delivery.
+      }
+    }
     if (senderAvatar) {
       message.senderAvatarUrl =
         this.matrixMediaProxyUrl(senderAvatar) || senderAvatar;
@@ -620,7 +631,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
         selfGhostIds,
         matrixUserId
       );
-      this.enrichMessageAvatars(unifiedMessage, room);
+      await this.enrichMessageAvatars(unifiedMessage, room);
       await this.enrichRemoteMessageContact(unifiedMessage, session);
 
       // Matrix receives bridged provider events after mautrix has translated
