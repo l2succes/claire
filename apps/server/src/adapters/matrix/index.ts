@@ -45,6 +45,7 @@ import {
   toPersistedMatrixSession,
 } from './session-persistence';
 import { logger } from '../../utils/logger';
+import { publicApiBaseUrl } from '../../services/media-token';
 import {
   displayNameFromBridge,
   incomingContactId,
@@ -1627,12 +1628,7 @@ export class MatrixBridgeAdapter extends BasePlatformAdapter {
       );
     if (!match) return undefined;
 
-    const apiBase =
-      process.env.PUBLIC_API_URL ||
-      (process.env.RAILWAY_PUBLIC_DOMAIN
-        ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
-        : `http://localhost:${process.env.PORT || '3001'}`);
-    return `${apiBase}/media/${encodeURIComponent(match[1])}/${encodeURIComponent(match[2])}`;
+    return `${publicApiBaseUrl()}/media/${encodeURIComponent(match[1])}/${encodeURIComponent(match[2])}`;
   }
 
   /**

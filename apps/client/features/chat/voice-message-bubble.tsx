@@ -5,6 +5,7 @@ import { colors, mobileType, space } from '@claire/design-system';
 import { formatAudioDuration, sanitizeWaveform } from '@claire/chat-core';
 import { VoiceWaveform } from '../../components/mobile/voice-waveform';
 import { expoAudioModule, type ExpoAudioModule } from '../../components/claire/expo-audio-module';
+import { useStableSignedMediaUrl } from '../../hooks/useMediaToken';
 
 export function VoiceMessageBubble({
   uri,
@@ -26,18 +27,19 @@ export function VoiceMessageBubble({
   const [retryKey, setRetryKey] = useState(0);
   const fallbackDuration = Math.max(0, (durationMs || 0) / 1000);
   const [loadedDuration, setLoadedDuration] = useState(fallbackDuration);
+  const playbackUri = useStableSignedMediaUrl(uri);
 
   if (!expoAudioModule) {
     return <VoiceUnavailable label="Update Claire to play voice notes" messageId={messageId} />;
   }
   if (!uri) return <VoiceUnavailable label="Voice note unavailable" messageId={messageId} />;
 
-  if (!active) {
+  if (!active || !playbackUri) {
     return (
       <VoicePlayerShell
         messageId={messageId}
         playing={false}
-        loading={false}
+        loading={active}
         duration={loadedDuration || fallbackDuration}
         currentTime={0}
         waveform={waveform}
@@ -50,7 +52,7 @@ export function VoiceMessageBubble({
     <VoiceMessagePlayer
       key={retryKey}
       audio={expoAudioModule}
-      uri={uri}
+      uri={playbackUri}
       messageId={messageId}
       fallbackDuration={fallbackDuration}
       waveform={waveform}

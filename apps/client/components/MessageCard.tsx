@@ -7,6 +7,7 @@ import { FeedbackPressable } from './mobile/pressable-feedback';
 import { PlatformBadge } from './PlatformIcon';
 import { Platform } from '../types/platform';
 import { formatInboxTimestamp } from '../utils/messageTimestamp';
+import { useSignedMediaSource } from '../hooks/useMediaToken';
 
 interface MessageCardProps {
   message: {
@@ -33,6 +34,7 @@ interface MessageCardProps {
 
 export function MessageCard({ message, variant = 'default', onPress, onLongPress }: MessageCardProps) {
   const [imageError, setImageError] = useState(false);
+  const avatar = useSignedMediaSource(message.contact_avatar);
   const name = message.chat_name || message.contact_name || 'Unknown conversation';
   const isPinnedPresentation = variant === 'pinned';
   const isCompactPresentation = variant === 'recent';
@@ -73,8 +75,8 @@ export function MessageCard({ message, variant = 'default', onPress, onLongPress
     >
       <View style={{ width: 42, height: 42, flexShrink: 0 }}>
         <View style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: message.is_group ? colors.sky : colors.blush, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-          {message.contact_avatar && !imageError ? (
-            <Image source={{ uri: message.contact_avatar }} style={{ width: 42, height: 42 }} contentFit="cover" transition={120} onError={() => setImageError(true)} />
+          {avatar && !imageError ? (
+            <Image source={avatar} style={{ width: 42, height: 42 }} contentFit="cover" transition={120} onError={() => setImageError(true)} />
           ) : message.is_group ? <UsersRound size={20} color={colors.neutral[600]} /> : <UserRound size={20} color={colors.neutral[600]} />}
         </View>
         {message.platform ? <View style={{ position: 'absolute', right: -4, bottom: -3, borderRadius: 10, borderWidth: 2, borderColor: colors.cream, backgroundColor: colors.paper }}><PlatformBadge platform={message.platform} size={16} /></View> : null}

@@ -14,8 +14,6 @@ export default function ConfirmScreen() {
   const handleEmailConfirmation = async () => {
     try {
       const code = params.code as string | undefined;
-      const access_token = params.access_token as string;
-      const refresh_token = params.refresh_token as string;
       const oauthError = params.error_description || params.error;
 
       if (oauthError) {
@@ -24,14 +22,10 @@ export default function ConfirmScreen() {
         return;
       }
 
-      const result = code
-        ? await supabase.auth.exchangeCodeForSession(code)
-        : access_token && refresh_token
-          ? await supabase.auth.setSession({
-              access_token,
-              refresh_token,
-            })
-          : null;
+      // Only a PKCE code is accepted: it can be exchanged solely by the client
+      // that started the sign-in, so a link cannot sign the app into another
+      // account.
+      const result = code ? await supabase.auth.exchangeCodeForSession(code) : null;
 
       if (!result) {
         router.replace('/(auth)/signin');

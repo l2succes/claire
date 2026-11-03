@@ -84,6 +84,9 @@ const updateLoopSchema = z.object({
     deadline_precision: z.enum(['exact', 'day', 'week', 'month', 'none']).optional(),
     thread_state: z.enum(['proposed', 'negotiating', 'pending_confirmation', 'agreed', 'resolved']).optional(),
     priority: z.enum(['low', 'medium', 'high']).optional(),
+    // Optimistic-concurrency token; the handler passes it to transitionLoop
+    // and keeps it out of the patch.
+    expected_version: z.number().int().positive().optional(),
   }).refine(data => Object.keys(data).some(key => key !== 'expected_version'), {
     message: 'At least one field must be provided',
   }),

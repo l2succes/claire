@@ -1,10 +1,14 @@
-import { Router, type Request, type Response } from 'express';
+import { Router, type Request, type RequestHandler, type Response } from 'express';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { MediaCache, MediaLimitError } from '../services/media-cache';
+import { MEDIA_TOKEN_PARAM, type MediaTokenSigner } from '../services/media-token';
 
 interface MediaDependencies {
-  config: { enabled: boolean; homeserverUrl?: string; adminToken?: string };
+  config: { enabled: boolean; homeserverUrl?: string; adminToken?: string; serverName?: string };
+  tokens: Pick<MediaTokenSigner, 'issue' | 'verify'>;
+  /** Authenticates the bearer-token request that mints a media token. */
+  requireAuth: RequestHandler;
   fetch?: typeof globalThis.fetch;
   cache?: MediaCache;
   transcode: (key: string, bytes: Buffer) => Promise<Buffer>;
@@ -16,9 +20,24 @@ export function createMediaRouter(deps: MediaDependencies) {
   const cache = deps.cache ?? new MediaCache();
   const fetchMedia = deps.fetch ?? globalThis.fetch;
 
+  // Image, video and audio elements cannot send an Authorization header, so
+  // clients exchange their session for a short-lived token carried in the URL.
+  router.get('/token', deps.requireAuth, (req: Request, res: Response) => {
+    res.setHeader('Cache-Control', 'no-store');
+    res.json(deps.tokens.issue(req.user.id));
+  });
+
   router.get('/:server/:mediaId', async (req: Request, res: Response) => {
-    if (!deps.config.enabled || !deps.config.homeserverUrl || !deps.config.adminToken) {
+    if (!deps.config.enabled || !deps.config.homeserverUrl || !deps.config.adminToken || !deps.config.serverName) {
       res.status(503).json({ error: 'Matrix not configured' }); return;
+    }
+    if (!deps.tokens.verify(req.query[MEDIA_TOKEN_PARAM])) {
+      res.setHeader('Cache-Control', 'no-store');
+      res.status(401).json({ error: 'Media token required' }); return;
+    }
+    // Only media held by this deployment's homeserver is proxied.
+    if (req.params.server !== deps.config.serverName) {
+      res.status(404).json({ error: 'Media unavailable' }); return;
     }
     const key = `${req.params.server}/${req.params.mediaId}`;
     const url = `${deps.config.homeserverUrl.replace(/\/$/, '')}/_matrix/client/v1/media/download/${encodeURIComponent(req.params.server)}/${encodeURIComponent(req.params.mediaId)}`;
@@ -85,7 +104,7 @@ export function createMediaRouter(deps: MediaDependencies) {
         const value = upstream.headers.get(name); if (value) res.setHeader(name, value);
       }
       res.status(upstream.status);
-      if (upstream.ok) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      if (upstream.ok) res.setHeader('Cache-Control', MEDIA_CACHE_CONTROL);
       if (req.method === 'HEAD' || upstream.status === 304 || !upstream.body) {
         await upstream.body?.cancel(); res.end(); return;
       }
@@ -108,13 +127,17 @@ export function createMediaRouter(deps: MediaDependencies) {
   return router;
 }
 
+// URLs carry a user-bound token, so responses may only live in the requesting
+// client's own cache, and not beyond the token's lifetime.
+const MEDIA_CACHE_CONTROL = 'private, max-age=21600';
+
 class UnsupportedAudioError extends Error {}
 
 async function sendCached(res: Response, entry: Awaited<ReturnType<MediaCache['acquire']>>) {
   try {
     if (res.destroyed) return;
     res.setHeader('Content-Type', entry.contentType);
-    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    res.setHeader('Cache-Control', MEDIA_CACHE_CONTROL);
     if (entry.etag) res.setHeader('ETag', entry.etag);
     if (entry.lastModified) res.setHeader('Last-Modified', entry.lastModified);
     await new Promise<void>((resolve, reject) => res.sendFile(entry.path, { dotfiles: 'deny', cacheControl: false }, (error) => {

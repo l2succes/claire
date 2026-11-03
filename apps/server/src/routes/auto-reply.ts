@@ -41,6 +41,22 @@ const updateRuleSchema = z.object({
   }),
 });
 
+/**
+ * Columns a user may change on an existing rule. Ownership, identity,
+ * timestamps and any counters the auto-reply engine maintains are never
+ * taken from the request body.
+ */
+const UPDATABLE_RULE_FIELDS = [
+  'name',
+  'enabled',
+  'trigger_type',
+  'keywords',
+  'reply_template',
+  'platforms',
+  'max_per_hour',
+  'max_per_day',
+] as const;
+
 const ruleIdSchema = z.object({
   params: z.object({ id: z.string().uuid() }),
 });
@@ -113,7 +129,10 @@ router.patch(
   async (req: Request, res: Response): Promise<void> => {
     const userId = req.user?.id;
     const { id } = req.params;
-    const updates = { ...req.body, updated_at: new Date().toISOString() };
+    const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    for (const field of UPDATABLE_RULE_FIELDS) {
+      if (req.body[field] !== undefined) updates[field] = req.body[field];
+    }
 
     const { data, error } = await supabase
       .from('auto_reply_rules')

@@ -2,19 +2,38 @@ import { Request, Response, NextFunction } from 'express';
 import { ZodSchema } from 'zod';
 import { logger } from '../utils/logger';
 
+const REQUEST_PARTS = ['body', 'query', 'params'] as const;
+
 /**
- * Validation middleware factory
+ * Validation middleware factory.
+ *
+ * The schema is an object with optional `body`, `query` and `params` keys. The
+ * parsed values are written back onto `req`, so handlers only see validated
+ * fields: unknown keys are stripped (zod's default for `z.object`), and
+ * coercions, transforms and defaults are applied. A part the schema does not
+ * declare is left untouched.
  */
 export const validateRequest = (schema: ZodSchema) => {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
-      // Validate request against schema
-      await schema.parseAsync({
+      const parsed = (await schema.parseAsync({
         body: req.body,
         query: req.query,
         params: req.params,
-      });
-      
+      })) as Partial<Record<(typeof REQUEST_PARTS)[number], unknown>> | undefined;
+
+      for (const part of REQUEST_PARTS) {
+        if (!parsed || !Object.prototype.hasOwnProperty.call(parsed, part)) continue;
+        // `req.query` is a getter in some Express versions, so define an own
+        // property rather than relying on plain assignment.
+        Object.defineProperty(req, part, {
+          value: parsed[part],
+          writable: true,
+          configurable: true,
+          enumerable: true,
+        });
+      }
+
       return next();
     } catch (error: any) {
       logger.warn('Validation error:', error);

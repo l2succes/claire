@@ -27,6 +27,7 @@ import { formatInboxTimestamp } from '../../utils/messageTimestamp';
 import { InboxRowSkeleton, InboxSkeleton } from '../../components/claire/skeleton';
 import { signalFirstPaint } from '../../services/mobile-sync';
 import { useScreenLoadMark } from '../../hooks/useScreenLoadMark';
+import { useSignedMediaSource } from '../../hooks/useMediaToken';
 import { syncNotificationBadge } from '../../services/notifications';
 import { SwipeActionRow } from '../../components/mobile/swipe-action-row';
 import { groupCategoryTag } from '../chat/group-category';
@@ -105,7 +106,9 @@ function InboxConversationRowInner({
 }) {
   const [imageFailed, setImageFailed] = useState(false);
   const [thumbFailed, setThumbFailed] = useState(false);
+  const avatarSource = useSignedMediaSource(message.contact_avatar);
   const preview = conversationPreview(message);
+  const thumbnailSource = useSignedMediaSource(preview.thumbnailUri);
   const name = message.chat_name || message.contact_name || 'Unknown conversation';
   const categoryTag = message.is_group
     ? groupCategoryTag(message.ai_category, message.ai_category_confidence)
@@ -153,8 +156,8 @@ function InboxConversationRowInner({
     >
       <View style={{ position: 'absolute', left: inset, top: Math.round((rowHeight - avatarSize) / 2), width: avatarSize, height: avatarSize }}>
         <View style={{ width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2, backgroundColor: tone, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }}>
-          {message.contact_avatar && !imageFailed
-            ? <Image source={{ uri: message.contact_avatar }} style={{ width: 44, height: 44 }} contentFit="cover" transition={120} onError={() => setImageFailed(true)} />
+          {avatarSource && !imageFailed
+            ? <Image source={avatarSource} style={{ width: 44, height: 44 }} contentFit="cover" transition={120} onError={() => setImageFailed(true)} />
             : <Text maxFontSizeMultiplier={1} style={{ ...mobileType.label, color: colors.ink }}>{initials}</Text>}
         </View>
         {message.platform ? <View style={{ position: 'absolute', right: -3, bottom: -3, padding: 1, borderRadius: 11, borderWidth: 2, borderColor: surface, backgroundColor: colors.paper }}><PlatformBadge platform={message.platform} size={16} /></View> : null}
@@ -180,9 +183,9 @@ function InboxConversationRowInner({
             entering={inboxContentUpdate}
             style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 6 }}
           >
-            {preview.thumbnailUri && !thumbFailed ? (
+            {thumbnailSource && !thumbFailed ? (
               <Image
-                source={{ uri: preview.thumbnailUri }}
+                source={thumbnailSource}
                 style={{ width: 26, height: 26, borderRadius: 5, backgroundColor: colors.neutral[100] }}
                 contentFit="cover"
                 transition={120}

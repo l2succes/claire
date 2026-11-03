@@ -6,6 +6,7 @@ import { colors, mobileType, radius } from '@claire/design-system';
 import { fitMediaSize, formatAudioDuration, parseMediaCaption, type ChatMessage, type VisualMedia } from '@claire/chat-core';
 import { MediaImage } from './media-image';
 import { useMediaDimensions } from '../../hooks/useMediaDimensions';
+import { useSignedMediaSource } from '../../hooks/useMediaToken';
 
 export function MediaMessage({ media, message, maxWidth, sender, reply }: {
   media: VisualMedia;
@@ -16,6 +17,7 @@ export function MediaMessage({ media, message, maxWidth, sender, reply }: {
 }) {
   const dimensions = useMediaDimensions(media);
   const [posterFailed, setPosterFailed] = useState(false);
+  const poster = useSignedMediaSource(media.thumbnailUri);
   const size = fitMediaSize(dimensions.width, dimensions.height, maxWidth, 420);
   const caption = parseMediaCaption(message.content);
   const hasCaption = Boolean(caption.text || caption.hint);
@@ -30,7 +32,7 @@ export function MediaMessage({ media, message, maxWidth, sender, reply }: {
           <MediaImage uri={media.uri} testID={`media-image-${message.id}`} onDimensions={dimensions.onDimensions} />
         ) : (
           <>
-            {media.thumbnailUri && !posterFailed ? <Image source={{ uri: media.thumbnailUri }} contentFit="contain" style={{ width: '100%', height: '100%' }} onError={() => setPosterFailed(true)} /> : null}
+            {poster && !posterFailed ? <Image source={poster} contentFit="contain" style={{ width: '100%', height: '100%' }} onError={() => setPosterFailed(true)} /> : null}
             <View pointerEvents="none" style={{ position: 'absolute', inset: 0, alignItems: 'center', justifyContent: 'center' }}>
               <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: 'rgba(0,0,0,0.65)', alignItems: 'center', justifyContent: 'center' }}>
                 <Play size={24} color="white" fill="white" />

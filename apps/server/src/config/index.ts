@@ -56,6 +56,8 @@ const envSchema = z.object({
 
   // Security
   JWT_SECRET: z.string(),
+  // Signs short-lived /media URLs. Defaults to a key derived from JWT_SECRET.
+  MEDIA_TOKEN_SECRET: z.string().min(32).optional(),
   ENCRYPTION_KEY: z.string(),
   // During a rotation, new values use ENCRYPTION_KEY while reads may fall
   // back to this one previous key. Remove it after all active TTLs expire.

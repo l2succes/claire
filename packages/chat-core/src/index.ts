@@ -10,6 +10,9 @@ export {
 } from './messages';
 export {
   normalizeMediaUrl,
+  isProxiedMediaUrl,
+  withMediaToken,
+  MEDIA_TOKEN_PARAM,
   normalizeAudioPlaybackUrl,
   isPlayableAudio,
   parseMediaCaption,

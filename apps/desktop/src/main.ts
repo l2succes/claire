@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, nativeImage, Notification, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, nativeImage, Notification, session, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron';
 import path from 'node:path';
 import { APP_NAME, applyChannelIdentity, channelIconPath, IS_DEV } from './channel';
 import { buildApplicationMenu } from './menu';
@@ -9,7 +9,8 @@ import {
 } from './protocol';
 import { secureDelete, secureGet, secureSet } from './secure-store';
 import { IPC, type NotifyPayload } from './shared/ipc';
-import { createMainWindow, openConversationWindow } from './windows';
+import { createMainWindow, isRendererUrl, openConversationWindow, openExternalWebUrl } from './windows';
+import { withConfiguredApiUrl } from './app-config';
 import { clearEncryptedCache, encryptedCacheInfo, readEncryptedCache, writeEncryptedCache } from './encrypted-cache';
 import { companionStatus, openCompanionSettings, sendIMessage } from './companion';
 import { startInstagramLogin } from './instagram-login';
@@ -83,6 +84,7 @@ async function onReady(): Promise<void> {
   }
 
   registerRendererProtocol(RENDERER_ROOT);
+  applyPermissionPolicy();
   registerIpcHandlers();
   buildApplicationMenu({
     getWindow: () => mainWindow,
@@ -112,11 +114,15 @@ async function onReady(): Promise<void> {
   });
 }
 
+/** Session material is never accepted from a link; only a PKCE `code` is. */
+const DEEP_LINK_DROPPED_PARAMS = ['access_token', 'refresh_token', 'provider_token', 'provider_refresh_token'];
+
 function navigateDeepLink(url: string): void {
   let route: string | null = null;
   try {
     const parsed = new URL(url);
     if (parsed.protocol !== 'claire:') return;
+    for (const name of DEEP_LINK_DROPPED_PARAMS) parsed.searchParams.delete(name);
     const path = `${parsed.host}${parsed.pathname}`.replace(/^\/+/, '');
     route = path ? `/${path}${parsed.search}` : '/';
   } catch { return; }
@@ -133,14 +139,48 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
+/**
+ * Deny every permission by default. Claire's own renderer may use the
+ * microphone (voice notes), notifications and clipboard writes; no other page
+ * — including the sign-in popup — is granted anything.
+ */
+function applyPermissionPolicy(): void {
+  const allowed = (permission: string, origin: string | undefined, mediaTypes: string[] = []): boolean => {
+    if (!isRendererUrl(origin)) return false;
+    if (permission === 'media') return mediaTypes.length > 0 && mediaTypes.every((type) => type === 'audio');
+    return permission === 'notifications' || permission === 'clipboard-sanitized-write';
+  };
+  session.defaultSession.setPermissionRequestHandler((contents, permission, callback, details) => {
+    const mediaTypes = 'mediaTypes' in details ? details.mediaTypes ?? [] : [];
+    callback(allowed(permission, details.requestingUrl || contents.getURL(), mediaTypes));
+  });
+  session.defaultSession.setPermissionCheckHandler((_contents, permission, requestingOrigin, details) => {
+    const mediaType = 'mediaType' in details && details.mediaType ? [details.mediaType] : ['audio'];
+    return allowed(permission, requestingOrigin, mediaType);
+  });
+}
+
+/** IPC is only honoured from Claire's own renderer, never from a page it navigated to. */
+function fromRenderer(event: IpcMainEvent | IpcMainInvokeEvent): boolean {
+  return isRendererUrl(event.senderFrame?.url);
+}
+
 function registerIpcHandlers(): void {
-  ipcMain.on(IPC.setBadgeCount, (_event, count: unknown) => {
+  const on = (channel: string, listener: (event: IpcMainEvent, ...args: any[]) => void) =>
+    ipcMain.on(channel, (event, ...args) => { if (fromRenderer(event)) listener(event, ...args); });
+  const handle = (channel: string, listener: (event: IpcMainInvokeEvent, ...args: any[]) => unknown) =>
+    ipcMain.handle(channel, (event, ...args) => {
+      if (!fromRenderer(event)) throw new Error('Unauthorized IPC sender');
+      return listener(event, ...args);
+    });
+
+  on(IPC.setBadgeCount, (_event, count: unknown) => {
     if (typeof count !== 'number' || !Number.isFinite(count)) return;
     const value = Math.max(0, Math.trunc(count));
     if (typeof app.setBadgeCount === 'function') app.setBadgeCount(value);
   });
 
-  ipcMain.on(IPC.notify, (_event, payload: NotifyPayload) => {
+  on(IPC.notify, (_event, payload: NotifyPayload) => {
     if (!Notification.isSupported()) return;
     if (!payload || typeof payload.title !== 'string' || typeof payload.body !== 'string') return;
 
@@ -156,52 +196,51 @@ function registerIpcHandlers(): void {
     notification.show();
   });
 
-  ipcMain.on(IPC.openExternal, (_event, url: unknown) => {
-    if (typeof url !== 'string') return;
+  on(IPC.openExternal, (_event, url: unknown) => {
     // Only ever hand http(s) to the OS — never a file:// or custom scheme.
-    if (!/^https?:\/\//i.test(url)) return;
-    void shell.openExternal(url);
+    if (typeof url === 'string') openExternalWebUrl(url);
   });
 
-  ipcMain.on(IPC.openConversationWindow, (_event, chatId: unknown) => {
+  on(IPC.openConversationWindow, (_event, chatId: unknown) => {
     if (typeof chatId !== 'string' || !chatId) return;
     openConversationWindow(chatId);
   });
 
-  ipcMain.on(IPC.reportActiveConversation, (_event, chatId: unknown) => {
+  on(IPC.reportActiveConversation, (_event, chatId: unknown) => {
     activeConversationId = typeof chatId === 'string' && chatId ? chatId : null;
   });
 
-  ipcMain.handle(IPC.preferenceGet, (_event, key: unknown) =>
+  handle(IPC.preferenceGet, (_event, key: unknown) =>
     typeof key === 'string' ? getPreference(key) : null,
   );
 
-  ipcMain.handle(IPC.preferenceSet, (_event, key: unknown, value: unknown) => {
+  handle(IPC.preferenceSet, (_event, key: unknown, value: unknown) => {
     if (typeof key !== 'string' || typeof value !== 'string') return;
     setPreference(key, value);
   });
 
-  ipcMain.handle(IPC.secureGet, (_event, key: unknown) =>
+  handle(IPC.secureGet, (_event, key: unknown) =>
     typeof key === 'string' ? secureGet(key) : null,
   );
 
-  ipcMain.handle(IPC.secureSet, (_event, key: unknown, value: unknown) => {
+  handle(IPC.secureSet, (_event, key: unknown, value: unknown) => {
     if (typeof key !== 'string' || typeof value !== 'string') return false;
     return secureSet(key, value);
   });
 
-  ipcMain.handle(IPC.secureDelete, (_event, key: unknown) => {
+  handle(IPC.secureDelete, (_event, key: unknown) => {
     if (typeof key === 'string') secureDelete(key);
   });
 
-  ipcMain.handle(IPC.companionStatus, () => companionStatus());
-  ipcMain.handle(IPC.cacheRead, (_event, userId: unknown) => readEncryptedCache(userId));
-  ipcMain.handle(IPC.cacheWrite, (_event, userId: unknown, value: unknown) => writeEncryptedCache(userId, value));
-  ipcMain.handle(IPC.cacheClear, (_event, userId: unknown) => clearEncryptedCache(userId));
-  ipcMain.handle(IPC.cacheInfo, (_event, userId: unknown) => encryptedCacheInfo(userId));
-  ipcMain.handle(IPC.instagramLogin, (_event, request: unknown) => startInstagramLogin(request));
-  ipcMain.handle(IPC.imessageSend, (_event, request: unknown) => sendIMessage(request));
-  ipcMain.handle(IPC.openSystemSettings, (_event, section: unknown) => openCompanionSettings(section));
-  ipcMain.handle(IPC.configurePush, (_event, request: unknown) => configurePushHelper(request));
-  ipcMain.handle(IPC.configureCompanion, (_event, request: unknown) => configureIMessageSync(request));
+  handle(IPC.companionStatus, () => companionStatus());
+  handle(IPC.cacheRead, (_event, userId: unknown) => readEncryptedCache(userId));
+  handle(IPC.cacheWrite, (_event, userId: unknown, value: unknown) => writeEncryptedCache(userId, value));
+  handle(IPC.cacheClear, (_event, userId: unknown) => clearEncryptedCache(userId));
+  handle(IPC.cacheInfo, (_event, userId: unknown) => encryptedCacheInfo(userId));
+  // The main process decides where credentials and local data are sent.
+  handle(IPC.instagramLogin, (_event, request: unknown) => startInstagramLogin(withConfiguredApiUrl(request)));
+  handle(IPC.imessageSend, (_event, request: unknown) => sendIMessage(request));
+  handle(IPC.openSystemSettings, (_event, section: unknown) => openCompanionSettings(section));
+  handle(IPC.configurePush, (_event, request: unknown) => configurePushHelper(withConfiguredApiUrl(request)));
+  handle(IPC.configureCompanion, (_event, request: unknown) => configureIMessageSync(withConfiguredApiUrl(request)));
 }

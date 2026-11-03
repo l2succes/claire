@@ -9,7 +9,10 @@ const router = Router();
 const schema = z.object({ query: z.object({
   q: z.string().trim().min(1).max(300),
   scope: z.enum(['everything', 'messages', 'people', 'files', 'loops']).optional().default('everything'),
-  limit: z.string().optional().transform(value => value ? Math.max(1, Math.min(50, Number.parseInt(value, 10))) : 20),
+  limit: z.string().optional().transform(value => {
+    const parsed = value ? Number.parseInt(value, 10) : Number.NaN;
+    return Number.isFinite(parsed) ? Math.max(1, Math.min(50, parsed)) : 20;
+  }),
 }) });
 
 router.get('/', requireAuth, validateRequest(schema), async (req: Request, res: Response) => {

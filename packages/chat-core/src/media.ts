@@ -18,6 +18,34 @@ export function normalizeMediaUrl(value: string | null | undefined, apiBaseUrl: 
   return value;
 }
 
+/** Query parameter the server's media proxy reads its access token from. */
+export const MEDIA_TOKEN_PARAM = 'mt';
+
+/** True for a URL served by the server's `/media/:server/:mediaId` proxy. */
+export function isProxiedMediaUrl(url: string | null | undefined, apiBaseUrl: string): boolean {
+  if (!url) return false;
+  const mediaBase = `${apiBaseUrl.replace(/\/$/, '')}/media/`;
+  return url.startsWith(mediaBase) && /^[^/?#]+\/[^/?#]+(?:[?#]|$)/.test(url.slice(mediaBase.length));
+}
+
+/**
+ * Attach the short-lived media token to a proxied media URL. Element loaders
+ * (images, players, notification extensions) cannot send an Authorization
+ * header, so the proxy authenticates from the query string. Any other URL is
+ * returned untouched, so the token never goes to another host.
+ */
+export function withMediaToken(url: string | null | undefined, apiBaseUrl: string, token: string): string | null {
+  if (!url) return null;
+  if (!isProxiedMediaUrl(url, apiBaseUrl)) return url;
+  const hashIndex = url.indexOf('#');
+  const base = hashIndex === -1 ? url : url.slice(0, hashIndex);
+  const hash = hashIndex === -1 ? '' : url.slice(hashIndex);
+  const pattern = new RegExp(`([?&])${MEDIA_TOKEN_PARAM}=[^&]*(&|$)`);
+  const stripped = base.replace(pattern, (_m, lead: string, tail: string) => (tail ? lead : '')).replace(/[?&]$/, '');
+  const param = `${MEDIA_TOKEN_PARAM}=${encodeURIComponent(token)}`;
+  return `${stripped}${stripped.includes('?') ? '&' : '?'}${param}${hash}`;
+}
+
 /**
  * iOS and macOS have no Ogg/Opus decoder, and that is what the bridges deliver
  * for voice notes today. Detecting it lets the UI offer an honest state instead

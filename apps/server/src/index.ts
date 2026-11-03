@@ -73,6 +73,8 @@ import { instagramAdapter } from './adapters/instagram';
 import { MatrixBridgeAdapter } from './adapters/matrix';
 import { mockBridgeAdapter } from './adapters/mock';
 import { createMediaRouter } from './routes/media';
+import { mediaTokens } from './services/media-token';
+import { requireAuth } from './middleware/auth';
 import { transcodeVoiceToM4aOnce } from './services/audio-transcoder';
 import { applyIncomingMessageEdit } from './services/message-edits';
 import { isWhatsAppStatusUpdate } from './services/whatsapp-status';
@@ -297,6 +299,8 @@ app.get('/', (req, res, next) => {
 
 app.use('/media', createMediaRouter({
   config: matrixConfig,
+  tokens: mediaTokens(),
+  requireAuth,
   transcode: transcodeVoiceToM4aOnce,
   onError: () => logger.warn('Media delivery failed'),
 }));
