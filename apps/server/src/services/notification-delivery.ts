@@ -25,7 +25,9 @@ export interface IncomingNotificationEvent {
   platform: string;
   senderContactId?: string;
   senderName?: string;
+  senderAvatarUrl?: string;
   chatName?: string;
+  chatAvatarUrl?: string;
   isGroup?: boolean;
   content: string;
   messageId: string;
@@ -384,8 +386,13 @@ export class NotificationDeliveryService {
     // devices. A muted chat, however, should not create an alert in either place.
     if (chat?.is_muted) return 0;
     const contact = Array.isArray(chat?.contact) ? chat.contact[0] : chat?.contact;
-    const senderAvatarUrl = notificationImageUrl(contactRow?.avatar_url || contact?.avatar_url);
-    const chatAvatarUrl = notificationImageUrl(chat?.avatar_url);
+    // Use artwork resolved with the incoming event first. Matrix profile
+    // images can be available on the event even when the contacts read is
+    // stale or the contact row has not been hydrated yet.
+    const senderAvatarUrl = notificationImageUrl(event.senderAvatarUrl)
+      || notificationImageUrl(contactRow?.avatar_url || contact?.avatar_url);
+    const chatAvatarUrl = notificationImageUrl(event.chatAvatarUrl)
+      || notificationImageUrl(chat?.avatar_url);
     try {
       await recordMessageActivity(event, { senderAvatarUrl, chatAvatarUrl });
     } catch (error) {
