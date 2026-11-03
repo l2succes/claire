@@ -96,6 +96,7 @@ export function buildIncomingMessageNotification(
   event: IncomingNotificationEvent,
   badge: number,
   artwork: MessageNotificationArtwork = {},
+  devicePlatform: NotificationDevice['platform'] = 'ios',
 ): NotificationPayload {
   const isGroup = event.isGroup === true;
   const senderName = event.senderName?.trim()
@@ -104,12 +105,20 @@ export function buildIncomingMessageNotification(
   const chatName = event.chatName?.trim() || (isGroup ? 'Group chat' : senderName);
   const groupAvatarUrl = isGroup ? notificationImageUrl(artwork.chatAvatarUrl) : undefined;
   const senderAvatarUrl = notificationImageUrl(artwork.senderAvatarUrl);
-  const avatarUrl = groupAvatarUrl || senderAvatarUrl;
-  const avatarType = groupAvatarUrl ? 'group' : avatarUrl ? 'sender' : undefined;
+  // Prefer the actual author for communication notifications. A group photo
+  // can describe the conversation, but iOS displays this image beside the
+  // sender; choosing the group photo here caused the extension to show no
+  // sender image at all for group messages.
+  const avatarUrl = senderAvatarUrl || groupAvatarUrl;
+  const avatarType = senderAvatarUrl ? 'sender' : groupAvatarUrl ? 'group' : undefined;
+  const messageBody = event.content.trim().slice(0, 160) || 'Sent you an update';
 
   return {
+    // iOS has a native subtitle field; on Android keep the same information
+    // order by prefixing the message body with the group name.
     title: senderName,
-    body: event.content.trim().slice(0, 160) || 'Sent you an update',
+    ...(isGroup && devicePlatform === 'ios' ? { subtitle: chatName } : {}),
+    body: isGroup && devicePlatform !== 'ios' ? `${chatName} · ${messageBody}` : messageBody,
     badge,
     collapseId: event.messageId,
     categoryId: MESSAGE_NOTIFICATION_CATEGORY,
@@ -408,7 +417,7 @@ export class NotificationDeliveryService {
       const payload = buildIncomingMessageNotification(event, badge, {
         senderAvatarUrl,
         chatAvatarUrl,
-      });
+      }, device.platform);
       await this.queue!.add({
         kind: 'delivery',
         deliveryId: delivery.id,

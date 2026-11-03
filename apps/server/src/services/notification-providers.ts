@@ -4,6 +4,7 @@ import { config } from '../config';
 
 export interface NotificationPayload {
   title: string;
+  subtitle?: string;
   body: string;
   badge?: number;
   channelId?: string;
@@ -45,6 +46,7 @@ export class ExpoNotificationProvider implements NotificationProvider {
         body: JSON.stringify({
           to: token,
           title: payload.title,
+          subtitle: payload.subtitle,
           body: payload.body,
           sound: 'default',
           channelId: payload.channelId || 'messages',
@@ -150,7 +152,18 @@ export class ApnsNotificationProvider implements NotificationProvider {
         });
       });
       request.end(JSON.stringify({
-        aps: { alert: { title: payload.title, body: payload.body }, sound: 'default', badge: payload.badge },
+        aps: {
+          alert: {
+            title: payload.title,
+            ...(payload.subtitle ? { subtitle: payload.subtitle } : {}),
+            body: payload.body,
+          },
+          sound: 'default',
+          badge: payload.badge,
+          ...(payload.mutableContent ? { 'mutable-content': 1 } : {}),
+          ...(payload.categoryId ? { category: payload.categoryId } : {}),
+          ...(payload.threadId ? { 'thread-id': payload.threadId } : {}),
+        },
         ...payload.data,
       }));
     });
