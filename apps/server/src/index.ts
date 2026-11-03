@@ -95,7 +95,9 @@ async function notifyIncomingMessage(message: {
   platform: string;
   senderContactId?: string;
   senderName?: string;
+  senderAvatarUrl?: string;
   chatName?: string;
+  chatAvatarUrl?: string;
   isGroup?: boolean;
   content: string;
   messageId: string;
@@ -958,7 +960,9 @@ async function initializePlatforms() {
             platform: message.platform,
             senderContactId: contactId || undefined,
             senderName: message.senderName,
+            senderAvatarUrl: message.senderAvatarUrl,
             chatName: notificationChatName,
+            chatAvatarUrl: message.chatAvatarUrl,
             isGroup: chat.is_group,
             content: message.content,
             messageId: savedMsg.id,
