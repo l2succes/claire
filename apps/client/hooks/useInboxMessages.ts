@@ -205,7 +205,7 @@ export type InboxRealtimeRow = Partial<RawMessage> & { id: string; content?: str
 function updateInboxQueries(
   queryClient: QueryClient,
   userId: string | undefined,
-  updater: (old: InboxQueryData | undefined, canInsert: boolean) => InboxQueryData | undefined,
+  updater: (old: InboxQueryData | undefined, canInsert: boolean, filter: InboxServerFilter) => InboxQueryData | undefined,
   rowIsGroup?: boolean,
 ) {
   const queries = queryClient.getQueryCache().findAll({ queryKey: inboxQueryPrefix(userId) });
@@ -216,7 +216,7 @@ function updateInboxQueries(
       (filter === 'dms' && rowIsGroup === false) ||
       (filter === 'groups' && rowIsGroup === true);
     const canInsert = !search && platform === 'all' && scopeAccepts;
-    queryClient.setQueryData<InboxQueryData>(query.queryKey, (old) => updater(old, canInsert));
+    queryClient.setQueryData<InboxQueryData>(query.queryKey, (old) => updater(old, canInsert, filter));
   }
 }
 
@@ -258,7 +258,7 @@ export function patchInboxRealtimeMessage(
           status: row.status ?? message.status,
           contact_name: row.contact_name ? incomingName : message.contact_name,
           contact_phone: row.contact_phone || message.contact_phone,
-          unread_count: options.event !== 'update' && row.from_me === false
+          unread_count: options.event !== 'update' && row.from_me === false && row.id !== message.id
             ? (message.unread_count || 0) + 1
             : message.unread_count,
           platform,
@@ -283,7 +283,7 @@ export function patchInboxRealtimeMessage(
       chat_id: row.chat_id || row.id,
       contact_phone: row.contact_phone,
       platform,
-      unread_count: 0,
+      unread_count: options.event !== 'update' && row.from_me === false ? 1 : 0,
       has_ai_response: false,
       snoozed_until: row.snoozed_until ?? null,
       is_pinned: false,
@@ -308,12 +308,20 @@ export function patchInboxChat(
     const { latest_message: _latest, contact: _contact, ...rest } = chat;
     void patchCachedChat(userId, chat.id, rest).catch(() => undefined);
   }
-  updateInboxQueries(queryClient, userId, (old) => {
+  updateInboxQueries(queryClient, userId, (old, _canInsert, filter) => {
     if (!old) return old;
     let changed = false;
     const pages = old.pages.map((page) => ({
       ...page,
-      messages: sortMessages(page.messages.map((message) => {
+      // A receipt from another device must obey the same filter as opening
+      // the chat locally: a read row no longer belongs in an Unread feed.
+      messages: sortMessages(page.messages.filter((message) => {
+        if (filter === 'unread' && chat.unread_count === 0 && message.conversation_key === key) {
+          changed = true;
+          return false;
+        }
+        return true;
+      }).map((message) => {
         if (message.conversation_key !== key || (message.unread_count === chat.unread_count && message.is_pinned === chat.is_pinned && message.is_muted === chat.is_muted)) return message;
         changed = true;
         return { ...message, unread_count: chat.unread_count ?? message.unread_count ?? 0, is_pinned: chat.is_pinned ?? message.is_pinned, is_muted: chat.is_muted ?? message.is_muted };

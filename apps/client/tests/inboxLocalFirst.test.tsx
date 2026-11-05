@@ -254,4 +254,55 @@ describe('inbox realtime write-through', () => {
     expect(unread?.pages[0].messages).toHaveLength(0);
     expect(mockPatchCachedChat).toHaveBeenCalledWith(USER, 'c1', { unread_count: 0 });
   });
+
+  it('removes a remotely read conversation from every Unread variant and page', () => {
+    const client = makeClient();
+    const row = (id: string, platform = Platform.WHATSAPP) => ({
+      id: `m-${id}`, chat_id: id, platform, conversation_key: `${platform}:${id}`,
+      unread_count: 3, timestamp: '2026-09-07T10:00:00.000Z', content: 'hello',
+    });
+    const data = {
+      pages: [
+        { messages: [row('c2')], hasMore: true, nextCursor: 'next' },
+        { messages: [row('c1'), row('c1', Platform.TELEGRAM)], hasMore: false, nextCursor: null },
+      ],
+      pageParams: [null, 'next'],
+    };
+    const keys = [
+      ['messages-feed', USER, '', 'unread', 'all'],
+      ['messages-feed', USER, 'hello', 'unread', Platform.WHATSAPP],
+      ['messages-feed', USER, '', 'all', 'all'],
+      ['messages-feed', 'another-user', '', 'unread', 'all'],
+    ];
+    keys.forEach((key) => client.setQueryData(key, data));
+
+    patchInboxChat(client, USER, { id: 'c1', platform: Platform.WHATSAPP, unread_count: 0 });
+
+    for (const key of keys.slice(0, 2)) {
+      const updated = client.getQueryData<typeof data>(key)!;
+      expect(updated.pages[0].messages.map((message) => message.chat_id)).toEqual(['c2']);
+      expect(updated.pages[1].messages.map((message) => message.platform)).toEqual([Platform.TELEGRAM]);
+      expect(updated.pageParams).toEqual(data.pageParams);
+      expect(updated.pages[0].nextCursor).toBe('next');
+    }
+    const all = client.getQueryData<typeof data>(keys[2])!;
+    expect(all.pages[1].messages[0].unread_count).toBe(0);
+    expect(all.pages[1].messages[1].unread_count).toBe(3);
+    expect(client.getQueryData(keys[3])).toEqual(data);
+  });
+
+  it('retains an Unread row on pin updates and partial read receipts', () => {
+    const client = makeClient();
+    const key = ['messages-feed', USER, '', 'unread', 'all'];
+    const data = {
+      pages: [{ messages: [{ id: 'm1', conversation_key: `${Platform.WHATSAPP}:c1`, unread_count: 3 }], hasMore: false, nextCursor: null }],
+      pageParams: [null],
+    };
+    client.setQueryData(key, data);
+    patchInboxChat(client, USER, { id: 'c1', platform: Platform.WHATSAPP, is_pinned: true });
+    patchInboxChat(client, USER, { id: 'c1', platform: Platform.WHATSAPP, unread_count: 1 });
+    const updated = client.getQueryData<typeof data>(key)!;
+    expect(updated.pages[0].messages).toHaveLength(1);
+    expect(updated.pages[0].messages[0].unread_count).toBe(1);
+  });
 });
