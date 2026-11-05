@@ -3,8 +3,11 @@
 This is the operational map of the Express API in `apps/server/src/index.ts`.
 It describes server-owned routes only; Supabase REST, Auth, Realtime, Storage,
 and Matrix are separate services. Production API traffic should use
-`https://api.useclaire.co` once its Railway certificate is healthy; the
-Railway-generated domain is the break-glass diagnostic endpoint.
+`https://api.useclaire.co`; its certificate and the Supabase gateway's
+certificate passed hostname and chain validation on 2026-11-05. See the
+[TLS follow-up evidence](./tls-acceptance-2026-11-05.md) for the checks and
+remaining mobile release acceptance. The Railway-generated domain is the
+break-glass diagnostic endpoint.
 
 ## Authentication and conventions
 
