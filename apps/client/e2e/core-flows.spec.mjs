@@ -19,13 +19,14 @@ import { test, expect } from '@playwright/test';
 import {
   mockBackend,
   openReplyOptions,
+  openSettings,
   signIn,
-  MOCK_CHAT_MESSAGES,
+  toConversationFeedRow,
+  MOCK_CONVERSATION_FEED,
   MOCK_GROUP_CHAT_ID,
   MOCK_GROUP_INBOX_MESSAGE,
   MOCK_INBOX_MESSAGES,
   MOCK_PLATFORM_SESSIONS,
-  MOCK_LOOPS,
   MOCK_USER_ID,
 } from './helpers/mock-backend.mjs';
 
@@ -33,6 +34,31 @@ import {
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
+
+// An open loop deliberately suppresses the quick-context strip — they compete
+// for the same row above the transcript (app/chat/[chatId].tsx). Silence loops
+// when the strip itself is what is under test.
+async function withoutOpenLoops(page) {
+  await page.route('**/rest/v1/**', async (route) => {
+    if (route.request().url().includes('/loops')) {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+    } else {
+      await route.fallback();
+    }
+  });
+}
+
+async function longPressInboxCard(page, card) {
+  await card.hover();
+  await page.mouse.down();
+  try {
+    // Hold until the app handles the gesture, rather than releasing at a
+    // fixed 600ms deadline that races the long-press timer under load.
+    await expect(page.getByTestId('snooze-modal-overlay')).toBeVisible();
+  } finally {
+    await page.mouse.up();
+  }
+}
 
 test.describe('Core loop — mock backend', () => {
   test.beforeEach(async ({ page }) => {
@@ -74,7 +100,7 @@ test.describe('Core loop — mock backend', () => {
     await page.getByTestId('tab-messages').click();
     await expect(page.getByTestId('messages-screen')).toBeVisible({ timeout: 10_000 });
 
-    await page.getByTestId('inbox-compose').click();
+    await page.getByTestId('inbox-floating-compose').click();
     await expect(page.getByTestId('compose-screen')).toBeVisible({ timeout: 8_000 });
     await expect(page.getByTestId('compose-recipient-mock-chat-wa-alice')).toBeVisible();
     await expect(page.getByTestId('compose-recipient-mock-chat-wa-group-1')).toBeVisible();
@@ -91,7 +117,7 @@ test.describe('Core loop — mock backend', () => {
     await page.getByTestId('tab-messages').click();
     await expect(page.getByTestId('messages-screen')).toBeVisible({ timeout: 10_000 });
 
-    await page.getByTestId('inbox-compose').click();
+    await page.getByTestId('inbox-floating-compose').click();
     await expect(page.getByTestId('compose-screen')).toBeVisible({ timeout: 8_000 });
     await page.getByTestId('compose-close').click();
 
@@ -147,7 +173,11 @@ test.describe('Core loop — mock backend', () => {
 
     // Input should clear after sending (optimistic update clears immediately)
     await expect(page.getByTestId('chat-input')).toHaveValue('', { timeout: 5_000 });
-    await expect(page.getByText('Hello from e2e test')).toBeVisible({ timeout: 5_000 });
+    // The inbox stays mounted (hidden) under the chat and previews the same
+    // text, so assert on the conversation itself.
+    await expect(
+      page.getByTestId('chat-message-list').getByText('Hello from e2e test')
+    ).toBeVisible({ timeout: 5_000 });
   });
 
   // 5. AI suggestions — suggestion text appears in the chat screen
@@ -253,33 +283,14 @@ test.describe('Core loop — mock backend', () => {
   // 5e. Reply options prefetch — options appear without a manual draft trigger.
   test('prefetched reply options populate the composer when selected', async ({ page }) => {
     // Override ai_suggestions to return empty, so the chat prefetches a fresh
-    // response from the AI endpoint on open.
+    // response from the AI endpoint on open. Every other table falls through
+    // to mockBackend — a copied table list here drifted when the inbox moved to
+    // `conversation_feed`, and the inbox rendered empty.
     await page.route('**/rest/v1/**', async (route) => {
-      const url = route.request().url();
-      const method = route.request().method();
-      if (url.includes('/ai_suggestions')) {
-        // Return empty list for both GET and PATCH
+      if (route.request().url().includes('/ai_suggestions')) {
         await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
-      } else if (url.includes('/messages')) {
-        if (url.includes('chat_id=eq.')) {
-          await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_CHAT_MESSAGES) });
-        } else {
-          await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_INBOX_MESSAGES) });
-        }
-      } else if (url.includes('/chats')) {
-        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(chatsPayload(url, route.request().headers())) });
-      } else if (url.includes('/platform_sessions')) {
-        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_PLATFORM_SESSIONS) });
-      } else if (url.includes('/smart_cards')) {
-        if (method === 'PATCH') {
-          await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
-        } else {
-          await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
-        }
-      } else if (url.includes('/contact_profiles')) {
-        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(null) });
       } else {
-        await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+        await route.fallback();
       }
     });
 
@@ -298,7 +309,9 @@ test.describe('Core loop — mock backend', () => {
     await expect(page.getByTestId('draft-reply-button')).toHaveCount(0);
 
     // Selecting a prefetched option fills the composer but never sends it.
-    await page.getByTestId('ai-suggestion-chip-0').click();
+    // The chip is the card; "Use" is the control that selects it.
+    await expect(page.getByTestId('ai-suggestion-chip-0')).toBeVisible();
+    await page.getByTestId('ai-suggestion-use-0').click();
 
     // Composer should be filled with the first suggestion from the mock response
     await expect(page.getByTestId('chat-input')).toHaveValue(
@@ -478,6 +491,7 @@ test.describe('Core loop — mock backend', () => {
 
     // Confirm the route loaded — the loops screen container is present
     await expect(page.getByTestId('loops-screen')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText('NEED ATTENTION', { exact: true }).locator('..').getByText('1', { exact: true })).toBeVisible();
   });
 
   // 6b. Loops screen — seeded loop item appears in the list
@@ -504,16 +518,16 @@ test.describe('Core loop — mock backend', () => {
     await expect(page.getByTestId('loops-screen')).toBeVisible({ timeout: 10_000 });
 
     // Switch to Done tab
-    await page.getByTestId('loops-tab-done').click();
+    await page.getByTestId('loops-list').getByTestId('loops-tab-done').click();
     // Done tab is now active — either empty state or items show
     await expect(page.getByTestId('loops-list')).toBeVisible({ timeout: 5_000 });
 
     // Switch to Overdue tab
-    await page.getByTestId('loops-tab-waiting').click();
+    await page.getByTestId('loops-list').getByTestId('loops-tab-waiting').click();
     await expect(page.getByTestId('loops-list')).toBeVisible({ timeout: 5_000 });
 
     // Switch back to Open
-    await page.getByTestId('loops-tab-open').click();
+    await page.getByTestId('loops-list').getByTestId('loops-tab-open').click();
     await expect(page.getByTestId('loops-list')).toBeVisible({ timeout: 5_000 });
   });
 
@@ -576,7 +590,7 @@ test.describe('Core loop — mock backend', () => {
     await signIn(page);
 
     // Navigate to Settings tab
-    await page.click('text=Settings');
+    await openSettings(page);
     await expect(page.getByTestId('settings-screen')).toBeVisible({ timeout: 8_000 });
 
     // Tap Notifications row
@@ -597,36 +611,34 @@ test.describe('Core loop — mock backend', () => {
   test('notification preferences: toggling DND disables other toggles', async ({ page }) => {
     await signIn(page);
 
-    await page.click('text=Settings');
+    await openSettings(page);
     await expect(page.getByTestId('settings-screen')).toBeVisible({ timeout: 8_000 });
     await page.getByTestId('settings-notifications').click();
 
     await expect(page.getByTestId('notifications-settings-screen')).toBeVisible({ timeout: 8_000 });
 
-    // DND toggle is initially on (notification_enabled=true from mock)
-    // Tap it to turn off
+    const saved = page.waitForRequest((request) =>
+      new URL(request.url()).pathname === '/preferences' && request.method() === 'PUT');
     await page.getByTestId('notif-toggle-enabled').click();
-
-    // Save button is present (the route mock will accept PUT)
-    await expect(page.getByTestId('notifications-settings-save')).toBeVisible();
+    const payload = (await saved).postDataJSON();
+    expect(payload.notification_enabled).toBe(false);
+    await expect(page.getByTestId('notif-toggle-messages')).toHaveAttribute('aria-disabled', 'true');
+    await expect(page.getByTestId('notifications-autosave-status')).toHaveText('Changes save automatically.');
   });
 
-  // 9. Smart card tray — seeded card appears in chat
-  test('smart card tray shows seeded card in chat', async ({ page }) => {
+  // 9. Quick context — the seeded smart card surfaces above the transcript.
+  // This replaced the smart-card tray, which is no longer rendered.
+  test('quick context surfaces the seeded smart card in chat', async ({ page }) => {
+    await withoutOpenLoops(page);
     await signIn(page);
 
-    await expect(
-      page.locator('[data-testid^="message-card-"]').first()
-    ).toBeVisible({ timeout: 8_000 });
-    await page.locator('[data-testid^="message-card-"]').first().click();
-
+    await page.getByTestId('message-card-msg-wa-1').click();
     await expect(page.getByTestId('chat-screen')).toBeVisible({ timeout: 10_000 });
 
-    // Smart card tray should appear (seeded card has dismissed=false)
-    await expect(page.getByTestId('smart-card-tray')).toBeVisible({ timeout: 8_000 });
-
-    // The seeded card itself should render
-    await expect(page.getByTestId('smart-card-card-1')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId('chat-quick-context')).toContainText(
+      'Alice mentioned a Friday deadline',
+      { timeout: 8_000 }
+    );
   });
 
   // 10. Loop badge — tab badge count matches open fixtures (#19)
@@ -657,123 +669,92 @@ test.describe('Core loop — mock backend', () => {
 
     // The message card for Alice (WA) is id=msg-wa-1 — the loop badge should appear on it.
     await expect(
-      page.getByTestId('message-card-loop-badge-msg-wa-1')
+      page.getByTestId('message-card-msg-wa-1').getByLabel('Open loop in this conversation')
     ).toBeVisible({ timeout: 8_000 });
 
     // Bob (TG) has no loop — his card should NOT have a loop badge.
+    await expect(page.getByTestId('message-card-msg-tg-1')).toBeVisible();
     await expect(
-      page.getByTestId('message-card-loop-badge-msg-tg-1')
-    ).not.toBeVisible();
+      page.getByTestId('message-card-msg-tg-1').getByLabel('Open loop in this conversation')
+    ).toHaveCount(0);
   });
 
-  // 11. Contact clarification card — appears in chat and answer persists to profile
-  test('contact clarification card appears and answer persists to profile', async ({ page }) => {
+  // 11. Quick context — a chat with no stored relationship context offers to set
+  // one up, and conversation settings persists it to the profile. This replaced
+  // the contact clarification card, which is no longer rendered.
+  test('quick context offers to set up relationship context, which saves to the profile', async ({ page }) => {
+    await withoutOpenLoops(page);
     await signIn(page);
 
-    await expect(
-      page.locator('[data-testid^="message-card-"]').first()
-    ).toBeVisible({ timeout: 8_000 });
-    await page.locator('[data-testid^="message-card-"]').first().click();
-
+    // Bob has no smart card and no stored profile, so the strip asks for context.
+    await page.getByTestId('message-card-msg-tg-1').click();
     await expect(page.getByTestId('chat-screen')).toBeVisible({ timeout: 10_000 });
-
-    // Clarification card should appear (no profile set in mock)
-    await expect(page.getByTestId('contact-clarification-card')).toBeVisible({ timeout: 8_000 });
-
-    // The prompt should mention the contact name
-    await expect(page.getByTestId('contact-clarification-prompt')).toBeVisible();
-
-    // Intercept the upsert request to verify relationship_context is sent
-    const profileUpsertPromise = page.waitForRequest(
-      (req) => req.url().includes('/contact_profiles') && req.method() === 'POST',
-      { timeout: 5_000 }
+    await expect(page.getByTestId('chat-quick-context')).toContainText(
+      'Add relationship context',
+      { timeout: 8_000 }
     );
 
-    // Tap "Colleague" option
-    await page.getByTestId('contact-clarification-option-colleague').click();
+    await page.getByTestId('ask-claire-button').click();
+    await expect(page.getByTestId('conversation-ai-settings')).toBeVisible({ timeout: 8_000 });
 
-    // Verify the upsert was fired with the right payload
-    const profileReq = await profileUpsertPromise;
-    const body = JSON.parse(profileReq.postData() || '{}');
-    expect(body.relationship_context).toBe('colleague');
+    const profileUpsert = page.waitForRequest(
+      (request) => request.url().includes('/contact_profiles') && request.method() === 'POST',
+      { timeout: 8_000 }
+    );
+    await page.getByPlaceholder('Add useful context about this person').fill('colleague');
+    await page.getByRole('button', { name: 'Save' }).click();
 
-    // Card should disappear after selection (optimistic dismiss)
-    await expect(page.getByTestId('contact-clarification-card')).not.toBeVisible({ timeout: 5_000 });
+    const body = JSON.parse((await profileUpsert).postData() || '{}');
+    expect((Array.isArray(body) ? body[0] : body).relationship_context).toBe('colleague');
   });
 
-  // 11b. Contact clarification card — dismiss hides the card
-  test('contact clarification card can be dismissed', async ({ page }) => {
+  // 9b. Quick context — dismissing the card marks it dismissed and drops its text
+  test('dismissing quick context marks the smart card dismissed', async ({ page }) => {
+    await withoutOpenLoops(page);
     await signIn(page);
 
-    await expect(
-      page.locator('[data-testid^="message-card-"]').first()
-    ).toBeVisible({ timeout: 8_000 });
-    await page.locator('[data-testid^="message-card-"]').first().click();
+    await page.getByTestId('message-card-msg-wa-1').click();
+    await expect(page.getByTestId('chat-quick-context')).toContainText(
+      'Alice mentioned a Friday deadline',
+      { timeout: 8_000 }
+    );
 
-    await expect(page.getByTestId('chat-screen')).toBeVisible({ timeout: 10_000 });
+    const dismissRequest = page.waitForRequest(
+      (request) => request.url().includes('/smart_cards') && request.method() === 'PATCH',
+      { timeout: 8_000 }
+    );
+    await page.getByLabel('Dismiss quick context').click();
 
-    // Clarification card should appear
-    await expect(page.getByTestId('contact-clarification-card')).toBeVisible({ timeout: 8_000 });
-
-    // Dismiss it
-    await page.getByTestId('contact-clarification-dismiss').click();
-
-    // Card should be gone
-    await expect(page.getByTestId('contact-clarification-card')).not.toBeVisible({ timeout: 5_000 });
+    const request = await dismissRequest;
+    expect(JSON.parse(request.postData() || '{}').dismissed).toBe(true);
+    await expect(page.getByTestId('chat-quick-context')).toHaveCount(0);
   });
 
-  // 9b. Smart card tray — dismissing a card removes it
-  test('dismissing a smart card removes it from the tray', async ({ page }) => {
+  test('Home renders current conversation summaries from the inbox feed', async ({ page }) => {
     await signIn(page);
-
-    await expect(
-      page.locator('[data-testid^="message-card-"]').first()
-    ).toBeVisible({ timeout: 8_000 });
-    await page.locator('[data-testid^="message-card-"]').first().click();
-
-    await expect(page.getByTestId('chat-screen')).toBeVisible({ timeout: 10_000 });
-
-    // Wait for the smart card to appear
-    await expect(page.getByTestId('smart-card-card-1')).toBeVisible({ timeout: 8_000 });
-
-    // Tap the dismiss button
-    await page.getByTestId('smart-card-dismiss-card-1').click();
-
-    // Card should be removed from the tray (optimistic update)
-    await expect(page.getByTestId('smart-card-card-1')).not.toBeVisible({ timeout: 5_000 });
-
-    // Tray itself should also disappear when no cards remain
-    await expect(page.getByTestId('smart-card-tray')).not.toBeVisible({ timeout: 3_000 });
+    await page.goto('/dashboard');
+    const home = page.getByTestId('home-screen');
+    await expect(home).toBeVisible();
+    await expect(home.getByText('Recent conversations')).toBeVisible();
+    await expect(home.getByText(MOCK_INBOX_MESSAGES[1].content, { exact: true })).toBeVisible();
+    await expect(home.getByText('Telegram · Bob (TG)', { exact: true })).toBeVisible();
+    await expect(home.getByTestId('follow-up-status-card')).toHaveCount(0);
   });
 
-  // 12. Morning Brief — brief text renders from fixture endpoint (#32)
-  test('morning brief renders from /ai/morning-brief fixture', async ({ page }) => {
+  test('Home explains when automatic follow-up tracking is paused', async ({ page }) => {
+    await page.route('**/loops/health', (route) => route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({ success: true, data: {
+        detectionMode: 'off', shadow: false, notificationsEnabled: true,
+        enabledDevices: 1, dirtyChats: 0, oldestDirtyAt: null,
+        preferences: { detectionEnabled: true, aiEnabled: true, notificationsEnabled: true, notifyLoops: true },
+      } }),
+    }));
     await signIn(page);
-
-    // Morning brief container should appear (fed by the mocked /ai/morning-brief endpoint)
-    await expect(page.getByTestId('morning-brief-container')).toBeVisible({ timeout: 10_000 });
-
-    // The fixture brief text should be visible
-    await expect(
-      page.getByText('2 messages need your attention')
-    ).toBeVisible({ timeout: 8_000 });
+    await page.goto('/dashboard');
+    await expect(page.getByTestId('follow-up-status-card')).toContainText('Claire’s automatic follow-up processing is paused.');
   });
 
-  // 12b. Urgent card — renders from morning brief fixture (#32)
-  test('urgent card renders for the fixture urgent message', async ({ page }) => {
-    await signIn(page);
-
-    // The urgent cards container should be visible
-    await expect(page.getByTestId('urgent-cards-container')).toBeVisible({ timeout: 10_000 });
-
-    // Alice (WA) urgent card should be rendered (first urgent message in fixture)
-    // Scope within the container to avoid ambiguity with inbox card rows
-    await expect(
-      page.getByTestId('urgent-cards-container').getByText('Alice (WA)')
-    ).toBeVisible({ timeout: 8_000 });
-  });
-
-  // 13. Media in — incoming image fixture renders in chat (#35)
   test('incoming image message renders in chat', async ({ page }) => {
     await signIn(page);
 
@@ -786,7 +767,7 @@ test.describe('Core loop — mock backend', () => {
     await expect(page.getByTestId('chat-message-list')).toBeVisible({ timeout: 8_000 });
 
     // The image fixture message should render (testID added in this ticket)
-    const image = page.getByTestId('media-image-img-chatmsg-img').locator('img');
+    const image = page.getByRole('img', { name: 'Message attachment', exact: true });
     await expect(image).toBeVisible({ timeout: 8_000 });
     await expect(image).toHaveJSProperty('naturalWidth', 1);
   });
@@ -806,9 +787,10 @@ test.describe('Core loop — mock backend', () => {
     // Audio fixture
     await expect(page.getByTestId('media-audio-chatmsg-audio')).toBeVisible({ timeout: 8_000 });
     // Video fixture
-    await expect(page.getByTestId('media-video-chatmsg-video')).toBeVisible({ timeout: 8_000 });
+    // Until tapped, a video renders its poster with a play button (MediaVideoSurface).
+    await expect(page.getByRole('button', { name: 'Play video full screen', exact: true })).toBeVisible({ timeout: 8_000 });
     // Document fixture
-    await expect(page.getByTestId('media-document-chatmsg-doc')).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByRole('button', { name: 'Open report.pdf', exact: true })).toBeVisible({ timeout: 8_000 });
   });
 
   // 13c. Media send path — send button dispatches to platform API (#35)
@@ -842,7 +824,9 @@ test.describe('Core loop — mock backend', () => {
 
     // Input should be cleared after send
     await expect(page.getByTestId('chat-input')).toHaveValue('', { timeout: 5_000 });
-    await expect(page.getByText('Test media send path')).toBeVisible({ timeout: 5_000 });
+    await expect(
+      page.getByTestId('chat-message-list').getByText('Test media send path')
+    ).toBeVisible({ timeout: 5_000 });
   });
 
   // 14. Snooze — long-pressing a message card opens the snooze modal (#38)
@@ -854,8 +838,7 @@ test.describe('Core loop — mock backend', () => {
       page.locator('[data-testid^="message-card-"]').first()
     ).toBeVisible({ timeout: 8_000 });
 
-    // Long-press to trigger onLongPress (Playwright click with delay triggers long-press)
-    await page.locator('[data-testid^="message-card-"]').first().click({ delay: 600 });
+    await longPressInboxCard(page, page.locator('[data-testid^="message-card-"]').first());
 
     // Snooze modal should appear
     await expect(page.getByTestId('snooze-modal-overlay')).toBeVisible({ timeout: 5_000 });
@@ -879,7 +862,7 @@ test.describe('Core loop — mock backend', () => {
     const firstCardTestId = await firstCard.getAttribute('data-testid');
 
     // Long-press to open snooze modal
-    await firstCard.click({ delay: 600 });
+    await longPressInboxCard(page, firstCard);
     await expect(page.getByTestId('snooze-modal-overlay')).toBeVisible({ timeout: 5_000 });
 
     // Tap "Later today (3 hours)" option
@@ -907,7 +890,7 @@ test.describe('Core loop — mock backend', () => {
     const firstCardTestId = await firstCard.getAttribute('data-testid');
 
     // Long-press to open snooze modal
-    await firstCard.click({ delay: 600 });
+    await longPressInboxCard(page, firstCard);
     await expect(page.getByTestId('snooze-modal-overlay')).toBeVisible({ timeout: 5_000 });
 
     // Tap Cancel
@@ -924,10 +907,17 @@ test.describe('Core loop — mock backend', () => {
 
   // 15. Group-chat summary — banner renders and shows summary text after expand (#41)
   test('group chat summary banner renders and shows summary on expand', async ({ page }) => {
-    // Override the messages endpoint to return a group message as the first inbox entry
+    // Put the group conversation at the top of the inbox, and serve its chat
+    // with group AI enabled — GroupChatSummary only renders when it is.
     await page.route('**/rest/v1/**', async (route) => {
       const url = route.request().url();
-      if (url.includes('/messages')) {
+      if (url.includes('/conversation_feed')) {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify([toConversationFeedRow(MOCK_GROUP_INBOX_MESSAGE), ...MOCK_CONVERSATION_FEED]),
+        });
+      } else if (url.includes('/messages')) {
         if (url.includes('chat_id=eq.')) {
           await route.fulfill({
             status: 200,
@@ -962,14 +952,18 @@ test.describe('Core loop — mock backend', () => {
             platform: 'whatsapp',
             platform_chat_id: MOCK_GROUP_CHAT_ID,
             name: 'Friday Crew',
+            is_group: true,
+            ai_enabled: true,
           }),
         });
       } else {
-        await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+        await route.fallback();
       }
     });
 
     await signIn(page);
+    // The inbox opens on DMs; group conversations are under Groups.
+    await page.getByTestId('inbox-filter-groups').click();
 
     // First message card should be the group chat
     await expect(
@@ -1027,18 +1021,11 @@ const MOCK_TG_SESSION_CONNECTED = {
   user_id: MOCK_USER_ID,
   platform: 'telegram',
   status: 'connected',
-  platform_user_id: '+15550001234',
+  platform_user_id: '+14155552671',
   created_at: new Date().toISOString(),
 };
 
-const MOCK_IG_SESSION_CONNECTED = {
-  id: 'ig-session-1',
-  user_id: MOCK_USER_ID,
-  platform: 'instagram',
-  status: 'connected',
-  platform_user_id: 'ig_test_user',
-  created_at: new Date().toISOString(),
-};
+
 
 /**
  * Sets up platform connect-flow mocks on top of existing mockBackend routes.
@@ -1132,11 +1119,16 @@ async function mockConnectFlow(page, platformOverrides = {}) {
       return;
     }
 
-    // Default: all other platform status checks → return connected sessions
+    // Default: a platform's status check returns only that platform's sessions.
+    // Returning the whole fixture made every platform report the connected
+    // WhatsApp session, since getAllSessions() aggregates across platforms.
+    const requested = url.match(/\/platforms\/([^/?]+)\//)?.[1];
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ sessions: MOCK_PLATFORM_SESSIONS }),
+      body: JSON.stringify({
+        sessions: MOCK_PLATFORM_SESSIONS.filter((session) => !requested || session.platform === requested),
+      }),
     });
   });
 }
@@ -1193,12 +1185,13 @@ test.describe('Platform connect flows — mock backend', () => {
     await page.getByRole('button', { name: 'Get link code' }).click();
     await expect(page.getByTestId('connection-phone-error')).toBeVisible();
 
-    await page.getByTestId('connection-phone-input').fill('+15550001234');
+    await page.getByTestId('connection-phone-input').fill('+14155552671');
     await page.getByRole('button', { name: 'Get link code' }).click();
     await expect(page.getByTestId('whatsapp-pairing-code')).toHaveText('ABCD EFGH');
     await expect(page.getByText(/Link with phone number instead/).first()).toBeVisible();
     await page.getByTestId('whatsapp-copy-code').click();
-    await expect(page.getByText('Copied')).toBeVisible();
+    // The button's own label confirms the copy; the screen also announces it.
+    await expect(page.getByTestId('whatsapp-copy-code')).toHaveText('Copied');
   });
 
   // TG-1. Telegram connect: phone step renders
@@ -1218,30 +1211,10 @@ test.describe('Platform connect flows — mock backend', () => {
 
   // TG-2. Telegram connect: phone → code → connected
   test('Telegram connect flow — phone to code to connected', async ({ page }) => {
-    // Track whether verify has been called, so status stays awaiting_auth until then
-    let verifyDone = false;
-
-    // Override telegram/status to stay in awaiting_auth until verify fires
-    await page.route('**/telegram/status**', async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          sessions: [verifyDone ? MOCK_TG_SESSION_CONNECTED : MOCK_TG_SESSION_CONNECTING],
-        }),
-      });
-    });
-
-    // Override telegram/verify to mark done and return connected
-    await page.route('**/telegram/verify**', async (route) => {
-      verifyDone = true;
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ success: true, session: MOCK_TG_SESSION_CONNECTED }),
-      });
-    });
-
+    // mockConnectFlow's status handler walks disconnected → awaiting code →
+    // connected as the flow calls connect and verify. Reporting awaiting_auth
+    // from the very first status check instead makes the screen resume that
+    // login at the code step, skipping the phone step this test starts on.
     await page.goto('/login');
     await expect(page.getByTestId('platform-login-screen')).toBeVisible();
 
@@ -1251,7 +1224,7 @@ test.describe('Platform connect flows — mock backend', () => {
     await expect(page.getByText('Enter your Telegram number')).toBeVisible({ timeout: 5_000 });
 
     // Enter phone number and tap Send Code
-    await page.getByTestId('connection-phone-input').fill('+15550001234');
+    await page.getByTestId('connection-phone-input').fill('+14155552671');
     await page.getByRole('button', { name: 'Send verification code' }).click();
 
     // Code entry step should appear (mock returns awaiting_auth with authData)
@@ -1321,7 +1294,7 @@ test.describe('Platform connect flows — mock backend', () => {
     });
 
     await signIn(page);
-    await page.click('text=Settings');
+    await openSettings(page);
     await expect(page.getByTestId('settings-screen')).toBeVisible({ timeout: 8_000 });
 
     await page.getByTestId('settings-connections').click();
@@ -1358,7 +1331,7 @@ test.describe('Platform connect flows — mock backend', () => {
     await signIn(page);
 
     // Navigate to Settings tab
-    await page.click('text=Settings');
+    await openSettings(page);
     await expect(page.getByTestId('settings-screen')).toBeVisible({ timeout: 8_000 });
 
     // Tap Auto-Reply Rules entry
@@ -1405,7 +1378,7 @@ test.describe('Platform connect flows — mock backend', () => {
     });
 
     await signIn(page);
-    await page.click('text=Settings');
+    await openSettings(page);
     await expect(page.getByTestId('settings-screen')).toBeVisible({ timeout: 8_000 });
     await page.getByTestId('settings-auto-reply').click();
     await expect(page.getByTestId('auto-reply-settings-screen')).toBeVisible({ timeout: 10_000 });
@@ -1463,7 +1436,7 @@ test.describe('Platform connect flows — mock backend', () => {
     });
 
     await signIn(page);
-    await page.click('text=Settings');
+    await openSettings(page);
     await expect(page.getByTestId('settings-screen')).toBeVisible({ timeout: 8_000 });
     await page.getByTestId('settings-auto-reply').click();
     await expect(page.getByTestId('auto-reply-settings-screen')).toBeVisible({ timeout: 10_000 });

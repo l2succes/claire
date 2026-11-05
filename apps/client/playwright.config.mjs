@@ -2,6 +2,8 @@ import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
   testDir: './e2e',
+  fullyParallel: true,
+  workers: 2,
   timeout: 30_000,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? 'github' : 'list',
@@ -26,11 +28,12 @@ export default defineConfig({
   webServer: process.env.PLAYWRIGHT_BASE_URL
     ? undefined
     : {
-        command: 'MOCK_BRIDGE=true bunx expo start --web --non-interactive',
+        command: 'bunx expo start --web',
         port: 8081,
         reuseExistingServer: true,
         timeout: 120_000,
         env: {
+          CI: '1',
           MOCK_BRIDGE: 'true',
           EXPO_PUBLIC_SUPABASE_URL: 'http://localhost:54321',
           EXPO_PUBLIC_SUPABASE_ANON_KEY: 'mock-anon-key',

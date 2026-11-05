@@ -7,7 +7,7 @@ export const meta: DocMeta = {
   description: 'Stable test identifiers for Claire’s browser and mobile acceptance flows.',
   section: 'build-claire',
   status: 'current',
-  lastReviewed: '2026-08-17',
+  lastReviewed: '2026-11-05',
   order: 6,
   roadmap: {
     status: 'in_progress',
@@ -31,6 +31,12 @@ export default function Page() {
         <C>data-testid</C> attributes, and <C>page.getByTestId(id)</C> maps to{' '}
         <C>[data-testid=&quot;id&quot;]</C>.
       </Callout>
+      <P>
+        The mock suites share <C>apps/client/e2e/helpers/mock-backend.mjs</C>. They exercise the
+        browser shell with synthetic API responses; they do not establish iOS, Electron cache,
+        physical notification, or real bridge acceptance. Use a dedicated Expo server when
+        diagnosing tests so another run cannot shut down the server underneath them.
+      </P>
 
       <Section id="auth" title="Auth screens">
         <Section id="sign-in" title="Sign in — /(auth)/signin" level={3}>
@@ -109,12 +115,17 @@ export default function Page() {
               [<C key="b">contacts-search-input</C>, 'Search TextInput'],
               [<C key="c">contacts-list</C>, 'Contacts FlatList'],
               [<C key="d">contacts-empty</C>, 'Empty state'],
+              [<C key="e">people-row-&lt;id&gt;</C>, 'Desktop People list row, distinct from the detail pane'],
             ]}
           />
         </Section>
 
         <Section id="loops" title="Loops — /(tabs)/loops" level={3}>
           <P>Verified against <C>apps/client/features/loops/loops-screen.tsx</C>.</P>
+          <P>
+            Scope filter selectors to <C>loops-list</C>. The pinned filter copy remains mounted
+            alongside the list header, so an unscoped selector can match two controls.
+          </P>
           <Table
             head={['Selector', 'Element']}
             rows={[
@@ -149,6 +160,20 @@ export default function Page() {
               [<C key="m">disconnect-platform-&lt;platform&gt;</C>, 'Disconnect button'],
             ]}
           />
+        </Section>
+        <Section id="notification-preferences" title="Notification preferences — /settings/notifications" level={3}>
+          <Table
+            head={['Selector', 'Element']}
+            rows={[
+              [<C key="a">notifications-settings-screen</C>, 'Preferences screen'],
+              [<C key="b">notif-toggle-enabled</C>, 'Master notification switch'],
+              [<C key="c">notif-toggle-messages</C>, 'Incoming-message switch'],
+              [<C key="d">notif-toggle-loops</C>, 'Loop notification switch'],
+              [<C key="e">notif-toggle-ai-suggestions</C>, 'AI suggestion switch'],
+              [<C key="f">notifications-autosave-status</C>, 'Autosave progress or failure; no manual Save button'],
+            ]}
+          />
+          <P>Assert the <C>PUT /preferences</C> payload as well as the displayed save status.</P>
         </Section>
       </Section>
 

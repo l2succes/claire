@@ -87,27 +87,31 @@ export const MOCK_INBOX_MESSAGES = [
 // One row per conversation, mirroring the `conversation_feed` view used by
 // the inbox and home screens. Keep this derived from the message fixtures so
 // a fixture edit cannot make the two representations drift apart.
-export const MOCK_CONVERSATION_FEED = MOCK_INBOX_MESSAGES.map((message) => ({
-  chat_id: message.chat_id,
-  platform: message.platform,
-  chat_name: message.chats?.name || message.contact_name,
-  contact_name: message.contact_name,
-  contact_inferred_name: null,
-  contact_avatar_url: null,
-  contact_phone: message.contact_phone,
-  is_group: message.is_group,
-  unread_count: message.from_me ? 0 : 1,
-  is_pinned: false,
-  last_message_id: message.id,
-  last_message_content: message.content,
-  last_message_from_me: message.from_me,
-  last_message_status: message.status,
-  last_message_content_type: 'text',
-  last_message_sender_name: message.contact_name,
-  last_message_has_ai_response: message.ai_suggestions.length > 0,
-  last_message_snoozed_until: null,
-  last_activity_at: message.timestamp,
-}));
+export function toConversationFeedRow(message) {
+  return {
+    chat_id: message.chat_id,
+    platform: message.platform,
+    chat_name: message.chats?.name || message.contact_name,
+    contact_name: message.contact_name,
+    contact_inferred_name: null,
+    contact_avatar_url: null,
+    contact_phone: message.contact_phone,
+    is_group: message.is_group,
+    unread_count: message.from_me ? 0 : 1,
+    is_pinned: false,
+    last_message_id: message.id,
+    last_message_content: message.content,
+    last_message_from_me: message.from_me,
+    last_message_status: message.status,
+    last_message_content_type: 'text',
+    last_message_sender_name: message.contact_name,
+    last_message_has_ai_response: message.ai_suggestions.length > 0,
+    last_message_snoozed_until: null,
+    last_activity_at: message.timestamp,
+  };
+}
+
+export const MOCK_CONVERSATION_FEED = MOCK_INBOX_MESSAGES.map(toConversationFeedRow);
 
 export const MOCK_CHAT_MESSAGES = [
   {
@@ -429,6 +433,18 @@ export const MOCK_GROUP_SUMMARY_RESP = {
 // ---------------------------------------------------------------------------
 
 export async function mockBackend(page) {
+  // LogBox's development-only toast overlaps the floating tab bar. Hide only
+  // that toast, keeping the full error overlay available for real app failures.
+  // Init scripts run before documentElement exists, so observe the document
+  // instead of appending a stylesheet before the DOM has been created.
+  await page.addInitScript(() => {
+    const hideToast = () => {
+      document.getElementById('error-toast')?.style.setProperty('display', 'none', 'important');
+    };
+    new MutationObserver(hideToast).observe(document, { childList: true, subtree: true });
+    hideToast();
+  });
+
   // Supabase passwordless email sign-in: requesting a code has no session;
   // verifying it creates the same session returned by password auth.
   await page.route('**/auth/v1/otp**', async (route) => {
@@ -527,10 +543,22 @@ export async function mockBackend(page) {
           body: '',
         });
       } else {
+        // Mirror LOOP_SELECT (features/loops/loops-screen.tsx): rows carry their
+        // joined contact and chat, which the loop row names itself from. The
+        // chat screen asks for one conversation's open loop with `chat_id=eq.`,
+        // so honour that filter — otherwise every chat appears to have a loop.
+        const chatId = decodeURIComponent(url).match(/[?&]chat_id=eq\.([^&]+)/)?.[1];
+        const rows = MOCK_LOOPS
+          .filter((loop) => !chatId || loop.chat_id === chatId)
+          .map((loop) => ({
+            ...loop,
+            contact: MOCK_LOOP_SOURCE_MESSAGES[0].contact,
+            chat: MOCK_LOOP_SOURCE_MESSAGES[0].chat,
+          }));
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
-          body: JSON.stringify(MOCK_LOOPS),
+          body: JSON.stringify(rows),
         });
       }
     } else if (url.includes('/chats')) {
@@ -558,10 +586,12 @@ export async function mockBackend(page) {
           body: JSON.stringify([]),
         });
       } else {
+        // Cards belong to one conversation; honour the chat screen's filter.
+        const chatId = decodeURIComponent(url).match(/[?&]chat_id=eq\.([^&]+)/)?.[1];
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
-          body: JSON.stringify(MOCK_SMART_CARDS),
+          body: JSON.stringify(MOCK_SMART_CARDS.filter((card) => !chatId || card.chat_id === chatId)),
         });
       }
     } else if (url.includes('/chat_categories')) {
@@ -620,8 +650,24 @@ export async function mockBackend(page) {
 
   // Bun server API: platform status endpoints.
   // getAllSessions() calls /platforms/<platform>/status for each platform.
-  await page.route('**/platforms/**', async (route) => {
+  await page.route(/\/platforms(?:\/|\?|$)/, async (route) => {
     const url = route.request().url();
+    if (new URL(url).pathname === '/platforms') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: true, platforms: ['whatsapp', 'telegram', 'instagram'].map((platform) => ({
+          platform, enabled: true, authMethod: platform === 'telegram' ? 'phone_number' : 'qr_code',
+          capabilities: {
+            canSendText: true, canSendMedia: true, canSendVoice: true,
+            canSendStickers: true, canSendReactions: true, canReplyToMessages: true,
+            canReadReceipts: true, canDeleteMessages: true, canEditMessages: false,
+            supportsGroups: true, supportsBroadcasts: false,
+          },
+        })) }),
+      });
+      return;
+    }
     if (route.request().method() === 'POST' && url.includes('/send')) {
       const body = JSON.parse(route.request().postData() || '{}');
       await route.fulfill({
@@ -675,7 +721,6 @@ export async function mockBackend(page) {
 
   // Bun server API: snooze message
   await page.route('**/messages/*/snooze**', async (route) => {
-    const method = route.request().method();
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -817,30 +862,55 @@ export async function mockBackend(page) {
       await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ success: true, data: assistantThread }) });
     } else if (path.endsWith(`/threads/${assistantThread.id}`) && method === 'GET') {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data: { thread: assistantThread, turns: assistantTurns } }) });
-    } else if (path.endsWith(`/threads/${assistantThread.id}/messages`) && method === 'POST') {
-      assistantScope = JSON.parse(route.request().postData() || '{}').chatIds || [];
-      assistantTurns = [
-        { id: 'assistant-user-1', role: 'user', content: 'Where did I mention meeting Alice?', citations: [], scope_chat_ids: assistantScope, created_at: new Date().toISOString() },
-        { id: 'assistant-answer-1', role: 'assistant', content: 'You discussed meeting Alice after the report is sent.', citations: [], scope_chat_ids: assistantScope, created_at: new Date().toISOString() },
+    } else if (path.endsWith('/messages') && method === 'POST') {
+      // Ask Claire streams its answer: the screen posts `stream: true` with
+      // `Accept: text/event-stream` and reads AI SDK UI-stream events
+      // (services/conversationAssistant.ts). A plain JSON body leaves it waiting
+      // on a result chunk that never arrives, so answer in that protocol.
+      const payload = JSON.parse(route.request().postData() || '{}');
+      assistantScope = payload.chatIds || [];
+      const now = new Date().toISOString();
+      const answer = assistantScope.includes('mock-chat-wa-alice')
+        ? 'Scoped Alice answer.'
+        : 'You discussed meeting Alice after the report is sent.';
+      const citations = [
+        { messageId: 'chatmsg-1', chatId: 'mock-chat-wa-alice', excerpt: "Hi! I'll send you the report by Friday", senderName: 'Alice (WA)', fromMe: false, timestamp: now, platform: 'whatsapp', chatName: 'Alice (WA)', isGroup: false, isPreferredScope: assistantScope.includes('mock-chat-wa-alice') },
+        { messageId: 'chatmsg-2', chatId: 'mock-chat-wa-alice', excerpt: 'Thanks for letting me know', senderName: 'You', fromMe: true, timestamp: now, platform: 'whatsapp', chatName: 'Alice (WA)', isGroup: false },
+        { messageId: 'chatmsg-img', chatId: 'mock-chat-wa-alice', excerpt: 'Check out this photo', senderName: 'Alice (WA)', fromMe: false, timestamp: now, platform: 'whatsapp', chatName: 'Alice (WA)', isGroup: false },
+        { messageId: 'chatmsg-audio', chatId: 'mock-chat-wa-alice', excerpt: 'Voice message', senderName: 'Alice (WA)', fromMe: false, timestamp: now, platform: 'whatsapp', chatName: 'Alice (WA)', isGroup: false },
+        { messageId: 'chatmsg-video', chatId: 'mock-chat-wa-alice', excerpt: 'Short clip', senderName: 'Alice (WA)', fromMe: false, timestamp: now, platform: 'whatsapp', chatName: 'Alice (WA)', isGroup: false },
       ];
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          success: true,
-          data: {
-            answer: assistantScope.includes('mock-chat-wa-alice') ? 'Scoped Alice answer.' : 'You discussed meeting Alice after the report is sent.',
-            citations: [
-              { messageId: 'chatmsg-1', chatId: 'mock-chat-wa-alice', excerpt: "Hi! I'll send you the report by Friday", senderName: 'Alice (WA)', fromMe: false, timestamp: new Date().toISOString(), platform: 'whatsapp', chatName: 'Alice (WA)', isGroup: false, isPreferredScope: assistantScope.includes('mock-chat-wa-alice') },
-              { messageId: 'chatmsg-2', chatId: 'mock-chat-wa-alice', excerpt: 'Thanks for letting me know', senderName: 'You', fromMe: true, timestamp: new Date().toISOString(), platform: 'whatsapp', chatName: 'Alice (WA)', isGroup: false },
-              { messageId: 'chatmsg-img', chatId: 'mock-chat-wa-alice', excerpt: 'Check out this photo', senderName: 'Alice (WA)', fromMe: false, timestamp: new Date().toISOString(), platform: 'whatsapp', chatName: 'Alice (WA)', isGroup: false },
-              { messageId: 'chatmsg-audio', chatId: 'mock-chat-wa-alice', excerpt: 'Voice message', senderName: 'Alice (WA)', fromMe: false, timestamp: new Date().toISOString(), platform: 'whatsapp', chatName: 'Alice (WA)', isGroup: false },
-              { messageId: 'chatmsg-video', chatId: 'mock-chat-wa-alice', excerpt: 'Short clip', senderName: 'Alice (WA)', fromMe: false, timestamp: new Date().toISOString(), platform: 'whatsapp', chatName: 'Alice (WA)', isGroup: false },
-            ],
-            indexing: { status: 'ready', indexedCount: 4, totalCount: 4, lastIndexedAt: new Date().toISOString(), lastError: null },
-          },
-        }),
-      });
+      assistantTurns = [
+        { id: 'assistant-user-1', role: 'user', content: payload.question || 'Where did I mention meeting Alice?', citations: [], scope_chat_ids: assistantScope, created_at: now },
+        { id: 'assistant-answer-1', role: 'assistant', content: answer, citations, scope_chat_ids: assistantScope, status: 'completed', created_at: now },
+      ];
+      const data = {
+        answer,
+        citations,
+        actions: [],
+        indexing: { status: 'ready', indexedCount: 4, totalCount: 4, lastIndexedAt: now, lastError: null },
+        requestId: payload.requestId || 'mock-request-1',
+        assistantTurn: assistantTurns[1],
+        thread: assistantThread,
+      };
+      if (payload.stream) {
+        const events = [
+          { type: 'data-claire-status', data: { phase: 'reading' } },
+          { type: 'text-delta', delta: answer },
+          { type: 'data-claire-result', data },
+        ];
+        await route.fulfill({
+          status: 200,
+          headers: { 'content-type': 'text/event-stream; charset=utf-8', 'cache-control': 'no-cache' },
+          body: `${events.map((event) => `data: ${JSON.stringify(event)}`).join('\n\n')}\n\ndata: [DONE]\n\n`,
+        });
+      } else {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ success: true, data }),
+        });
+      }
     } else if (path.endsWith(`/threads/${assistantThread.id}`) && method === 'DELETE') {
       assistantThreads = [];
       assistantTurns = [];
@@ -883,7 +953,18 @@ export async function mockBackend(page) {
     const snoozeMatch = path.match(/\/loops\/([^/]+)\/snooze$/);
     const eventsMatch = path.match(/\/loops\/([^/]+)\/events$/);
 
-    if (path.endsWith('/loops') && method === 'GET') {
+    if (path.endsWith('/loops/health') && method === 'GET') {
+      await json({
+        detectionMode: 'queue', shadow: false, notificationsEnabled: true,
+        enabledDevices: 1, dirtyChats: 0, oldestDirtyAt: null,
+        preferences: { detectionEnabled: true, aiEnabled: true, notificationsEnabled: true, notifyLoops: true },
+      });
+    } else if (path.endsWith('/loops/attention') && method === 'GET') {
+      await json(mockLoops.filter((loop) => loop.status === 'open').map((loop) => ({
+        loop_id: loop.id, row_version: 1, reason: 'due', next_action: 'Review the report commitment',
+        due_at: new Date().toISOString(), loop,
+      })));
+    } else if (path.endsWith('/loops') && method === 'GET') {
       await json(mockLoops.map((loop) => ({ ...loop, ...MOCK_LOOP_SOURCE_MESSAGES[0] , id: loop.id, status: loop.status })));
     } else if (eventsMatch && method === 'GET') {
       await json(MOCK_LOOP_EVENTS);
@@ -970,8 +1051,23 @@ export async function signIn(page) {
 
   // `/dashboard` is the home / daily-brief screen; the inbox lives on
   // `/messages`. Every test below asserts against the inbox, so land there.
+  // The same route renders `InboxScreen` below the desktop breakpoint and
+  // `DesktopInboxWorkspace` at or above it (app/(tabs)/messages.tsx), so wait
+  // for whichever one this viewport should show.
   await page.goto('/messages');
-  await page.getByTestId('messages-screen').waitFor({ timeout: 15_000 });
+  await page
+    .getByTestId('messages-screen')
+    .or(page.getByTestId('desktop-inbox-workspace'))
+    .first()
+    .waitFor({ timeout: 15_000 });
+}
+
+// Settings is a destination in the More sheet, not a tab. Go through the sheet:
+// clicking `text=Settings` reaches the closed sheet's off-screen row, which
+// navigates but leaves the sheet's backdrop over the Settings screen.
+export async function openSettings(page) {
+  await page.getByTestId('tab-more').click();
+  await page.getByTestId('more-settings').click();
 }
 
 export async function openReplyOptions(page) {

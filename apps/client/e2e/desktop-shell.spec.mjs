@@ -37,7 +37,9 @@ test.describe('Claire desktop shell', () => {
     await signIn(page);
     await expect(page.getByTestId('desktop-navigation-rail')).toBeVisible();
     await page.getByTestId('desktop-nav-inbox').click();
-    await expect(page.getByTestId('desktop-inbox-workspace')).toBeVisible();
+    // Navigating keeps the previous screen mounted but hidden, and it renders
+    // its own workspace, so assert on the one that is showing.
+    await expect(page.getByTestId('desktop-inbox-workspace').filter({ visible: true })).toBeVisible();
     await expect(page.getByTestId('desktop-inspector-pane')).toHaveCount(0);
   });
 
@@ -54,13 +56,17 @@ test.describe('Claire desktop shell', () => {
     await page.getByTestId('desktop-nav-inbox').click();
     await expect(page.getByTestId('desktop-inspector-pane')).toHaveCount(0);
     await page.setViewportSize(EXPANDED);
-    await expect(page.getByTestId('desktop-inspector-pane')).toBeVisible();
+    await expect(page.getByTestId('desktop-inspector-pane').filter({ visible: true })).toBeVisible();
   });
 
   test('swaps shells when the window is resized, without losing the route', async ({ page }) => {
     await page.setViewportSize(EXPANDED);
     await signIn(page);
     await expect(page.getByTestId('desktop-navigation-rail')).toBeVisible();
+    // The inbox workspace opens the first conversation once it loads
+    // (desktop-inbox-workspace.tsx). Let that settle first, or the auto-open
+    // reads as the resize moving the user.
+    await expect(page).toHaveURL(/\/chat\//);
 
     const routeBefore = new URL(page.url()).pathname;
 
@@ -89,13 +95,20 @@ test.describe('Claire desktop shell', () => {
   test('the sidebar collapses and the choice survives a reload', async ({ page }) => {
     await page.setViewportSize(EXPANDED);
     await signIn(page);
-
+    // Test persisted chrome on a stable route. Inbox auto-selection opens a
+    // chat URL, whose reserved `platform` parameter is tracked in #308.
+    await page.getByTestId('desktop-nav-loops').click();
+    await expect(page).toHaveURL(/loops/);
+    // The rail starts collapsed. Expand it first so the second click tests
+    // collapsing, rather than assuming the old expanded-by-default layout.
+    await expect(page.getByTestId('desktop-toggle-sidebar')).toHaveAttribute('aria-label', 'Expand sidebar');
     await page.getByTestId('desktop-toggle-sidebar').click();
-    // Collapsed rail keeps the icons but drops the labels.
-    await expect(page.getByTestId('desktop-nav-inbox')).toBeVisible();
-
+    await expect(page.getByTestId('desktop-toggle-sidebar')).toHaveAttribute('aria-label', 'Collapse sidebar');
+    await page.getByTestId('desktop-toggle-sidebar').click();
+    await expect(page.getByTestId('desktop-toggle-sidebar')).toHaveAttribute('aria-label', 'Expand sidebar');
     await page.reload();
     await expect(page.getByTestId('desktop-navigation-rail')).toBeVisible();
+    await expect(page.getByTestId('desktop-toggle-sidebar')).toHaveAttribute('aria-label', 'Expand sidebar');
   });
 
   test('People keeps mobile back navigation out of the desktop layout', async ({ page }) => {
@@ -112,16 +125,19 @@ test.describe('Claire desktop shell', () => {
     await signIn(page);
 
     await page.getByTestId('desktop-nav-people').click();
-    await expect(page.getByText('Alice', { exact: true })).toBeVisible();
-    await expect(page.getByText('Carol', { exact: true })).toBeVisible();
+    // Assert on list rows: the detail pane also shows the selected person's name.
+    const alice = page.getByTestId('people-row-mock-contact-wa-alice');
+    const carol = page.getByTestId('people-row-mock-contact-ig-carol');
+    await expect(alice).toBeVisible();
+    await expect(carol).toBeVisible();
 
     await page.getByTestId('people-platform-instagram').click();
-    await expect(page.getByText('Carol', { exact: true })).toBeVisible();
-    await expect(page.getByText('Alice', { exact: true })).toHaveCount(0);
+    await expect(carol).toBeVisible();
+    await expect(alice).toHaveCount(0);
 
     await page.getByTestId('people-platform-all').click();
     await page.getByTestId('contacts-search-input').fill('alice');
-    await expect(page.getByText('Alice', { exact: true })).toBeVisible();
-    await expect(page.getByText('Carol', { exact: true })).toHaveCount(0);
+    await expect(alice).toBeVisible();
+    await expect(carol).toHaveCount(0);
   });
 });
