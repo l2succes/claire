@@ -43,6 +43,37 @@ const feed = (qc: QueryClient) =>
   qc.getQueryData<InfiniteData<Page>>(inboxQueryKey(USER, '', 'all', 'all'))!.pages[0].messages;
 
 describe('inbox preview after sending', () => {
+  it('marks a newly received conversation unread immediately', () => {
+    const qc = new QueryClient();
+    seed(qc, []);
+    patchInboxRealtimeMessage(qc, USER, {
+      id: 'incoming-new', chat_id: CHAT, from_me: false, platform: Platform.WHATSAPP,
+      content: 'new message', timestamp: '2026-08-26T10:05:00Z',
+    });
+    expect(feed(qc)[0].unread_count).toBe(1);
+  });
+
+  it('does not count a repeated latest-message INSERT twice', () => {
+    const qc = new QueryClient();
+    seed(qc, [row({ unread_count: 3 })]);
+    const incoming = { id: 'incoming-new', chat_id: CHAT, from_me: false,
+      platform: Platform.WHATSAPP, content: 'new message', timestamp: '2026-08-26T10:05:00Z' };
+    patchInboxRealtimeMessage(qc, USER, incoming);
+    expect(feed(qc)[0].unread_count).toBe(4);
+    patchInboxRealtimeMessage(qc, USER, incoming);
+    expect(feed(qc)[0].unread_count).toBe(4);
+  });
+
+  it('keeps a new sent conversation read', () => {
+    const qc = new QueryClient();
+    seed(qc, []);
+    patchInboxRealtimeMessage(qc, USER, {
+      id: 'sent-new', chat_id: CHAT, from_me: true, platform: Platform.WHATSAPP,
+      content: 'sent message', timestamp: '2026-08-26T10:05:00Z',
+    });
+    expect(feed(qc)[0].unread_count).toBe(0);
+  });
+
   it('shows the sent message immediately, without waiting for the bridge round trip', () => {
     // The send endpoint never writes a messages row — it lands only when the
     // platform echoes back through Matrix. Without this patch the subtitle

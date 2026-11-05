@@ -258,7 +258,7 @@ export function patchInboxRealtimeMessage(
           status: row.status ?? message.status,
           contact_name: row.contact_name ? incomingName : message.contact_name,
           contact_phone: row.contact_phone || message.contact_phone,
-          unread_count: options.event !== 'update' && row.from_me === false
+          unread_count: options.event !== 'update' && row.from_me === false && row.id !== message.id
             ? (message.unread_count || 0) + 1
             : message.unread_count,
           platform,
@@ -283,7 +283,7 @@ export function patchInboxRealtimeMessage(
       chat_id: row.chat_id || row.id,
       contact_phone: row.contact_phone,
       platform,
-      unread_count: 0,
+      unread_count: options.event !== 'update' && row.from_me === false ? 1 : 0,
       has_ai_response: false,
       snoozed_until: row.snoozed_until ?? null,
       is_pinned: false,
