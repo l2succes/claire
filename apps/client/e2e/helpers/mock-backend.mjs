@@ -953,7 +953,18 @@ export async function mockBackend(page) {
     const snoozeMatch = path.match(/\/loops\/([^/]+)\/snooze$/);
     const eventsMatch = path.match(/\/loops\/([^/]+)\/events$/);
 
-    if (path.endsWith('/loops') && method === 'GET') {
+    if (path.endsWith('/loops/health') && method === 'GET') {
+      await json({
+        detectionMode: 'queue', shadow: false, notificationsEnabled: true,
+        enabledDevices: 1, dirtyChats: 0, oldestDirtyAt: null,
+        preferences: { detectionEnabled: true, aiEnabled: true, notificationsEnabled: true, notifyLoops: true },
+      });
+    } else if (path.endsWith('/loops/attention') && method === 'GET') {
+      await json(mockLoops.filter((loop) => loop.status === 'open').map((loop) => ({
+        loop_id: loop.id, row_version: 1, reason: 'due', next_action: 'Review the report commitment',
+        due_at: new Date().toISOString(), loop,
+      })));
+    } else if (path.endsWith('/loops') && method === 'GET') {
       await json(mockLoops.map((loop) => ({ ...loop, ...MOCK_LOOP_SOURCE_MESSAGES[0] , id: loop.id, status: loop.status })));
     } else if (eventsMatch && method === 'GET') {
       await json(MOCK_LOOP_EVENTS);

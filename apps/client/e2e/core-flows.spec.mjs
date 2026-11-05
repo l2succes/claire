@@ -479,6 +479,7 @@ test.describe('Core loop — mock backend', () => {
 
     // Confirm the route loaded — the loops screen container is present
     await expect(page.getByTestId('loops-screen')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText('NEED ATTENTION', { exact: true }).locator('..').getByText('1', { exact: true })).toBeVisible();
   });
 
   // 6b. Loops screen — seeded loop item appears in the list
@@ -725,6 +726,21 @@ test.describe('Core loop — mock backend', () => {
     await expect(home.getByText('Recent conversations')).toBeVisible();
     await expect(home.getByText(MOCK_INBOX_MESSAGES[1].content, { exact: true })).toBeVisible();
     await expect(home.getByText('Telegram · Bob (TG)', { exact: true })).toBeVisible();
+    await expect(home.getByTestId('follow-up-status-card')).toHaveCount(0);
+  });
+
+  test('Home explains when automatic follow-up tracking is paused', async ({ page }) => {
+    await page.route('**/loops/health', (route) => route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({ success: true, data: {
+        detectionMode: 'off', shadow: false, notificationsEnabled: true,
+        enabledDevices: 1, dirtyChats: 0, oldestDirtyAt: null,
+        preferences: { detectionEnabled: true, aiEnabled: true, notificationsEnabled: true, notifyLoops: true },
+      } }),
+    }));
+    await signIn(page);
+    await page.goto('/dashboard');
+    await expect(page.getByTestId('follow-up-status-card')).toContainText('Claire’s automatic follow-up processing is paused.');
   });
 
   test('incoming image message renders in chat', async ({ page }) => {
