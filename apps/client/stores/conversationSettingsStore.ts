@@ -36,12 +36,17 @@ const defaultSettings: ChatSettings = {
   clarificationDismissed: false,
 };
 
+// An edit made after a refresh starts outranks that refresh's profile snapshot.
+const profileEditVersions = new Map<string, number>();
+
 export const useConversationSettingsStore = create<ConversationSettingsState>((set, get) => ({
   settings: {},
 
   fetchSettings: async (chatId: string) => {
     const userId = useAuthStore.getState().user?.id;
     const alreadyLoaded = !!get().settings[chatId];
+    const profileVersion = profileEditVersions.get(chatId) ?? 0;
+    const profileWasEdited = () => (profileEditVersions.get(chatId) ?? 0) !== profileVersion;
 
     set((state) => ({
       settings: {
@@ -66,7 +71,9 @@ export const useConversationSettingsStore = create<ConversationSettingsState>((s
             [chatId]: {
               ...(state.settings[chatId] || defaultSettings),
               category: (cached.category as ChatCategory | null) ?? null,
-              profile: (cached.profile as ContactProfile | null) ?? null,
+              profile: profileWasEdited()
+                ? state.settings[chatId]?.profile ?? null
+                : (cached.profile as ContactProfile | null) ?? null,
               smartCards: (cached.smartCards as SmartCard[]) ?? [],
               clarificationDismissed: state.settings[chatId]?.clarificationDismissed ?? false,
               // Still loading: this is a starting picture, not the answer.
@@ -102,11 +109,12 @@ export const useConversationSettingsStore = create<ConversationSettingsState>((s
       // and disk with it would erase saved relationship context on reconnect.
       const queryError = categoryRes.error || profileRes.error || cardsRes.error;
       if (queryError) throw queryError;
+      const profile = profileWasEdited() ? get().settings[chatId]?.profile ?? null : profileRes.data ?? null;
 
       if (userId) {
         void cacheConversationSettings(userId, chatId, {
           category: categoryRes.data?.category ?? null,
-          profile: profileRes.data ?? null,
+          profile,
           smartCards: cardsRes.data ?? [],
         }).catch(() => undefined);
       }
@@ -116,7 +124,7 @@ export const useConversationSettingsStore = create<ConversationSettingsState>((s
           ...state.settings,
           [chatId]: {
             category: categoryRes.data?.category ?? null,
-            profile: profileRes.data ?? null,
+            profile,
             smartCards: cardsRes.data ?? [],
             isLoading: false,
             clarificationDismissed: state.settings[chatId]?.clarificationDismissed ?? false,
@@ -162,6 +170,7 @@ export const useConversationSettingsStore = create<ConversationSettingsState>((s
   },
 
   updateProfile: async (chatId: string, userId: string, updates: Partial<Pick<ContactProfile, 'display_name' | 'email' | 'phone_number' | 'location' | 'relationship_context' | 'ai_instruction'>>) => {
+    profileEditVersions.set(chatId, (profileEditVersions.get(chatId) ?? 0) + 1);
     // Optimistic update
     set((state) => {
       const current = state.settings[chatId] || defaultSettings;
