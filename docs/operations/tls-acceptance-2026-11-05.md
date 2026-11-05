@@ -37,13 +37,19 @@ command even when TLS works.
 ## Remaining gate for #156
 
 The certificate issuance symptom is resolved as observed from this machine.
-This check made no Railway, DNS, EAS, or deployment changes. The EAS production
-profile takes endpoint values from its remote environment; no remote EAS values
-were inspected in this check.
+This check made no Railway, DNS, EAS, or deployment changes. A read-only
+`eas env:list production --format short --scope project` check confirmed the
+remote EAS production environment still uses the temporary service domains:
 
-Before closing #156, verify that EAS production's `EXPO_PUBLIC_API_URL` and
-`EXPO_PUBLIC_SUPABASE_URL` use the branded URLs, then build and run the next
-production mobile binary against them. Confirm authenticated access on the
-native app. Existing binaries retain their embedded endpoint configuration.
+| Variable | Observed production value |
+| --- | --- |
+| `EXPO_PUBLIC_API_URL` | `https://claire-production-1450.up.railway.app` |
+| `EXPO_PUBLIC_SUPABASE_URL` | `https://kong-production-2679.up.railway.app` |
+
+Before closing #156, obtain release authorization to change those EAS production
+values to `https://api.useclaire.co` and `https://supabase.useclaire.co`, then
+build and run the next production mobile binary against them. Confirm
+authenticated access on the native app. Existing binaries retain their
+embedded endpoint configuration.
 Follow the [mobile release flow](./environments.md#mobile-clients) and the
 production acceptance gates in #100/#101.
