@@ -58,3 +58,40 @@ it('keeps an existing full detail response instead of replacing it with a list p
   const { result } = renderHook(() => useLoopDetail('user-1', loop.id), { wrapper });
   expect(result.current.data).toEqual(detail);
 });
+
+it.each([undefined, 408, 429, 503])('keeps saved details usable after a retryable refresh failure (%s)', async (status) => {
+  const { client, wrapper } = setup();
+  client.setQueryData(['mobile-home-loops', 'user-1'], [loop]);
+  mockFetch.mockRejectedValue(Object.assign(new Error('Could not refresh'), { status }));
+  const { result } = renderHook(() => useLoopDetail('user-1', loop.id), { wrapper });
+  await waitFor(() => expect(result.current.isError).toBe(true));
+  expect(result.current.data?.content).toBe('Send the deck');
+  expect(result.current.hasUsableData).toBe(true);
+  expect(result.current.refreshFailed).toBe(true);
+});
+
+it.each([401, 403, 404, 410])('does not present cached details as usable after a definitive denial (%s)', async (status) => {
+  const { client, wrapper } = setup();
+  client.setQueryData(['mobile-home-loops', 'user-1'], [loop]);
+  mockFetch.mockRejectedValue(Object.assign(new Error('Unavailable'), { status }));
+  const { result } = renderHook(() => useLoopDetail('user-1', loop.id), { wrapper });
+  await waitFor(() => expect(result.current.isError).toBe(true));
+  expect(result.current.hasUsableData).toBe(false);
+  expect(result.current.refreshFailed).toBe(false);
+});
+
+it('still shows failure when neither cache nor network can supply the loop', async () => {
+  const { wrapper } = setup();
+  mockFetch.mockRejectedValue(new Error('Offline'));
+  const { result } = renderHook(() => useLoopDetail('user-1', loop.id), { wrapper });
+  await waitFor(() => expect(result.current.isError).toBe(true));
+  expect(result.current.hasUsableData).toBe(false);
+});
+
+it('does not present saved details before the user is signed in', () => {
+  const { client, wrapper } = setup();
+  client.setQueryData(['loop-detail', loop.id], loop);
+  const { result } = renderHook(() => useLoopDetail(undefined, loop.id), { wrapper });
+  expect(result.current.hasUsableData).toBe(false);
+  expect(mockFetch).not.toHaveBeenCalled();
+});

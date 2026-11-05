@@ -9,11 +9,15 @@ export function useLoopDetail(userId: string | undefined, loopId: string | undef
     ?? queryClient.getQueryData<LoopItem[]>(['mobile-home-loops', userId])?.find((loop) => loop.id === loopId)
     ?? queryClient.getQueryData<LoopAttentionItem[]>(['loop-attention', userId])?.find((item) => item.loop_id === loopId)?.loop;
 
-  return useQuery<LoopDetail>({
+  const query = useQuery<LoopDetail>({
     queryKey: ['loop-detail', loopId],
     enabled: !!loopId && !!userId,
     queryFn: () => fetchLoopDetail(String(loopId)),
     initialData: preview,
     initialDataUpdatedAt: preview ? 0 : undefined,
   });
+  const status = (query.error as { status?: number } | null)?.status;
+  const unavailable = status !== undefined && status >= 400 && status < 500 && status !== 408 && status !== 429;
+  const hasUsableData = !!userId && !!query.data && !(query.isError && unavailable);
+  return { ...query, hasUsableData, refreshFailed: query.isError && hasUsableData };
 }

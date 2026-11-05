@@ -292,7 +292,7 @@ export function LoopDetailScreen() {
     );
   }
 
-  if (query.isError || !loop) {
+  if (!query.hasUsableData || !loop) {
     return (
       <View testID="loop-detail-screen" style={{ flex: 1, backgroundColor: colors.cream }}>
         <MobileHeader title="Loop" safeArea leading={<BackButton />} />
@@ -328,6 +328,15 @@ export function LoopDetailScreen() {
         contentContainerStyle={{ padding: space[4], paddingBottom: 132, gap: space[5] }}
         contentInsetAdjustmentBehavior="automatic"
       >
+        {query.refreshFailed ? (
+          <View testID="loop-detail-refresh-error" style={{ gap: space[2] }}>
+            <Text accessibilityRole="alert" style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>
+              Couldn't refresh. Showing saved details.
+            </Text>
+            <ActionButton label="Try again" icon={RotateCcw} testID="loop-detail-retry"
+              disabled={query.isFetching} onPress={() => { void query.refetch(); }} />
+          </View>
+        ) : null}
         {/* State card */}
         <View
           style={{

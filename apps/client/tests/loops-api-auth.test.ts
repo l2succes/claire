@@ -1,5 +1,6 @@
 import { authenticatedFetch } from '../services/authenticated-fetch';
-import { updateLoop } from '../services/loops';
+import { fetchLoopDetail, updateLoop } from '../services/loops';
+import { GENERIC_SERVER_ERROR } from '../services/api-errors';
 
 jest.mock('../services/authenticated-fetch', () => ({
   authenticatedFetch: jest.fn(),
@@ -26,5 +27,15 @@ describe('loops API authentication', () => {
       body: JSON.stringify({ status: 'done' }),
       headers: { 'Content-Type': 'application/json' },
     });
+  });
+
+  it('retains HTTP status so cached detail can distinguish deletion from a temporary failure', async () => {
+    request.mockResolvedValue({ ok: false, status: 404, json: async () => ({ error: 'Loop not found' }) } as Response);
+    await expect(fetchLoopDetail('loop-1')).rejects.toMatchObject({ status: 404, message: 'Loop not found' });
+  });
+
+  it('does not render internal server errors in the detail screen', async () => {
+    request.mockResolvedValue({ ok: false, status: 503, json: async () => ({ error: 'internal database relation missing' }) } as Response);
+    await expect(fetchLoopDetail('loop-1')).rejects.toMatchObject({ status: 503, message: GENERIC_SERVER_ERROR });
   });
 });

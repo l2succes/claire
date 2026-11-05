@@ -8,7 +8,15 @@
 
 import { API_BASE_URL } from './platforms';
 import { authenticatedFetch } from './authenticated-fetch';
+import { clientSafeMessage } from './api-errors';
 import type { LoopAgentResult, LoopDetail, LoopItem, LoopReviewInput } from './loop-types';
+
+export class LoopRequestError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+    this.name = 'LoopRequestError';
+  }
+}
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await authenticatedFetch(`${API_BASE_URL}${path}`, {
@@ -19,7 +27,10 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     },
   });
   const body = (await response.json().catch(() => ({}))) as { data?: T; error?: string };
-  if (!response.ok) throw new Error(body.error || `Request failed (${response.status})`);
+  if (!response.ok) throw new LoopRequestError(
+    clientSafeMessage({ response: { status: response.status, data: body } }),
+    response.status,
+  );
   return body.data as T;
 }
 
