@@ -1,17 +1,17 @@
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Bell, Check, CheckCircle2, ChevronLeft, Clock3, MessageCircle, RotateCcw, XCircle, UserRound } from 'lucide-react-native';
 import { colors, mobileType, radius, space } from '@claire/design-system';
 
 import { MobileHeader, MobileIconButton, MobileState } from '../../components/mobile/claire-mobile';
 import { useAuthStore } from '../../stores/authStore';
 import { markInAppLoopRead, notificationFeedKey } from '../../hooks/useInAppNotifications';
+import { useLoopDetail } from '../../hooks/useLoopDetail';
 import {
   conversationName,
   deleteLoop,
-  fetchLoopDetail,
   formatDeadline,
   isOverdue,
   loopTitle,
@@ -196,20 +196,7 @@ export function LoopDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const user = useAuthStore((state) => state.user);
   const queryClient = useQueryClient();
-  // Opening from the list should paint the loop the person just tapped before
-  // its timeline and participants finish downloading. The detail request still
-  // runs immediately and replaces this lightweight list shape when it lands.
-  const listLoop = queryClient
-    .getQueryData<LoopItem[]>(['mobile-loops', user?.id])
-    ?.find((item) => item.id === String(id));
-
-  const query = useQuery({
-    queryKey: ['loop-detail', id],
-    enabled: !!id && !!user?.id,
-    queryFn: () => fetchLoopDetail(String(id)),
-    initialData: listLoop as LoopDetail | undefined,
-    initialDataUpdatedAt: listLoop ? 0 : undefined,
-  });
+  const query = useLoopDetail(user?.id, id);
 
   const loopId = String(id);
   useEffect(() => {
@@ -305,7 +292,7 @@ export function LoopDetailScreen() {
     );
   }
 
-  if (query.isError || !loop) {
+  if (!query.hasUsableData || !loop) {
     return (
       <View testID="loop-detail-screen" style={{ flex: 1, backgroundColor: colors.cream }}>
         <MobileHeader title="Loop" safeArea leading={<BackButton />} />
@@ -341,6 +328,15 @@ export function LoopDetailScreen() {
         contentContainerStyle={{ padding: space[4], paddingBottom: 132, gap: space[5] }}
         contentInsetAdjustmentBehavior="automatic"
       >
+        {query.refreshFailed ? (
+          <View testID="loop-detail-refresh-error" style={{ gap: space[2] }}>
+            <Text accessibilityRole="alert" style={{ ...mobileType.bodySmall, color: colors.neutral[600] }}>
+              Couldn't refresh. Showing saved details.
+            </Text>
+            <ActionButton label="Try again" icon={RotateCcw} testID="loop-detail-retry"
+              disabled={query.isFetching} onPress={() => { void query.refetch(); }} />
+          </View>
+        ) : null}
         {/* State card */}
         <View
           style={{
