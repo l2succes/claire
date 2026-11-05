@@ -28,4 +28,33 @@ describe('message link cards', () => {
     expect(screen.getByText('Google Maps')).toBeTruthy();
     expect(open).toHaveBeenCalledWith('https://maps.app.goo.gl/abc123');
   });
+
+  it.each([
+    ['Read https://en.wikipedia.org/wiki/Paris_(mythology).', 'https://en.wikipedia.org/wiki/Paris_(mythology)'],
+    ['(https://example.com/a_(b_(c))).', 'https://example.com/a_(b_(c))'],
+    ['[https://example.com/page]', 'https://example.com/page'],
+    ['See https://example.com/list[1].', 'https://example.com/list[1]'],
+  ])('preserves the destination in %s', (text, url) => {
+    expect(extractMessageLinks(text).map((link) => link.url)).toEqual([url]);
+  });
+
+  it.each([
+    ['https://docs.google.com/document/d/123', 'docs.google.com'],
+    ['https://www.google.com/search?q=housing', 'google.com'],
+    ['https://maps.google.com/?q=Paris', 'Google Maps'],
+    ['https://www.google.com/maps/place/Paris', 'Google Maps'],
+    ['https://www.youtube.com/watch?v=123', 'YouTube'],
+    ['https://m.youtube.com/watch?v=123', 'YouTube'],
+    ['https://youtube.com.example.org/watch?v=123', 'youtube.com.example.org'],
+  ])('labels %s with its actual destination', (url, label) => {
+    expect(extractMessageLinks(url)[0]?.label).toBe(label);
+  });
+
+  it('opens a balanced-parenthesis URL without truncating its path', () => {
+    const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+    const url = 'https://en.wikipedia.org/wiki/Paris_(mythology)';
+    const screen = render(<MessageTextWithLinks text={`Read (${url}).`} fromMe={false} />);
+    fireEvent.press(screen.getByTestId('message-link-preview'));
+    expect(open).toHaveBeenCalledWith(url);
+  });
 });

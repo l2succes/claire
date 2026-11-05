@@ -3,37 +3,10 @@ import { Linking, Pressable, Text, View } from 'react-native';
 import { ExternalLink, Link2 } from 'lucide-react-native';
 import { colors, mobileType, radius, space } from '@claire/design-system';
 
-const TRAILING_PUNCTUATION = /[),.!?;:'"]+$/;
-const URL_PATTERN = /https?:\/\/[^\s<>]+/gi;
+import { extractMessageLinks } from './message-links';
 
-export interface MessageLink {
-  url: string;
-  host: string;
-  label: string;
-}
-
-function linkLabel(host: string): string {
-  const normalized = host.replace(/^www\./, '');
-  if (normalized === 'maps.app.goo.gl' || normalized.endsWith('.google.com')) return 'Google Maps';
-  if (normalized === 'youtu.be' || normalized.endsWith('.youtube.com')) return 'YouTube';
-  return normalized;
-}
-
-export function extractMessageLinks(text: string): MessageLink[] {
-  const seen = new Set<string>();
-  return (text.match(URL_PATTERN) || []).flatMap((match) => {
-    const url = match.replace(TRAILING_PUNCTUATION, '');
-    if (seen.has(url)) return [];
-    try {
-      const parsed = new URL(url);
-      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return [];
-      seen.add(url);
-      return [{ url, host: parsed.hostname, label: linkLabel(parsed.hostname) }];
-    } catch {
-      return [];
-    }
-  });
-}
+export { extractMessageLinks } from './message-links';
+export type { MessageLink } from './message-links';
 
 export function MessageTextWithLinks({ text, fromMe }: { text: string; fromMe: boolean }) {
   const links = useMemo(() => extractMessageLinks(text), [text]);
