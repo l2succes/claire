@@ -27,6 +27,7 @@ import {
   MOCK_GROUP_INBOX_MESSAGE,
   MOCK_INBOX_MESSAGES,
   MOCK_PLATFORM_SESSIONS,
+  MOCK_PEOPLE,
   MOCK_USER_ID,
 } from './helpers/mock-backend.mjs';
 
@@ -1299,6 +1300,31 @@ test.describe('Platform connect flows — mock backend', () => {
   // ---------------------------------------------------------------------------
   // Auto-reply rules (#40)
   // ---------------------------------------------------------------------------
+
+  test('People notes survive leaving and reopening a warm-cached person', async ({ page }) => {
+    const person = MOCK_PEOPLE[0];
+    let reads = 0;
+    await page.route(`**/contacts/${person.id}`, async (route) => {
+      const saving = route.request().method() === 'PATCH';
+      if (!saving) reads += 1;
+      const data = saving
+        ? { id: person.id, notes: route.request().postDataJSON().notes.trim() }
+        : { ...person, notes: 'Old context' };
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data }) });
+    });
+    await signIn(page);
+    await openSettings(page);
+    await page.getByTestId('settings-relationships').click();
+    await page.getByTestId('contacts-list').getByText(person.name, { exact: true }).click();
+    await expect(page.getByTestId('person-notes')).toHaveValue('Old context');
+    await page.getByTestId('person-notes').fill('Saved context');
+    await page.getByTestId('person-save-notes').click();
+    await expect(page.getByTestId('person-save-notes')).toContainText('Saved');
+    await page.getByRole('button', { name: 'Back to Contacts' }).click();
+    await page.getByTestId('contacts-list').getByText(person.name, { exact: true }).click();
+    await expect(page.getByTestId('person-notes')).toHaveValue('Saved context');
+    expect(reads).toBe(1);
+  });
 
   test('Profile destinations open Connections, People, and Auto-Reply Rules', async ({ page }) => {
     await page.route('**/auto-reply**', async (route) => {

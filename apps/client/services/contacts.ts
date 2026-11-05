@@ -66,9 +66,8 @@ const REQUEST_TIMEOUT_MS = 30_000;
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-  let response: Response;
   try {
-    response = await authenticatedFetch(`${API_BASE_URL}${path}`, {
+    const response = await authenticatedFetch(`${API_BASE_URL}${path}`, {
       ...init,
       signal: controller.signal,
       // Merge, never replace: a caller sending a body supplies its own
@@ -78,24 +77,29 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
         ...(init?.headers as Record<string, string> | undefined),
       },
     });
+    // fetch resolves when headers arrive. Keep the same deadline alive until
+    // the body is read too, otherwise a stalled directory can hang forever.
+    const body = await response.json().catch((cause) => {
+      if (controller.signal.aborted) throw cause;
+      return {};
+    }) as { data?: T; error?: string };
+    // Server text is written for logs and can carry database detail, so only the
+    // status decides what the person is told.
+    if (!response.ok) {
+      throw new Error(
+        response.status >= 500
+          ? 'People are unavailable right now. Try again in a moment.'
+          : body.error || `Could not load People (${response.status}).`,
+      );
+    }
+    if (!body.data) throw new Error('People request returned no data');
+    return body.data;
   } catch (cause) {
     if (controller.signal.aborted) throw new Error('People took too long to load. Try again.');
     throw cause;
   } finally {
     clearTimeout(timeout);
   }
-  const body = await response.json().catch(() => ({})) as { data?: T; error?: string };
-  // Server text is written for logs and can carry database detail, so only the
-  // status decides what the person is told.
-  if (!response.ok) {
-    throw new Error(
-      response.status >= 500
-        ? 'People are unavailable right now. Try again in a moment.'
-        : body.error || `Could not load People (${response.status}).`,
-    );
-  }
-  if (!body.data) throw new Error('People request returned no data');
-  return body.data;
 }
 
 /**
@@ -129,6 +133,7 @@ const PAGE_SIZE = 1000;
  * which is worth saying out loud rather than quietly returning a short list.
  */
 const MAX_PAGES = 200;
+const INCOMPLETE_DIRECTORY_MESSAGE = 'People could not finish loading. Try again.';
 
 export const contactsApi = {
   /**
@@ -154,8 +159,14 @@ export const contactsApi = {
     let exhausted = false;
     for (let page = 0; page < MAX_PAGES; page += 1) {
       const result = await contactsApi.list({ ...params, offset, limit: PAGE_SIZE });
-      contacts.push(...result.contacts);
       const isLast = result.nextOffset === null || !result.contacts.length;
+      if (!isLast && (typeof result.nextOffset !== 'number'
+        || !Number.isSafeInteger(result.nextOffset) || result.nextOffset <= offset)) {
+        // Validate before publishing: a repeated/backward page is not new data
+        // and must not duplicate contacts or replace a complete warm cache.
+        throw new Error(INCOMPLETE_DIRECTORY_MESSAGE);
+      }
+      contacts.push(...result.contacts);
       // The consumer decides how often to publish, but it must never miss the
       // final page: that is the one the A-Z index is measured against.
       onPage?.(contacts, isLast);
@@ -171,6 +182,7 @@ export const contactsApi = {
       console.warn(
         `[People] stopped after ${MAX_PAGES} pages with ${contacts.length} contacts and more remaining; the directory shown is incomplete.`,
       );
+      throw new Error(INCOMPLETE_DIRECTORY_MESSAGE);
     }
     return contacts;
   },
