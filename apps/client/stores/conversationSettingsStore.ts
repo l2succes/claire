@@ -97,6 +97,12 @@ export const useConversationSettingsStore = create<ConversationSettingsState>((s
           .order('priority', { ascending: false }),
       ]);
 
+      // Supabase reports query failures in `error` without rejecting. A null
+      // payload from a failed query is not an empty profile: replacing memory
+      // and disk with it would erase saved relationship context on reconnect.
+      const queryError = categoryRes.error || profileRes.error || cardsRes.error;
+      if (queryError) throw queryError;
+
       if (userId) {
         void cacheConversationSettings(userId, chatId, {
           category: categoryRes.data?.category ?? null,
