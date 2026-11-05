@@ -30,6 +30,7 @@ import { useScreenLoadMark } from '../../hooks/useScreenLoadMark';
 import { syncNotificationBadge } from '../../services/notifications';
 import { SwipeActionRow } from '../../components/mobile/swipe-action-row';
 import { groupCategoryTag } from '../chat/group-category';
+import { InboxSearchAction } from './inbox-search-action';
 
 type InboxFilter = 'dms' | 'all' | 'groups' | 'unread' | 'needs_reply';
 type PlatformFilter = 'all' | Platform;
@@ -269,6 +270,7 @@ function HighlightCard({ message, onPress }: { message: InboxMessage; onPress: (
 function InboxControls({
   query,
   onQueryChange,
+  onSearch,
   filters,
   filter,
   onFilterChange,
@@ -278,6 +280,7 @@ function InboxControls({
 }: {
   query: string;
   onQueryChange: (value: string) => void;
+  onSearch: () => void;
   filters: Array<{ value: InboxFilter; label: string; count?: number }>;
   filter: InboxFilter;
   onFilterChange: (value: InboxFilter) => void;
@@ -287,7 +290,7 @@ function InboxControls({
 }) {
   return (
       <View style={{ paddingHorizontal: space[4], gap: space[3], paddingBottom: space[3], borderBottomWidth: 1, borderBottomColor: colors.neutral[200] }}>
-        <MobileSearchField style={{ minHeight: 46, borderRadius: 13, paddingHorizontal: space[4], backgroundColor: colors.neutral[100] }} inputStyle={{ fontSize: 15, lineHeight: 20 }} icon={<Search size={24} strokeWidth={1.7} color={colors.neutral[600]} />} value={query} onChangeText={onQueryChange} placeholder="Search conversations" returnKeyType="search" testID="messages-search-input" />
+        <MobileSearchField style={{ minHeight: 46, borderRadius: 13, paddingHorizontal: space[4], backgroundColor: colors.neutral[100] }} inputStyle={{ fontSize: 15, lineHeight: 20 }} icon={<Search size={24} strokeWidth={1.7} color={colors.neutral[600]} />} value={query} onChangeText={onQueryChange} onSubmitEditing={onSearch} placeholder="Search conversations" returnKeyType="search" testID="messages-search-input" />
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingRight: space[4] }}>
           {filters.map(item => <MobileChip key={item.value} label={item.label} count={item.count} active={filter === item.value} onPress={() => onFilterChange(item.value)} testID={`inbox-filter-${item.value}`} />)}
           {platformFilters.map(item => (
@@ -505,6 +508,10 @@ export function InboxScreen() {
   });
 
   const searching = query.trim().length > 0;
+  const openFullSearch = useCallback((term: string) => {
+    if (!term.trim()) return;
+    router.push({ pathname: '/(tabs)/search', params: { query: term.trim(), searchRequestId: String(Date.now()) } });
+  }, []);
   const highlights = useMemo(() => searching ? [] : [...inboxRows]
     .map(message => ({
       message,
@@ -554,6 +561,7 @@ export function InboxScreen() {
       <Animated.FlatList
         ref={listRef}
         testID="messages-list"
+        keyboardShouldPersistTaps="handled"
         data={displayedMessages}
         keyExtractor={item => item.conversation_key}
         renderItem={renderConversation}
@@ -582,7 +590,10 @@ export function InboxScreen() {
           </> : null}
           <View style={{ paddingHorizontal: space[4], paddingTop: highlights.length ? space[4] : space[3], paddingBottom: space[1] }}><SectionLabel title="Recent" detail={`${displayedMessages.length} conversations`} /></View>
         </>}
-        ListFooterComponent={!searching && inbox.loadingMore ? <InboxRowSkeleton /> : null}
+        ListFooterComponent={<>
+          {inbox.loadingMore ? <InboxRowSkeleton /> : null}
+          <InboxSearchAction query={query} onSearch={openFullSearch} />
+        </>}
         ListEmptyComponent={inboxRows.length ? null : <MobileState error={!!inbox.error} title={inbox.error ? "Couldn't load the inbox" : 'No conversations here'} message={inbox.error ? 'Pull to retry. Your cached conversations will remain available while Claire reconnects.' : searching ? 'No conversations match that search.' : 'Try another filter or connect a messaging account.'} />}
       />
       )}
@@ -600,6 +611,7 @@ export function InboxScreen() {
         <InboxControls
           query={query}
           onQueryChange={setQuery}
+          onSearch={() => openFullSearch(query)}
           filters={filters}
           filter={filter}
           onFilterChange={setFilter}
