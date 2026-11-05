@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, ScrollView, Text, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Brain, CheckCircle2, Clock3, FileText, MessageCircle, Search, Sparkles, UserRound, X } from 'lucide-react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { colors, mobileType, radius, space } from '@claire/design-system';
 import { MobileChip, MobileHeader, MobileSearchField, MobileState, SectionLabel } from '../../components/mobile/claire-mobile';
@@ -102,12 +102,23 @@ const scopes: Array<{ value: SearchScope; label: string }> = [
 ];
 
 export function SearchScreen() {
+  const params = useLocalSearchParams<{ query?: string | string[] }>();
+  const initialQuery = (Array.isArray(params.query) ? params.query[0] : params.query)?.trim() || '';
   const user = useAuthStore(state => state.user);
-  const [query, setQuery] = useState('');
-  const [submitted, setSubmitted] = useState('');
+  const [query, setQuery] = useState(initialQuery);
+  const [submitted, setSubmitted] = useState(initialQuery);
   const [scope, setScope] = useState<SearchScope>('everything');
   const [recent, setRecent] = useState<string[]>([]);
   const storageKey = `claire:recent-searches:${user?.id || 'anonymous'}`;
+
+  // Tabs can stay mounted between visits. A new explicit inbox search should
+  // replace the previous submission, while typing alone never calls the APIs.
+  useEffect(() => {
+    if (!initialQuery) return;
+    setQuery(initialQuery);
+    setSubmitted(initialQuery);
+    setScope('everything');
+  }, [initialQuery]);
 
   useEffect(() => { void AsyncStorage.getItem(storageKey).then(value => setRecent(value ? JSON.parse(value) as string[] : [])).catch(() => undefined); }, [storageKey]);
   const runSearch = () => {

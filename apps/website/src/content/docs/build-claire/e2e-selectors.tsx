@@ -7,7 +7,7 @@ export const meta: DocMeta = {
   description: 'Stable test identifiers for Claire’s browser and mobile acceptance flows.',
   section: 'build-claire',
   status: 'current',
-  lastReviewed: '2026-08-17',
+  lastReviewed: '2026-11-05',
   order: 6,
   roadmap: {
     status: 'in_progress',
@@ -91,12 +91,28 @@ export default function Page() {
             head={['Selector', 'Element']}
             rows={[
               [<C key="a">messages-screen</C>, 'Root View'],
-              [<C key="b">messages-loading</C>, 'Loading spinner'],
-              [<C key="c">messages-search-input</C>, 'Search TextInput'],
+              [<C key="b">messages-loading</C>, 'Cold inbox skeleton'],
+              [<C key="c">messages-search-input</C>, 'Live conversation filter; submitting opens full search'],
               [<C key="d">messages-list</C>, 'Conversation FlatList'],
-              [<C key="e">messages-empty</C>, 'Empty state'],
               [<C key="f">message-card-&lt;id&gt;</C>, 'Individual MessageCard row; id is the message UUID'],
-              [<C key="g">message-card-loop-badge-&lt;id&gt;</C>, 'OPEN LOOP badge when the chat has at least one open loop'],
+              [<C key="g">inbox-search-everything</C>, 'Full-search action below results, including no matches; hidden for an empty query'],
+              [<C key="h">inbox-filter-&lt;filter&gt;</C>, 'Conversation filter chip: dms, all, groups, unread, needs_reply'],
+              [<C key="i">inbox-platform-&lt;platform&gt;</C>, 'Platform filter chip'],
+            ]}
+          />
+          <P>
+            Full search opens <C>/(tabs)/search?query=...</C>, pre-fills the query and executes it.
+            Conversation filtering remains live; exact and AI search run only after a tap or submit.
+          </P>
+        </Section>
+
+        <Section id="search" title="Search — /(tabs)/search" level={3}>
+          <Table
+            head={['Selector', 'Element']}
+            rows={[
+              [<C key="a">global-search-input</C>, 'Full-search field before submission'],
+              [<C key="b">search-results-screen</C>, 'Submitted search results'],
+              [<C key="c">search-result-&lt;kind&gt;-&lt;id&gt;</C>, 'Result row: message, person, file, or loop'],
             ]}
           />
         </Section>
