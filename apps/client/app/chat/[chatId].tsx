@@ -362,6 +362,7 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
         is_group: is_group === '1',
         platform: resolvedPlatform as Platform,
         contact_name: contact_name || chat_name || undefined,
+        chats: { name: chat_name || contact_name || undefined },
       });
     },
     [queryClient, user?.id, chatId, is_group, resolvedPlatform, contact_name, chat_name]

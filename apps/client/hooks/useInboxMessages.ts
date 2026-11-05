@@ -230,6 +230,13 @@ export function patchInboxRealtimeMessage(
   const platform = row.platform || Platform.WHATSAPP;
   const key = conversationKey(row.chat_id || row.id, platform);
   const incomingName = displayContactName(row.contact_name, platform, row.contact_phone);
+  // Outgoing message contact fields describe the sender, not the recipient.
+  // Only explicit conversation metadata can name a newly inserted sent row.
+  const conversationName = row.from_me
+    ? displayContactName(row.chats?.name, platform)
+    : incomingName;
+  const refreshOutgoingIdentity = row.from_me && options.persist !== false && !row.chats?.name?.trim();
+  let needsIdentityRefresh = false;
   if (options.persist !== false && usesNativeMobileCache() && userId && row.chat_id && row.timestamp) {
     void cacheTimeline(userId, row.chat_id, [row as RawMessage & { id: string; chat_id: string; timestamp: string }]).catch(() => undefined);
     // The conversation's own row has to move too. Caching only the message left
@@ -245,6 +252,7 @@ export function patchInboxRealtimeMessage(
       const messages = page.messages.map((message) => {
         if (message.conversation_key !== key) return message;
         found = true;
+        if (refreshOutgoingIdentity && message.chat_name === conversationName) needsIdentityRefresh = true;
         // An edit to an older timeline row must not replace or re-order the
         // conversation preview. Updates only affect the preview when that row
         // is already the conversation's latest message.
@@ -256,8 +264,8 @@ export function patchInboxRealtimeMessage(
           from_me: row.from_me ?? message.from_me,
           is_group: row.is_group ?? message.is_group,
           status: row.status ?? message.status,
-          contact_name: row.contact_name ? incomingName : message.contact_name,
-          contact_phone: row.contact_phone || message.contact_phone,
+          contact_name: !row.from_me && row.contact_name ? incomingName : message.contact_name,
+          contact_phone: !row.from_me && row.contact_phone ? row.contact_phone : message.contact_phone,
           unread_count: options.event !== 'update' && row.from_me === false
             ? (message.unread_count || 0) + 1
             : message.unread_count,
@@ -270,18 +278,19 @@ export function patchInboxRealtimeMessage(
     if (found) return { ...old, pages };
     // Unknown conversation: only the unfiltered feed can safely gain a row.
     if (!canInsert) return old;
+    if (refreshOutgoingIdentity) needsIdentityRefresh = true;
     const newMessage: InboxMessage = {
       id: row.id,
       conversation_key: key,
-      contact_name: incomingName,
-      chat_name: incomingName,
+      contact_name: conversationName,
+      chat_name: conversationName,
       content: row.content ?? '',
       timestamp: row.timestamp ?? new Date().toISOString(),
       from_me: row.from_me ?? false,
       is_group: row.is_group ?? false,
       status: row.status,
       chat_id: row.chat_id || row.id,
-      contact_phone: row.contact_phone,
+      contact_phone: row.from_me ? undefined : row.contact_phone,
       platform,
       unread_count: 0,
       has_ai_response: false,
@@ -293,6 +302,9 @@ export function patchInboxRealtimeMessage(
     if (!first) return { ...old, pages: [{ messages: [newMessage], hasMore: false, nextCursor: null }] };
     return { ...old, pages: [{ ...first, messages: sortMessages([newMessage, ...first.messages]) }, ...old.pages.slice(1)] };
   }, row.is_group ?? false);
+  if (needsIdentityRefresh) {
+    void queryClient.invalidateQueries({ queryKey: inboxQueryPrefix(userId) });
+  }
 }
 
 export function patchInboxChat(

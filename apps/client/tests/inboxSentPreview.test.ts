@@ -43,6 +43,67 @@ const feed = (qc: QueryClient) =>
   qc.getQueryData<InfiniteData<Page>>(inboxQueryKey(USER, '', 'all', 'all'))!.pages[0].messages;
 
 describe('inbox preview after sending', () => {
+  it('preserves the recipient identity when an outgoing echo contains the sender identity', () => {
+    const qc = new QueryClient();
+    seed(qc, [row({ contact_phone: '+15550100' })]);
+    patchInboxRealtimeMessage(qc, USER, {
+      id: 'echo', chat_id: CHAT, from_me: true, platform: Platform.WHATSAPP,
+      contact_name: 'My own name', contact_phone: '+15550999', content: 'sent',
+    });
+    expect(feed(qc)[0]).toMatchObject({
+      chat_name: 'Lucas', contact_name: 'Lucas', contact_phone: '+15550100', content: 'sent',
+    });
+  });
+
+  it('does not name an unknown conversation after the outgoing sender', () => {
+    const qc = new QueryClient();
+    const invalidate = jest.spyOn(qc, 'invalidateQueries');
+    seed(qc, []);
+    patchInboxRealtimeMessage(qc, USER, {
+      id: 'echo', chat_id: CHAT, from_me: true, platform: Platform.WHATSAPP,
+      contact_name: 'My own name', contact_phone: '+15550999', content: 'sent',
+    });
+    expect(feed(qc)[0].chat_name).not.toBe('My own name');
+    expect(feed(qc)[0].contact_name).not.toBe('My own name');
+    expect(feed(qc)[0].contact_phone).toBeUndefined();
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['messages-feed', USER] });
+  });
+
+  it('retains sender identity updates from an incoming message', () => {
+    const qc = new QueryClient();
+    seed(qc, [row()]);
+    patchInboxRealtimeMessage(qc, USER, {
+      id: 'incoming', chat_id: CHAT, from_me: false, platform: Platform.WHATSAPP,
+      contact_name: 'Lucas updated', contact_phone: '+15550100', content: 'received',
+    });
+    expect(feed(qc)[0]).toMatchObject({ contact_name: 'Lucas updated', contact_phone: '+15550100' });
+  });
+
+  it('uses explicit conversation metadata for a new optimistic sent preview', () => {
+    const qc = new QueryClient();
+    const invalidate = jest.spyOn(qc, 'invalidateQueries');
+    seed(qc, []);
+    patchInboxRealtimeMessage(qc, USER, {
+      id: 'optimistic', chat_id: CHAT, from_me: true, platform: Platform.WHATSAPP,
+      contact_name: 'My own name', chats: { name: 'Lucas' }, content: 'sent',
+    }, { persist: false });
+    expect(feed(qc)[0]).toMatchObject({ chat_name: 'Lucas', contact_name: 'Lucas', content: 'sent' });
+    expect(invalidate).not.toHaveBeenCalled();
+  });
+
+  it('waits for acknowledgement before refreshing an unnamed queued conversation', () => {
+    const qc = new QueryClient();
+    const invalidate = jest.spyOn(qc, 'invalidateQueries');
+    seed(qc, []);
+    const outgoing = { id: 'queued', chat_id: CHAT, from_me: true, platform: Platform.WHATSAPP,
+      contact_name: 'My own name', content: 'queued text' };
+    patchInboxRealtimeMessage(qc, USER, outgoing, { persist: false });
+    expect(invalidate).not.toHaveBeenCalled();
+    expect(feed(qc)[0].content).toBe('queued text');
+    patchInboxRealtimeMessage(qc, USER, { ...outgoing, id: 'acknowledged' });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['messages-feed', USER] });
+  });
+
   it('shows the sent message immediately, without waiting for the bridge round trip', () => {
     // The send endpoint never writes a messages row — it lands only when the
     // platform echoes back through Matrix. Without this patch the subtitle
