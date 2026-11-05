@@ -7,12 +7,16 @@ import { describe, it, expect, beforeEach, mock } from 'bun:test';
 
 // Per-table error the mocked supabase client should return (null = column exists).
 let errorByTable: Record<string, { code?: string; message?: string } | null> = {};
+let throwByTable: Record<string, Error> = {};
 
 mock.module('./supabase', () => ({
   supabase: {
     from: (table: string) => ({
       select: (_columns: string) => ({
-        limit: async (_n: number) => ({ data: [], error: errorByTable[table] ?? null }),
+        limit: async (_n: number) => {
+          if (throwByTable[table]) throw throwByTable[table];
+          return { data: [], error: errorByTable[table] ?? null };
+        },
       }),
     }),
   },
@@ -38,6 +42,7 @@ const REQS = [
 describe('schema-verification (#99)', () => {
   beforeEach(() => {
     errorByTable = {};
+    throwByTable = {};
     resetSchemaVerificationCache();
   });
 
@@ -55,6 +60,7 @@ describe('schema-verification (#99)', () => {
     it('does NOT flag transient/operational errors', () => {
       expect(isMissingSchemaError({ code: '08006', message: 'connection failure' })).toBe(false);
       expect(isMissingSchemaError({ code: 'PGRST301', message: 'JWT expired' })).toBe(false);
+      expect(isMissingSchemaError({ code: '28000', message: 'role does not exist' })).toBe(false);
       expect(isMissingSchemaError(null)).toBe(false);
     });
   });
@@ -64,6 +70,7 @@ describe('schema-verification (#99)', () => {
       const result = await verifySchema([{ table: 'present_table', columns: ['a', 'b'] }]);
       expect(result.ok).toBe(true);
       expect(result.drift).toHaveLength(0);
+      expect(result.probeErrors).toHaveLength(0);
       expect(result.checkedTables).toBe(1);
     });
 
@@ -89,12 +96,33 @@ describe('schema-verification (#99)', () => {
     it('does not treat a transient error as drift', async () => {
       errorByTable = { present_table: { code: '08006', message: 'connection failure' } };
       const result = await verifySchema([{ table: 'present_table', columns: ['a'] }]);
-      expect(result.ok).toBe(true);
+      expect(result.ok).toBe(false);
       expect(result.drift).toHaveLength(0);
+      expect(result.probeErrors[0]?.error).toBe('connection failure');
+    });
+
+    it('collects thrown probe failures and still checks the remaining tables', async () => {
+      throwByTable = { present_table: new Error('network disconnected') };
+      errorByTable = { missing_table: { code: '42P01', message: 'missing table' } };
+      const result = await verifySchema(REQS);
+      expect(result.ok).toBe(false);
+      expect(result.probeErrors.map((entry) => entry.table)).toEqual(['present_table']);
+      expect(result.drift.map((entry) => entry.table)).toEqual(['missing_table']);
+      expect(result.checkedTables).toBe(2);
     });
   });
 
   describe('verifySchemaCached', () => {
+    it('retries unavailable probes immediately after recovery', async () => {
+      errorByTable = { messages: { code: '08006', message: 'connection failure' } };
+      const failed = await verifySchemaCached(60_000);
+      expect(failed.ok).toBe(false);
+      errorByTable = {};
+      const recovered = await verifySchemaCached(60_000);
+      expect(recovered.ok).toBe(true);
+      expect(recovered.probeErrors).toHaveLength(0);
+    });
+
     it('caches the result until reset', async () => {
       // First call: everything ok, cached.
       const first = await verifySchemaCached(60_000);

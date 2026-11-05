@@ -7,6 +7,9 @@
 dockerfilePath = "Dockerfile"
 
 [deploy]
+# Read-only gate, bundled into the production image. Migrations must already
+# have been applied; failure leaves the previous deployment serving traffic.
+preDeployCommand = "bun run dist/verify-schema.js"
 # Number of replicas (1 for hobby, can increase for production)
 numReplicas = 1
 

@@ -7,7 +7,7 @@ export const meta: DocMeta = {
   description: 'Detect schema drift and verify production database migrations.',
   section: 'deploy-operate',
   status: 'current',
-  lastReviewed: '2026-08-17',
+  lastReviewed: '2026-11-05',
   order: 8,
   roadmap: {
     status: 'in_progress',
@@ -28,13 +28,16 @@ export default function Page() {
 
       <Section id="applying" title="Applying migrations">
         <P>
-          All schema lives in <C>supabase/migrations/*.sql</C> and is written to be idempotent (
-          <C>CREATE TABLE IF NOT EXISTS</C>, <C>ADD COLUMN IF NOT EXISTS</C>), so re-running the full set
-          is always safe.
+          Schema changes live in <C>supabase/migrations/*.sql</C>. Review pending migrations and take
+          a database snapshot before applying them. Migration tracking alone does not prove the DDL
+          ran: issue #176 documented a migration recorded as applied while its columns were missing.
         </P>
         <Terminal>{`supabase db push`}</Terminal>
-        <P>Against a raw Postgres connection without the CLI, apply in lexical order:</P>
-        <Terminal>{`for f in supabase/migrations/*.sql; do psql "$DATABASE_URL" -f "$f"; done`}</Terminal>
+        <P>
+          Against a raw Postgres connection, apply only reviewed pending or corrective migrations,
+          in lexical order, and stop on the first SQL error:
+        </P>
+        <Terminal>{`psql "$DIRECT_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/<reviewed-migration>.sql`}</Terminal>
         <P>Then reload the PostgREST schema cache so the API sees new columns immediately:</P>
         <Code lang="sql" title="Reload the API schema">{`NOTIFY pgrst, 'reload schema';`}</Code>
       </Section>
@@ -42,7 +45,7 @@ export default function Page() {
       <Section id="drift" title="Drift detection">
         <P>
           The application declares the columns it requires in{' '}
-          <C>server/src/services/schema-verification.ts</C> as <C>REQUIRED_SCHEMA</C>.
+          <C>apps/server/src/services/schema-verification.ts</C> as <C>REQUIRED_SCHEMA</C>.
         </P>
         <Callout kind="warning" title="Extend the list with the migration">
           Whenever a migration adds a table or column the code reads or writes, add it to{' '}
@@ -50,12 +53,24 @@ export default function Page() {
         </Callout>
 
         <Section id="pre-deploy" title="Pre-deploy gate" level={3}>
-          <Terminal cwd="server">{`bun run verify:schema`}</Terminal>
+          <Terminal cwd="apps/server">{`bun run verify:schema`}</Terminal>
           <P>
             Exits <C>0</C> when the live database satisfies <C>REQUIRED_SCHEMA</C>, <C>1</C> on drift
             (listing the missing tables and columns), and <C>2</C> if the check could not run. Wire it
-            into the deploy pipeline as a pre-release step against the production database.
+            into any other deploy pipeline as a pre-release step against its target database.
           </P>
+          <P>
+            The root <C>railway.toml</C> configures <C>preDeployCommand</C> as{' '}
+            <C>bun run dist/verify-schema.js</C>. The Docker build bundles this standalone command
+            into the production image. It uses the server&apos;s Supabase environment and performs
+            read-only probes through PostgREST; it does not run migrations. Apply migrations and
+            reload the schema cache before releasing dependent application code.
+          </P>
+          <Callout kind="warning" title="Verify the Railway service configuration">
+            Confirm the API service uses the root Dockerfile and railway.toml, and that its next
+            deployment logs show the pre-deploy check succeeding. Repository configuration and unit
+            tests do not establish that this gate has run against production.
+          </Callout>
         </Section>
 
         <Section id="runtime" title="Runtime readiness" level={3}>
@@ -63,7 +78,8 @@ export default function Page() {
             <C>GET /health</C> includes a <C>schema</C> check. On drift it reports{' '}
             <C>status: &quot;degraded&quot;</C> with HTTP <C>503</C> and a <C>checks.schema</C> entry
             listing the affected tables, so an incompatible deploy fails readiness before taking traffic.
-            The result is cached for 60 seconds to keep polling cheap.
+            Successful probes and detected drift are cached for 60 seconds to keep polling cheap.
+            Unavailable probes fail readiness and are retried on the next request.
           </P>
         </Section>
 
@@ -72,7 +88,8 @@ export default function Page() {
             A missing column or table returns a Postgres <C>42703</C>/<C>42P01</C> — or PostgREST{' '}
             <C>PGRST204</C>/<C>PGRST205</C> — regardless of row-level security, while a
             present-but-empty table simply returns no rows. Transient and operational errors (network
-            failures, expired JWTs) are deliberately not reported as drift.
+            failures, expired JWTs) are reported separately as unavailable verification and block
+            the pre-deploy command with exit code <C>2</C>. They never produce a successful check.
           </P>
         </Section>
       </Section>

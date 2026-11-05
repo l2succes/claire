@@ -74,6 +74,7 @@ COPY packages/platform-catalog/src ./packages/platform-catalog/src
 
 WORKDIR /app/apps/server
 RUN bun build src/index.ts --target=bun --outdir=dist
+RUN bun build src/scripts/verify-schema.ts --target=bun --outfile=dist/verify-schema.js
 
 FROM base AS production
 

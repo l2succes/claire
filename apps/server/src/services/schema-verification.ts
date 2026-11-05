@@ -76,6 +76,7 @@ export interface SchemaVerificationResult {
   ok: boolean;
   checkedTables: number;
   drift: SchemaDriftEntry[];
+  probeErrors: SchemaDriftEntry[];
 }
 
 // Postgres error codes for a missing column / relation.
@@ -98,6 +99,9 @@ export function isMissingSchemaError(error: SupabaseErrorLike | null | undefined
   if (code === UNDEFINED_COLUMN || code === UNDEFINED_TABLE) return true;
   // PostgREST schema-cache codes: PGRST204 (unknown column), PGRST205 (unknown table).
   if (code === 'PGRST204' || code === 'PGRST205') return true;
+  // A known operational code must win over generic wording such as
+  // "role does not exist" or "could not find the JWT".
+  if (code) return false;
   const message = (error.message ?? '').toLowerCase();
   return message.includes('does not exist') || message.includes('could not find the');
 }
@@ -110,18 +114,32 @@ export async function verifySchema(
   requirements: SchemaRequirement[] = REQUIRED_SCHEMA
 ): Promise<SchemaVerificationResult> {
   const drift: SchemaDriftEntry[] = [];
+  const probeErrors: SchemaDriftEntry[] = [];
 
   for (const { table, columns } of requirements) {
-    const { error } = await supabase.from(table).select(columns.join(',')).limit(1);
+    let error: SupabaseErrorLike | null;
+    try {
+      ({ error } = await supabase.from(table).select(columns.join(',')).limit(1));
+    } catch (err) {
+      error = { message: err instanceof Error ? err.message : String(err) };
+      probeErrors.push({ table, columns, error: error.message ?? 'probe failed' });
+      continue;
+    }
     if (isMissingSchemaError(error)) {
       drift.push({ table, columns, error: error?.message ?? 'missing table or column' });
     } else if (error) {
-      // Operational error — log but don't claim drift (avoids false readiness failures).
+      // An unavailable probe is not evidence of drift, nor evidence of readiness.
+      probeErrors.push({ table, columns, error: error.message ?? 'probe failed' });
       logger.warn(`[schema] Non-schema error probing ${table}: ${error.message}`);
     }
   }
 
-  return { ok: drift.length === 0, checkedTables: requirements.length, drift };
+  return {
+    ok: drift.length === 0 && probeErrors.length === 0,
+    checkedTables: requirements.length,
+    drift,
+    probeErrors,
+  };
 }
 
 // Schema only changes on deploy/migration, so a short TTL keeps /health cheap
@@ -132,7 +150,8 @@ export async function verifySchemaCached(ttlMs = 60_000): Promise<SchemaVerifica
   const now = Date.now();
   if (cache && now - cache.at < ttlMs) return cache.result;
   const result = await verifySchema();
-  cache = { at: now, result };
+  // Retry unavailable probes on the next readiness request after recovery.
+  cache = result.probeErrors.length === 0 ? { at: now, result } : null;
   return result;
 }
 
