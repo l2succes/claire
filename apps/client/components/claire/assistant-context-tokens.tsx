@@ -52,7 +52,7 @@ export function AssistantContextTokens({ citations }: { citations: AssistantCita
         chatId: citation.chatId,
         contact_name: citation.fromMe ? citation.chatName || 'Conversation' : citation.senderName,
         chat_name: citation.chatName || citation.senderName,
-        platform: citation.platform,
+        chatPlatform: citation.platform,
         is_group: citation.isGroup ? '1' : '0',
         highlightMessageId: citation.messageId,
       },

@@ -513,7 +513,7 @@ export function LoopDetailScreen() {
                   chatId: String(loop.chat_id),
                   contact_name: group ? '' : chatName,
                   chat_name: chatName,
-                  platform: loop.platform || loop.chat?.platform || '',
+                  chatPlatform: loop.platform || loop.chat?.platform || '',
                   is_group: group ? '1' : '0',
                 },
               })

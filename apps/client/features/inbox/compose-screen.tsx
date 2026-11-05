@@ -142,7 +142,7 @@ export function ComposeScreen() {
         chatId: recipient.id,
         contact_name: recipient.isGroup ? '' : recipient.name,
         chat_name: recipient.name,
-        platform: recipient.platform || '',
+        chatPlatform: recipient.platform || '',
         is_group: recipient.isGroup ? '1' : '0',
       },
     });

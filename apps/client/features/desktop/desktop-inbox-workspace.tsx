@@ -43,7 +43,7 @@ export function DesktopInboxWorkspace({ selectedChatId, conversation }: { select
   }), [inbox.messages, platform, query]);
   const selected = useMemo(() => messages.find((item) => item.chat_id === selectedChatId) || inbox.messages.find((item) => item.chat_id === selectedChatId) || messages[0], [inbox.messages, messages, selectedChatId]);
 
-  const chatRoute = (message: InboxMessage) => ({ pathname: '/chat/[chatId]' as const, params: { chatId: message.chat_id, contact_name: message.contact_name || '', chat_name: message.chat_name || '', platform: message.platform || '', is_group: message.is_group ? '1' : '0' } });
+  const chatRoute = (message: InboxMessage) => ({ pathname: '/chat/[chatId]' as const, params: { chatId: message.chat_id, contact_name: message.contact_name || '', chat_name: message.chat_name || '', chatPlatform: message.platform || '', is_group: message.is_group ? '1' : '0' } });
   const open = (message: InboxMessage) => router.push(chatRoute(message));
   const warmChat = (message: InboxMessage) => {
     void queryClient.prefetchQuery(chatTimelineOptions(queryClient, user?.id, message.chat_id));

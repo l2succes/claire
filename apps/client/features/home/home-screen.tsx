@@ -108,7 +108,7 @@ export function HomeScreen() {
       // marks the obvious and reads as an unexplained state. The highlight is
       // for search results and assistant citations, where the message is buried
       // in history and the reader needs to be told which one they were sent to.
-      onPress: () => router.push({ pathname: '/chat/[chatId]', params: { chatId: message.chat_id, contact_name: message.contact_name || '', chat_name: message.chat_name || '', platform: message.platform || '', is_group: message.is_group ? '1' : '0' } }),
+      onPress: () => router.push({ pathname: '/chat/[chatId]', params: { chatId: message.chat_id, contact_name: message.contact_name || '', chat_name: message.chat_name || '', chatPlatform: message.platform || '', is_group: message.is_group ? '1' : '0' } }),
     }; }), [urgent]);
 
   const refresh = useCallback(async () => {

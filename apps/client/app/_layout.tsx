@@ -181,7 +181,7 @@ export default function RootLayout() {
         ...(typeof data.messageId === 'string' ? { highlightMessageId: data.messageId } : {}),
         ...(typeof data.contactName === 'string' ? { contact_name: data.contactName } : {}),
         ...(typeof data.chatName === 'string' ? { chat_name: data.chatName } : {}),
-        ...(typeof data.platform === 'string' ? { platform: data.platform } : {}),
+        ...(typeof data.platform === 'string' ? { chatPlatform: data.platform } : {}),
         ...(typeof data.isGroup === 'boolean' ? { is_group: data.isGroup ? '1' : '0' } : {}),
         ...(draft ? { draft, notificationAction: 'reply' } : {}),
       } });

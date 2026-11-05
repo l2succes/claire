@@ -20,6 +20,7 @@ import { type ChatCategory } from '../../../types/conversationSettings';
 import { formatPhoneNumber, formatPhoneNumberInput, normalizePhoneNumber } from '../../../services/phone-numbers';
 import { displayContactName } from '../../../services/contact-display';
 import { API_BASE_URL } from '../../../services/platforms';
+import { readChatPlatform } from '../../../services/chat-route-params';
 
 const TONES = [
   { key: 'warm', title: 'Warm + direct', description: 'Clear, human, confident' },
@@ -47,7 +48,8 @@ function Field({ icon, label, value, onChangeText, placeholder, keyboardType = '
 }
 
 export default function ConversationSettingsScreen() {
-  const { chatId, platform, contact_name, chat_name, is_group } = useLocalSearchParams<{ chatId: string; platform?: string; contact_name?: string; chat_name?: string; is_group?: string }>();
+  const { chatId, chatPlatform, platform: legacyPlatform, contact_name, chat_name, is_group } = useLocalSearchParams<{ chatId: string; chatPlatform?: string | string[]; platform?: string | string[]; contact_name?: string; chat_name?: string; is_group?: string }>();
+  const platform = readChatPlatform({ chatPlatform, platform: legacyPlatform });
   const user = useAuthStore((state) => state.user);
   const accessToken = useAuthStore((state) => state.token);
   const insets = useSafeAreaInsets();

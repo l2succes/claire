@@ -16,7 +16,7 @@ export function AssistantAnswerActions({ actions }: { actions?: AssistantAction[
           chatId: action.chatId,
           contact_name: action.chatName || 'Conversation',
           chat_name: action.chatName || 'Conversation',
-          platform: action.platform || 'unknown',
+          chatPlatform: action.platform || 'unknown',
           is_group: action.isGroup ? '1' : '0',
         },
       });

@@ -42,6 +42,7 @@ import { GroupAiBanner } from '../../features/chat/group-ai-banner';
 import { shouldShowQuickContext } from '../../features/chat/quick-context';
 import type { GroupCategory } from '../../types/conversationSettings';
 import { Platform } from '../../types/platform';
+import { readChatPlatform } from '../../services/chat-route-params';
 import { PlatformName } from '../../components/PlatformIcon';
 import { displayContactName } from '../../services/contact-display';
 import {
@@ -222,17 +223,19 @@ export default function ChatRoute() {
 
 export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
   const queryClient = useQueryClient();
-  const { chatId, contact_name, chat_name, platform, is_group, highlightMessageId, draft, notificationAction } =
+  const { chatId, contact_name, chat_name, chatPlatform, platform: legacyPlatform, is_group, highlightMessageId, draft, notificationAction } =
     useLocalSearchParams<{
       chatId: string;
       contact_name: string;
       chat_name: string;
-      platform: string;
+      chatPlatform?: string | string[];
+      platform?: string | string[];
       is_group: string;
       highlightMessageId?: string;
       draft?: string;
       notificationAction?: string;
     }>();
+  const platform = readChatPlatform({ chatPlatform, platform: legacyPlatform });
 
   const user = useAuthStore((state) => state.user);
   const chatLoop = useQuery({
@@ -1415,7 +1418,7 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
           onPress={() =>
             router.push({
               pathname: '/chat/settings/[chatId]',
-              params: { chatId: chatId!, platform: resolvedPlatform, contact_name: resolvedName, chat_name: resolvedName, is_group: isGroup ? '1' : '0' },
+              params: { chatId: chatId!, chatPlatform: resolvedPlatform, contact_name: resolvedName, chat_name: resolvedName, is_group: isGroup ? '1' : '0' },
             })
           }
         >
@@ -1483,7 +1486,7 @@ export function ChatScreen({ embedded = false }: { embedded?: boolean }) {
               needsRelationshipContext && !quickContext
                 ? router.push({
                     pathname: '/chat/settings/[chatId]',
-                    params: { chatId: chatId!, platform: resolvedPlatform, contact_name: resolvedName, chat_name: resolvedName, is_group: isGroup ? '1' : '0' },
+                    params: { chatId: chatId!, chatPlatform: resolvedPlatform, contact_name: resolvedName, chat_name: resolvedName, is_group: isGroup ? '1' : '0' },
                   })
                 : router.push({
                     pathname: '/chat/assistant/[chatId]',
