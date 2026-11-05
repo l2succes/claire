@@ -66,9 +66,8 @@ const REQUEST_TIMEOUT_MS = 30_000;
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-  let response: Response;
   try {
-    response = await authenticatedFetch(`${API_BASE_URL}${path}`, {
+    const response = await authenticatedFetch(`${API_BASE_URL}${path}`, {
       ...init,
       signal: controller.signal,
       // Merge, never replace: a caller sending a body supplies its own
@@ -78,24 +77,29 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
         ...(init?.headers as Record<string, string> | undefined),
       },
     });
+    // fetch resolves when headers arrive. Keep the same deadline alive until
+    // the body is read too, otherwise a stalled directory can hang forever.
+    const body = await response.json().catch((cause) => {
+      if (controller.signal.aborted) throw cause;
+      return {};
+    }) as { data?: T; error?: string };
+    // Server text is written for logs and can carry database detail, so only the
+    // status decides what the person is told.
+    if (!response.ok) {
+      throw new Error(
+        response.status >= 500
+          ? 'People are unavailable right now. Try again in a moment.'
+          : body.error || `Could not load People (${response.status}).`,
+      );
+    }
+    if (!body.data) throw new Error('People request returned no data');
+    return body.data;
   } catch (cause) {
     if (controller.signal.aborted) throw new Error('People took too long to load. Try again.');
     throw cause;
   } finally {
     clearTimeout(timeout);
   }
-  const body = await response.json().catch(() => ({})) as { data?: T; error?: string };
-  // Server text is written for logs and can carry database detail, so only the
-  // status decides what the person is told.
-  if (!response.ok) {
-    throw new Error(
-      response.status >= 500
-        ? 'People are unavailable right now. Try again in a moment.'
-        : body.error || `Could not load People (${response.status}).`,
-    );
-  }
-  if (!body.data) throw new Error('People request returned no data');
-  return body.data;
 }
 
 /**
