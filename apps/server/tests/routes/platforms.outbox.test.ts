@@ -1,15 +1,10 @@
-import { describe, expect, it, mock } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from 'bun:test';
 import express from 'express';
 import request from 'supertest';
-import { Platform, PlatformStatus, MessageContentType } from '../../src/adapters/types';
+import { platformManager } from '../../src/adapters';
+import { Platform, PlatformStatus, type IPlatformAdapter } from '../../src/adapters/types';
 
-let activeAdapter: unknown;
-mock.module('../../src/adapters', () => ({
-  platformManager: { getAdapter: () => activeAdapter },
-  Platform,
-  PlatformStatus,
-  MessageContentType,
-}));
+let activeAdapter: IPlatformAdapter | undefined;
 mock.module('../../src/services/supabase', () => ({
   supabase: {},
   authHelpers: { verifyToken: async () => ({ id: 'test-user' }) },
@@ -27,6 +22,17 @@ app.use(express.json());
 app.use('/platforms', routes);
 
 describe('POST /platforms/:platform/outbox/send', () => {
+  let getAdapterSpy: ReturnType<typeof spyOn<typeof platformManager, 'getAdapter'>>;
+
+  beforeEach(() => {
+    activeAdapter = undefined;
+    getAdapterSpy = spyOn(platformManager, 'getAdapter').mockImplementation(() => activeAdapter);
+  });
+
+  afterEach(() => {
+    getAdapterSpy.mockRestore();
+  });
+
   it('accepts a queued send through a demo-decorated Matrix adapter', async () => {
     const matrix = new MatrixBridgeAdapter({ serverName: 'test.local' } as any);
     const internals = matrix as any;
