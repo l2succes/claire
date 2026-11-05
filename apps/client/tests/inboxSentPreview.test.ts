@@ -154,4 +154,25 @@ describe('inbox preview after sending', () => {
     expect(feed(qc)[0].content).toBe('actual latest');
     expect(feed(qc)[0].unread_count).toBe(2);
   });
+
+  it('does not create an empty conversation from a partial unknown message update', () => {
+    const qc = new QueryClient();
+    seed(qc, [row()]);
+    patchInboxRealtimeMessage(qc, USER, {
+      id: 'unknown-message', chat_id: 'another-chat', platform: Platform.WHATSAPP,
+    }, { event: 'update' });
+    expect(feed(qc)).toHaveLength(1);
+    expect(feed(qc)[0]).toMatchObject({ chat_id: CHAT, content: 'their older message' });
+  });
+
+  it('does not promote an unknown historical edit into the conversation feed', () => {
+    const qc = new QueryClient();
+    seed(qc, []);
+    patchInboxRealtimeMessage(qc, USER, {
+      id: 'old-message', chat_id: 'another-chat', platform: Platform.WHATSAPP,
+      content: 'edited old text', contact_name: 'Someone',
+      timestamp: '2026-01-01T00:00:00Z', from_me: false,
+    }, { event: 'update' });
+    expect(feed(qc)).toHaveLength(0);
+  });
 });

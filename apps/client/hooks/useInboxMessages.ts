@@ -268,6 +268,10 @@ export function patchInboxRealtimeMessage(
       return messages === page.messages ? page : { ...page, messages: sortMessages(messages) };
     });
     if (found) return { ...old, pages };
+    // An edit is not a new conversation. Its payload may be partial or refer
+    // to an old message outside this feed; inserting it invents an empty or
+    // stale preview instead of using the conversation's actual latest row.
+    if (options.event === 'update') return old;
     // Unknown conversation: only the unfiltered feed can safely gain a row.
     if (!canInsert) return old;
     const newMessage: InboxMessage = {
