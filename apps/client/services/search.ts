@@ -1,5 +1,6 @@
-import { supabase } from './supabase';
 import { API_BASE_URL } from './platforms';
+import { authenticatedFetch } from './authenticated-fetch';
+import { clientSafeMessage } from './api-errors';
 import type { AssistantCitation, AssistantIndexStatus } from './conversationAssistant';
 
 export type SearchScope = 'everything' | 'messages' | 'people' | 'files' | 'loops';
@@ -11,10 +12,9 @@ export interface UnifiedSearchResults { query: string; scope: SearchScope; messa
 export interface SemanticSearchAnswer { answer: string; citations: AssistantCitation[]; indexing: AssistantIndexStatus }
 
 async function request<T>(path: string, init: RequestInit = {}) {
-  const { data: { session } } = await supabase.auth.getSession();
-  const response = await fetch(`${API_BASE_URL}${path}`, { ...init, headers: { 'Content-Type': 'application/json', ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}), ...init.headers } });
+  const response = await authenticatedFetch(`${API_BASE_URL}${path}`, { ...init, headers: { 'Content-Type': 'application/json', ...init.headers } });
   const body = await response.json().catch(() => ({})) as { data?: T; error?: string };
-  if (!response.ok) throw new Error(body.error || `Request failed (${response.status})`);
+  if (!response.ok) throw new Error(clientSafeMessage({ response: { status: response.status, data: body } }));
   return body.data as T;
 }
 
