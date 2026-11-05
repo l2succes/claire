@@ -163,6 +163,31 @@ describe('create guards', () => {
     expect(decideCreate(createOp({ title: 'Meet Priya on August 16, 2026' }), context()).action).toBe('create');
   });
 
+  it.each([
+    'Available: 16 August 2026',
+    '16th August, 2026',
+    'Friday, August 16, 2026',
+    'Tomorrow',
+    'Available tomorrow',
+    'Availability: next Friday',
+    'Due: today',
+    'This Wednesday',
+  ])('rejects the date-only title %s in a group', (title) => {
+    expect(decideCreate(createOp({ title }), context({ isGroup: true, memberCount: 6 }))).toEqual({
+      action: 'skip', reason: 'not_actionable',
+    });
+  });
+
+  it.each([
+    'Discuss availability tomorrow',
+    'Send housing application by next Friday',
+    'Meet Priya on 16 August 2026',
+    'Friday coffee with Priya',
+    'Plan the August trip',
+  ])('retains the actionable title %s', (title) => {
+    expect(decideCreate(createOp({ title }), context()).action).toBe('create');
+  });
+
   it('honours a per-chat confidence floor above the default', () => {
     const outcome = decideCreate(
       createOp({ confidence: 0.6 }),
