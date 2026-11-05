@@ -1,16 +1,15 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
 import { Check, ChevronLeft, MessageSquarePlus } from 'lucide-react-native';
 import { colors, mobileType, radius, space } from '@claire/design-system';
 import { MobileAvatar, MobileIconButton, MobileState, SectionLabel } from '../../components/mobile/claire-mobile';
 import { PlatformBadge } from '../../components/PlatformIcon';
-import { contactsApi, type PersonContact } from '../../services/contacts';
+import type { PersonContact } from '../../services/contacts';
 import { displayPersonDetails, displayPersonName } from '../../services/contact-display';
 import { Platform, platformLabel } from '../../types/platform';
-import { userFacingErrorMessage } from '../../services/api-errors';
+import { usePersonDetail } from '../../hooks/usePersonDetail';
 
 function identity(contact: PersonContact) {
   return {
@@ -35,28 +34,9 @@ function identity(contact: PersonContact) {
 export function PersonDetailScreen() {
   const { contactId } = useLocalSearchParams<{ contactId: string }>();
   const insets = useSafeAreaInsets();
-  const [notes, setNotes] = useState('');
-  const [notesLoadedFor, setNotesLoadedFor] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
-
-  const person = useQuery({
-    queryKey: ['person', contactId],
-    enabled: !!contactId,
-    staleTime: 60_000,
-    queryFn: () => contactsApi.get(contactId!),
-  });
+  const { person, notes, setNotes, saving, saveError, saved, saveNotes } = usePersonDetail(contactId);
 
   const contact = person.data;
-
-  // Seed the editor once per person, so a background refetch never overwrites
-  // what is being typed.
-  useEffect(() => {
-    if (!contact || notesLoadedFor === contact.id) return;
-    setNotesLoadedFor(contact.id);
-    setNotes(contact.notes || '');
-  }, [contact, notesLoadedFor]);
 
   const name = useMemo(
     () => (contact ? displayPersonName(identity(contact), 'Unknown person') : ''),
@@ -79,21 +59,6 @@ export function PersonDetailScreen() {
         is_group: contact.chat.is_group ? '1' : '0',
       },
     });
-  };
-
-  const saveNotes = async () => {
-    if (!contactId || saving) return;
-    setSaving(true);
-    setSaveError(null);
-    try {
-      await contactsApi.saveNotes(contactId, notes);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 1800);
-    } catch (error) {
-      setSaveError(userFacingErrorMessage(error, 'Could not save. Try again.'));
-    } finally {
-      setSaving(false);
-    }
   };
 
   const back = (
