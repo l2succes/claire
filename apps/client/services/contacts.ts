@@ -133,6 +133,7 @@ const PAGE_SIZE = 1000;
  * which is worth saying out loud rather than quietly returning a short list.
  */
 const MAX_PAGES = 200;
+const INCOMPLETE_DIRECTORY_MESSAGE = 'People could not finish loading. Try again.';
 
 export const contactsApi = {
   /**
@@ -158,8 +159,14 @@ export const contactsApi = {
     let exhausted = false;
     for (let page = 0; page < MAX_PAGES; page += 1) {
       const result = await contactsApi.list({ ...params, offset, limit: PAGE_SIZE });
-      contacts.push(...result.contacts);
       const isLast = result.nextOffset === null || !result.contacts.length;
+      if (!isLast && (typeof result.nextOffset !== 'number'
+        || !Number.isSafeInteger(result.nextOffset) || result.nextOffset <= offset)) {
+        // Validate before publishing: a repeated/backward page is not new data
+        // and must not duplicate contacts or replace a complete warm cache.
+        throw new Error(INCOMPLETE_DIRECTORY_MESSAGE);
+      }
+      contacts.push(...result.contacts);
       // The consumer decides how often to publish, but it must never miss the
       // final page: that is the one the A-Z index is measured against.
       onPage?.(contacts, isLast);
@@ -175,6 +182,7 @@ export const contactsApi = {
       console.warn(
         `[People] stopped after ${MAX_PAGES} pages with ${contacts.length} contacts and more remaining; the directory shown is incomplete.`,
       );
+      throw new Error(INCOMPLETE_DIRECTORY_MESSAGE);
     }
     return contacts;
   },

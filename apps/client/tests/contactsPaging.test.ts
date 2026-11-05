@@ -9,6 +9,8 @@ const person = (id: string): PersonContact => ({
   id, name: `Person ${id}`, phone_number: null, is_group: false,
 });
 
+afterEach(() => jest.restoreAllMocks());
+
 function mockPages(pages: Array<{ contacts: PersonContact[]; nextOffset: number | null }>) {
   const calls: string[] = [];
   let index = 0;
@@ -57,8 +59,8 @@ describe('contactsApi.listAll', () => {
     const calls = mockPages(
       Array.from({ length: 500 }, () => ({ contacts: [person('x')], nextOffset: 500 })),
     );
-    await contactsApi.listAll({ query: '', platform: 'all', filter: 'all' });
-    expect(calls.length).toBeLessThanOrEqual(200);
+    await expect(contactsApi.listAll({ query: '', platform: 'all', filter: 'all' })).rejects.toThrow('finish loading');
+    expect(calls).toHaveLength(2);
   });
 
   it('says so loudly when it stops before the directory is exhausted', async () => {
@@ -66,8 +68,8 @@ describe('contactsApi.listAll', () => {
     // and its A-Z index is confidently wrong. This guard once sat below a real
     // account size and cut it off at 6,000 of 21,366 in silence.
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
-    mockPages(Array.from({ length: 500 }, () => ({ contacts: [person('x')], nextOffset: 500 })));
-    await contactsApi.listAll({ query: '', platform: 'all', filter: 'all' });
+    mockPages(Array.from({ length: 500 }, (_, index) => ({ contacts: [person(String(index))], nextOffset: (index + 1) * 500 })));
+    await expect(contactsApi.listAll({ query: '', platform: 'all', filter: 'all' })).rejects.toThrow('finish loading');
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('incomplete'));
     warn.mockRestore();
   });
@@ -78,5 +80,24 @@ describe('contactsApi.listAll', () => {
     await contactsApi.listAll({ query: '', platform: 'all', filter: 'all' });
     expect(warn).not.toHaveBeenCalled();
     warn.mockRestore();
+  });
+
+  it.each([0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1])('rejects invalid nextOffset %s before publishing its page', async (nextOffset) => {
+    const calls = mockPages([{ contacts: [person('a')], nextOffset }]);
+    const onPage = jest.fn();
+    await expect(contactsApi.listAll({ query: '', platform: 'all', filter: 'all' }, onPage)).rejects.toThrow('finish loading');
+    expect(calls).toHaveLength(1);
+    expect(onPage).not.toHaveBeenCalled();
+  });
+
+  it.each([500, 1000])('does not publish a repeated/backward page with cursor %s or mark it final', async (nextOffset) => {
+    mockPages([
+      { contacts: [person('a')], nextOffset: 1000 },
+      { contacts: [person('a')], nextOffset },
+    ]);
+    const onPage = jest.fn();
+    await expect(contactsApi.listAll({ query: '', platform: 'all', filter: 'all' }, onPage)).rejects.toThrow('finish loading');
+    expect(onPage).toHaveBeenCalledTimes(1);
+    expect(onPage).toHaveBeenCalledWith([person('a')], false);
   });
 });
