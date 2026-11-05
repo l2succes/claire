@@ -92,9 +92,12 @@ jobs:
 
   e2e:
     name: Mock end-to-end tests
-    # Keep browser OS dependencies stable: ubuntu-latest moved to 26.04 and
-    # its font downloads consumed the job's entire budget before tests ran.
     runs-on: ubuntu-24.04
+    # Match bun.lock's Playwright version. Preinstalled browsers and OS/fonts
+    # avoid slow apt mirrors consuming the job budget before tests even start.
+    container:
+      image: mcr.microsoft.com/playwright:v1.62.1-noble
+      options: --ipc=host
     # Keep the suite from occupying a runner for GitHub's six-hour
     # default when Expo or Playwright becomes stuck during startup.
     timeout-minutes: 15
@@ -111,12 +114,12 @@ jobs:
         working-directory: ./apps/client
         run: bun install
 
-      - name: Install Playwright Chromium
-        timeout-minutes: 5
+      - name: Verify preinstalled Chromium
+        timeout-minutes: 1
         working-directory: ./apps/client
-        # All projects run headless, so the separate headed Chromium download
-        # is unused. Keep OS dependency installation and fail visibly if stuck.
-        run: bunx playwright install --with-deps --only-shell chromium
+        # Fail before the suite if a dependency bump no longer matches the
+        # image, or if the browser cannot launch with its bundled OS libraries.
+        run: bun -e 'import { chromium } from "@playwright/test"; const browser = await chromium.launch(); await browser.close();'
 
       - name: Run mock end-to-end tests
         working-directory: ./apps/client
