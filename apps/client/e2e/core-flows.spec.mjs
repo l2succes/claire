@@ -48,6 +48,18 @@ async function withoutOpenLoops(page) {
   });
 }
 
+async function longPressInboxCard(page, card) {
+  await card.hover();
+  await page.mouse.down();
+  try {
+    // Hold until the app handles the gesture, rather than releasing at a
+    // fixed 600ms deadline that races the long-press timer under load.
+    await expect(page.getByTestId('snooze-modal-overlay')).toBeVisible();
+  } finally {
+    await page.mouse.up();
+  }
+}
+
 test.describe('Core loop — mock backend', () => {
   test.beforeEach(async ({ page }) => {
     await mockBackend(page);
@@ -826,8 +838,7 @@ test.describe('Core loop — mock backend', () => {
       page.locator('[data-testid^="message-card-"]').first()
     ).toBeVisible({ timeout: 8_000 });
 
-    // Long-press to trigger onLongPress (Playwright click with delay triggers long-press)
-    await page.locator('[data-testid^="message-card-"]').first().click({ delay: 600 });
+    await longPressInboxCard(page, page.locator('[data-testid^="message-card-"]').first());
 
     // Snooze modal should appear
     await expect(page.getByTestId('snooze-modal-overlay')).toBeVisible({ timeout: 5_000 });
@@ -851,7 +862,7 @@ test.describe('Core loop — mock backend', () => {
     const firstCardTestId = await firstCard.getAttribute('data-testid');
 
     // Long-press to open snooze modal
-    await firstCard.click({ delay: 600 });
+    await longPressInboxCard(page, firstCard);
     await expect(page.getByTestId('snooze-modal-overlay')).toBeVisible({ timeout: 5_000 });
 
     // Tap "Later today (3 hours)" option
@@ -879,7 +890,7 @@ test.describe('Core loop — mock backend', () => {
     const firstCardTestId = await firstCard.getAttribute('data-testid');
 
     // Long-press to open snooze modal
-    await firstCard.click({ delay: 600 });
+    await longPressInboxCard(page, firstCard);
     await expect(page.getByTestId('snooze-modal-overlay')).toBeVisible({ timeout: 5_000 });
 
     // Tap Cancel
