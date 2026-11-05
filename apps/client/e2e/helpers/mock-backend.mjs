@@ -433,28 +433,16 @@ export const MOCK_GROUP_SUMMARY_RESP = {
 // ---------------------------------------------------------------------------
 
 export async function mockBackend(page) {
-  // The Expo dev server mounts LogBox's error toast (`#error-toast`, from
-  // @expo/log-box) fixed over the bottom-left of the viewport as soon as the
-  // app logs a console.error — on web that happens on every load, from React
-  // Native Web's unknown-prop warnings (`collapsable`, `maskType`,
-  // `accessibilityIgnoresInvertColors`). The toast sits on the floating tab bar
-  // and swallows its clicks. It is dev-server chrome no build ships, so hide it.
-  // Injected unconditionally rather than from a DOMContentLoaded listener.
-  // That listener did run, yet the toast stayed hit-testable and swallowed
-  // clicks 30s at a time (screenshot-tour 05), so the style was not taking
-  // effect for every document. Appending to documentElement needs no head and
-  // no event, and pointer-events is belt-and-braces: even if something keeps
-  // the node displayed, it can no longer intercept a click.
+  // LogBox's development-only toast overlaps the floating tab bar. Hide only
+  // that toast, keeping the full error overlay available for real app failures.
+  // Init scripts run before documentElement exists, so observe the document
+  // instead of appending a stylesheet before the DOM has been created.
   await page.addInitScript(() => {
-    const hide = () => {
-      if (document.getElementById('claire-e2e-hide-logbox')) return;
-      const style = document.createElement('style');
-      style.id = 'claire-e2e-hide-logbox';
-      style.textContent = '#error-toast { display: none !important; pointer-events: none !important; }';
-      (document.head || document.documentElement).appendChild(style);
+    const hideToast = () => {
+      document.getElementById('error-toast')?.style.setProperty('display', 'none', 'important');
     };
-    hide();
-    document.addEventListener('DOMContentLoaded', hide);
+    new MutationObserver(hideToast).observe(document, { childList: true, subtree: true });
+    hideToast();
   });
 
   // Supabase passwordless email sign-in: requesting a code has no session;
@@ -662,8 +650,24 @@ export async function mockBackend(page) {
 
   // Bun server API: platform status endpoints.
   // getAllSessions() calls /platforms/<platform>/status for each platform.
-  await page.route('**/platforms/**', async (route) => {
+  await page.route(/\/platforms(?:\/|\?|$)/, async (route) => {
     const url = route.request().url();
+    if (new URL(url).pathname === '/platforms') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: true, platforms: ['whatsapp', 'telegram', 'instagram'].map((platform) => ({
+          platform, enabled: true, authMethod: platform === 'telegram' ? 'phone_number' : 'qr_code',
+          capabilities: {
+            canSendText: true, canSendMedia: true, canSendVoice: true,
+            canSendStickers: true, canSendReactions: true, canReplyToMessages: true,
+            canReadReceipts: true, canDeleteMessages: true, canEditMessages: false,
+            supportsGroups: true, supportsBroadcasts: false,
+          },
+        })) }),
+      });
+      return;
+    }
     if (route.request().method() === 'POST' && url.includes('/send')) {
       const body = JSON.parse(route.request().postData() || '{}');
       await route.fulfill({
@@ -717,7 +721,6 @@ export async function mockBackend(page) {
 
   // Bun server API: snooze message
   await page.route('**/messages/*/snooze**', async (route) => {
-    const method = route.request().method();
     await route.fulfill({
       status: 200,
       contentType: 'application/json',

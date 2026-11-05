@@ -27,7 +27,6 @@ import {
   MOCK_GROUP_INBOX_MESSAGE,
   MOCK_INBOX_MESSAGES,
   MOCK_PLATFORM_SESSIONS,
-  MOCK_LOOPS,
   MOCK_USER_ID,
 } from './helpers/mock-backend.mjs';
 
@@ -89,7 +88,7 @@ test.describe('Core loop — mock backend', () => {
     await page.getByTestId('tab-messages').click();
     await expect(page.getByTestId('messages-screen')).toBeVisible({ timeout: 10_000 });
 
-    await page.getByTestId('inbox-compose').click();
+    await page.getByTestId('inbox-floating-compose').click();
     await expect(page.getByTestId('compose-screen')).toBeVisible({ timeout: 8_000 });
     await expect(page.getByTestId('compose-recipient-mock-chat-wa-alice')).toBeVisible();
     await expect(page.getByTestId('compose-recipient-mock-chat-wa-group-1')).toBeVisible();
@@ -106,7 +105,7 @@ test.describe('Core loop — mock backend', () => {
     await page.getByTestId('tab-messages').click();
     await expect(page.getByTestId('messages-screen')).toBeVisible({ timeout: 10_000 });
 
-    await page.getByTestId('inbox-compose').click();
+    await page.getByTestId('inbox-floating-compose').click();
     await expect(page.getByTestId('compose-screen')).toBeVisible({ timeout: 8_000 });
     await page.getByTestId('compose-close').click();
 
@@ -506,16 +505,16 @@ test.describe('Core loop — mock backend', () => {
     await expect(page.getByTestId('loops-screen')).toBeVisible({ timeout: 10_000 });
 
     // Switch to Done tab
-    await page.getByTestId('loops-tab-done').click();
+    await page.getByTestId('loops-list').getByTestId('loops-tab-done').click();
     // Done tab is now active — either empty state or items show
     await expect(page.getByTestId('loops-list')).toBeVisible({ timeout: 5_000 });
 
     // Switch to Overdue tab
-    await page.getByTestId('loops-tab-waiting').click();
+    await page.getByTestId('loops-list').getByTestId('loops-tab-waiting').click();
     await expect(page.getByTestId('loops-list')).toBeVisible({ timeout: 5_000 });
 
     // Switch back to Open
-    await page.getByTestId('loops-tab-open').click();
+    await page.getByTestId('loops-list').getByTestId('loops-tab-open').click();
     await expect(page.getByTestId('loops-list')).toBeVisible({ timeout: 5_000 });
   });
 
@@ -605,12 +604,13 @@ test.describe('Core loop — mock backend', () => {
 
     await expect(page.getByTestId('notifications-settings-screen')).toBeVisible({ timeout: 8_000 });
 
-    // DND toggle is initially on (notification_enabled=true from mock)
-    // Tap it to turn off
+    const saved = page.waitForRequest((request) =>
+      new URL(request.url()).pathname === '/preferences' && request.method() === 'PUT');
     await page.getByTestId('notif-toggle-enabled').click();
-
-    // Save button is present (the route mock will accept PUT)
-    await expect(page.getByTestId('notifications-settings-save')).toBeVisible();
+    const payload = (await saved).postDataJSON();
+    expect(payload.notification_enabled).toBe(false);
+    await expect(page.getByTestId('notif-toggle-messages')).toHaveAttribute('aria-disabled', 'true');
+    await expect(page.getByTestId('notifications-autosave-status')).toHaveText('Changes save automatically.');
   });
 
   // 9. Quick context — the seeded smart card surfaces above the transcript.
@@ -714,36 +714,19 @@ test.describe('Core loop — mock backend', () => {
 
     const request = await dismissRequest;
     expect(JSON.parse(request.postData() || '{}').dismissed).toBe(true);
-    await expect(page.getByTestId('chat-quick-context')).not.toContainText(
-      'Alice mentioned a Friday deadline',
-      { timeout: 5_000 }
-    );
+    await expect(page.getByTestId('chat-quick-context')).toHaveCount(0);
   });
 
-  // 12. Morning Brief — brief text renders from fixture endpoint (#32)
-  // The brief moved from the inbox to the home screen (features/home/home-screen.tsx).
-  test('morning brief renders from /ai/morning-brief fixture', async ({ page }) => {
+  test('Home renders current conversation summaries from the inbox feed', async ({ page }) => {
     await signIn(page);
     await page.goto('/dashboard');
-
-    await expect(page.getByTestId('home-screen')).toBeVisible({ timeout: 10_000 });
-
-    // The fixture brief text should be visible
-    await expect(
-      page.getByTestId('home-screen').getByText('2 messages need your attention')
-    ).toBeVisible({ timeout: 8_000 });
+    const home = page.getByTestId('home-screen');
+    await expect(home).toBeVisible();
+    await expect(home.getByText('Recent conversations')).toBeVisible();
+    await expect(home.getByText(MOCK_INBOX_MESSAGES[1].content, { exact: true })).toBeVisible();
+    await expect(home.getByText('Telegram · Bob (TG)', { exact: true })).toBeVisible();
   });
 
-  // 12b. Urgent messages — home's "needs a reply" card counts the fixture's urgent messages (#32)
-  test('urgent card renders for the fixture urgent message', async ({ page }) => {
-    await signIn(page);
-    await page.goto('/dashboard');
-
-    // MOCK_MORNING_BRIEF has one urgent message (Alice).
-    await expect(page.getByTestId('home-needs-reply')).toContainText('1 conversation waiting', { timeout: 10_000 });
-  });
-
-  // 13. Media in — incoming image fixture renders in chat (#35)
   test('incoming image message renders in chat', async ({ page }) => {
     await signIn(page);
 
@@ -756,7 +739,7 @@ test.describe('Core loop — mock backend', () => {
     await expect(page.getByTestId('chat-message-list')).toBeVisible({ timeout: 8_000 });
 
     // The image fixture message should render (testID added in this ticket)
-    const image = page.getByTestId('media-image-img-chatmsg-img').locator('img');
+    const image = page.getByRole('img', { name: 'Message attachment', exact: true });
     await expect(image).toBeVisible({ timeout: 8_000 });
     await expect(image).toHaveJSProperty('naturalWidth', 1);
   });
@@ -777,9 +760,9 @@ test.describe('Core loop — mock backend', () => {
     await expect(page.getByTestId('media-audio-chatmsg-audio')).toBeVisible({ timeout: 8_000 });
     // Video fixture
     // Until tapped, a video renders its poster with a play button (MediaVideoSurface).
-    await expect(page.getByTestId('media-video-play-chatmsg-video')).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByRole('button', { name: 'Play video full screen', exact: true })).toBeVisible({ timeout: 8_000 });
     // Document fixture
-    await expect(page.getByTestId('media-document-chatmsg-doc')).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByRole('button', { name: 'Open report.pdf', exact: true })).toBeVisible({ timeout: 8_000 });
   });
 
   // 13c. Media send path — send button dispatches to platform API (#35)
@@ -1015,14 +998,7 @@ const MOCK_TG_SESSION_CONNECTED = {
   created_at: new Date().toISOString(),
 };
 
-const MOCK_IG_SESSION_CONNECTED = {
-  id: 'ig-session-1',
-  user_id: MOCK_USER_ID,
-  platform: 'instagram',
-  status: 'connected',
-  platform_user_id: 'ig_test_user',
-  created_at: new Date().toISOString(),
-};
+
 
 /**
  * Sets up platform connect-flow mocks on top of existing mockBackend routes.
@@ -1291,7 +1267,7 @@ test.describe('Platform connect flows — mock backend', () => {
     });
 
     await signIn(page);
-    await page.click('text=Settings');
+    await openSettings(page);
     await expect(page.getByTestId('settings-screen')).toBeVisible({ timeout: 8_000 });
 
     await page.getByTestId('settings-connections').click();

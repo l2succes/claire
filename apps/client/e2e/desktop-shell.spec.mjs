@@ -93,21 +93,22 @@ test.describe('Claire desktop shell', () => {
   });
 
   test('the sidebar collapses and the choice survives a reload', async ({ page }) => {
-    // Known app bug, not a test problem: the reload lands on the auto-opened
-    // conversation, whose URL carries `?platform=whatsapp`. Expo's dev server
-    // reserves the `platform` query param for bundle requests and answers any
-    // non-web value with 404 "Cannot GET". Drop this once chat routes stop
-    // passing a param named `platform`.
-    test.fail();
     await page.setViewportSize(EXPANDED);
     await signIn(page);
-
+    // Test persisted chrome on a stable route. Inbox auto-selection opens a
+    // chat URL, whose reserved `platform` parameter is tracked in #308.
+    await page.getByTestId('desktop-nav-loops').click();
+    await expect(page).toHaveURL(/loops/);
+    // The rail starts collapsed. Expand it first so the second click tests
+    // collapsing, rather than assuming the old expanded-by-default layout.
+    await expect(page.getByTestId('desktop-toggle-sidebar')).toHaveAttribute('aria-label', 'Expand sidebar');
     await page.getByTestId('desktop-toggle-sidebar').click();
-    // Collapsed rail keeps the icons but drops the labels.
-    await expect(page.getByTestId('desktop-nav-inbox')).toBeVisible();
-
+    await expect(page.getByTestId('desktop-toggle-sidebar')).toHaveAttribute('aria-label', 'Collapse sidebar');
+    await page.getByTestId('desktop-toggle-sidebar').click();
+    await expect(page.getByTestId('desktop-toggle-sidebar')).toHaveAttribute('aria-label', 'Expand sidebar');
     await page.reload();
     await expect(page.getByTestId('desktop-navigation-rail')).toBeVisible();
+    await expect(page.getByTestId('desktop-toggle-sidebar')).toHaveAttribute('aria-label', 'Expand sidebar');
   });
 
   test('People keeps mobile back navigation out of the desktop layout', async ({ page }) => {
