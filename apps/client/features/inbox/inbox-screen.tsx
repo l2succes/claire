@@ -390,7 +390,7 @@ export function InboxScreen() {
   const openChat = useCallback((message: InboxMessage) => {
     router.push({
       pathname: '/chat/[chatId]',
-      params: { chatId: message.chat_id, contact_name: message.contact_name || '', chat_name: message.chat_name || '', platform: message.platform || '', is_group: message.is_group ? '1' : '0' },
+      params: { chatId: message.chat_id, contact_name: message.contact_name || '', chat_name: message.chat_name || '', chatPlatform: message.platform || '', is_group: message.is_group ? '1' : '0' },
     });
     // The chat route marks this conversation read on mount. Mutating every
     // cached inbox variant here held up the navigation on the same JS turn.

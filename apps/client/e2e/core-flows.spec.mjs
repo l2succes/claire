@@ -138,6 +138,18 @@ test.describe('Core loop — mock backend', () => {
     await expect(page.getByTestId('chat-message-list')).toBeVisible({ timeout: 8_000 });
   });
 
+  test('a Telegram conversation retains its platform through a browser reload', async ({ page }) => {
+    await signIn(page);
+    await page.getByTestId('message-card-msg-tg-1').click();
+    await expect(page.getByTestId('chat-screen')).toBeVisible();
+    const url = new URL(page.url());
+    expect(url.searchParams.has('platform')).toBe(false);
+    expect(url.searchParams.get('chatPlatform')).toBe('telegram');
+    await page.reload();
+    await expect(page.getByTestId('chat-screen')).toBeVisible();
+    await expect(page.getByTestId('chat-screen').getByText('Telegram', { exact: true })).toBeVisible();
+  });
+
   test('chat bubbles use sender identity for alignment', async ({ page }) => {
     await signIn(page);
     await expect(page.locator('[data-testid^="message-card-"]').first()).toBeVisible({ timeout: 8_000 });

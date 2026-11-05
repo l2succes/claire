@@ -95,7 +95,7 @@ export default function ConversationAssistantScreen() {
 
   const openCitation = (citation: AssistantCitation) => router.push({
     pathname: '/chat/[chatId]',
-    params: { chatId: citation.chatId, highlightMessageId: citation.messageId, contact_name: citation.chatName || citation.senderName, chat_name: citation.chatName || citation.senderName, platform: citation.platform },
+    params: { chatId: citation.chatId, highlightMessageId: citation.messageId, contact_name: citation.chatName || citation.senderName, chat_name: citation.chatName || citation.senderName, chatPlatform: citation.platform },
   });
 
   const useSuggestion = () => {

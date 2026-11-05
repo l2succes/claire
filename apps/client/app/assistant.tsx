@@ -90,7 +90,7 @@ function Sources({ citations, onExpand }: { citations: AssistantCitation[]; onEx
                   chatId: citation.chatId,
                   contact_name: citation.fromMe ? citation.chatName || 'Conversation' : citation.senderName,
                   chat_name: citation.chatName || citation.senderName,
-                  platform: citation.platform,
+                  chatPlatform: citation.platform,
                   is_group: citation.isGroup ? '1' : '0',
                   highlightMessageId: citation.messageId,
                 },

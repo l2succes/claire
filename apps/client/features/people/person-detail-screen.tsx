@@ -75,7 +75,7 @@ export function PersonDetailScreen() {
         chatId: contact.chat.id,
         contact_name: name,
         chat_name: contact.chat.name || '',
-        platform: contact.chat.platform || contact.platform || '',
+        chatPlatform: contact.chat.platform || contact.platform || '',
         is_group: contact.chat.is_group ? '1' : '0',
       },
     });

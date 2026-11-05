@@ -79,7 +79,7 @@ export function NotificationsScreen() {
         ...(item.message_id ? { highlightMessageId: item.message_id } : {}),
         chat_name: item.chat_name || '',
         contact_name: item.sender_name || '',
-        platform: item.platform || '',
+        chatPlatform: item.platform || '',
         is_group: item.is_group ? '1' : '0',
       } });
     }

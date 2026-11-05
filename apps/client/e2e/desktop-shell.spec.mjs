@@ -111,6 +111,27 @@ test.describe('Claire desktop shell', () => {
     await expect(page.getByTestId('desktop-toggle-sidebar')).toHaveAttribute('aria-label', 'Expand sidebar');
   });
 
+  test('an auto-selected chat and its settings survive a browser reload', async ({ page }) => {
+    await page.setViewportSize(EXPANDED);
+    await signIn(page);
+    await expect(page).toHaveURL(/\/chat\/mock-chat-wa-alice/);
+    let url = new URL(page.url());
+    expect(url.searchParams.has('platform')).toBe(false);
+    expect(url.searchParams.get('chatPlatform')).toBe('whatsapp');
+
+    await page.reload();
+    await expect(page.getByTestId('chat-screen')).toBeVisible();
+    await expect(page.getByTestId('desktop-navigation-rail')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Conversation settings', exact: true }).click();
+    await expect(page.getByTestId('conversation-ai-settings')).toBeVisible();
+    url = new URL(page.url());
+    expect(url.searchParams.has('platform')).toBe(false);
+    expect(url.searchParams.get('chatPlatform')).toBe('whatsapp');
+    await page.reload();
+    await expect(page.getByTestId('conversation-ai-settings')).toBeVisible();
+  });
+
   test('People keeps mobile back navigation out of the desktop layout', async ({ page }) => {
     await page.setViewportSize(EXPANDED);
     await signIn(page);

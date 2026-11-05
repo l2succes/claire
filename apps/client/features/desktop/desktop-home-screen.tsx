@@ -85,7 +85,7 @@ export function DesktopHomeScreen() {
         action: 'Reply',
         icon: <MessageCircle size={18} color={colors.ink} />,
         onPress: () => latest
-          ? router.push({ pathname: '/chat/[chatId]', params: { chatId: latest.chat_id, platform: latest.platform || '', chat_name: latest.chat_name || '', contact_name: latest.contact_name || '', is_group: latest.is_group ? '1' : '0' } } as never)
+          ? router.push({ pathname: '/chat/[chatId]', params: { chatId: latest.chat_id, chatPlatform: latest.platform || '', chat_name: latest.chat_name || '', contact_name: latest.contact_name || '', is_group: latest.is_group ? '1' : '0' } } as never)
           : router.push('/messages'),
       };
     }
@@ -146,7 +146,7 @@ export function DesktopHomeScreen() {
       </View>
 
       <View flexDirection={media.gtWide ? 'row' : 'column'} columnGap="$3" rowGap="$3">
-        <View flex={1} minHeight={185} borderRadius={20} borderWidth={1} borderColor="$neutral200" backgroundColor="$paper" padding="$4" rowGap="$2"><Text style={{ ...type.monoLabel, color: colors.ink }}>NEEDS A REPLY</Text>{needsReply.slice(0, 2).map((message) => <DesktopActionRow key={message.id} icon={<ArrowUpRight size={17} color={colors.ink} />} title={message.chat_name || message.contact_name || 'Conversation'} detail={message.content || 'New message'} action="Reply" onPress={() => router.push({ pathname: '/chat/[chatId]', params: { chatId: message.chat_id, platform: message.platform || '', chat_name: message.chat_name || '', contact_name: message.contact_name || '', is_group: message.is_group ? '1' : '0' } } as never)} />)}{!needsReply.length ? <Text style={{ ...type.bodySmall, color: colors.neutral[600] }}>Nothing waiting for you.</Text> : null}</View>
+        <View flex={1} minHeight={185} borderRadius={20} borderWidth={1} borderColor="$neutral200" backgroundColor="$paper" padding="$4" rowGap="$2"><Text style={{ ...type.monoLabel, color: colors.ink }}>NEEDS A REPLY</Text>{needsReply.slice(0, 2).map((message) => <DesktopActionRow key={message.id} icon={<ArrowUpRight size={17} color={colors.ink} />} title={message.chat_name || message.contact_name || 'Conversation'} detail={message.content || 'New message'} action="Reply" onPress={() => router.push({ pathname: '/chat/[chatId]', params: { chatId: message.chat_id, chatPlatform: message.platform || '', chat_name: message.chat_name || '', contact_name: message.contact_name || '', is_group: message.is_group ? '1' : '0' } } as never)} />)}{!needsReply.length ? <Text style={{ ...type.bodySmall, color: colors.neutral[600] }}>Nothing waiting for you.</Text> : null}</View>
         <View flex={1} minHeight={185} borderRadius={20} borderWidth={1} borderColor="$neutral200" backgroundColor="$paper" padding="$4" rowGap="$2"><Text style={{ ...type.monoLabel, color: colors.ink }}>OPEN LOOPS</Text>{(loops.data || []).slice(0, 2).map((loop) => <DesktopActionRow key={loop.id} icon={<CheckCircle2 size={17} color={colors.ink} />} title={loop.content} detail={loop.deadline ? `Due ${new Date(loop.deadline).toLocaleDateString()}` : 'Open loop'} action="Open" onPress={() => loop.chat_id ? router.push(`/chat/${loop.chat_id}` as never) : router.push('/loops')} />)}{!loops.data?.length ? <Text style={{ ...type.bodySmall, color: colors.neutral[600] }}>No open loops right now.</Text> : null}</View>
       </View>
     </View>
