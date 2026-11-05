@@ -63,13 +63,17 @@ it('does not query while typing, then runs exact and AI search on submit', async
 });
 
 it('executes a route query on entry and accepts another query while mounted', async () => {
-  params.mockReturnValue({ query: '  renta  ' });
+  params.mockReturnValue({ query: '  renta  ', searchRequestId: 'first' });
   const screen = renderSearch();
   await waitFor(() => expect(exact).toHaveBeenCalledWith('renta', 'everything'));
   expect(answer).toHaveBeenCalledTimes(1);
   fireEvent.press(screen.getByLabelText('Clear search'));
   expect(screen.getByTestId('global-search-input').props.value).toBe('');
   expect(answer).toHaveBeenCalledTimes(1);
+  params.mockReturnValue({ query: 'renta', searchRequestId: 'second' });
+  screen.rerender(<SearchScreen />);
+  expect(screen.getByTestId('search-results-screen')).toBeTruthy();
+  expect(answer).toHaveBeenCalledTimes(1); // Reuse the recent cached answer.
   params.mockReturnValue({ query: 'address' });
   screen.rerender(<SearchScreen />);
   await waitFor(() => expect(exact).toHaveBeenCalledWith('address', 'everything'));

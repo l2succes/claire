@@ -510,7 +510,7 @@ export function InboxScreen() {
   const searching = query.trim().length > 0;
   const openFullSearch = useCallback((term: string) => {
     if (!term.trim()) return;
-    router.push({ pathname: '/(tabs)/search', params: { query: term.trim() } });
+    router.push({ pathname: '/(tabs)/search', params: { query: term.trim(), searchRequestId: String(Date.now()) } });
   }, []);
   const highlights = useMemo(() => searching ? [] : [...inboxRows]
     .map(message => ({

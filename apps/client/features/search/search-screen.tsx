@@ -102,7 +102,7 @@ const scopes: Array<{ value: SearchScope; label: string }> = [
 ];
 
 export function SearchScreen() {
-  const params = useLocalSearchParams<{ query?: string | string[] }>();
+  const params = useLocalSearchParams<{ query?: string | string[]; searchRequestId?: string }>();
   const initialQuery = (Array.isArray(params.query) ? params.query[0] : params.query)?.trim() || '';
   const user = useAuthStore(state => state.user);
   const [query, setQuery] = useState(initialQuery);
@@ -118,7 +118,7 @@ export function SearchScreen() {
     setQuery(initialQuery);
     setSubmitted(initialQuery);
     setScope('everything');
-  }, [initialQuery]);
+  }, [initialQuery, params.searchRequestId]);
 
   useEffect(() => { void AsyncStorage.getItem(storageKey).then(value => setRecent(value ? JSON.parse(value) as string[] : [])).catch(() => undefined); }, [storageKey]);
   const runSearch = () => {
