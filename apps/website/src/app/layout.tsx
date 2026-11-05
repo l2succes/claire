@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+import { Analytics } from '@vercel/analytics/next';
 import type { Metadata } from 'next';
 import { DM_Mono, Inter, Public_Sans } from 'next/font/google';
 import type { ReactNode } from 'react';
@@ -60,7 +61,10 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
       className={`${publicSans.variable} ${inter.variable} ${dmMono.variable} ${publicSans.className}`}
       suppressHydrationWarning
     >
-      <body className="flex min-h-screen flex-col">{children}</body>
+      <body className="flex min-h-screen flex-col">
+        {children}
+        <Analytics />
+      </body>
     </html>
   );
 }
