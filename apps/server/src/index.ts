@@ -327,8 +327,10 @@ async function collectReadiness() {
         ? { status: 'ok', latencyMs: Date.now() - t0 }
         : {
             status: 'error',
-            error: `Schema drift: ${result.drift.map((d) => d.table).join(', ')}`,
-            detail: result.drift,
+            error: result.probeErrors.length > 0
+              ? `Schema verification unavailable: ${result.probeErrors.map((d) => d.table).join(', ')}`
+              : `Schema drift: ${result.drift.map((d) => d.table).join(', ')}`,
+            detail: [...result.drift, ...result.probeErrors],
           };
     } catch (err) {
       checks.schema = { status: 'error', error: (err as Error).message };

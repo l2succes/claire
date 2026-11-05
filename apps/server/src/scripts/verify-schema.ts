@@ -22,14 +22,18 @@ async function main(): Promise<void> {
   }
 
   // eslint-disable-next-line no-console
-  console.error('❌ SCHEMA DRIFT DETECTED — the database is behind the deployed code:');
+  console.error('❌ Schema verification failed — deployment blocked:');
   for (const entry of result.drift) {
     // eslint-disable-next-line no-console
     console.error(`   - ${entry.table} (${entry.columns.join(', ')}): ${entry.error}`);
   }
+  for (const entry of result.probeErrors) {
+    // eslint-disable-next-line no-console
+    console.error(`   - Could not verify ${entry.table}: ${entry.error}`);
+  }
   // eslint-disable-next-line no-console
-  console.error('\nApply pending migrations before deploying (see docs/SCHEMA_VERIFICATION.md).');
-  process.exit(1);
+  console.error('\nResolve probe errors and apply pending migrations before deploying (see /docs/deploy-operate/schema-verification).');
+  process.exit(result.probeErrors.length > 0 ? 2 : 1);
 }
 
 main().catch((err) => {
